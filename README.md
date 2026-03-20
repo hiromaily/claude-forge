@@ -62,7 +62,15 @@ flowchart TD
 Start a new Claude Code session in the terminal and enter the following commands:
 
 ```
+# register for marketplaces
 /plugin marketplace add hiromaily/dev-agent
 
+# install
 /plugin install dev-agent
+
+# update
+claude plugin update dev-agent@dev-agent
+
+# reload
+/reload-plugins
 ```
