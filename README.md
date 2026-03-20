@@ -56,3 +56,13 @@ flowchart TD
     FV["**Final Verification**<br>① one general-purpose subagent<br>full typecheck + test suite"]
     FS["**Final Summary**<br>main agent · writes summary.md"]
 ```
+
+## Quick Start
+
+Start a new Claude Code session in the terminal and enter the following commands:
+
+```
+/plugin marketplace add hiromaily/dev-agent
+
+/plugin install dev-agent
+```
