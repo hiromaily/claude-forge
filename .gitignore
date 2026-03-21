@@ -10,3 +10,7 @@ node_modules/
 # Logs
 logs
 *.log
+
+# others
+memo.md
+COMPETITIVE-ANALYSIS.md

@@ -1,5 +1,5 @@
 {
-  "name": "dev-agent",
+  "name": "claude-forge",
   "owner": {
     "name": "hiromaily"
   },
@@ -9,7 +9,7 @@
   },
   "plugins": [
     {
-      "name": "dev-agent",
+      "name": "claude-forge",
       "source": "./",
       "description": "The entire development pipeline (analysis → investigation → design → AI review → task → AI review → implementation → review) is orchestrated using isolated subagents, preventing context contamination and saving tokens.",
       "version": "1.0.0",
@@ -17,7 +17,7 @@
         "name": "hiromaily"
       },
       "keywords": [
-        "dev-agent",
+        "claude-forge",
         "orchestration",
         "subagent",
         "save-tokens",
