@@ -828,7 +828,7 @@ $SM phase-complete {workspace} phase-1
 > Checkpoint A (human confirms the documentation plan before implementation begins).
 >
 > **Note:** For `(docs, XS)` and `(docs, S)` (`direct` template), Phase 1 was skipped during Workspace
-> Setup and stub synthesis was done in Workspace Setup step 7. The Phase 1 block is not reached for
+> Setup and stub synthesis was done in the Initialize-state step of Workspace Setup. The Phase 1 block is not reached for
 > these cells. Phase 3b and Checkpoint A still run on the stubs.
 
 ---
@@ -1051,7 +1051,7 @@ $SM phase-complete {workspace} phase-4b
 > $SM checkpoint {workspace} checkpoint-b
 > $SM phase-complete {workspace} checkpoint-b
 > ```
-> Proceed to step 6 below.
+> Proceed to the change-request step below.
 
 **Human approval path — STOP AND WAIT**
 
@@ -1074,13 +1074,13 @@ If neither skip gate fired:
 
 5. **WAIT FOR USER RESPONSE. Do not proceed further in this message.**
 
-6. If the user requests changes: re-run Phase 4 with user feedback appended, then re-run Phase 4b, and re-present.
+6. **Change-request step** — If the user requests changes: re-run Phase 4 with user feedback appended, then re-run Phase 4b, and re-present.
 7. Once the user approves, call:
    ```bash
    $SM phase-complete {workspace} checkpoint-b
    ```
 
-8. **Populate task state** — parse `tasks.md` and initialize task tracking (runs after human approval at step 7 OR after auto-approve skip gate 2 above):
+8. **Populate task state** — parse `tasks.md` and initialize task tracking (runs after human approval OR after the auto-approve path above):
    ```bash
    $SM task-init {workspace} '{
      "1": {"title": "Task 1 title", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0},
@@ -1259,7 +1259,7 @@ $SM phase-complete {workspace} final-verification
 
 > **Skip gate 1 (task-type/template):** If `pr-creation` is in `{skipped_phases}` (present in the supplemental skip set for `investigation` — and its union with any template): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
 
-> **Skip gate 2 (--nopr):** If `{skip_pr}` is `true`: run steps 1-2 (stage, commit, push) but skip step 3-4 (PR creation). Set `{pr-number}` to `none`. Print:
+> **Skip gate 2 (--nopr):** If `{skip_pr}` is `true`: run the stage-commit step and the push step, but skip the gh-pr-create and capture-PR-number steps. Set `{pr-number}` to `none`. Print:
 > "Skipping PR creation (--nopr flag). Branch pushed to origin."
 
 ```bash
@@ -1357,10 +1357,8 @@ $SM phase-start {workspace} final-summary
    …
    | **TOTAL** | **…** | **…s** | |
    ```
-4. **Run debug epilogue** — if `{debug_mode}` is `true`, execute the `### Debug Report (conditional — all task types)` block below; otherwise skip it. Then always execute the `### Improvement Report (all task types)` block below.
-5. **Run improvement report** — execute `### Improvement Report (all task types)` block.
-6. Present the contents of `summary.md` to the user.
-7. **Update the commit to include summary.md**:
+4. Present the contents of `summary.md` to the user.
+5. **Update the commit to include summary.md**:
    ```bash
    git add {workspace}/summary.md
    git commit --amend --no-edit
@@ -1400,10 +1398,8 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
    …
    | **TOTAL** | **…** | **…s** | |
    ```
-4. **Run debug epilogue** — if `{debug_mode}` is `true`, execute the `### Debug Report (conditional — all task types)` block below; otherwise skip it. Then always execute the `### Improvement Report (all task types)` block below.
-5. **Run improvement report** — execute `### Improvement Report (all task types)` block.
-6. Present the contents of `summary.md` to the user.
-7. **Update the commit to include summary.md**:
+4. Present the contents of `summary.md` to the user.
+5. **Update the commit to include summary.md**:
    ```bash
    git add {workspace}/summary.md
    git commit --amend --no-edit
@@ -1445,10 +1441,8 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
    …
    | **TOTAL** | **…** | **…s** | |
    ```
-4. **Run debug epilogue** — if `{debug_mode}` is `true`, execute the `### Debug Report (conditional — all task types)` block below; otherwise skip it. Then always execute the `### Improvement Report (all task types)` block below.
-5. **Run improvement report** — execute `### Improvement Report (all task types)` block.
-6. Present the contents of `summary.md` to the user.
-7. **Do NOT run commit-amend or push** — no feature branch exists for `investigation` flows.
+4. Present the contents of `summary.md` to the user.
+5. **Do NOT run commit-amend or push** — no feature branch exists for `investigation` flows.
 
 ---
 
@@ -1460,11 +1454,21 @@ Stop immediately and report an error:
 
 ---
 
+### Post-dispatch epilogue <!-- anchor: final-summary-epilogue -->
+
+Runs for all task types after the per-type dispatch block above completes.
+
+1. **Run debug-report** (reports on forge skill operation — pipeline metrics, anomalies, token outliers, revision cycles): if `{debug_mode}` is `true`, execute the debug-report block below; otherwise skip it.
+
+2. **Run improvement-report** (reports on target-repository friction — documentation gaps, code readability, conventions — that would have helped complete the task): always execute the improvement-report block below.
+
+---
+
 ### Debug Report (conditional — all task types) <!-- anchor: debug-report -->
 
 _Reports on the **operation of the forge skill itself**: pipeline execution flow, phase metrics, token outliers, retry counts, and revision cycles. Triggered only when `{debug_mode}` is `true`._
 
-If `{debug_mode}` is `false`, skip this section entirely and proceed to the `### Improvement Report (all task types)` block.
+If `{debug_mode}` is `false`, skip this section entirely and proceed to the improvement-report block.
 
 If `{debug_mode}` is `true`:
 
@@ -1473,7 +1477,7 @@ If `{debug_mode}` is `true`:
    `completed` at this point — `phase-complete final-summary` has not yet been called.
    This is expected; the debug report does not read or display `currentPhaseStatus`.)
 
-   Also reuse the `phase-stats` output already captured in step 2 of the dispatch block.
+   Also reuse the `phase-stats` output already captured in the dispatch block above.
 
 2. Evaluate the following heuristics against `{debug_data}`:
 
@@ -1531,7 +1535,7 @@ If `{debug_mode}` is `true`:
      present in all phase execution blocks."
    ```
 
-4. After appending the debug section, proceed to the `### Improvement Report (all task types)` block.
+4. After appending the debug section, proceed to the improvement-report block.
 
 ---
 
