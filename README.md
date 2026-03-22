@@ -51,7 +51,7 @@ flowchart TD
     DREV -->|REVISE| P3
     DREV -->|APPROVE| CPA
 
-    CPA{{"👤 Checkpoint A<br>Human reviews design"}}
+    CPA{{"👤🔊 Checkpoint A<br>Human reviews design"}}
     CPA -->|approved| P4
     CPA -->|rejected| P3
 
@@ -62,7 +62,7 @@ flowchart TD
     TREV -->|REVISE| P4
     TREV -->|APPROVE| CPB
 
-    CPB{{"👤 Checkpoint B<br>Human reviews tasks"}}
+    CPB{{"👤🔊 Checkpoint B<br>Human reviews tasks"}}
     CPB -->|approved| P5
     CPB -->|rejected| P4
 
@@ -84,7 +84,7 @@ flowchart TD
     FS --> POST{"Source type?"}
     POST -->|GitHub Issue| GH["💬 Post to GitHub Issue"]
     POST -->|Jira Issue| JIRA["💬 Post to Jira Issue"]
-    POST -->|Plain text| DONE(["✔ Done"])
+    POST -->|Plain text| DONE(["✔🔊 Done"])
     GH --> DONE
     JIRA --> DONE
 ```
@@ -109,7 +109,7 @@ flowchart TD
 - **Phase metrics** — Every agent invocation logged with token count, duration, and model; included in the Final Summary
 - **Source integration** — Accepts GitHub Issue URLs or Jira Issue URLs as input; posts the final summary back as a comment
 - **Automatic PR creation** — Commits, pushes, and opens a GitHub PR with a structured summary; skippable with `--nopr`
-- **Sound notification** — macOS notification sound (`afplay Glass.aiff`) plays automatically when the pipeline pauses at a human checkpoint, so you don't need to watch the terminal
+- **Sound notification** — macOS notification sound (`afplay Glass.aiff`) plays automatically when the pipeline pauses at a human checkpoint and when the pipeline completes, so you don't need to watch the terminal
 - **Debug report** — `--debug` flag appends a `## Debug Report` to `summary.md` with execution flow diagnostics: token outliers, retry counts, revision cycles, and missing phase-log entries
 - **Comprehensive test suite** — Automated tests covering state management, all hook scripts, and edge cases
 - **Fail-open hooks** — Hooks never block non-pipeline work; gracefully degrade if `jq` is missing

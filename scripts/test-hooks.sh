@@ -102,6 +102,7 @@ setup_workspace() {
   "revisions": { "designRevisions": 0, "taskRevisions": 0 },
   "tasks": ${tasks},
   "phaseLog": [],
+  "notifyOnStop": false,
   "timestamps": { "created": "2026-03-20T00:00:00Z", "lastUpdated": "2026-03-20T00:00:00Z", "phaseStarted": null },
   "error": null
 }
@@ -920,6 +921,29 @@ run_hook "stop-hook.sh" '{"hook_event_name":"Stop","stop_hook_active":false}' "C
 assert_exit 0 "stop allowed when pipeline completed"
 
 echo ""
+echo "--- notifyOnStop: true — sound fires once, then flag disarmed ---"
+reset_workspace
+WS="$(setup_workspace "final-summary" "completed")"
+# Set notifyOnStop to true to simulate pipeline just completed
+jq '.notifyOnStop = true' "${WS}/state.json" > "${WS}/state.json.tmp" && mv "${WS}/state.json.tmp" "${WS}/state.json"
+
+run_hook "stop-hook.sh" '{"hook_event_name":"Stop","stop_hook_active":false}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "stop allowed when notifyOnStop is true (completed workspace)"
+# Verify flag was cleared
+NOTIFY_AFTER="$(jq '.notifyOnStop' "${WS}/state.json")"
+if [ "$NOTIFY_AFTER" = "false" ]; then
+  pass "notifyOnStop flag cleared to false after first Stop"
+else
+  fail "notifyOnStop flag cleared to false after first Stop" "got: $NOTIFY_AFTER"
+fi
+
+echo ""
+echo "--- notifyOnStop: false after disarm — workspace invisible on second Stop ---"
+# Don't reset — reuse same workspace with notifyOnStop = false
+run_hook "stop-hook.sh" '{"hook_event_name":"Stop","stop_hook_active":false}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "stop allowed on second Stop (flag already cleared, workspace invisible)"
+
+echo ""
 echo "--- awaiting_human checkpoint: allow ---"
 reset_workspace
 WS="$(setup_workspace "checkpoint-a" "awaiting_human")"
@@ -928,13 +952,13 @@ run_hook "stop-hook.sh" '{"hook_event_name":"Stop","stop_hook_active":false}' "C
 assert_exit 0 "stop allowed at human checkpoint"
 
 echo ""
-echo "--- final-summary with summary.md: allow ---"
+echo "--- final-summary with summary.md: block (dead block removed) ---"
 reset_workspace
 WS="$(setup_workspace "final-summary" "in_progress")"
 touch "${WS}/summary.md"
 
 run_hook "stop-hook.sh" '{"hook_event_name":"Stop","stop_hook_active":false}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
-assert_exit 0 "stop allowed at final-summary with summary.md"
+assert_exit 2 "stop blocked at final-summary in_progress even with summary.md (dead block removed)"
 
 echo ""
 echo "--- abandoned pipeline: allow stop ---"
