@@ -622,6 +622,88 @@ else
   fail "special characters in spec-name preserved" "got: $SPECIAL_SPEC"
 fi
 
+echo ""
+echo "--- checkpointRevisionPending: init default (sm-init) ---"
+SM_WS_CRP="${TMPDIR_BASE}/sm-crp"
+mkdir -p "$SM_WS_CRP"
+bash "$SM" init "$SM_WS_CRP" "crp-test"
+
+CRP_INIT="$(jq -c '.checkpointRevisionPending' "${SM_WS_CRP}/state.json")"
+if [ "$CRP_INIT" = '{"checkpoint-a":false,"checkpoint-b":false}' ]; then
+  pass "sm-init: checkpointRevisionPending initialized with both values false"
+else
+  fail "sm-init: checkpointRevisionPending initialized with both values false" "got: $CRP_INIT"
+fi
+
+echo ""
+echo "--- set-revision-pending (sm-set) ---"
+bash "$SM" set-revision-pending "$SM_WS_CRP" checkpoint-a
+CRP_SET="$(jq '.checkpointRevisionPending["checkpoint-a"]' "${SM_WS_CRP}/state.json")"
+if [ "$CRP_SET" = "true" ]; then
+  pass "sm-set: set-revision-pending checkpoint-a sets flag to true"
+else
+  fail "sm-set: set-revision-pending checkpoint-a sets flag to true" "got: $CRP_SET"
+fi
+
+CRP_B_UNCHANGED="$(jq '.checkpointRevisionPending["checkpoint-b"]' "${SM_WS_CRP}/state.json")"
+if [ "$CRP_B_UNCHANGED" = "false" ]; then
+  pass "sm-set: checkpoint-b remains false after setting checkpoint-a"
+else
+  fail "sm-set: checkpoint-b remains false after setting checkpoint-a" "got: $CRP_B_UNCHANGED"
+fi
+
+echo ""
+echo "--- clear-revision-pending (sm-clear) ---"
+bash "$SM" clear-revision-pending "$SM_WS_CRP" checkpoint-a
+CRP_CLEAR="$(jq '.checkpointRevisionPending["checkpoint-a"]' "${SM_WS_CRP}/state.json")"
+if [ "$CRP_CLEAR" = "false" ]; then
+  pass "sm-clear: clear-revision-pending checkpoint-a sets flag to false"
+else
+  fail "sm-clear: clear-revision-pending checkpoint-a sets flag to false" "got: $CRP_CLEAR"
+fi
+
+echo ""
+echo "--- set-revision-pending invalid checkpoint (sm-invalid) ---"
+SM_INVALID_EXIT=0
+bash "$SM" set-revision-pending "$SM_WS_CRP" invalid-phase 2>/dev/null || SM_INVALID_EXIT=$?
+if [ "$SM_INVALID_EXIT" -eq 1 ]; then
+  pass "sm-invalid: set-revision-pending with invalid checkpoint exits 1"
+else
+  fail "sm-invalid: set-revision-pending with invalid checkpoint exits 1" "got exit: $SM_INVALID_EXIT"
+fi
+
+SM_CLEAR_INVALID_EXIT=0
+bash "$SM" clear-revision-pending "$SM_WS_CRP" invalid-phase 2>/dev/null || SM_CLEAR_INVALID_EXIT=$?
+if [ "$SM_CLEAR_INVALID_EXIT" -eq 1 ]; then
+  pass "sm-invalid: clear-revision-pending with invalid checkpoint exits 1"
+else
+  fail "sm-invalid: clear-revision-pending with invalid checkpoint exits 1" "got exit: $SM_CLEAR_INVALID_EXIT"
+fi
+
+echo ""
+echo "--- resume-info includes checkpointRevisionPending (sm-legacy) ---"
+# Test sm-legacy: resume-info on state without checkpointRevisionPending returns defaults
+SM_WS_LEGACY="${TMPDIR_BASE}/sm-legacy"
+mkdir -p "$SM_WS_LEGACY"
+bash "$SM" init "$SM_WS_LEGACY" "legacy-test"
+# Remove checkpointRevisionPending to simulate a legacy state file
+jq 'del(.checkpointRevisionPending)' "${SM_WS_LEGACY}/state.json" > "${SM_WS_LEGACY}/state.json.tmp" && mv "${SM_WS_LEGACY}/state.json.tmp" "${SM_WS_LEGACY}/state.json"
+
+LEGACY_CRP="$(bash "$SM" resume-info "$SM_WS_LEGACY" | jq -c '.checkpointRevisionPending')"
+if [ "$LEGACY_CRP" = '{"checkpoint-a":false,"checkpoint-b":false}' ]; then
+  pass "sm-legacy: resume-info returns default checkpointRevisionPending for legacy state"
+else
+  fail "sm-legacy: resume-info returns default checkpointRevisionPending for legacy state" "got: $LEGACY_CRP"
+fi
+
+# Test resume-info on new state includes checkpointRevisionPending correctly
+RINFO_CRP="$(bash "$SM" resume-info "$SM_WS_CRP" | jq -c '.checkpointRevisionPending')"
+if [ "$RINFO_CRP" = '{"checkpoint-a":false,"checkpoint-b":false}' ]; then
+  pass "resume-info includes checkpointRevisionPending in output"
+else
+  fail "resume-info includes checkpointRevisionPending in output" "got: $RINFO_CRP"
+fi
+
 # ============================================================
 echo ""
 echo "=== pre-tool-hook.sh tests ==="
@@ -1188,6 +1270,107 @@ WS="$(setup_workspace "checkpoint-b" "awaiting_human")"
 
 run_hook "pre-tool-hook.sh" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} checkpoint-b\"}}" "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
 assert_exit 0 "phase-complete checkpoint-b allowed when status is awaiting_human"
+
+# ============================================================
+echo ""
+echo "=== pre-tool-hook.sh: Rule 3j (checkpoint revision-pending guard) tests ==="
+# ============================================================
+
+echo ""
+echo "--- 3j-a: phase-complete checkpoint-a blocked when revision pending (flag=true, status=awaiting_human) ---"
+reset_workspace
+WS="$(setup_workspace "checkpoint-a" "awaiting_human")"
+bash "$SM" set-revision-pending "$WS" checkpoint-a
+
+run_hook "pre-tool-hook.sh" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} checkpoint-a\"}}" "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 2 "3j-a: phase-complete checkpoint-a blocked when checkpointRevisionPending.checkpoint-a is true"
+assert_stderr_contains "clear-revision-pending" "3j-a: block message instructs to call clear-revision-pending"
+
+echo ""
+echo "--- 3j-b: phase-complete checkpoint-a allowed when revision not pending (flag=false, status=awaiting_human) ---"
+reset_workspace
+WS="$(setup_workspace "checkpoint-a" "awaiting_human")"
+# checkpointRevisionPending field is absent from setup_workspace state.json; hook uses // false fallback
+
+run_hook "pre-tool-hook.sh" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} checkpoint-a\"}}" "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "3j-b: phase-complete checkpoint-a allowed when checkpointRevisionPending.checkpoint-a is false"
+
+echo ""
+echo "--- 3j-c: phase-complete checkpoint-b blocked when revision pending (flag=true, status=awaiting_human) ---"
+reset_workspace
+WS="$(setup_workspace "checkpoint-b" "awaiting_human")"
+bash "$SM" set-revision-pending "$WS" checkpoint-b
+
+run_hook "pre-tool-hook.sh" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} checkpoint-b\"}}" "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 2 "3j-c: phase-complete checkpoint-b blocked when checkpointRevisionPending.checkpoint-b is true"
+assert_stderr_contains "clear-revision-pending" "3j-c: block message instructs to call clear-revision-pending"
+
+echo ""
+echo "--- 3j-d: phase-complete checkpoint-b allowed when revision not pending (flag=false, status=awaiting_human) ---"
+reset_workspace
+WS="$(setup_workspace "checkpoint-b" "awaiting_human")"
+# checkpointRevisionPending field is absent from setup_workspace state.json; hook uses // false fallback
+
+run_hook "pre-tool-hook.sh" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} checkpoint-b\"}}" "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "3j-d: phase-complete checkpoint-b allowed when checkpointRevisionPending.checkpoint-b is false"
+
+echo ""
+echo "--- 3j-e: phase-complete checkpoint-a blocked when flag=true, status=pending (Rule 3e fires first) ---"
+reset_workspace
+WS="$(setup_workspace "checkpoint-a" "pending")"
+bash "$SM" set-revision-pending "$WS" checkpoint-a
+
+run_hook "pre-tool-hook.sh" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} checkpoint-a\"}}" "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 2 "3j-e: phase-complete checkpoint-a blocked when flag=true and status=pending (Rule 3e fires first)"
+
+echo ""
+echo "--- 3j-f: full revision-loop integration sequence ---"
+reset_workspace
+WS="$(setup_workspace "checkpoint-a" "awaiting_human")"
+
+# Step 1: User requests revision — set revision-pending flag
+bash "$SM" set-revision-pending "$WS" checkpoint-a
+CRP_FLAG="$(jq '.checkpointRevisionPending["checkpoint-a"]' "${WS}/state.json")"
+if [ "$CRP_FLAG" = "true" ]; then
+  pass "3j-f: set-revision-pending sets flag to true"
+else
+  fail "3j-f: set-revision-pending sets flag to true" "got: $CRP_FLAG"
+fi
+
+# Step 2: Re-run phases (simulate by setting currentPhaseStatus to pending via direct state update)
+jq '.currentPhase = "checkpoint-a" | .currentPhaseStatus = "pending"' "${WS}/state.json" > "${WS}/state.tmp" && mv "${WS}/state.tmp" "${WS}/state.json"
+
+# Step 3: After phase-3b completes, checkpoint call advances status to awaiting_human (flag stays true)
+bash "$SM" checkpoint "$WS" checkpoint-a
+CP_STATUS="$(jq -r '.currentPhaseStatus' "${WS}/state.json")"
+if [ "$CP_STATUS" = "awaiting_human" ]; then
+  pass "3j-f: checkpoint call advances status to awaiting_human"
+else
+  fail "3j-f: checkpoint call advances status to awaiting_human" "got: $CP_STATUS"
+fi
+CRP_AFTER_CP="$(jq '.checkpointRevisionPending["checkpoint-a"]' "${WS}/state.json")"
+if [ "$CRP_AFTER_CP" = "true" ]; then
+  pass "3j-f: revision-pending flag remains true after checkpoint call"
+else
+  fail "3j-f: revision-pending flag remains true after checkpoint call" "got: $CRP_AFTER_CP"
+fi
+
+# Step 4: phase-complete checkpoint-a must be blocked (flag is still true, status is awaiting_human)
+run_hook "pre-tool-hook.sh" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} checkpoint-a\"}}" "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 2 "3j-f: phase-complete checkpoint-a blocked while revision-pending flag is true"
+
+# Step 5: User approves the revised artifact — clear revision-pending flag
+bash "$SM" clear-revision-pending "$WS" checkpoint-a
+CRP_CLEARED="$(jq '.checkpointRevisionPending["checkpoint-a"]' "${WS}/state.json")"
+if [ "$CRP_CLEARED" = "false" ]; then
+  pass "3j-f: clear-revision-pending sets flag to false"
+else
+  fail "3j-f: clear-revision-pending sets flag to false" "got: $CRP_CLEARED"
+fi
+
+# Step 6: phase-complete checkpoint-a must now be allowed (flag is false, status is awaiting_human)
+run_hook "pre-tool-hook.sh" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} checkpoint-a\"}}" "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "3j-f: phase-complete checkpoint-a allowed after clear-revision-pending"
 
 echo ""
 echo "--- 3g: task-init guard — task-init blocked when checkpoint-b not completed or skipped ---"

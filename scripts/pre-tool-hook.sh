@@ -22,6 +22,8 @@
 #        (non-blocking, same pattern as 3f)
 #    3i. Warn when phase-log entry is missing before phase-complete
 #        (non-blocking, warning only for logged phases)
+#    3j. phase-complete checkpoint-a/b blocked when checkpointRevisionPending[<checkpoint>]
+#        is true; orchestrator must call clear-revision-pending first (blocking)
 #
 # Receives JSON on stdin from Claude Code. Outputs JSON to stdout for flow control.
 # Exit 0 = allow (default), Exit 2 + stderr = block.
@@ -314,6 +316,23 @@ if [ "$TOOL_NAME" = "Bash" ]; then
           CP_STATUS="$(jq -r '.currentPhaseStatus // empty' "${PC_WS}/state.json" 2>/dev/null || true)"
           if [ "$CP_STATUS" != "awaiting_human" ]; then
             echo "BLOCKED: phase-complete ${PC_PHASE} requires currentPhaseStatus == \"awaiting_human\". Call '\$SM checkpoint {workspace} ${PC_PHASE}' first to register the human review pause before completing this checkpoint." >&2
+            exit 2
+          fi
+          ;;
+      esac
+    fi
+
+    # 3j. Checkpoint revision-pending guard: phase-complete checkpoint-a/b blocked when
+    # checkpointRevisionPending[<checkpoint>] == true. The orchestrator must call
+    # '$SM clear-revision-pending <workspace> <checkpoint>' after receiving explicit user
+    # approval before calling phase-complete. This prevents the orchestrator from completing
+    # a checkpoint without the user seeing the revised artifact after a REVISE cycle.
+    if [ -n "$PC_MATCH" ]; then
+      case "$PC_PHASE" in
+        checkpoint-a|checkpoint-b)
+          REV_PENDING="$(jq -r --arg k "$PC_PHASE" '.checkpointRevisionPending[$k] // false' "${PC_WS}/state.json" 2>/dev/null || echo "false")"
+          if [ "$REV_PENDING" = "true" ]; then
+            echo "BLOCKED: phase-complete ${PC_PHASE} requires 'clear-revision-pending' to be called first. The user requested a revision — call '\$SM clear-revision-pending {workspace} ${PC_PHASE}' after receiving explicit user approval, then call phase-complete." >&2
             exit 2
           fi
           ;;
