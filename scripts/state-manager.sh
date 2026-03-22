@@ -24,6 +24,8 @@
 #   set-skip-pr <workspace>               Set skipPr = true in state.json
 #   set-debug <workspace>                 Set debug = true in state.json
 #   set-use-current-branch <workspace> <branch>  Record that the user chose to stay on an existing branch
+#   set-revision-pending <workspace> <checkpoint>  Set checkpointRevisionPending[<checkpoint>] = true
+#   clear-revision-pending <workspace> <checkpoint>  Set checkpointRevisionPending[<checkpoint>] = false
 #   abandon <workspace>                    Mark pipeline as abandoned
 #   resume-info <workspace>                Print resume information as JSON
 
@@ -161,6 +163,7 @@ cmd_init() {
       currentPhaseStatus: "pending",
       completedPhases: ["setup"],
       revisions: { designRevisions: 0, taskRevisions: 0 },
+      checkpointRevisionPending: { "checkpoint-a": false, "checkpoint-b": false },
       tasks: {},
       phaseLog: [],
       timestamps: { created: $ts, lastUpdated: $ts, phaseStarted: null },
@@ -537,6 +540,58 @@ cmd_set_use_current_branch() {
   locked_update "$(state_path "$1")" _do_set_use_current_branch "$1" "$2"
 }
 
+_do_set_revision_pending() {
+  local workspace="$1"
+  local checkpoint="$2"
+  local state
+  state="$(read_state "$workspace")"
+  local ts
+  ts="$(now_iso)"
+
+  case "$checkpoint" in
+    checkpoint-a|checkpoint-b) ;;
+    *) die "Invalid checkpoint: ${checkpoint} (expected: checkpoint-a, checkpoint-b)" ;;
+  esac
+
+  state="$(echo "$state" | jq \
+    --arg k "$checkpoint" \
+    --arg ts "$ts" \
+    '.checkpointRevisionPending[$k] = true |
+     .timestamps.lastUpdated = $ts'
+  )"
+  write_state "$workspace" "$state"
+}
+
+cmd_set_revision_pending() {
+  locked_update "$(state_path "$1")" _do_set_revision_pending "$1" "$2"
+}
+
+_do_clear_revision_pending() {
+  local workspace="$1"
+  local checkpoint="$2"
+  local state
+  state="$(read_state "$workspace")"
+  local ts
+  ts="$(now_iso)"
+
+  case "$checkpoint" in
+    checkpoint-a|checkpoint-b) ;;
+    *) die "Invalid checkpoint: ${checkpoint} (expected: checkpoint-a, checkpoint-b)" ;;
+  esac
+
+  state="$(echo "$state" | jq \
+    --arg k "$checkpoint" \
+    --arg ts "$ts" \
+    '.checkpointRevisionPending[$k] = false |
+     .timestamps.lastUpdated = $ts'
+  )"
+  write_state "$workspace" "$state"
+}
+
+cmd_clear_revision_pending() {
+  locked_update "$(state_path "$1")" _do_clear_revision_pending "$1" "$2"
+}
+
 _do_skip_phase() {
   local workspace="$1"
   local phase="$2"
@@ -686,7 +741,8 @@ cmd_resume_info() {
       .tasks | to_entries[] |
       select(.value.implRetries > 0 or .value.reviewRetries > 0) |
       { task: .key, implRetries: .value.implRetries, reviewRetries: .value.reviewRetries }
-    ]
+    ],
+    checkpointRevisionPending: (.checkpointRevisionPending // {"checkpoint-a": false, "checkpoint-b": false})
   }'
 }
 
@@ -720,6 +776,8 @@ case "$command" in
   set-skip-pr)       check_args 1 $# "set-skip-pr <workspace>";                 cmd_set_skip_pr "$@" ;;
   set-debug)         check_args 1 $# "set-debug <workspace>";                   cmd_set_debug "$@" ;;
   set-use-current-branch) check_args 2 $# "set-use-current-branch <workspace> <branch>"; cmd_set_use_current_branch "$@" ;;
+  set-revision-pending)   check_args 2 $# "set-revision-pending <workspace> <checkpoint>"; cmd_set_revision_pending "$@" ;;
+  clear-revision-pending) check_args 2 $# "clear-revision-pending <workspace> <checkpoint>"; cmd_clear_revision_pending "$@" ;;
   skip-phase)        check_args 2 $# "skip-phase <workspace> <phase>";           cmd_skip_phase "$@" ;;
   phase-log)         check_args 4 $# "phase-log <workspace> <phase> <tokens> <duration_ms> [model]"; cmd_phase_log "$@" ;;
   phase-stats)       check_args 1 $# "phase-stats <workspace>";                  cmd_phase_stats "$@" ;;

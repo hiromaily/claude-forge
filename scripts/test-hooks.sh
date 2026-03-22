@@ -622,6 +622,88 @@ else
   fail "special characters in spec-name preserved" "got: $SPECIAL_SPEC"
 fi
 
+echo ""
+echo "--- checkpointRevisionPending: init default (sm-init) ---"
+SM_WS_CRP="${TMPDIR_BASE}/sm-crp"
+mkdir -p "$SM_WS_CRP"
+bash "$SM" init "$SM_WS_CRP" "crp-test"
+
+CRP_INIT="$(jq -c '.checkpointRevisionPending' "${SM_WS_CRP}/state.json")"
+if [ "$CRP_INIT" = '{"checkpoint-a":false,"checkpoint-b":false}' ]; then
+  pass "sm-init: checkpointRevisionPending initialized with both values false"
+else
+  fail "sm-init: checkpointRevisionPending initialized with both values false" "got: $CRP_INIT"
+fi
+
+echo ""
+echo "--- set-revision-pending (sm-set) ---"
+bash "$SM" set-revision-pending "$SM_WS_CRP" checkpoint-a
+CRP_SET="$(jq '.checkpointRevisionPending["checkpoint-a"]' "${SM_WS_CRP}/state.json")"
+if [ "$CRP_SET" = "true" ]; then
+  pass "sm-set: set-revision-pending checkpoint-a sets flag to true"
+else
+  fail "sm-set: set-revision-pending checkpoint-a sets flag to true" "got: $CRP_SET"
+fi
+
+CRP_B_UNCHANGED="$(jq '.checkpointRevisionPending["checkpoint-b"]' "${SM_WS_CRP}/state.json")"
+if [ "$CRP_B_UNCHANGED" = "false" ]; then
+  pass "sm-set: checkpoint-b remains false after setting checkpoint-a"
+else
+  fail "sm-set: checkpoint-b remains false after setting checkpoint-a" "got: $CRP_B_UNCHANGED"
+fi
+
+echo ""
+echo "--- clear-revision-pending (sm-clear) ---"
+bash "$SM" clear-revision-pending "$SM_WS_CRP" checkpoint-a
+CRP_CLEAR="$(jq '.checkpointRevisionPending["checkpoint-a"]' "${SM_WS_CRP}/state.json")"
+if [ "$CRP_CLEAR" = "false" ]; then
+  pass "sm-clear: clear-revision-pending checkpoint-a sets flag to false"
+else
+  fail "sm-clear: clear-revision-pending checkpoint-a sets flag to false" "got: $CRP_CLEAR"
+fi
+
+echo ""
+echo "--- set-revision-pending invalid checkpoint (sm-invalid) ---"
+SM_INVALID_EXIT=0
+bash "$SM" set-revision-pending "$SM_WS_CRP" invalid-phase 2>/dev/null || SM_INVALID_EXIT=$?
+if [ "$SM_INVALID_EXIT" -eq 1 ]; then
+  pass "sm-invalid: set-revision-pending with invalid checkpoint exits 1"
+else
+  fail "sm-invalid: set-revision-pending with invalid checkpoint exits 1" "got exit: $SM_INVALID_EXIT"
+fi
+
+SM_CLEAR_INVALID_EXIT=0
+bash "$SM" clear-revision-pending "$SM_WS_CRP" invalid-phase 2>/dev/null || SM_CLEAR_INVALID_EXIT=$?
+if [ "$SM_CLEAR_INVALID_EXIT" -eq 1 ]; then
+  pass "sm-invalid: clear-revision-pending with invalid checkpoint exits 1"
+else
+  fail "sm-invalid: clear-revision-pending with invalid checkpoint exits 1" "got exit: $SM_CLEAR_INVALID_EXIT"
+fi
+
+echo ""
+echo "--- resume-info includes checkpointRevisionPending (sm-legacy) ---"
+# Test sm-legacy: resume-info on state without checkpointRevisionPending returns defaults
+SM_WS_LEGACY="${TMPDIR_BASE}/sm-legacy"
+mkdir -p "$SM_WS_LEGACY"
+bash "$SM" init "$SM_WS_LEGACY" "legacy-test"
+# Remove checkpointRevisionPending to simulate a legacy state file
+jq 'del(.checkpointRevisionPending)' "${SM_WS_LEGACY}/state.json" > "${SM_WS_LEGACY}/state.json.tmp" && mv "${SM_WS_LEGACY}/state.json.tmp" "${SM_WS_LEGACY}/state.json"
+
+LEGACY_CRP="$(bash "$SM" resume-info "$SM_WS_LEGACY" | jq -c '.checkpointRevisionPending')"
+if [ "$LEGACY_CRP" = '{"checkpoint-a":false,"checkpoint-b":false}' ]; then
+  pass "sm-legacy: resume-info returns default checkpointRevisionPending for legacy state"
+else
+  fail "sm-legacy: resume-info returns default checkpointRevisionPending for legacy state" "got: $LEGACY_CRP"
+fi
+
+# Test resume-info on new state includes checkpointRevisionPending correctly
+RINFO_CRP="$(bash "$SM" resume-info "$SM_WS_CRP" | jq -c '.checkpointRevisionPending')"
+if [ "$RINFO_CRP" = '{"checkpoint-a":false,"checkpoint-b":false}' ]; then
+  pass "resume-info includes checkpointRevisionPending in output"
+else
+  fail "resume-info includes checkpointRevisionPending in output" "got: $RINFO_CRP"
+fi
+
 # ============================================================
 echo ""
 echo "=== pre-tool-hook.sh tests ==="
