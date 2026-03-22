@@ -854,7 +854,7 @@ $SM phase-complete {workspace} phase-3b
 
 ### Checkpoint A — Design Review (Human)
 
-> **Skip gate 1:** If `checkpoint-a` is in `{skipped_phases}`, proceed to the next block.
+> **Skip gate 1:** If `checkpoint-a` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 > **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND the AI reviewer verdict in `{workspace}/review-design.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
 > Print: "Auto-approving Checkpoint A (AI verdict: APPROVE_WITH_NOTES)." (or APPROVE)
@@ -949,7 +949,7 @@ $SM phase-complete {workspace} phase-4b
 
 ### Checkpoint B — Task Review (Human)
 
-> **Skip gate 1:** If `checkpoint-b` is in `{skipped_phases}`, proceed to the next block.
+> **Skip gate 1:** If `checkpoint-b` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 > **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND the AI reviewer verdict in `{workspace}/review-tasks.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
 >
@@ -1356,12 +1356,6 @@ Stop immediately and report an error:
 After completing the per-type dispatch block above:
 
 4. Present the contents of `summary.md` to the user.
-5. **Update the commit to include summary.md** — skip this step if `{task_type}` is `investigation` (no feature branch exists):
-   ```bash
-   git add {workspace}/summary.md
-   git commit --amend --no-edit
-   git push --force-with-lease
-   ```
 
 ---
 
@@ -1507,6 +1501,13 @@ For `lite` + `investigation` flows: after writing the section, add a note in the
 _Retrospective on what would have made this work easier. Note: this run used the `lite` flow template — analyst and investigator output was merged into `analysis.md`._
 
 ---
+
+5. **Update the commit to include summary.md** — skip this step if `{task_type}` is `investigation` (no feature branch exists):
+   ```bash
+   git add {workspace}/summary.md
+   git commit --amend --no-edit
+   git push --force-with-lease
+   ```
 
 ```bash
 $SM phase-complete {workspace} final-summary
