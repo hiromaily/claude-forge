@@ -688,9 +688,9 @@ Before running any phase, establish the workspace:
 
 | When | Command | Consequence if skipped |
 |------|---------|----------------------|
-| **Workspace Setup step 7** (immediately after `$SM init`) | `$SM set-task-type {workspace} {task_type}` | `taskType: null` → Final Summary dispatch error, wrong phase skipping |
-| **Workspace Setup step 7** (after `set-task-type`) | `$SM set-effort {workspace} {effort}` | `effort: null` → pre-tool-hook Rule 3f warning on every phase-1 start; effort missing from resume-info |
-| **Workspace Setup step 7** (after `set-effort`) | `$SM set-flow-template {workspace} {flow_template}` | `flowTemplate: null` → flow template missing from resume-info; wrong template restored on resume |
+| **The Initialize-state step of Workspace Setup** (immediately after `$SM init`) | `$SM set-task-type {workspace} {task_type}` | `taskType: null` → Final Summary dispatch error, wrong phase skipping |
+| **The Initialize-state step of Workspace Setup** (after `set-task-type`) | `$SM set-effort {workspace} {effort}` | `effort: null` → pre-tool-hook Rule 3f warning on every phase-1 start; effort missing from resume-info |
+| **The Initialize-state step of Workspace Setup** (after `set-effort`) | `$SM set-flow-template {workspace} {flow_template}` | `flowTemplate: null` → flow template missing from resume-info; wrong template restored on resume |
 | **After every Agent tool call** | `$SM phase-log {workspace} {phase-id} {tokens} {duration} {model}` | Execution Stats table in Final Summary is empty |
 | **At every Checkpoint (A/B)** | `$SM checkpoint {workspace} {phase}` before `$SM phase-complete` | `currentPhaseStatus` never reaches `awaiting_human` → checkpoint hook guard blocks `phase-complete` (exit 2), stop-hook safety net bypassed |
 
