@@ -11,6 +11,10 @@ claude-forge/
 ├── BACKLOG.md             ← known issues, improvement candidates
 ├── .claude-plugin/
 │   └── plugin.json        ← plugin metadata (name, version)
+├── .claude/
+│   └── rules/
+│       ├── git.md         ← Git practices enforced in this repo
+│       └── shell-script.md ← Shell scripting conventions for *.sh files
 ├── agents/                ← 11 named agent definitions (.md files)
 │   ├── README.md          ← agent roster with roles
 │   ├── situation-analyst.md  (Phase 1: codebase mapping)
@@ -131,11 +135,21 @@ SKILL.md (orchestrator)
 - The orchestrator never reads source code — only small artifact files. This is a token economy rule.
 - **Prefer deterministic enforcement over prompt instructions.** The orchestrator (SKILL.md) is an LLM and may skip or misinterpret instructions non-deterministically. When adding or changing pipeline behavior, first consider whether a hook script can enforce it deterministically (exit 2 = block). Use prompt instructions only for behavior that cannot be expressed as a state-based guard. Examples: checkpoint guards (P10-3), artifact guards, read-only phase enforcement — all implemented as hooks, not just prose.
 
+### Script structure conventions
+
+**state-manager.sh** — dispatch calls `locked_update` directly. There is no intermediate `cmd_*` wrapper layer. Write commands must always go through `locked_update` to be safe under parallel Phase 5 execution. Read-only commands that only call `read_state` + `jq` do not need locking.
+
+**pre-tool-hook.sh** — Rule 3 sub-checks (3a–3j) are each extracted into a named function (`check_phase1_warnings`, `check_task_init_guard`, etc.). The main dispatch block calls these functions in sequence. Do not inline new sub-checks into the dispatch block — add a named function and call it from there.
+
+**find_active_workspace** — this function is duplicated across `pre-tool-hook.sh`, `post-agent-hook.sh`, and `stop-hook.sh`. **The copies are intentionally different**: each script uses a slightly different filter predicate suited to its own enforcement context. Do not unify them into a shared library. Each copy carries a comment explaining the divergence — read it before modifying.
+
+**Subcommand count** — `state-manager.sh` currently has **24** dispatch entries. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
+
 ### What NOT to do
 - Do NOT add `isolation: "worktree"` to any Agent tool call — breaks inter-task visibility
 - Do NOT duplicate agent instructions in SKILL.md prompts — agents have their own system prompts
 - Do NOT store state in memory/conversation — use state.json via state-manager.sh
-- Do NOT add flock to scripts — macOS doesn't have it; use the existing mkdir-based lock
+- Do NOT use bare `flock` without a mkdir fallback — macOS lacks `flock` by default. The existing `locked_update` helper in state-manager.sh already handles both cases; use it instead of reimplementing locking
 
 ## Before You Start Working
 
@@ -143,3 +157,5 @@ SKILL.md (orchestrator)
 2. Read `ARCHITECTURE.md` for design rationale if making structural changes
 3. Check `agents/README.md` for the current agent roster
 4. Run `bash scripts/state-manager.sh` with no args to see available commands
+5. Read `.claude/rules/git.md` for Git branch and commit conventions
+6. Read `.claude/rules/shell-script.md` for Bash scripting conventions before editing any `.sh` file
