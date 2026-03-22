@@ -31,9 +31,11 @@ find_active_workspace() {
   local latest_ts=""
   for state_file in "${project_dir}"/.specs/*/state.json; do
     [ -f "$state_file" ] || continue
-    local status ts
+    local status ts notify_flag
     status="$(jq -r '.currentPhaseStatus // empty' "$state_file" 2>/dev/null || true)"
-    if [ "$status" != "completed" ] && [ "$status" != "abandoned" ] && [ -n "$status" ]; then
+    notify_flag="$(jq -r '.notifyOnStop // false' "$state_file" 2>/dev/null || true)"
+    if { [ "$status" != "completed" ] && [ "$status" != "abandoned" ] && [ -n "$status" ]; } || \
+       [ "$notify_flag" = "true" ]; then
       ts="$(jq -r '.timestamps.lastUpdated // ""' "$state_file" 2>/dev/null || true)"
       if [ -z "$latest_ts" ] || [[ "$ts" > "$latest_ts" ]]; then
         latest_ts="$ts"
@@ -53,10 +55,17 @@ STATE_FILE="${WORKSPACE}/state.json"
 
 CURRENT_PHASE="$(jq -r '.currentPhase' "$STATE_FILE" 2>/dev/null || true)"
 CURRENT_STATUS="$(jq -r '.currentPhaseStatus' "$STATE_FILE" 2>/dev/null || true)"
+NOTIFY_ON_STOP="$(jq -r '.notifyOnStop // false' "$STATE_FILE" 2>/dev/null || true)"
 
-# Allow stop if pipeline is completed or abandoned (no human attention needed)
 case "$CURRENT_STATUS" in
-  completed|abandoned)
+  completed)
+    if [ "$NOTIFY_ON_STOP" = "true" ]; then
+      notify_human
+      jq '.notifyOnStop = false' "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+    fi
+    exit 0
+    ;;
+  abandoned)
     exit 0
     ;;
   awaiting_human)
@@ -64,12 +73,6 @@ case "$CURRENT_STATUS" in
     exit 0
     ;;
 esac
-
-# Allow stop if we're at the final-summary phase and summary.md exists
-if [ "$CURRENT_PHASE" = "final-summary" ] && [ -f "${WORKSPACE}/summary.md" ]; then
-  notify_human
-  exit 0
-fi
 
 # Pipeline is active and not at a safe stop point — block with exit 2
 COMPLETED_PHASES="$(jq -r '.completedPhases | join(", ")' "$STATE_FILE" 2>/dev/null || echo "none")"
