@@ -18,6 +18,16 @@ TOOL_NAME="$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null || true)"
 [ "$TOOL_NAME" = "Agent" ] || exit 0
 
 # Find active pipeline workspace (most recently updated in_progress pipeline)
+#
+# INTENTIONAL DIVERGENCE from pre-tool-hook.sh and stop-hook.sh:
+#   Filter predicate: status == "in_progress" only
+#   Accepted statuses: in_progress
+#
+#   Rationale: post-agent-hook.sh validates agent output quality after an Agent
+#   tool call completes. Output quality checks are only meaningful while a phase
+#   is actively running (in_progress). When the pipeline is awaiting human review
+#   (awaiting_human) or not yet started (pending), there is no agent output to
+#   validate, so those statuses are intentionally excluded.
 find_active_workspace() {
   local project_dir="${CLAUDE_PROJECT_DIR:-.}"
   local latest_file=""
