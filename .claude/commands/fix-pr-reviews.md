@@ -1,3 +1,5 @@
+# Fix PR review comments
+
 For the current branch, fetch all open pull request review comments using `gh pr view --json number` then `gh api repos/{owner}/{repo}/pulls/{number}/comments`. For each comment that has not yet been resolved:
 
 1. Read the referenced file and line to understand the context.
