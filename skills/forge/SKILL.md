@@ -607,6 +607,10 @@ Before running any phase, establish the workspace:
 | **The Initialize-state step of Workspace Setup** (after `set-effort`) | `$SM set-flow-template {workspace} {flow_template}` | `flowTemplate: null` → flow template missing from resume-info; wrong template restored on resume |
 | **After every Agent tool call** | `$SM phase-log {workspace} {phase-id} {tokens} {duration} {model}` | Execution Stats table in Final Summary is empty |
 | **At every Checkpoint (A/B)** | `$SM checkpoint {workspace} {phase}` before `$SM phase-complete` | `currentPhaseStatus` never reaches `awaiting_human` → checkpoint hook guard blocks `phase-complete` (exit 2), stop-hook safety net bypassed |
+| **When the USER requests a revision at Checkpoint A or B** | `$SM set-revision-pending {workspace} checkpoint-a` (or `checkpoint-b`) | Revision-pending flag not set → Rule 3j hook safety net cannot block premature `phase-complete`; auto-approve may fire on a revised artifact the user has not seen |
+| **After the user explicitly approves the revised artifact at Checkpoint A or B** | `$SM clear-revision-pending {workspace} checkpoint-a` (or `checkpoint-b`) before `$SM phase-complete` | `phase-complete` blocked by Rule 3j hook (exit 2) — only needed if `set-revision-pending` was previously called for this checkpoint |
+
+> **Note — skip matrix precedes flag logic:** Investigation tasks skip `checkpoint-a` entirely during Workspace Setup (the skip matrix adds `checkpoint-a` to `skippedPhases`). Skip gate 1 fires first and the entire checkpoint block is bypassed, so `checkpointRevisionPending` is never evaluated for those tasks. Tasks that skip `checkpoint-a` are therefore unaffected by this flag.
 
 ---
 
@@ -856,7 +860,8 @@ $SM phase-complete {workspace} phase-3b
 
 > **Skip gate 1:** If `checkpoint-a` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
-> **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND the AI reviewer verdict in `{workspace}/review-design.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
+> **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND `checkpointRevisionPending["checkpoint-a"]` is `false` (no pending user revision) AND the AI reviewer verdict in `{workspace}/review-design.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
+> This prose condition is the primary guard; Rule 3j in the hook is the safety net if the orchestrator bypasses this condition.
 > Print: "Auto-approving Checkpoint A (AI verdict: APPROVE_WITH_NOTES)." (or APPROVE)
 > Call:
 > ```bash
@@ -879,11 +884,21 @@ $SM checkpoint {workspace} checkpoint-a
    - Present: approach chosen, key changes, risk level, AI review verdict and any MINOR findings from `review-design.md`.
    - The workspace path `{workspace}` (so the user can reference it if the session is interrupted)
 3. Ask: "Does this design look right? Approve to continue to task decomposition, or share feedback to revise."
-4. If the user requests changes: re-run Phase 3 with user feedback appended, then re-run Phase 3b, and re-present.
+4. If the user requests changes:
+   ```bash
+   $SM set-revision-pending {workspace} checkpoint-a
+   ```
+   (Only call this when the USER at this checkpoint requests a change.
+   Do NOT call this for AI REVISE cycles where Phase 3b returns REVISE without user input at the checkpoint.)
+   - Re-run Phase 3 with user feedback appended, then re-run Phase 3b.
+   - After Phase 3b completes, call: `$SM checkpoint {workspace} checkpoint-a`
+   - Re-present the updated design to the user. STOP AND WAIT.
 5. Once approved:
    ```bash
+   $SM clear-revision-pending {workspace} checkpoint-a
    $SM phase-complete {workspace} checkpoint-a
    ```
+   (Call `clear-revision-pending` before `phase-complete`, but only if `set-revision-pending` was previously called for this checkpoint.)
 
 ---
 
@@ -951,13 +966,15 @@ $SM phase-complete {workspace} phase-4b
 
 > **Skip gate 1:** If `checkpoint-b` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
-> **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND the AI reviewer verdict in `{workspace}/review-tasks.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
+> **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND `checkpointRevisionPending["checkpoint-b"]` is `false` (no pending user revision) AND the AI reviewer verdict in `{workspace}/review-tasks.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
+> This prose condition is the primary guard; Rule 3j in the hook is the safety net if the orchestrator bypasses this condition.
 >
-> IMPORTANT: Auto-approve only fires when BOTH conditions are true:
+> IMPORTANT: Auto-approve only fires when ALL conditions are true:
 > - `{auto_approve}` is `true`
+> - `checkpointRevisionPending["checkpoint-b"]` is `false`
 > - `review-tasks.md` verdict is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings)
 >
-> If either condition is false, continue to the human approval path below. Do NOT conflate the auto-approve path with the human path.
+> If any condition is false, continue to the human approval path below. Do NOT conflate the auto-approve path with the human path.
 >
 > Print: "Auto-approving Checkpoint B (AI verdict: APPROVE_WITH_NOTES)." (or APPROVE)
 > Call:
@@ -988,11 +1005,21 @@ If neither skip gate fired:
 
 5. **WAIT FOR USER RESPONSE. Do not proceed further in this message.**
 
-6. **Change-request step** — If the user requests changes: re-run Phase 4 with user feedback appended, then re-run Phase 4b, and re-present.
+6. **Change-request step** — If the user requests changes:
+   ```bash
+   $SM set-revision-pending {workspace} checkpoint-b
+   ```
+   (Only call this when the USER at this checkpoint requests a change.
+   Do NOT call this for AI REVISE cycles where Phase 4b returns REVISE without user input at the checkpoint.)
+   - Re-run Phase 4 with user feedback appended, then re-run Phase 4b.
+   - After Phase 4b completes, call: `$SM checkpoint {workspace} checkpoint-b`
+   - Re-present the updated tasks to the user. STOP AND WAIT.
 7. Once the user approves, call:
    ```bash
+   $SM clear-revision-pending {workspace} checkpoint-b
    $SM phase-complete {workspace} checkpoint-b
    ```
+   (Call `clear-revision-pending` before `phase-complete`, but only if `set-revision-pending` was previously called for this checkpoint.)
 
 8. **Populate task state** — parse `tasks.md` and initialize task tracking (runs after human approval OR after the auto-approve path above):
    ```bash
