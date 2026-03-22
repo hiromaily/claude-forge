@@ -646,3 +646,12 @@ Token economy. If the orchestrator read implementation files, its context would 
 2. Agents can be reused from other skills
 3. Model can be configured per-agent in frontmatter
 4. The orchestrator SKILL.md stays small (~500 lines vs ~900 with inline prompts)
+
+### Why inline comment anchors for SKILL.md cross-references?
+
+SKILL.md is consumed by an LLM reading raw Markdown, not a renderer. HTML anchors
+(`<a id="...">`) would be invisible in rendered view but visible to the LLM in raw text.
+The chosen convention appends `<!-- anchor: <token> -->` to target headings and uses the
+token (not the heading text) in all prose references. Tokens are short, lowercase,
+hyphenated, and can be searched with `grep anchor:`. This is the stable-label convention
+for SKILL.md. When adding new cross-referenced sections, follow this pattern.
