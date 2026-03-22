@@ -12,7 +12,7 @@
 - **Before creating a branch, sync `main` first.**
   ```bash
   git checkout main
-  git pull
+  git pull --rebase
   git checkout -b feature/your-branch-name
   ```
   Branching from a stale `main` causes the new branch to miss upstream commits, leading to conflicts and missing content when rebasing later.

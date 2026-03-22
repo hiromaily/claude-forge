@@ -20,7 +20,7 @@ Hooks must never block legitimate non-pipeline work. Follow the fail-open patter
 command -v jq >/dev/null 2>&1 || exit 0
 
 # Wrap jq calls with fallback so parse failures don't block
-VALUE="$(echo "$INPUT" | jq -r '.field // empty' 2>/dev/null || true)"
+VALUE="$(jq -r '.field // empty' <<< "$INPUT" 2>/dev/null || true)"
 [ -z "$VALUE" ] && exit 0
 ```
 
@@ -32,7 +32,7 @@ VALUE="$(echo "$INPUT" | jq -r '.field // empty' 2>/dev/null || true)"
 - Prefer a single `jq` invocation over multiple chained calls. Combining extractions into one call halves the subprocess overhead and avoids operator-precedence bugs:
   ```bash
   # Good — single call
-  read -r PHASE STATUS <<< "$(echo "$STATE" | jq -r '[.currentPhase, .currentPhaseStatus] | @tsv')"
+  read -r PHASE STATUS <<< "$(jq -r '[.currentPhase, .currentPhaseStatus] | @tsv' <<< "$STATE")"
 
   # Avoid — two calls
   PHASE="$(echo "$STATE" | jq -r '.currentPhase')"
@@ -97,10 +97,11 @@ Do not add a bare `flock` call without the mkdir fallback — it will break on s
 - Run `bash scripts/test-hooks.sh` after every change to any script. All existing tests must continue to pass.
 - Test new state-manager commands manually with a temp directory:
   ```bash
-  mkdir -p /tmp/test-sm
-  bash scripts/state-manager.sh init /tmp/test-sm test-spec
+  local temp_dir
+  temp_dir=$(mktemp -d)
+  bash scripts/state-manager.sh init "$temp_dir" test-spec
   # ... test commands ...
-  rm -rf /tmp/test-sm
+  rm -rf "$temp_dir"
   ```
 - Pipe sample JSON to hook scripts directly to test them in isolation:
   ```bash
