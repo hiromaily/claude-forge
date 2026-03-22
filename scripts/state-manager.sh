@@ -540,9 +540,10 @@ cmd_set_use_current_branch() {
   locked_update "$(state_path "$1")" _do_set_use_current_branch "$1" "$2"
 }
 
-_do_set_revision_pending() {
+_do_update_revision_pending() {
   local workspace="$1"
   local checkpoint="$2"
+  local value="$3"
   local state
   state="$(read_state "$workspace")"
   local ts
@@ -555,41 +556,20 @@ _do_set_revision_pending() {
 
   state="$(echo "$state" | jq \
     --arg k "$checkpoint" \
+    --argjson v "$value" \
     --arg ts "$ts" \
-    '.checkpointRevisionPending[$k] = true |
+    '.checkpointRevisionPending[$k] = $v |
      .timestamps.lastUpdated = $ts'
   )"
   write_state "$workspace" "$state"
 }
 
 cmd_set_revision_pending() {
-  locked_update "$(state_path "$1")" _do_set_revision_pending "$1" "$2"
-}
-
-_do_clear_revision_pending() {
-  local workspace="$1"
-  local checkpoint="$2"
-  local state
-  state="$(read_state "$workspace")"
-  local ts
-  ts="$(now_iso)"
-
-  case "$checkpoint" in
-    checkpoint-a|checkpoint-b) ;;
-    *) die "Invalid checkpoint: ${checkpoint} (expected: checkpoint-a, checkpoint-b)" ;;
-  esac
-
-  state="$(echo "$state" | jq \
-    --arg k "$checkpoint" \
-    --arg ts "$ts" \
-    '.checkpointRevisionPending[$k] = false |
-     .timestamps.lastUpdated = $ts'
-  )"
-  write_state "$workspace" "$state"
+  locked_update "$(state_path "$1")" _do_update_revision_pending "$1" "$2" "true"
 }
 
 cmd_clear_revision_pending() {
-  locked_update "$(state_path "$1")" _do_clear_revision_pending "$1" "$2"
+  locked_update "$(state_path "$1")" _do_update_revision_pending "$1" "$2" "false"
 }
 
 _do_skip_phase() {
