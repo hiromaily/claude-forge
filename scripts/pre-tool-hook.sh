@@ -237,12 +237,12 @@ check_phase1_warnings() {
   if [ -n "$PS1_MATCH" ]; then
     PS1_WS="$(echo "$PS1_MATCH" | awk '{print $2}')"
     PS1_WS="$(resolve_ws "$PS1_WS")"
-    EFFORT_VAL="$(jq -r '(.effort // "null")' "${PS1_WS}/state.json" 2>/dev/null || echo "null")"
+    local EFFORT_VAL TASK_TYPE_VAL
+    { read -r EFFORT_VAL; read -r TASK_TYPE_VAL; } < <(jq -r '.effort // "null", .taskType // "null"' "${PS1_WS}/state.json" 2>/dev/null || printf 'null\nnull\n')
     if [ "$EFFORT_VAL" = "null" ]; then
       echo "WARNING: effort not set in state.json. Call 'set-effort <workspace> <effort>' during Workspace Setup. Defaulting to M." >&2
     fi
     # 3h. Warn when taskType not set before phase-start phase-1 (non-blocking)
-    TASK_TYPE_VAL="$(jq -r '.taskType // "null"' "${PS1_WS}/state.json" 2>/dev/null || echo "null")"
     if [ "$TASK_TYPE_VAL" = "null" ]; then
       echo "WARNING: taskType not set in state.json. Call 'set-task-type <workspace> <type>' during Workspace Setup. Valid values: feature, bugfix, investigation, docs, refactor." >&2
     fi
@@ -258,8 +258,8 @@ check_task_init_guard() {
     TI_WS="$(echo "$TI_MATCH" | awk '{print $2}')"
     TI_WS="$(resolve_ws "$TI_WS")"
 
-    CP_B_COMPLETED="$(jq -r '[.completedPhases[] | select(. == "checkpoint-b")] | length' "${TI_WS}/state.json" 2>/dev/null || echo "0")"
-    CP_B_SKIPPED="$(jq -r '[(.skippedPhases // [])[] | select(. == "checkpoint-b")] | length' "${TI_WS}/state.json" 2>/dev/null || echo "0")"
+    local CP_B_COMPLETED CP_B_SKIPPED
+    { read -r CP_B_COMPLETED; read -r CP_B_SKIPPED; } < <(jq -r '([.completedPhases[] | select(. == "checkpoint-b")] | length), ([(.skippedPhases // [])[] | select(. == "checkpoint-b")] | length)' "${TI_WS}/state.json" 2>/dev/null || printf '0\n0\n')
     CP_B_COMPLETED="$(echo "$CP_B_COMPLETED" | tr -d '[:space:]')"
     CP_B_SKIPPED="$(echo "$CP_B_SKIPPED" | tr -d '[:space:]')"
 
