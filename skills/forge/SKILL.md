@@ -1460,7 +1460,9 @@ Stop immediately and report an error:
 
 ---
 
-### Debug Report (conditional — all task types)
+### Debug Report (conditional — all task types) <!-- anchor: debug-report -->
+
+_Reports on the **operation of the forge skill itself**: pipeline execution flow, phase metrics, token outliers, retry counts, and revision cycles. Triggered only when `{debug_mode}` is `true`._
 
 If `{debug_mode}` is `false`, skip this section entirely and proceed to the `### Improvement Report (all task types)` block.
 
@@ -1533,7 +1535,9 @@ If `{debug_mode}` is `true`:
 
 ---
 
-### Improvement Report (all task types)
+### Improvement Report (all task types) <!-- anchor: improvement-report -->
+
+_Reports on friction in the **target repository** — documentation gaps, code readability issues, or conventions — that would have helped complete the assigned task. Always runs._
 
 Always execute this block for every task type and flow template.
 
