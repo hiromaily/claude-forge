@@ -762,7 +762,7 @@ $SM phase-complete {workspace} phase-1
 
 ### Phase 2 — Investigation
 
-> **Skip gate:** If `phase-2` is in `{skipped_phases}`: skip-phase was already called during Workspace Setup (for `docs` task-type supplemental, or `docs/M` union), OR it will be called inside the Phase 1 block for `lite`-template flows after `phase-complete phase-1`. Check `{skipped_phases}` — if `phase-2` is present, do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-2` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `investigator`
 **Output**: Return value → orchestrator writes to `investigation.md`
@@ -788,7 +788,7 @@ $SM phase-complete {workspace} phase-2
 
 ### Phase 3 — Design
 
-> **Skip gate:** If `phase-3` is in `{skipped_phases}` (present for `docs` supplemental, `investigation` supplemental, and their union with any template): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-3` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `architect`
 **Output**: Return value → orchestrator writes to `design.md`
@@ -837,7 +837,7 @@ $SM phase-complete {workspace} phase-3
 
 ### Phase 3b — Design AI Review
 
-> **Skip gate:** If `phase-3b` is in `{skipped_phases}` (only for `investigation` task type, where phase-3 is also skipped): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block. Phase 3b is **mandatory for all other task types** — it always runs when Phase 3 runs.
+> **Skip gate:** If `phase-3b` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `design-reviewer`
 **Output**: Return value → orchestrator writes to `review-design.md`
@@ -867,7 +867,7 @@ $SM phase-complete {workspace} phase-3b
 
 ### Checkpoint A — Design Review (Human)
 
-> **Skip gate 1 (task-type/template):** If `checkpoint-a` is in `{skipped_phases}` (only for `investigation` task type, where phase-3 is also skipped): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block. Checkpoint A is **mandatory for all other task types** — the human always reviews the design before implementation proceeds.
+> **Skip gate 1:** If `checkpoint-a` is in `{skipped_phases}`, proceed to the next block.
 
 > **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND the AI reviewer verdict in `{workspace}/review-design.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
 > Print: "Auto-approving Checkpoint A (AI verdict: APPROVE_WITH_NOTES)." (or APPROVE)
@@ -902,7 +902,7 @@ $SM checkpoint {workspace} checkpoint-a
 
 ### Phase 4 — Task Decomposition
 
-> **Skip gate:** If `phase-4` is in `{skipped_phases}` (present in the supplemental skip set for `bugfix`, `docs`, and `investigation` — not in any template base skip set): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-4` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `task-decomposer`
 **Output**: Return value → orchestrator writes to `tasks.md`
@@ -932,7 +932,7 @@ $SM phase-complete {workspace} phase-4
 
 ### Phase 4b — Tasks AI Review
 
-> **Skip gate:** If `phase-4b` is in `{skipped_phases}` (present in the base skip set for `lite` and `light` templates, and in the supplemental skip set for `bugfix`, `docs`, and `investigation` — and their unions): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-4b` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `task-reviewer`
 **Output**: Return value → orchestrator writes to `review-tasks.md`
@@ -962,7 +962,7 @@ $SM phase-complete {workspace} phase-4b
 
 ### Checkpoint B — Task Review (Human)
 
-> **Skip gate 1 (task-type/template):** If `checkpoint-b` is in `{skipped_phases}` (present in the base skip set for `lite` and `light` templates, and in the supplemental skip set for `bugfix`, `docs`, and `investigation` — and their unions): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate 1:** If `checkpoint-b` is in `{skipped_phases}`, proceed to the next block.
 
 > **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND the AI reviewer verdict in `{workspace}/review-tasks.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
 >
@@ -1019,7 +1019,7 @@ If neither skip gate fired:
 
 ### Phase 5 — Implementation
 
-> **Skip gate:** If `phase-5` is in `{skipped_phases}` (present in the supplemental skip set for `investigation` — and its union with any template): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-5` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `implementer` (one per task)
 **One agent per task** (parallel for `[parallel]` tasks, sequential for `[sequential]` tasks)
@@ -1082,7 +1082,7 @@ For `[sequential]` tasks: launch one at a time and wait for completion (each age
 
 ### Phase 6 — Implementation Review
 
-> **Skip gate:** If `phase-6` is in `{skipped_phases}` (present in the base skip set for `direct` and `lite` templates, and in the supplemental skip set for `investigation` — and their unions): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-6` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `impl-reviewer` (one per completed task)
 **Output**: Return value → orchestrator writes to `review-{N}.md`
@@ -1127,7 +1127,7 @@ $SM phase-complete {workspace} phase-6
 
 ### Phase 7 — Comprehensive Review
 
-> **Skip gate:** If `phase-7` is in `{skipped_phases}` (present in the base skip set for `lite`, `light`, and `direct` templates, and in the supplemental skip set for `bugfix`, `docs`, `investigation`, and `refactor` — and their unions): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-7` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `comprehensive-reviewer`
 **Output**: Return value → orchestrator writes to `comprehensive-review.md`
@@ -1158,7 +1158,7 @@ If the comprehensive reviewer made fixes (verdict: IMPROVED), those changes are 
 
 ## Final Verification
 
-> **Skip gate:** If `final-verification` is in `{skipped_phases}` (present in the supplemental skip set for `investigation` — and its union with any template): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `final-verification` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `verifier`
 
@@ -1184,7 +1184,7 @@ $SM phase-complete {workspace} final-verification
 
 ## PR Creation
 
-> **Skip gate 1 (task-type/template):** If `pr-creation` is in `{skipped_phases}` (present in the supplemental skip set for `investigation` — and its union with any template): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate 1:** If `pr-creation` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 > **Skip gate 2 (--nopr):** If `{skip_pr}` is `true`: run the stage-commit step and the push step, but skip the gh-pr-create and capture-PR-number steps. Set `{pr-number}` to `none`. Print:
 > "Skipping PR creation (--nopr flag). Branch pushed to origin."
