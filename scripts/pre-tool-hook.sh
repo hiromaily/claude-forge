@@ -83,6 +83,16 @@ resolve_ws() {
 }
 
 # Find active pipeline workspace (most recently updated non-completed pipeline)
+#
+# INTENTIONAL DIVERGENCE from post-agent-hook.sh and stop-hook.sh:
+#   Filter predicate: status != "completed" AND status != "abandoned" AND non-empty
+#   Accepted statuses: in_progress, pending, awaiting_human
+#
+#   Rationale: pre-tool-hook.sh must fire for all active pipelines regardless of
+#   the exact phase status, so that read-only enforcement (Rule 1), commit blocking
+#   (Rule 2), and artifact guards (Rule 3) apply at every step of the pipeline,
+#   including when the pipeline is paused at a checkpoint (awaiting_human) or has
+#   not yet started its first phase (pending).
 find_active_workspace() {
   local project_dir="${CLAUDE_PROJECT_DIR:-.}"
   local latest_file=""
