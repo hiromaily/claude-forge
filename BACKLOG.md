@@ -305,7 +305,7 @@ All items below are implemented and verified. One-line summaries for reference.
 
 ## Version History
 
-### 1.2.0 (2026-03-20)
+### 1.0.0 (2026-03-20)
 
 - Effort-aware pipeline flow: 2-axis `(task_type, effort)` with 5 flow templates — direct, lite, light, standard, full (F13)
 - `--effort=XS|S|M|L` flag with Jira story points fallback and heuristic detection
@@ -318,9 +318,6 @@ All items below are implemented and verified. One-line summaries for reference.
 - `--nopr` flag for skipping PR creation
 - Resume handles pre-F13 pipelines with in-context defaults
 - 128 automated tests (up from 100)
-
-### 1.1.0 (2026-03-20)
-
 - Task-type-aware pipeline flow: 5 types (feature, bugfix, investigation, docs, refactor) with per-type phase skip tables (F4)
 - Per-task-type Final Summary templates with dispatch logic (P5)
 - `--auto` flag for autonomous checkpoint approval with two-gate skip structure (F3)
@@ -331,9 +328,6 @@ All items below are implemented and verified. One-line summaries for reference.
 - "Mandatory Calls — Never Skip" section in SKILL.md for orchestrator compliance (P9)
 - `abandon` command for clean pipeline termination (P4)
 - 100 automated tests (up from 43)
-
-### 1.0.0 (2026-03-20)
-
 - Initial implementation: 9 named agents, SKILL.md orchestrator, state management, hooks
 - Agent extraction from inline prompts to dedicated .md files
 - State manager with jq-based JSON operations and mkdir file locking

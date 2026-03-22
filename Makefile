@@ -26,3 +26,11 @@ update-git-tag:
 .PHONY: update-all
 update-all: update-tag update-git-tag
 	@echo "Version updated to v${new} and git tag created and pushed"
+
+# e.g. make retag TAG=v1.1.0
+.PHONY: retag
+retag:
+	git tag -d $(TAG) 2>/dev/null || true
+	git push --delete origin $(TAG) 2>/dev/null || true
+	git tag -a $(TAG) $(COMMIT) -m "retag $(TAG)"
+	git push origin $(TAG)
