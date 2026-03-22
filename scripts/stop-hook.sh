@@ -32,8 +32,12 @@ find_active_workspace() {
   for state_file in "${project_dir}"/.specs/*/state.json; do
     [ -f "$state_file" ] || continue
     local status ts notify_flag
-    status="$(jq -r '.currentPhaseStatus // empty' "$state_file" 2>/dev/null || true)"
-    notify_flag="$(jq -r '.notifyOnStop // false' "$state_file" 2>/dev/null || true)"
+    {
+      read -r status
+      read -r notify_flag
+    } < <(jq -r '(.currentPhaseStatus // ""), (.notifyOnStop // false)' "$state_file" 2>/dev/null)
+    status=${status:-""}
+    notify_flag=${notify_flag:-false}
     if { [ "$status" != "completed" ] && [ "$status" != "abandoned" ] && [ -n "$status" ]; } || \
        [ "$notify_flag" = "true" ]; then
       ts="$(jq -r '.timestamps.lastUpdated // ""' "$state_file" 2>/dev/null || true)"

@@ -218,7 +218,7 @@ _do_phase_complete() {
      .completedPhases = (.completedPhases | unique) |
      .currentPhase = $next |
      .currentPhaseStatus = (if $next == "completed" then "completed" else "pending" end) |
-     .notifyOnStop = (if $next == "completed" then true else false end) |
+     .notifyOnStop = ($next == "completed") |
      .timestamps.lastUpdated = $ts |
      .timestamps.phaseStarted = null'
   )"
