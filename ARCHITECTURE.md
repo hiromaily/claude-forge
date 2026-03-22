@@ -346,6 +346,7 @@ The information flow is strictly forward — no agent reads output from a later 
 |-------|---------------------|
 | situation-analyst | request.md |
 | investigator | request.md, analysis.md |
+| analyst (Phase 1+2 merged, lite flow template) | request.md |
 | architect | request.md, analysis.md, investigation.md (+review-design.md on revision) — _investigation.md is optional: absent only if phase-2 was unexpectedly skipped for a non-docs flow; proceed without it_ |
 | design-reviewer | request.md, analysis.md, investigation.md, design.md |
 | task-decomposer | request.md, design.md, investigation.md (+review-tasks.md on revision) |
