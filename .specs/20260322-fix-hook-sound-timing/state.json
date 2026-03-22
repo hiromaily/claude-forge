@@ -118,5 +118,5 @@
     "phaseStarted": null
   },
   "error": null,
-  "notifyOnStop": true
+  "notifyOnStop": false
 }

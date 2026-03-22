@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "specName": "refactor-scripts-maintainability",
+  "workspace": ".specs/20260322-refactor-scripts-maintainability",
+  "branch": "feature/refactor-scripts-maintainability",
+  "taskType": "refactor",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "notifyOnStop": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "final-summary",
+    "final-verification",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "post-to-source",
+    "pr-creation",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Remove cmd_* wrappers from state-manager.sh",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Hoist resolve_ws and extract Rule 3 functions in pre-tool-hook.sh",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Add divergence comments to hook files",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Fix README subcommand count",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Verify full test suite passes",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 55786,
+      "duration_ms": 86809,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:01:47Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 78976,
+      "duration_ms": 246061,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:06:10Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 46180,
+      "duration_ms": 105524,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:08:38Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 33471,
+      "duration_ms": 49608,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:09:50Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 43683,
+      "duration_ms": 57864,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:13:02Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 28226,
+      "duration_ms": 68058,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:14:30Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 40550,
+      "duration_ms": 177088,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:21:00Z"
+    },
+    {
+      "phase": "task-2-impl",
+      "tokens": 33715,
+      "duration_ms": 157610,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:23:57Z"
+    },
+    {
+      "phase": "task-3-impl",
+      "tokens": 29177,
+      "duration_ms": 70544,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:25:46Z"
+    },
+    {
+      "phase": "task-4-impl",
+      "tokens": 22784,
+      "duration_ms": 59928,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:25:46Z"
+    },
+    {
+      "phase": "task-5-impl",
+      "tokens": 20708,
+      "duration_ms": 87879,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:27:29Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 61335,
+      "duration_ms": 164652,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:31:00Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 20420,
+      "duration_ms": 32685,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T11:31:46Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-22T10:58:35Z",
+    "lastUpdated": "2026-03-22T11:33:20Z",
+    "phaseStarted": null
+  },
+  "error": null
+}
