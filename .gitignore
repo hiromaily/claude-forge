@@ -14,3 +14,6 @@ logs
 # others
 memo.md
 COMPETITIVE-ANALYSIS.md
+/.specs
+!/.specs/**/summary.md
+!/.specs/**/state.json
