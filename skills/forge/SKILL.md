@@ -140,79 +140,6 @@ Hooks are defined in `hooks/hooks.json` and run automatically:
 
 ## Architecture Overview
 
-### Pipeline Flow
-
-```mermaid
-flowchart TD
-    %% ── Entry ──
-    START(["▶ /forge"])
-    START --> RC{state.json<br>exists?}
-    RC -->|yes| RESUME[Load state.json<br>restore variables]
-    RC -->|no| IV["🛡️ Input Validation<br>validate-input.sh + LLM check"]
-    IV -->|invalid| REJECT(["❌ Reject — show error"])
-    IV -->|valid| WS[Workspace Setup<br>request.md + state.json]
-    RESUME --> REJOIN(("resume at<br>current phase"))
-    WS --> P1
-
-    %% ── Analysis ──
-    REJOIN -.-> P1
-    P1["🔍 Phase 1 — Situation Analysis<br><i>situation-analyst</i>"]
-    P1 -->|analysis.md| P2
-    P2["🔍 Phase 2 — Investigation<br><i>investigator</i>"]
-
-    %% ── Design loop ──
-    P2 -->|investigation.md| P3
-    P3["📐 Phase 3 — Design<br><i>architect</i>"]
-    P3 -->|design.md| P3R
-    P3R["🔎 Phase 3b — Design Review<br><i>design-reviewer</i>"]
-    P3R -->|review-design.md| DREV{APPROVE?}
-    DREV -->|REVISE| P3
-    DREV -->|APPROVE| CPA
-
-    %% ── Checkpoint A ──
-    CPA{{"👤 Checkpoint A<br>Human reviews design"}}
-    CPA -->|approved| P4
-    CPA -->|rejected| P3
-
-    %% ── Task loop ──
-    P4["📋 Phase 4 — Task Decomposition<br><i>task-decomposer</i>"]
-    P4 -->|tasks.md| P4R
-    P4R["🔎 Phase 4b — Tasks Review<br><i>task-reviewer</i>"]
-    P4R -->|review-tasks.md| TREV{APPROVE?}
-    TREV -->|REVISE| P4
-    TREV -->|APPROVE| CPB
-
-    %% ── Checkpoint B ──
-    CPB{{"👤 Checkpoint B<br>Human reviews tasks"}}
-    CPB -->|approved| P5
-    CPB -->|rejected| P4
-
-    %% ── Implementation & Review (per task) ──
-    subgraph loop ["🔄 Repeat for each task"]
-        P5["⚙️ Phase 5 — Implementation<br><i>implementer</i>"]
-        P5 -->|"impl-N.md"| P6
-        P6["🔎 Phase 6 — Code Review<br><i>impl-reviewer</i>"]
-        P6 -->|"review-N.md"| RESULT{PASS?}
-        RESULT -->|"FAIL (≤2 retries)"| P5
-    end
-    RESULT -->|all PASS| P7
-
-    %% ── Comprehensive Review ──
-    P7["🔬 Phase 7 — Comprehensive Review<br><i>comprehensive-reviewer</i>"]
-    P7 -->|comprehensive-review.md| FV
-
-    %% ── Final ──
-    FV["✅ Final Verification<br><i>verifier</i>"]
-    FV --> PR["🚀 PR Creation<br>commit · push · gh pr create"]
-    PR --> FS["📝 Final Summary<br>summary.md + Improvement Report"]
-    FS --> POST{"Source type?"}
-    POST -->|GitHub Issue| GH["💬 Post summary<br>to GitHub Issue"]
-    POST -->|Jira Issue| JIRA["💬 Post summary<br>to Jira Issue"]
-    POST -->|Plain text| DONE(["✔ Done"])
-    GH --> DONE
-    JIRA --> DONE
-```
-
 ### Agent Roster
 
 | Phase | Agent | Reads | Writes |
@@ -530,20 +457,7 @@ Before running any phase, establish the workspace:
 
    **Flow template derivation (step 5g):**
 
-   After effort detection, derive `{flow_template}` from the 2D lookup table:
-
-   ```
-   (task_type, effort) → flow_template
-
-                XS       S        M         L
-   feature    | lite   | light  | standard | full
-   bugfix     | direct | lite   | light    | standard
-   refactor   | lite   | light  | standard | full
-   docs       | direct | direct | lite     | light
-   investig.  | lite   | lite   | light    | standard
-   ```
-
-   Store `{flow_template}` as an in-context variable. The `$SM set-flow-template` call happens in step 7
+   After effort detection, derive `{flow_template}` from the flow template matrix in ARCHITECTURE.md (§ Flow Template Matrix). Store `{flow_template}` as an in-context variable. The `$SM set-flow-template` call happens in step 7
    after workspace initialization.
 
    **`full` template + `--auto` conflict**: if `{flow_template}` is `full` AND `{auto_approve}` is `true`:
@@ -835,7 +749,7 @@ $SM phase-complete {workspace} phase-1
 
 ### Phase 2 — Investigation
 
-> **Skip gate:** If `phase-2` is in `{skipped_phases}`: skip-phase was already called during Workspace Setup (for `docs` task-type supplemental, or `docs/M` union), OR it will be called inside the Phase 1 block for `lite`-template flows after `phase-complete phase-1`. Check `{skipped_phases}` — if `phase-2` is present, do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-2` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `investigator`
 **Output**: Return value → orchestrator writes to `investigation.md`
@@ -861,7 +775,7 @@ $SM phase-complete {workspace} phase-2
 
 ### Phase 3 — Design
 
-> **Skip gate:** If `phase-3` is in `{skipped_phases}` (present for `docs` supplemental, `investigation` supplemental, and their union with any template): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-3` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `architect`
 **Output**: Return value → orchestrator writes to `design.md`
@@ -910,7 +824,7 @@ $SM phase-complete {workspace} phase-3
 
 ### Phase 3b — Design AI Review
 
-> **Skip gate:** If `phase-3b` is in `{skipped_phases}` (only for `investigation` task type, where phase-3 is also skipped): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block. Phase 3b is **mandatory for all other task types** — it always runs when Phase 3 runs.
+> **Skip gate:** If `phase-3b` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `design-reviewer`
 **Output**: Return value → orchestrator writes to `review-design.md`
@@ -940,7 +854,7 @@ $SM phase-complete {workspace} phase-3b
 
 ### Checkpoint A — Design Review (Human)
 
-> **Skip gate 1 (task-type/template):** If `checkpoint-a` is in `{skipped_phases}` (only for `investigation` task type, where phase-3 is also skipped): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block. Checkpoint A is **mandatory for all other task types** — the human always reviews the design before implementation proceeds.
+> **Skip gate 1:** If `checkpoint-a` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 > **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND the AI reviewer verdict in `{workspace}/review-design.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
 > Print: "Auto-approving Checkpoint A (AI verdict: APPROVE_WITH_NOTES)." (or APPROVE)
@@ -975,7 +889,7 @@ $SM checkpoint {workspace} checkpoint-a
 
 ### Phase 4 — Task Decomposition
 
-> **Skip gate:** If `phase-4` is in `{skipped_phases}` (present in the supplemental skip set for `bugfix`, `docs`, and `investigation` — not in any template base skip set): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-4` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `task-decomposer`
 **Output**: Return value → orchestrator writes to `tasks.md`
@@ -1005,7 +919,7 @@ $SM phase-complete {workspace} phase-4
 
 ### Phase 4b — Tasks AI Review
 
-> **Skip gate:** If `phase-4b` is in `{skipped_phases}` (present in the base skip set for `lite` and `light` templates, and in the supplemental skip set for `bugfix`, `docs`, and `investigation` — and their unions): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-4b` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `task-reviewer`
 **Output**: Return value → orchestrator writes to `review-tasks.md`
@@ -1035,7 +949,7 @@ $SM phase-complete {workspace} phase-4b
 
 ### Checkpoint B — Task Review (Human)
 
-> **Skip gate 1 (task-type/template):** If `checkpoint-b` is in `{skipped_phases}` (present in the base skip set for `lite` and `light` templates, and in the supplemental skip set for `bugfix`, `docs`, and `investigation` — and their unions): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate 1:** If `checkpoint-b` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 > **Skip gate 2 (auto-approve):** If `{auto_approve}` is `true` AND the AI reviewer verdict in `{workspace}/review-tasks.md` is APPROVE or APPROVE_WITH_NOTES (no CRITICAL findings): skip this checkpoint.
 >
@@ -1092,7 +1006,7 @@ If neither skip gate fired:
 
 ### Phase 5 — Implementation
 
-> **Skip gate:** If `phase-5` is in `{skipped_phases}` (present in the supplemental skip set for `investigation` — and its union with any template): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-5` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `implementer` (one per task)
 **One agent per task** (parallel for `[parallel]` tasks, sequential for `[sequential]` tasks)
@@ -1155,7 +1069,7 @@ For `[sequential]` tasks: launch one at a time and wait for completion (each age
 
 ### Phase 6 — Implementation Review
 
-> **Skip gate:** If `phase-6` is in `{skipped_phases}` (present in the base skip set for `direct` and `lite` templates, and in the supplemental skip set for `investigation` — and their unions): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-6` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `impl-reviewer` (one per completed task)
 **Output**: Return value → orchestrator writes to `review-{N}.md`
@@ -1200,7 +1114,7 @@ $SM phase-complete {workspace} phase-6
 
 ### Phase 7 — Comprehensive Review
 
-> **Skip gate:** If `phase-7` is in `{skipped_phases}` (present in the base skip set for `lite`, `light`, and `direct` templates, and in the supplemental skip set for `bugfix`, `docs`, `investigation`, and `refactor` — and their unions): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `phase-7` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `comprehensive-reviewer`
 **Output**: Return value → orchestrator writes to `comprehensive-review.md`
@@ -1231,7 +1145,7 @@ If the comprehensive reviewer made fixes (verdict: IMPROVED), those changes are 
 
 ## Final Verification
 
-> **Skip gate:** If `final-verification` is in `{skipped_phases}` (present in the supplemental skip set for `investigation` — and its union with any template): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate:** If `final-verification` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 **Agent**: `verifier`
 
@@ -1257,7 +1171,7 @@ $SM phase-complete {workspace} final-verification
 
 ## PR Creation
 
-> **Skip gate 1 (task-type/template):** If `pr-creation` is in `{skipped_phases}` (present in the supplemental skip set for `investigation` — and its union with any template): do NOT call phase-start or spawn an agent. Proceed directly to the next phase block.
+> **Skip gate 1:** If `pr-creation` is in `{skipped_phases}`, skip this phase entirely and proceed to the next block.
 
 > **Skip gate 2 (--nopr):** If `{skip_pr}` is `true`: run the stage-commit step and the push step, but skip the gh-pr-create and capture-PR-number steps. Set `{pr-number}` to `none`. Print:
 > "Skipping PR creation (--nopr flag). Branch pushed to origin."
@@ -1313,6 +1227,8 @@ $SM phase-complete {workspace} pr-creation
 $SM phase-start {workspace} final-summary
 ```
 
+Before writing summary.md: run `$SM phase-stats {workspace}` and capture its output for the Execution Stats section.
+
 **Dispatch on `{task_type}`** — select exactly one block below and follow only those steps:
 
 ---
@@ -1320,8 +1236,7 @@ $SM phase-start {workspace} final-summary
 ### If `{task_type}` is `feature` or `refactor`
 
 1. Read all `review-{N}.md` files and `comprehensive-review.md`.
-2. Run `$SM phase-stats {workspace}` and capture its output.
-3. Write `{workspace}/summary.md` with this structure:
+2. Write `{workspace}/summary.md` with this structure:
    ```markdown
    # Pipeline Summary
 
@@ -1357,13 +1272,6 @@ $SM phase-start {workspace} final-summary
    …
    | **TOTAL** | **…** | **…s** | |
    ```
-4. Present the contents of `summary.md` to the user.
-5. **Update the commit to include summary.md**:
-   ```bash
-   git add {workspace}/summary.md
-   git commit --amend --no-edit
-   git push --force-with-lease
-   ```
 
 ---
 
@@ -1372,8 +1280,7 @@ $SM phase-start {workspace} final-summary
 Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4 (Task Decomposition) was also skipped (stub tasks.md used instead). Do NOT read `comprehensive-review.md` or build a Tasks table — neither exists.
 
 1. Read all `review-{N}.md` files (Phase 6 ran for both `bugfix` and `docs`).
-2. Run `$SM phase-stats {workspace}` and capture its output.
-3. Write `{workspace}/summary.md` with this structure:
+2. Write `{workspace}/summary.md` with this structure:
    ```markdown
    # Pipeline Summary
 
@@ -1398,13 +1305,6 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
    …
    | **TOTAL** | **…** | **…s** | |
    ```
-4. Present the contents of `summary.md` to the user.
-5. **Update the commit to include summary.md**:
-   ```bash
-   git add {workspace}/summary.md
-   git commit --amend --no-edit
-   git push --force-with-lease
-   ```
 
 ---
 
@@ -1413,8 +1313,7 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
 > **Terminal phase for investigation flow.** Phases 3 (Design), 3b, checkpoint-a, 4, 4b, checkpoint-b, 5, 6, 7, Final Verification, and PR Creation were all skipped. There is no `design.md`, no feature branch, no PR, and no commit to amend. After `final-summary` completes, `post-to-source` still runs so findings are posted back to the source issue.
 
 1. Read `{workspace}/analysis.md` and `{workspace}/investigation.md`.
-2. Run `$SM phase-stats {workspace}` and capture its output.
-3. Write `{workspace}/summary.md` with this structure:
+2. Write `{workspace}/summary.md` with this structure:
    ```markdown
    # Investigation Summary
 
@@ -1441,8 +1340,6 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
    …
    | **TOTAL** | **…** | **…s** | |
    ```
-4. Present the contents of `summary.md` to the user.
-5. **Do NOT run commit-amend or push** — no feature branch exists for `investigation` flows.
 
 ---
 
@@ -1451,6 +1348,14 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
 Stop immediately and report an error:
 
 > Pipeline error: `{task_type}` is not a recognised task type. Expected one of: `feature`, `refactor`, `bugfix`, `docs`, `investigation`. The pipeline is in an unexpected state — do not proceed.
+
+---
+
+### Common epilogue (all task types)
+
+After completing the per-type dispatch block above:
+
+4. Present the contents of `summary.md` to the user.
 
 ---
 
@@ -1477,7 +1382,7 @@ If `{debug_mode}` is `true`:
    `completed` at this point — `phase-complete final-summary` has not yet been called.
    This is expected; the debug report does not read or display `currentPhaseStatus`.)
 
-   Also reuse the `phase-stats` output already captured in the dispatch block above.
+   Also reuse the `phase-stats` output already captured in the common preamble above.
 
 2. Evaluate the following heuristics against `{debug_data}`:
 
@@ -1596,6 +1501,13 @@ For `lite` + `investigation` flows: after writing the section, add a note in the
 _Retrospective on what would have made this work easier. Note: this run used the `lite` flow template — analyst and investigator output was merged into `analysis.md`._
 
 ---
+
+5. **Update the commit to include summary.md** — skip this step if `{task_type}` is `investigation` (no feature branch exists):
+   ```bash
+   git add {workspace}/summary.md
+   git commit --amend --no-edit
+   git push --force-with-lease
+   ```
 
 ```bash
 $SM phase-complete {workspace} final-summary

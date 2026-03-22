@@ -14,16 +14,15 @@ Ordered by priority. Higher rows should be tackled first.
 | 1 | **P22** | ARCHITECTURE.md "What Each Agent Reads" table incomplete | Docs | XS | Final Summary row was missing — caused implementation deviation during F16. Keep table complete for all phases including orchestrator-driven ones. |
 | 2 | **F15** | Inline revision shortcut for MINOR findings | Feature | S | When all review findings are MINOR, orchestrator edits artifacts directly + re-reviews, instead of re-spawning the full authoring agent. |
 | 3 | **F5** | Diff-based review (token reduction) | Feature | M | 60-80% token reduction for review agents. Higher ROI on large codebases. |
-| 4 | **P21** | SKILL.md size reduction / split | Refactor | M | SKILL.md is ~1600 lines. Analysis/investigation agents spend significant tokens navigating it. Consider splitting orchestrator instructions from reference documentation. Note: the structural consolidation of the post-dispatch epilogue done in P19 partially addresses P21's size concerns by collapsing duplicated steps across three dispatch blocks into one shared block. |
-| 5 | **F10** | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
-| 6 | **F9** | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
-| 7 | **F12** | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
-| 8 | **F8** | Past pipeline reference (data flywheel) | Feature | L | Uses `.specs/` history to improve future pipelines. The accumulated data is a moat — competitors can copy code but not execution history. |
-| 9 | **F17** | Repository profiling | Feature | M | First-run analysis of repo structure, test strategy, CI config → persisted profile that tunes agent prompts. Hard to replicate without per-repo data. |
-| 10 | **F18** | Improvement report → test case generation | Feature | S | Auto-generate hook guard test cases from friction points found in improvement reports. Accelerates deterministic guard accumulation. |
-| 11 | **F19** | CI feedback loop (post-PR auto-fix) | Feature | L | After PR creation, monitor CI results and auto-trigger fix flow on failure. Closes the quality loop beyond the pipeline boundary. |
-| 12 | **F6** | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. F13 (effort axis) provides the foundation for model selection. |
-| 13 | **F2** | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
+| 4 | **F10** | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
+| 5 | **F9** | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
+| 6 | **F12** | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
+| 7 | **F8** | Past pipeline reference (data flywheel) | Feature | L | Uses `.specs/` history to improve future pipelines. The accumulated data is a moat — competitors can copy code but not execution history. |
+| 8 | **F17** | Repository profiling | Feature | M | First-run analysis of repo structure, test strategy, CI config → persisted profile that tunes agent prompts. Hard to replicate without per-repo data. |
+| 9 | **F18** | Improvement report → test case generation | Feature | S | Auto-generate hook guard test cases from friction points found in improvement reports. Accelerates deterministic guard accumulation. |
+| 10 | **F19** | CI feedback loop (post-PR auto-fix) | Feature | L | After PR creation, monitor CI results and auto-trigger fix flow on failure. Closes the quality loop beyond the pipeline boundary. |
+| 11 | **F6** | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. F13 (effort axis) provides the foundation for model selection. |
+| 12 | **F2** | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
 
 **Effort key:** XS = < 30min, S = 1-2h, M = half day, L = 1+ day
 
@@ -274,6 +273,7 @@ All items below are implemented and verified. One-line summaries for reference.
 
 | ID | Title | Resolution |
 |----|-------|------------|
+| **P21** | SKILL.md size reduction / split | Removed Mermaid diagram (73 lines), compressed skip gate blockquotes (already terse in live file), removed flow template matrix (13 lines), consolidated Final Summary shared steps (3 lines). Net: 89 lines reduced (1,646 → 1,557). Remaining size reduction opportunities exist via stub file extraction if needed. |
 | **P20** | Consolidated artifact availability table | Added a 20-row lookup table to ARCHITECTURE.md (§ Consolidated Artifact Availability) showing which workspace files are present for every `(task_type, effort)` cell. Replaces the need to cross-reference the flow template matrix, template base skip sets, and task-type supplemental skip sets manually. |
 | **P19** | SKILL.md forward-reference fragility | Resolved via three-technique approach: inline HTML-comment anchors (`<!-- anchor: <token> -->`) on target headings, structural consolidation of the dispatch epilogue (duplicated steps 4–5 extracted into a shared Post-dispatch epilogue block), and step-reference rewrites replacing ordinal references with prose labels and anchor tokens. |
 | **F16** | Improvement Report | Retrospective analysis of workspace artifacts for documentation gaps, code readability issues, and AI agent support needs. Always-on, appended to summary.md. |
