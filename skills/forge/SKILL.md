@@ -457,20 +457,7 @@ Before running any phase, establish the workspace:
 
    **Flow template derivation (step 5g):**
 
-   After effort detection, derive `{flow_template}` from the 2D lookup table:
-
-   ```
-   (task_type, effort) → flow_template
-
-                XS       S        M         L
-   feature    | lite   | light  | standard | full
-   bugfix     | direct | lite   | light    | standard
-   refactor   | lite   | light  | standard | full
-   docs       | direct | direct | lite     | light
-   investig.  | lite   | lite   | light    | standard
-   ```
-
-   Store `{flow_template}` as an in-context variable. The `$SM set-flow-template` call happens in step 7
+   After effort detection, derive `{flow_template}` from the flow template matrix in ARCHITECTURE.md (§ Flow Template Matrix). Store `{flow_template}` as an in-context variable. The `$SM set-flow-template` call happens in step 7
    after workspace initialization.
 
    **`full` template + `--auto` conflict**: if `{flow_template}` is `full` AND `{auto_approve}` is `true`:
