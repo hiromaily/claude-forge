@@ -198,10 +198,6 @@ _do_phase_start() {
   write_state "$workspace" "$state"
 }
 
-cmd_phase_start() {
-  locked_update "$(state_path "$1")" _do_phase_start "$1" "$2"
-}
-
 _do_phase_complete() {
   local workspace="$1"
   local phase="$2"
@@ -228,10 +224,6 @@ _do_phase_complete() {
   write_state "$workspace" "$state"
 }
 
-cmd_phase_complete() {
-  locked_update "$(state_path "$1")" _do_phase_complete "$1" "$2"
-}
-
 _do_phase_fail() {
   local workspace="$1"
   local phase="$2"
@@ -252,10 +244,6 @@ _do_phase_fail() {
   write_state "$workspace" "$state"
 }
 
-cmd_phase_fail() {
-  locked_update "$(state_path "$1")" _do_phase_fail "$1" "$2" "$3"
-}
-
 _do_checkpoint() {
   local workspace="$1"
   local phase="$2"
@@ -274,10 +262,6 @@ _do_checkpoint() {
   write_state "$workspace" "$state"
 }
 
-cmd_checkpoint() {
-  locked_update "$(state_path "$1")" _do_checkpoint "$1" "$2"
-}
-
 _do_task_init() {
   local workspace="$1"
   local tasks_json="$2"
@@ -293,10 +277,6 @@ _do_task_init() {
      .timestamps.lastUpdated = $ts'
   )"
   write_state "$workspace" "$state"
-}
-
-cmd_task_init() {
-  locked_update "$(state_path "$1")" _do_task_init "$1" "$2"
 }
 
 _do_task_update() {
@@ -335,10 +315,6 @@ _do_task_update() {
   write_state "$workspace" "$state"
 }
 
-cmd_task_update() {
-  locked_update "$(state_path "$1")" _do_task_update "$1" "$2" "$3" "$4"
-}
-
 _do_revision_bump() {
   local workspace="$1"
   local type="$2"
@@ -363,10 +339,6 @@ _do_revision_bump() {
   write_state "$workspace" "$state"
 }
 
-cmd_revision_bump() {
-  locked_update "$(state_path "$1")" _do_revision_bump "$1" "$2"
-}
-
 _do_set_branch() {
   local workspace="$1"
   local branch="$2"
@@ -384,10 +356,6 @@ _do_set_branch() {
   write_state "$workspace" "$state"
 }
 
-cmd_set_branch() {
-  locked_update "$(state_path "$1")" _do_set_branch "$1" "$2"
-}
-
 _do_set_task_type() {
   local workspace="$1"
   local task_type="$2"
@@ -403,10 +371,6 @@ _do_set_task_type() {
      .timestamps.lastUpdated = $ts'
   )"
   write_state "$workspace" "$state"
-}
-
-cmd_set_task_type() {
-  locked_update "$(state_path "$1")" _do_set_task_type "$1" "$2"
 }
 
 _do_set_effort() {
@@ -431,10 +395,6 @@ _do_set_effort() {
   write_state "$workspace" "$state"
 }
 
-cmd_set_effort() {
-  locked_update "$(state_path "$1")" _do_set_effort "$1" "$2"
-}
-
 _do_set_flow_template() {
   local workspace="$1"
   local flow_template="$2"
@@ -457,10 +417,6 @@ _do_set_flow_template() {
   write_state "$workspace" "$state"
 }
 
-cmd_set_flow_template() {
-  locked_update "$(state_path "$1")" _do_set_flow_template "$1" "$2"
-}
-
 _do_set_auto_approve() {
   local workspace="$1"
   local state
@@ -474,10 +430,6 @@ _do_set_auto_approve() {
      .timestamps.lastUpdated = $ts'
   )"
   write_state "$workspace" "$state"
-}
-
-cmd_set_auto_approve() {
-  locked_update "$(state_path "$1")" _do_set_auto_approve "$1"
 }
 
 _do_set_skip_pr() {
@@ -495,10 +447,6 @@ _do_set_skip_pr() {
   write_state "$workspace" "$state"
 }
 
-cmd_set_skip_pr() {
-  locked_update "$(state_path "$1")" _do_set_skip_pr "$1"
-}
-
 _do_set_debug() {
   local workspace="$1"
   local state
@@ -512,10 +460,6 @@ _do_set_debug() {
      .timestamps.lastUpdated = $ts'
   )"
   write_state "$workspace" "$state"
-}
-
-cmd_set_debug() {
-  locked_update "$(state_path "$1")" _do_set_debug "$1"
 }
 
 _do_set_use_current_branch() {
@@ -534,10 +478,6 @@ _do_set_use_current_branch() {
      .timestamps.lastUpdated = $ts'
   )"
   write_state "$workspace" "$state"
-}
-
-cmd_set_use_current_branch() {
-  locked_update "$(state_path "$1")" _do_set_use_current_branch "$1" "$2"
 }
 
 _do_update_revision_pending() {
@@ -564,14 +504,6 @@ _do_update_revision_pending() {
   write_state "$workspace" "$state"
 }
 
-cmd_set_revision_pending() {
-  locked_update "$(state_path "$1")" _do_update_revision_pending "$1" "$2" "true"
-}
-
-cmd_clear_revision_pending() {
-  locked_update "$(state_path "$1")" _do_update_revision_pending "$1" "$2" "false"
-}
-
 _do_skip_phase() {
   local workspace="$1"
   local phase="$2"
@@ -593,10 +525,6 @@ _do_skip_phase() {
      .timestamps.lastUpdated = $ts'
   )"
   write_state "$workspace" "$state"
-}
-
-cmd_skip_phase() {
-  locked_update "$(state_path "$1")" _do_skip_phase "$1" "$2"
 }
 
 _do_phase_log() {
@@ -626,10 +554,6 @@ _do_phase_log() {
      .timestamps.lastUpdated = $ts'
   )"
   write_state "$workspace" "$state"
-}
-
-cmd_phase_log() {
-  locked_update "$(state_path "$1")" _do_phase_log "$1" "$2" "$3" "$4" "${5:-sonnet}"
 }
 
 cmd_phase_stats() {
@@ -673,10 +597,6 @@ _do_abandon() {
   )"
   write_state "$workspace" "$state"
   echo "Pipeline abandoned: ${workspace}"
-}
-
-cmd_abandon() {
-  locked_update "$(state_path "$1")" _do_abandon "$1"
 }
 
 cmd_resume_info() {
@@ -739,29 +659,49 @@ check_args() {
 }
 
 case "$command" in
-  init)              check_args 2 $# "init <workspace> <spec-name>";           cmd_init "$@" ;;
-  get)               check_args 2 $# "get <workspace> <field>";                cmd_get "$@" ;;
-  phase-start)       check_args 2 $# "phase-start <workspace> <phase>";        cmd_phase_start "$@" ;;
-  phase-complete)    check_args 2 $# "phase-complete <workspace> <phase>";      cmd_phase_complete "$@" ;;
-  phase-fail)        check_args 3 $# "phase-fail <workspace> <phase> <msg>";    cmd_phase_fail "$@" ;;
-  checkpoint)        check_args 2 $# "checkpoint <workspace> <phase>";          cmd_checkpoint "$@" ;;
-  task-init)         check_args 2 $# "task-init <workspace> <json>";            cmd_task_init "$@" ;;
-  task-update)       check_args 4 $# "task-update <workspace> <N> <field> <value>"; cmd_task_update "$@" ;;
-  revision-bump)     check_args 2 $# "revision-bump <workspace> <type>";        cmd_revision_bump "$@" ;;
-  set-branch)        check_args 2 $# "set-branch <workspace> <branch>";         cmd_set_branch "$@" ;;
-  set-task-type)     check_args 2 $# "set-task-type <workspace> <taskType>";    cmd_set_task_type "$@" ;;
-  set-effort)        check_args 2 $# "set-effort <workspace> <effort>";              cmd_set_effort "$@" ;;
-  set-flow-template) check_args 2 $# "set-flow-template <workspace> <flowTemplate>"; cmd_set_flow_template "$@" ;;
-  set-auto-approve)  check_args 1 $# "set-auto-approve <workspace>";            cmd_set_auto_approve "$@" ;;
-  set-skip-pr)       check_args 1 $# "set-skip-pr <workspace>";                 cmd_set_skip_pr "$@" ;;
-  set-debug)         check_args 1 $# "set-debug <workspace>";                   cmd_set_debug "$@" ;;
-  set-use-current-branch) check_args 2 $# "set-use-current-branch <workspace> <branch>"; cmd_set_use_current_branch "$@" ;;
-  set-revision-pending)   check_args 2 $# "set-revision-pending <workspace> <checkpoint>"; cmd_set_revision_pending "$@" ;;
-  clear-revision-pending) check_args 2 $# "clear-revision-pending <workspace> <checkpoint>"; cmd_clear_revision_pending "$@" ;;
-  skip-phase)        check_args 2 $# "skip-phase <workspace> <phase>";           cmd_skip_phase "$@" ;;
-  phase-log)         check_args 4 $# "phase-log <workspace> <phase> <tokens> <duration_ms> [model]"; cmd_phase_log "$@" ;;
-  phase-stats)       check_args 1 $# "phase-stats <workspace>";                  cmd_phase_stats "$@" ;;
-  abandon)           check_args 1 $# "abandon <workspace>";                      cmd_abandon "$@" ;;
-  resume-info)       check_args 1 $# "resume-info <workspace>";                 cmd_resume_info "$@" ;;
+  init)              check_args 2 $# "init <workspace> <spec-name>";                              cmd_init "$@" ;;
+  get)               check_args 2 $# "get <workspace> <field>";                                   cmd_get "$@" ;;
+  phase-start)       check_args 2 $# "phase-start <workspace> <phase>"
+                     locked_update "$(state_path "$1")" _do_phase_start "$@" ;;
+  phase-complete)    check_args 2 $# "phase-complete <workspace> <phase>"
+                     locked_update "$(state_path "$1")" _do_phase_complete "$@" ;;
+  phase-fail)        check_args 3 $# "phase-fail <workspace> <phase> <msg>"
+                     locked_update "$(state_path "$1")" _do_phase_fail "$@" ;;
+  checkpoint)        check_args 2 $# "checkpoint <workspace> <phase>"
+                     locked_update "$(state_path "$1")" _do_checkpoint "$@" ;;
+  task-init)         check_args 2 $# "task-init <workspace> <json>"
+                     locked_update "$(state_path "$1")" _do_task_init "$@" ;;
+  task-update)       check_args 4 $# "task-update <workspace> <N> <field> <value>"
+                     locked_update "$(state_path "$1")" _do_task_update "$@" ;;
+  revision-bump)     check_args 2 $# "revision-bump <workspace> <type>"
+                     locked_update "$(state_path "$1")" _do_revision_bump "$@" ;;
+  set-branch)        check_args 2 $# "set-branch <workspace> <branch>"
+                     locked_update "$(state_path "$1")" _do_set_branch "$@" ;;
+  set-task-type)     check_args 2 $# "set-task-type <workspace> <taskType>"
+                     locked_update "$(state_path "$1")" _do_set_task_type "$@" ;;
+  set-effort)        check_args 2 $# "set-effort <workspace> <effort>"
+                     locked_update "$(state_path "$1")" _do_set_effort "$@" ;;
+  set-flow-template) check_args 2 $# "set-flow-template <workspace> <flowTemplate>"
+                     locked_update "$(state_path "$1")" _do_set_flow_template "$@" ;;
+  set-auto-approve)  check_args 1 $# "set-auto-approve <workspace>"
+                     locked_update "$(state_path "$1")" _do_set_auto_approve "$@" ;;
+  set-skip-pr)       check_args 1 $# "set-skip-pr <workspace>"
+                     locked_update "$(state_path "$1")" _do_set_skip_pr "$@" ;;
+  set-debug)         check_args 1 $# "set-debug <workspace>"
+                     locked_update "$(state_path "$1")" _do_set_debug "$@" ;;
+  set-use-current-branch) check_args 2 $# "set-use-current-branch <workspace> <branch>"
+                          locked_update "$(state_path "$1")" _do_set_use_current_branch "$@" ;;
+  set-revision-pending)   check_args 2 $# "set-revision-pending <workspace> <checkpoint>"
+                          locked_update "$(state_path "$1")" _do_update_revision_pending "$1" "$2" "true" ;;
+  clear-revision-pending) check_args 2 $# "clear-revision-pending <workspace> <checkpoint>"
+                          locked_update "$(state_path "$1")" _do_update_revision_pending "$1" "$2" "false" ;;
+  skip-phase)        check_args 2 $# "skip-phase <workspace> <phase>"
+                     locked_update "$(state_path "$1")" _do_skip_phase "$@" ;;
+  phase-log)         check_args 4 $# "phase-log <workspace> <phase> <tokens> <duration_ms> [model]"
+                     locked_update "$(state_path "$1")" _do_phase_log "$@" ;;
+  phase-stats)       check_args 1 $# "phase-stats <workspace>";                                   cmd_phase_stats "$@" ;;
+  abandon)           check_args 1 $# "abandon <workspace>"
+                     locked_update "$(state_path "$1")" _do_abandon "$@" ;;
+  resume-info)       check_args 1 $# "resume-info <workspace>";                                   cmd_resume_info "$@" ;;
   *)                 die "Unknown command: ${command}" ;;
 esac

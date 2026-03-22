@@ -26,7 +26,7 @@ claude-forge/
 ├── hooks/
 │   └── hooks.json         ← hook definitions (PreToolUse, PostToolUse, Stop)
 ├── scripts/
-│   ├── state-manager.sh   ← core state management CLI (22 commands, jq-based)
+│   ├── state-manager.sh   ← core state management CLI (24 commands, jq-based)
 │   ├── validate-input.sh  ← deterministic input validation (empty, too short, URL format)
 │   ├── pre-tool-hook.sh   ← read-only, commit blocking, checkpoint, artifact & input validation guards
 │   ├── post-agent-hook.sh ← agent output quality validation
