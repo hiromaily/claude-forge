@@ -293,7 +293,7 @@ $ARGUMENTS
 │ architect → design.md                              │
 │ design-reviewer → review-design.md                 │
 └──────┬───────────────────────────────────────────┘
-       │ [phase-3 skipped for docs; phase-3b, checkpoint-a skipped for bugfix/docs/refactor]
+       │ [phase-3 skipped for docs (stub written instead); phase-3b and checkpoint-a run for all task types]
        │ Checkpoint A (human approval)
        ▼
 ┌──────────────────────────────────────────────────┐
@@ -412,20 +412,22 @@ The pipeline adapts its execution based on the detected task type. The orchestra
 
 Five task types are supported. The `feature` type runs the full pipeline. All other types skip one or more phases:
 
-| Task type | Phases to skip |
+> **Note:** With F13 (effort-aware pipeline), these are now the **task-type supplemental skip sets** that get unioned with a template base skip set. The 20-cell canonical skip sequence table in SKILL.md is the authoritative reference; this table shows only the task-type contribution to the final skip set.
+
+| Task type | Phases to skip (task-type supplemental) |
 |-----------|----------------|
-| `feature` | (none — full pipeline) |
-| `bugfix` | `phase-3b`, `checkpoint-a`, `phase-4`, `phase-4b`, `checkpoint-b`, `phase-7` |
+| `feature` | (none) |
+| `bugfix` | `phase-4`, `phase-4b`, `checkpoint-b`, `phase-7` |
 | `investigation` | `phase-3`, `phase-3b`, `checkpoint-a`, `phase-4`, `phase-4b`, `checkpoint-b`, `phase-5`, `phase-6`, `phase-7`, `final-verification`, `pr-creation` |
-| `docs` | `phase-2`, `phase-3`, `phase-3b`, `checkpoint-a`, `phase-4`, `phase-4b`, `checkpoint-b`, `phase-7` |
-| `refactor` | `phase-3b`, `checkpoint-a` |
+| `docs` | `phase-2`, `phase-3`, `phase-4`, `phase-4b`, `checkpoint-b`, `phase-7` |
+| `refactor` | (none) |
 
 **Rationale by task type:**
 
-- **`bugfix`**: Phase 2 (root-cause investigation) and Phase 3 (fix strategy design) are mandatory. The AI design review loop and human Checkpoint A are skipped — the fix strategy is reviewed implicitly when the human approves the PR. The task decomposition loop is skipped; the orchestrator synthesises a single-task `tasks.md` stub after Phase 3. Phase 7 (comprehensive review) is skipped for single-fix bugs.
-- **`investigation`**: Ends at Final Summary — no implementation, no PR. Phase 3 produces recommendations. `post-to-source` still runs so findings are posted back to the source issue.
-- **`docs`**: Skips all investigation and design phases. Phase 7 is skipped because docs changes carry lower regression risk. The orchestrator synthesises `design.md` and `tasks.md` stubs after Phase 1 completes (see Stub Synthesis below).
-- **`refactor`**: Full design loop but no Design AI Review (trusts human at Checkpoint A). Keeps Phase 7 because refactoring carries higher regression risk.
+- **`bugfix`**: Phase 2 (root-cause investigation) and Phase 3 (fix strategy design) are mandatory. Phase 3b (AI design review) and Checkpoint A (human design review) also run — the fix strategy is reviewed before implementation. The task decomposition loop is skipped; the orchestrator synthesises a single-task `tasks.md` stub after Phase 3. Phase 7 (comprehensive review) is skipped for single-fix bugs.
+- **`investigation`**: Ends at Final Summary — no implementation, no PR. Phase 3 produces recommendations if the template is high enough effort; low-effort cells skip it. `post-to-source` still runs so findings are posted back to the source issue.
+- **`docs`**: Skips Phase 2 (investigation) and Phase 3 (design by architect). Phase 3b (AI design review) and Checkpoint A (human review) still run on orchestrator-written stubs. Phase 7 is skipped because docs changes carry lower regression risk. The orchestrator synthesises `design.md` and `tasks.md` stubs after Phase 1 completes (see Stub Synthesis below).
+- **`refactor`**: Full design loop including Phase 3b and Checkpoint A. Keeps Phase 7 because refactoring carries higher regression risk.
 
 ### `state.json` Schema Additions
 
@@ -437,7 +439,7 @@ Several top-level fields have been added to `state.json` beyond the initial v1 s
   "taskType": "feature | bugfix | investigation | docs | refactor | null",
   "effort": "XS | S | M | L | null",
   "flowTemplate": "direct | lite | light | standard | full | null",
-  "skippedPhases": ["phase-3b", "checkpoint-a"],
+  "skippedPhases": ["phase-4", "phase-4b", "checkpoint-b", "phase-7"],
   "autoApprove": false,
   "phaseLog": [
     {"phase": "phase-1", "tokens": 5000, "duration_ms": 30000, "model": "sonnet", "timestamp": "..."}
@@ -536,12 +538,14 @@ After lookup, call: `$SM set-flow-template {workspace} {flow_template}`
 
 #### Template definitions
 
-| Template | Phases run | Agent count |
+Phases listed are for `feature` task type. Task-type supplemental skips may remove additional phases (see union rule below). Actual phase sequence for any `(task_type, effort)` cell: see the 20-cell table in SKILL.md.
+
+| Template | Phases run (`feature` task type) | Agent count |
 |----------|-----------|-------------|
-| `direct` | Phase 5 → Verification → PR | 2 |
-| `lite` | Phase 1+2 (merged, analyst agent) → Phase 5 → Phase 6 → Verification → PR | 3–4 |
-| `light` | Phase 1 → Phase 2 → Phase 3 → Phase 5 → Phase 6 → Phase 7 → Verification → PR | 6–8 |
-| `standard` | Full pipeline (current default) | 10+ |
+| `direct` | Stubs → Phase 3b → Checkpoint A → Phase 5 → Verification → PR | 2 |
+| `lite` | Phase 1+2 (merged) → Phase 3 → Phase 3b → Checkpoint A → Phase 4 → Phase 5 → Verification → PR | 4+ |
+| `light` | Phase 1 → Phase 2 → Phase 3 → Phase 3b → Checkpoint A → Phase 4 → Phase 5 → Phase 6 → Verification → PR | 5+ |
+| `standard` | Full pipeline (all phases, both checkpoints) | 10+ |
 | `full` | Standard + all checkpoints mandatory (auto-approve disabled even with `--auto`) | 10+ |
 
 #### Union rule for skip-set computation
@@ -556,24 +560,58 @@ Both sets are emitted as `skip-phase` calls in canonical PHASES-array order duri
 **Template base skip sets** (in canonical PHASES-array order):
 
 ```
-direct:   phase-1, phase-2, phase-3, phase-3b, checkpoint-a, phase-4, phase-4b, checkpoint-b, phase-6, phase-7
-lite:     phase-3b, checkpoint-a, phase-4b, checkpoint-b, phase-6, phase-7
+direct:   phase-1, phase-2, phase-3, phase-4, phase-4b, checkpoint-b, phase-6, phase-7
+          NOTE: phase-3b and checkpoint-a are NOT skipped — they run on orchestrator-written stubs.
+lite:     phase-4b, checkpoint-b, phase-6, phase-7
           IMPORTANT: phase-2 is NOT included here. It is skipped by one dedicated call
           inside the Phase 1 execution block, after phase-complete phase-1.
-light:    phase-3b, checkpoint-a, phase-4b, checkpoint-b, phase-7
+light:    phase-4b, checkpoint-b, phase-7
 standard: (no base skips — full pipeline)
 full:     (no base skips — same as standard; autoApprove is forced false)
 ```
 
-**Task-type supplemental skip sets** (unchanged from the existing 1D table):
+**Task-type supplemental skip sets:**
 
 ```
 feature:       (none)
-bugfix:        phase-3b, checkpoint-a, phase-4, phase-4b, checkpoint-b, phase-7
+bugfix:        phase-4, phase-4b, checkpoint-b, phase-7
 investigation: phase-3, phase-3b, checkpoint-a, phase-4, phase-4b, checkpoint-b, phase-5, phase-6, phase-7, final-verification, pr-creation
-docs:          phase-2, phase-3, phase-3b, checkpoint-a, phase-4, phase-4b, checkpoint-b, phase-7
-refactor:      phase-3b, checkpoint-a
+docs:          phase-2, phase-3, phase-4, phase-4b, checkpoint-b, phase-7
+refactor:      (none)
 ```
+
+### Consolidated Artifact Availability
+
+Single reference for which workspace artifact files are present after a completed pipeline. Derived from the 20-cell canonical skip sequence table in SKILL.md — consult that table for the exact `skip-phase` call sequences.
+
+**Legend:** `✓` agent-produced · `✓†` `analyst` agent (merged Phase 1+2) · `S` orchestrator stub · `—` not produced
+
+`summary.md` is always produced and is omitted from the table. `†` Both `analysis.md` and `investigation.md` are written by the `analyst` agent in a single merged Phase 1+2 call; `skip-phase phase-2` is called afterward to advance the state machine.
+
+| task_type | effort | template | `analysis.md` | `investigation.md` | `design.md` | `review-design.md` | `tasks.md` | `review-tasks.md` | `impl-{N}.md` | `review-{N}.md` | `comprehensive-review.md` |
+|-----------|--------|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `feature` | XS | `lite` | ✓† | ✓† | ✓ | ✓ | ✓ | — | ✓ | — | — |
+| `feature` | S | `light` | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | — |
+| `feature` | M | `standard` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `feature` | L | `full` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `bugfix` | XS | `direct` | S | — | S | ✓ | S | — | ✓ | — | — |
+| `bugfix` | S | `lite` | ✓† | ✓† | ✓ | ✓ | S | — | ✓ | — | — |
+| `bugfix` | M | `light` | ✓ | ✓ | ✓ | ✓ | S | — | ✓ | ✓ | — |
+| `bugfix` | L | `standard` | ✓ | ✓ | ✓ | ✓ | S | — | ✓ | ✓ | — |
+| `refactor` | XS | `lite` | ✓† | ✓† | ✓ | ✓ | ✓ | — | ✓ | — | — |
+| `refactor` | S | `light` | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | — |
+| `refactor` | M | `standard` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `refactor` | L | `full` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `docs` | XS | `direct` | S | — | S | ✓ | S | — | ✓ | — | — |
+| `docs` | S | `direct` | S | — | S | ✓ | S | — | ✓ | — | — |
+| `docs` | M | `lite` | ✓ | — | S | ✓ | S | — | ✓ | — | — |
+| `docs` | L | `light` | ✓ | — | S | ✓ | S | — | ✓ | ✓ | — |
+| `investigation` | XS | `lite` | ✓† | ✓† | — | — | — | — | — | — | — |
+| `investigation` | S | `lite` | ✓† | ✓† | — | — | — | — | — | — | — |
+| `investigation` | M | `light` | ✓ | ✓ | — | — | — | — | — | — | — |
+| `investigation` | L | `standard` | ✓ | ✓ | — | — | — | — | — | — | — |
+
+**Notes on stubs (S):** For `direct` template cells, the orchestrator writes `analysis.md`, `design.md`, and `tasks.md` stubs during Workspace Setup before Phase 3b runs. For `bugfix` cells (S/M/L), `tasks.md` is a single-task stub written by the orchestrator after Phase 3 completes (since Phase 4 is skipped). For `docs` cells, `design.md` and `tasks.md` stubs are written after Phase 1 completes (since Phases 2–4 are skipped).
 
 ### Resume Behaviour
 
