@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "specName": "architecture-agent-reads-table",
+  "workspace": ".specs/20260322-architecture-agent-reads-table",
+  "branch": "feature/architecture-agent-reads-table",
+  "taskType": "docs",
+  "effort": "S",
+  "flowTemplate": "direct",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [
+    "checkpoint-b",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-4",
+    "phase-4b",
+    "phase-6",
+    "phase-7"
+  ],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "checkpoint-a",
+    "final-summary",
+    "final-verification",
+    "phase-3b",
+    "phase-5",
+    "phase-6",
+    "post-to-source",
+    "pr-creation",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0
+  },
+  "tasks": {
+    "1": {
+      "title": "Implement",
+      "implStatus": "completed",
+      "reviewStatus": "pending",
+      "executionMode": "sequential",
+      "implRetries": 0,
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-3b",
+      "tokens": 25551,
+      "duration_ms": 59180,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T08:35:43Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 16278,
+      "duration_ms": 53327,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T08:38:17Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 19559,
+      "duration_ms": 33916,
+      "model": "sonnet",
+      "timestamp": "2026-03-22T08:39:03Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-22T08:32:27Z",
+    "lastUpdated": "2026-03-22T08:39:45Z",
+    "phaseStarted": null
+  },
+  "error": null
+}
