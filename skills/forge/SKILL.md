@@ -1227,6 +1227,8 @@ $SM phase-complete {workspace} pr-creation
 $SM phase-start {workspace} final-summary
 ```
 
+Before writing summary.md: run `$SM phase-stats {workspace}` and capture its output for the Execution Stats section.
+
 **Dispatch on `{task_type}`** — select exactly one block below and follow only those steps:
 
 ---
@@ -1234,8 +1236,7 @@ $SM phase-start {workspace} final-summary
 ### If `{task_type}` is `feature` or `refactor`
 
 1. Read all `review-{N}.md` files and `comprehensive-review.md`.
-2. Run `$SM phase-stats {workspace}` and capture its output.
-3. Write `{workspace}/summary.md` with this structure:
+2. Write `{workspace}/summary.md` with this structure:
    ```markdown
    # Pipeline Summary
 
@@ -1271,13 +1272,6 @@ $SM phase-start {workspace} final-summary
    …
    | **TOTAL** | **…** | **…s** | |
    ```
-4. Present the contents of `summary.md` to the user.
-5. **Update the commit to include summary.md**:
-   ```bash
-   git add {workspace}/summary.md
-   git commit --amend --no-edit
-   git push --force-with-lease
-   ```
 
 ---
 
@@ -1286,8 +1280,7 @@ $SM phase-start {workspace} final-summary
 Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4 (Task Decomposition) was also skipped (stub tasks.md used instead). Do NOT read `comprehensive-review.md` or build a Tasks table — neither exists.
 
 1. Read all `review-{N}.md` files (Phase 6 ran for both `bugfix` and `docs`).
-2. Run `$SM phase-stats {workspace}` and capture its output.
-3. Write `{workspace}/summary.md` with this structure:
+2. Write `{workspace}/summary.md` with this structure:
    ```markdown
    # Pipeline Summary
 
@@ -1312,13 +1305,6 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
    …
    | **TOTAL** | **…** | **…s** | |
    ```
-4. Present the contents of `summary.md` to the user.
-5. **Update the commit to include summary.md**:
-   ```bash
-   git add {workspace}/summary.md
-   git commit --amend --no-edit
-   git push --force-with-lease
-   ```
 
 ---
 
@@ -1327,8 +1313,7 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
 > **Terminal phase for investigation flow.** Phases 3 (Design), 3b, checkpoint-a, 4, 4b, checkpoint-b, 5, 6, 7, Final Verification, and PR Creation were all skipped. There is no `design.md`, no feature branch, no PR, and no commit to amend. After `final-summary` completes, `post-to-source` still runs so findings are posted back to the source issue.
 
 1. Read `{workspace}/analysis.md` and `{workspace}/investigation.md`.
-2. Run `$SM phase-stats {workspace}` and capture its output.
-3. Write `{workspace}/summary.md` with this structure:
+2. Write `{workspace}/summary.md` with this structure:
    ```markdown
    # Investigation Summary
 
@@ -1355,8 +1340,6 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
    …
    | **TOTAL** | **…** | **…s** | |
    ```
-4. Present the contents of `summary.md` to the user.
-5. **Do NOT run commit-amend or push** — no feature branch exists for `investigation` flows.
 
 ---
 
@@ -1365,6 +1348,20 @@ Phase 7 (Comprehensive Review) was skipped for both `bugfix` and `docs`. Phase 4
 Stop immediately and report an error:
 
 > Pipeline error: `{task_type}` is not a recognised task type. Expected one of: `feature`, `refactor`, `bugfix`, `docs`, `investigation`. The pipeline is in an unexpected state — do not proceed.
+
+---
+
+### Common epilogue (all task types)
+
+After completing the per-type dispatch block above:
+
+4. Present the contents of `summary.md` to the user.
+5. **Update the commit to include summary.md** — skip this step if `{task_type}` is `investigation` (no feature branch exists):
+   ```bash
+   git add {workspace}/summary.md
+   git commit --amend --no-edit
+   git push --force-with-lease
+   ```
 
 ---
 
@@ -1391,7 +1388,7 @@ If `{debug_mode}` is `true`:
    `completed` at this point — `phase-complete final-summary` has not yet been called.
    This is expected; the debug report does not read or display `currentPhaseStatus`.)
 
-   Also reuse the `phase-stats` output already captured in the dispatch block above.
+   Also reuse the `phase-stats` output already captured in the common preamble above.
 
 2. Evaluate the following heuristics against `{debug_data}`:
 
