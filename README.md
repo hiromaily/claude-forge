@@ -1,12 +1,54 @@
 # claude-forge
 
-**claude-forge** is a Claude Code plugin that replaces ad-hoc, single-conversation AI development workflows with a structured, multi-phase pipeline of isolated subagents. If you have been using Spec-Driven Development (SDD) or similar prompt frameworks, claude-forge is the upgrade — deterministic guardrails, disk-based state that survives restarts, built-in review loops, and a full automated test suite.
+Claude Code is getting good enough that you start delegating more and more development work to it.
+
+At that point, even structured approaches like Spec-Driven Development (SDD) start to feel manual.
+
+You don’t just want better prompts — you want the whole workflow to run itself.
+
+And the focus shifts to things like:
+- reducing token usage
+- avoiding context pollution
+- making outputs reproducible
+- structuring information so AI can actually use it
+
+I built **claude-forge** to automate that layer.
+
+It’s a Claude Code plugin that turns AI development into a structured, multi-phase pipeline:
+
+- isolated subagents per phase (no context pollution)
+- disk-based state (resume anytime)
+- deterministic guardrails via hooks
+- review loops before implementation
+- artifacts structured for both humans and AI
+
+Instead of managing prompts and workflows manually, claude-forge manages the system around the model.
+
+---
+
+## Why claude-forge?
+
+Recent research from Anthropic highlights a key insight about AI agents in real-world usage.
+
+In the paper **[“Measuring Agent Autonomy in Practice”](https://www.anthropic.com/research/measuring-agent-autonomy)**, Anthropic analyzed millions of interactions with agentic systems and observed that current deployments often **under-utilize the autonomy that models are capable of**.
+
+> “We observe a significant *deployment overhang*, where the autonomy models are capable of handling exceeds what they exercise in practice.”
+
+In other words, the limiting factor for autonomous systems is increasingly **not model intelligence**, but **how humans structure workflows around the models**.
+
+The study also shows that:
+
+* Autonomous sessions are becoming **longer and more capable**
+* Experienced users increasingly **trust agents with fewer manual approvals**
+* A large portion of agent usage already occurs in **software engineering tasks**
+
+This indicates that the main challenge is shifting from **interactive prompting** to **structured autonomous workflows** — which is exactly the gap claude-forge is designed to close.
 
 ---
 
 ## Overview
 
-Most AI-assisted development frameworks (including [SDD Framework](https://github.com/zhimin-z/Awesome-Spec-Driven-Development)) rely on a single conversation with structured prompts. This works for small tasks but breaks down as complexity grows — the context window fills up, the model loses focus, and there is no mechanism to enforce constraints beyond "please follow these instructions."
+Most AI-assisted development frameworks (including [SDD Framework](https://github.com/zhimin-z/Awesome-Spec-Driven-Development)) rely on a single conversation with structured prompts. This works for small tasks but breaks down as complexity grows — the context window fills up, the model loses focus, and there is no mechanism to enforce constraints beyond “please follow these instructions.”
 
 claude-forge takes a fundamentally different approach:
 
@@ -36,7 +78,13 @@ flowchart TD
     IV -->|invalid| REJECT(["❌ Reject — show error"])
     IV -->|valid| WS[Workspace Setup<br>request.md + state.json]
     RESUME --> REJOIN(("resume at<br>current phase"))
-    WS --> P1
+    WS --> BC{"On main<br>branch?"}
+    BC -->|"yes (new branch<br>created before Phase 5)"| TE
+    BC -->|no| BCASK["👤 Use current branch<br>or create new?"]
+    BCASK --> TE
+
+    TE["🔍 Detect task type & effort<br>(👤 confirm if heuristic)"]
+    TE --> P1
 
     REJOIN -.-> P1
     P1["🔍 Phase 1 — Situation Analysis<br><i>situation-analyst</i>"]
@@ -63,8 +111,10 @@ flowchart TD
     TREV -->|APPROVE| CPB
 
     CPB{{"👤🔊 Checkpoint B<br>Human reviews tasks"}}
-    CPB -->|approved| P5
+    CPB -->|approved| GITBR["🌿 Create/use<br>feature branch"]
     CPB -->|rejected| P4
+
+    GITBR --> P5
 
     subgraph loop ["🔄 Repeat for each task"]
         P5["⚙️ Phase 5 — Implementation<br><i>implementer</i>"]
@@ -90,6 +140,18 @@ flowchart TD
 ```
 
 > The diagram above shows the full `feature` flow. Other task types skip phases — see [Task types](#task-types) below.
+
+### Improvement feedback loop
+
+Each run appends an `## Improvement Report` to `.specs/{date}-{name}/summary.md` — a retrospective on friction encountered during the pipeline: documentation gaps, unclear conventions, missing tooling, or issues that slowed down the AI agents.
+
+To act on those suggestions, feed the report back into a new pipeline:
+
+```text
+/forge Review and implement the improvement suggestions in .specs/{date}-{name}/summary.md
+```
+
+This turns every completed run into a compounding investment — the codebase progressively gets easier for both humans and future AI runs.
 
 ---
 
