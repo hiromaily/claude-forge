@@ -1,56 +1,94 @@
 # claude-forge
 
-Claude Code is getting good enough that you start delegating more and more development work to it.
+Spec-Driven Development got you most of the way there.
 
-At that point, even structured approaches like Spec-Driven Development (SDD) start to feel manual.
+You write the spec. AI does the implementation. You review. It works — until you realize you're still managing every handoff manually. You kick off analysis, wait for output, hand off context to the next prompt, watch for mistakes, review intermediate work, decide when to proceed — on every task, on every run.
 
-You don’t just want better prompts — you want the whole workflow to run itself.
+The bottleneck is no longer prompting. It's orchestration.
 
-And the focus shifts to things like:
-- reducing token usage
-- avoiding context pollution
-- making outputs reproducible
-- structuring information so AI can actually use it
+You start caring about:
+- token efficiency
+- context isolation
+- reproducibility across runs
+- structuring artifacts so AI can actually use them
 
 I built **claude-forge** to automate that layer.
 
-It’s a Claude Code plugin that turns AI development into a structured, multi-phase pipeline:
+It's a Claude Code plugin that replaces ad-hoc AI development workflows with a structured, multi-phase pipeline — isolated subagents, deterministic guardrails, and state that survives restarts.
 
-- isolated subagents per phase (no context pollution)
-- disk-based state (resume anytime)
-- deterministic guardrails via hooks
-- review loops before implementation
-- artifacts structured for both humans and AI
-
-Instead of managing prompts and workflows manually, claude-forge manages the system around the model.
+Instead of writing better prompts, you build a system where AI development can run predictably.
 
 ---
 
-## Why claude-forge?
+## The problem with SDD today
 
-Recent research from Anthropic highlights a key insight about AI agents in real-world usage.
+The AI development landscape has evolved through three phases:
 
-In the paper **[“Measuring Agent Autonomy in Practice”](https://www.anthropic.com/research/measuring-agent-autonomy)**, Anthropic analyzed millions of interactions with agentic systems and observed that current deployments often **under-utilize the autonomy that models are capable of**.
+**1. Vibe coding** — "Write me a function that does X." Works for small tasks. Breaks as complexity grows. The model loses focus, context fills up, nothing is reproducible.
 
-> “We observe a significant *deployment overhang*, where the autonomy models are capable of handling exceeds what they exercise in practice.”
+**2. Spec-Driven Development (SDD)** — Write a spec first, then hand it to AI. Better. But you're still the orchestrator. You manage each handoff, watch for quality regressions, decide when to move on. It's an improvement — but it's still manual.
 
-In other words, the limiting factor for autonomous systems is increasingly **not model intelligence**, but **how humans structure workflows around the models**.
+**3. Pipeline automation** — You describe a task once; the system runs the full workflow, enforces constraints, reviews its own output, and self-reports on where it got stuck.
 
-The study also shows that:
+Anthropic's own research puts it plainly: ["Measuring Agent Autonomy in Practice"](https://www.anthropic.com/research/measuring-agent-autonomy) found a significant _deployment overhang_ — models can handle far more autonomy than humans actually grant them. The bottleneck isn't model intelligence. It's how humans structure workflows around the models.
 
-* Autonomous sessions are becoming **longer and more capable**
-* Experienced users increasingly **trust agents with fewer manual approvals**
-* A large portion of agent usage already occurs in **software engineering tasks**
+claude-forge is built for phase 3.
 
-This indicates that the main challenge is shifting from **interactive prompting** to **structured autonomous workflows** — which is exactly the gap claude-forge is designed to close.
+---
+
+## Four things that make it different
+
+### 1. SDD is still manual — claude-forge isn't
+
+SDD tells you *what* to do at each phase. It doesn't *run* the phases. You still decide when to move from analysis to design, when to approve, when to iterate.
+
+claude-forge automates the full handoff chain. Each phase writes a markdown artifact. The next phase reads it. No context sharing, no conversation history — just structured files as the API between agents.
+
+### 2. Improvement loop — automatic, not optional
+
+Most teams measure AI output by the artifact: did it ship? But the real cost is invisible.
+
+AI spent 40% of its tokens re-reading docs it couldn't find quickly. Context had to be re-established multiple times because agents shared a session. You never see this. You just see a PR.
+
+After every run, claude-forge emits an **Improvement Report** — appended to `summary.md` — identifying exactly where the pipeline got stuck:
+
+- Documentation gaps that slowed agents down
+- Missing conventions that caused repeated clarification loops
+- Token-heavy phases caused by poorly structured context
+
+Most teams de-prioritize this under deadline pressure. claude-forge makes it automatic on every run.
+
+To act on it, feed the report back into a new pipeline:
+
+```text
+/forge Review and implement the improvement suggestions in .specs/{date}-{name}/summary.md
+```
+
+This turns every completed run into a compounding investment — the codebase progressively gets easier for both humans and future AI runs.
+
+### 3. Flow optimization — task type × effort level
+
+Not every task needs 11 phases and 3 review cycles.
+
+claude-forge detects the task type (feature / bugfix / docs / refactor) and effort level (XS → L), and selects the appropriate pipeline template — from a 2-phase direct fix to a full 11-phase pipeline with mandatory human checkpoints.
+
+A tiny bugfix doesn't go through task review. A large feature doesn't skip it. The workflow adapts to the task, not the other way around.
+
+### 4. Deterministic guardrails — hooks, not just prompts
+
+LLM instructions are probabilistic. A well-prompted agent *usually* follows them. But "usually" isn't enough when the cost of a mistake is high.
+
+claude-forge enforces critical constraints at the shell level via Claude Code hooks:
+
+- **Read-only guard** — blocks source edits during analysis phases (exit 2)
+- **Commit guard** — prevents git commits during parallel task execution
+- **Checkpoint gate** — blocks progression until required artifacts exist and human approval is recorded
+
+These aren't instructions the agent can misinterpret. They're hard stops.
 
 ---
 
 ## Overview
-
-Most AI-assisted development frameworks (including [SDD Framework](https://github.com/zhimin-z/Awesome-Spec-Driven-Development)) rely on a single conversation with structured prompts. This works for small tasks but breaks down as complexity grows — the context window fills up, the model loses focus, and there is no mechanism to enforce constraints beyond “please follow these instructions.”
-
-claude-forge takes a fundamentally different approach:
 
 | Dimension | SDD / Single-conversation | claude-forge |
 | --- | --- | --- |
@@ -140,18 +178,6 @@ flowchart TD
 ```
 
 > The diagram above shows the full `feature` flow. Other task types skip phases — see [Task types](#task-types) below.
-
-### Improvement feedback loop
-
-Each run appends an `## Improvement Report` to `.specs/{date}-{name}/summary.md` — a retrospective on friction encountered during the pipeline: documentation gaps, unclear conventions, missing tooling, or issues that slowed down the AI agents.
-
-To act on those suggestions, feed the report back into a new pipeline:
-
-```text
-/forge Review and implement the improvement suggestions in .specs/{date}-{name}/summary.md
-```
-
-This turns every completed run into a compounding investment — the codebase progressively gets easier for both humans and future AI runs.
 
 ---
 
@@ -269,7 +295,7 @@ claude-forge/
   agents/             11 specialist agents (.md files with YAML frontmatter)
   hooks/              Hook definitions (hooks.json)
   scripts/
-    state-manager.sh  State management CLI (22 commands)
+    state-manager.sh  State management CLI (24 commands)
     pre-tool-hook.sh  Read-only, commit blocking, checkpoint & artifact guards
     post-agent-hook.sh  Agent output quality validation
     stop-hook.sh      Pipeline completion guard
