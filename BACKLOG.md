@@ -11,16 +11,15 @@ Ordered by priority. Higher rows should be tackled first.
 
 | # | ID | Issue | Title | Type | Effort | Why now |
 |---|-----|-------|-------|------|--------|---------|
-| 1 | **F5** | [#11](https://github.com/hiromaily/claude-forge/issues/11) | Diff-based review (token reduction) | Feature | M | 60-80% token reduction for review agents. Higher ROI on large codebases. |
-| 2 | **F10** | [#12](https://github.com/hiromaily/claude-forge/issues/12) | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
-| 3 | **F9** | [#13](https://github.com/hiromaily/claude-forge/issues/13) | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
-| 4 | **F12** | [#14](https://github.com/hiromaily/claude-forge/issues/14) | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
-| 5 | **F8** | [#15](https://github.com/hiromaily/claude-forge/issues/15) | Past pipeline reference (data flywheel) | Feature | L | Uses `.specs/` history to improve future pipelines. The accumulated data is a moat — competitors can copy code but not execution history. |
-| 6 | **F17** | [#16](https://github.com/hiromaily/claude-forge/issues/16) | Repository profiling | Feature | M | First-run analysis of repo structure, test strategy, CI config → persisted profile that tunes agent prompts. Hard to replicate without per-repo data. |
-| 7 | **F18** | [#17](https://github.com/hiromaily/claude-forge/issues/17) | Improvement report → test case generation | Feature | S | Auto-generate hook guard test cases from friction points found in improvement reports. Accelerates deterministic guard accumulation. |
-| 8 | **F19** | [#18](https://github.com/hiromaily/claude-forge/issues/18) | CI feedback loop (post-PR auto-fix) | Feature | L | After PR creation, monitor CI results and auto-trigger fix flow on failure. Closes the quality loop beyond the pipeline boundary. |
-| 9 | **F6** | [#19](https://github.com/hiromaily/claude-forge/issues/19) | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. F13 (effort axis) provides the foundation for model selection. |
-| 10 | **F2** | [#20](https://github.com/hiromaily/claude-forge/issues/20) | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
+| 1 | **F10** | [#12](https://github.com/hiromaily/claude-forge/issues/12) | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
+| 2 | **F9** | [#13](https://github.com/hiromaily/claude-forge/issues/13) | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
+| 3 | **F12** | [#14](https://github.com/hiromaily/claude-forge/issues/14) | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
+| 4 | **F8** | [#15](https://github.com/hiromaily/claude-forge/issues/15) | Past pipeline reference (data flywheel) | Feature | L | Uses `.specs/` history to improve future pipelines. The accumulated data is a moat — competitors can copy code but not execution history. |
+| 5 | **F17** | [#16](https://github.com/hiromaily/claude-forge/issues/16) | Repository profiling | Feature | M | First-run analysis of repo structure, test strategy, CI config → persisted profile that tunes agent prompts. Hard to replicate without per-repo data. |
+| 6 | **F18** | [#17](https://github.com/hiromaily/claude-forge/issues/17) | Improvement report → test case generation | Feature | S | Auto-generate hook guard test cases from friction points found in improvement reports. Accelerates deterministic guard accumulation. |
+| 7 | **F19** | [#18](https://github.com/hiromaily/claude-forge/issues/18) | CI feedback loop (post-PR auto-fix) | Feature | L | After PR creation, monitor CI results and auto-trigger fix flow on failure. Closes the quality loop beyond the pipeline boundary. |
+| 8 | **F6** | [#19](https://github.com/hiromaily/claude-forge/issues/19) | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. F13 (effort axis) provides the foundation for model selection. |
+| 9 | **F2** | [#20](https://github.com/hiromaily/claude-forge/issues/20) | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
 
 **Effort key:** XS = < 30min, S = 1-2h, M = half day, L = 1+ day
 
@@ -113,6 +112,7 @@ All items below are implemented and verified. One-line summaries for reference.
 
 | ID | Title | Resolution |
 |----|-------|------------|
+| **F5** | Diff-based review (token reduction) | impl-reviewer replaces full-file reads with agent self-executed `git diff main...HEAD -- <files>`. comprehensive-reviewer adds selective structural reads instruction. PR [#35](https://github.com/hiromaily/claude-forge/pull/35). |
 | **F15** | Inline revision shortcut for MINOR findings | `APPROVE_WITH_NOTES` + all MINOR findings → orchestrator edits artifact inline and re-runs review only. New `inline-revision-bump` command tracks inline revisions separately. |
 | **P21** | SKILL.md size reduction / split | Removed Mermaid diagram (73 lines), compressed skip gate blockquotes (already terse in live file), removed flow template matrix (13 lines), consolidated Final Summary shared steps (3 lines). Net: 89 lines reduced (1,646 → 1,557). Remaining size reduction opportunities exist via stub file extraction if needed. |
 | **P20** | Consolidated artifact availability table | Added a 20-row lookup table to ARCHITECTURE.md (§ Consolidated Artifact Availability) showing which workspace files are present for every `(task_type, effort)` cell. Replaces the need to cross-reference the flow template matrix, template base skip sets, and task-type supplemental skip sets manually. |
