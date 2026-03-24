@@ -22,6 +22,8 @@ Then examine the **actual code changes** on the feature branch by running:
 git diff main...HEAD
 ```
 
+After reviewing the diff, for each changed file where the diff alone does not provide sufficient structural context (e.g., the change adds a new function and you need to verify it fits the existing module structure), read only the top-level declarations of that file (function/method signatures, type/struct/class definitions, import blocks). Do NOT read entire file bodies — limit reads to the first 50–80 lines or use grep-style searches for declaration patterns.
+
 ## What to check
 
 ### Cross-task consistency
