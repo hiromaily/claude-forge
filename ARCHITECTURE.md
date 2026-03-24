@@ -388,8 +388,8 @@ The information flow is strictly forward — no agent reads output from a later 
 | task-reviewer | request.md, design.md, investigation.md, tasks.md |
 | Checkpoint B (orchestrator) | tasks.md, review-tasks.md (to present summary to human) |
 | implementer | request.md, design.md (may be an orchestrator-written stub for `docs` task type), tasks.md (may be a single-task stub for `bugfix` task type), review-{dep}.md (+review-{N}.md on retry) |
-| impl-reviewer | request.md, tasks.md, design.md, impl-{N}.md |
-| comprehensive-reviewer | request.md, design.md, tasks.md, all impl-{N}.md, all review-{N}.md, git diff |
+| impl-reviewer | request.md, tasks.md, design.md, impl-{N}.md, git diff (file-scoped, main...HEAD) |
+| comprehensive-reviewer | request.md, design.md, tasks.md, all impl-{N}.md, all review-{N}.md, git diff + selective structural reads |
 | verifier | (reads code on feature branch directly) |
 | PR Creation (orchestrator) | request.md, design.md, tasks.md (for PR title and body) |
 | Final Summary (orchestrator) | artifacts vary by task_type (see Final Summary section); also reads analysis.md and investigation.md (where present) for the Improvement Report epilogue |
@@ -773,6 +773,8 @@ Cost optimization. The pipeline spawns 10+ agents per run. Using opus for all wo
 
 ### Why the orchestrator doesn't read code?
 Token economy. If the orchestrator read implementation files, its context would grow with each phase, degrading reasoning quality. By only reading small artifact files (~500 lines total across all phases), the orchestrator stays fast and focused.
+
+This rule extends to diff output: review agents (Phase 6 impl-reviewer, Phase 7 comprehensive-reviewer) self-execute `git diff main...HEAD` inside their own agent context rather than having the orchestrator pre-compute and inject the diff. The diff is consumed in the agent's context, not the orchestrator's — the Token Economy Rule is satisfied.
 
 ### Why separate agent files instead of inline prompts?
 1. Each agent has a persistent, versionable system prompt
