@@ -349,8 +349,10 @@ The information flow is strictly forward — no agent reads output from a later 
 | analyst (Phase 1+2 merged, lite flow template) | request.md |
 | architect | request.md, analysis.md, investigation.md (+review-design.md on revision) — _investigation.md is optional: absent only if phase-2 was unexpectedly skipped for a non-docs flow; proceed without it_ |
 | design-reviewer | request.md, analysis.md, investigation.md, design.md |
+| Checkpoint A (orchestrator) | design.md, review-design.md (to present summary to human) |
 | task-decomposer | request.md, design.md, investigation.md (+review-tasks.md on revision) |
 | task-reviewer | request.md, design.md, investigation.md, tasks.md |
+| Checkpoint B (orchestrator) | tasks.md, review-tasks.md (to present summary to human) |
 | implementer | request.md, design.md (may be an orchestrator-written stub for `docs` task type), tasks.md (may be a single-task stub for `bugfix` task type), review-{dep}.md (+review-{N}.md on retry) |
 | impl-reviewer | request.md, tasks.md, design.md, impl-{N}.md |
 | comprehensive-reviewer | request.md, design.md, tasks.md, all impl-{N}.md, all review-{N}.md, git diff |
