@@ -14,7 +14,13 @@ Read these files:
 - `{workspace}/design.md` — the approved design
 - `{workspace}/impl-{N}.md` — the implementer's summary
 
-Also read the actual files that were created or modified by Task {N} (listed in tasks.md and impl-{N}.md).
+Then obtain the code changes for the reviewed task(s). This agent may be invoked for a single task (Task {N}) or a batch of tasks (e.g., N, N+1, N+2). For each task being reviewed, read the corresponding `impl-{N}.md` to find the list of files created or modified. Union all file paths across all tasks, then run:
+
+```bash
+git diff main...HEAD -- "<file1>" "<file2>" ...
+```
+
+using the exact file paths collected from the `impl-{N}.md` files. If a file list is not available in a task's `impl-{N}.md`, you should fail the review and report that the list of modified files is missing from the implementer's summary. This indicates a problem in the preceding implementation step that needs to be addressed.
 
 `{workspace}` and `{N}` (task number) are passed by the orchestrator.
 
@@ -26,7 +32,7 @@ Also read the actual files that were created or modified by Task {N} (listed in 
    - Happy path covered
    - Error/edge cases covered
    - Tests actually assert the right things
-4. **Code quality** — any obvious issues:
+4. **Code quality** — any obvious issues evaluated from the diff context (not full file bodies):
    - Missing error handling
    - Security vulnerabilities
    - Race conditions
