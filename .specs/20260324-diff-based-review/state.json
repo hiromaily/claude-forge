@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "specName": "diff-based-review",
+  "workspace": ".specs/20260324-diff-based-review",
+  "branch": "feature/diff-based-review",
+  "taskType": "feature",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "notifyOnStop": false,
+  "skippedPhases": [],
+  "currentPhase": "pr-creation",
+  "currentPhaseStatus": "in_progress",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "final-verification",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Update impl-reviewer to use diff-based code review",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Add selective structural reads to comprehensive-reviewer",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Update SKILL.md Agent Roster for Phase 6 and Phase 7",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Update ARCHITECTURE.md and agents/README.md documentation tables",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 38604,
+      "duration_ms": 84092,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:02:22Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 49516,
+      "duration_ms": 163630,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:05:59Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 27592,
+      "duration_ms": 100425,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:08:37Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 25471,
+      "duration_ms": 53922,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:09:52Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 24084,
+      "duration_ms": 37194,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:16:00Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 26739,
+      "duration_ms": 51185,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:17:12Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 22717,
+      "duration_ms": 60024,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:19:51Z"
+    },
+    {
+      "phase": "task-2-impl",
+      "tokens": 23865,
+      "duration_ms": 78165,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:19:51Z"
+    },
+    {
+      "phase": "task-3-impl",
+      "tokens": 22136,
+      "duration_ms": 63703,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:21:13Z"
+    },
+    {
+      "phase": "task-4-impl",
+      "tokens": 32287,
+      "duration_ms": 134780,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:23:38Z"
+    },
+    {
+      "phase": "task-1-review",
+      "tokens": 21595,
+      "duration_ms": 28165,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:24:27Z"
+    },
+    {
+      "phase": "task-2-review",
+      "tokens": 22095,
+      "duration_ms": 24045,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:25:06Z"
+    },
+    {
+      "phase": "task-3-review",
+      "tokens": 20841,
+      "duration_ms": 25735,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:25:50Z"
+    },
+    {
+      "phase": "task-4-review",
+      "tokens": 22680,
+      "duration_ms": 30229,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:26:31Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 35357,
+      "duration_ms": 93592,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:28:27Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 21029,
+      "duration_ms": 29434,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T11:29:20Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-24T11:00:19Z",
+    "lastUpdated": "2026-03-24T11:29:25Z",
+    "phaseStarted": "2026-03-24T11:29:25Z"
+  },
+  "error": null
+}
