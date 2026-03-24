@@ -17,10 +17,10 @@ Read these files:
 Then obtain the code changes for the reviewed task(s). This agent may be invoked for a single task (Task {N}) or a batch of tasks (e.g., N, N+1, N+2). For each task being reviewed, read the corresponding `impl-{N}.md` to find the list of files created or modified. Union all file paths across all tasks, then run:
 
 ```bash
-git diff main...HEAD -- <file1> <file2> ...
+git diff main...HEAD -- "<file1>" "<file2>" ...
 ```
 
-using the exact file paths collected from the `impl-{N}.md` files. If no file list is available from any `impl-{N}.md`, run `git diff main...HEAD` without path filters.
+using the exact file paths collected from the `impl-{N}.md` files. If a file list is not available in a task's `impl-{N}.md`, you should fail the review and report that the list of modified files is missing from the implementer's summary. This indicates a problem in the preceding implementation step that needs to be addressed.
 
 `{workspace}` and `{N}` (task number) are passed by the orchestrator.
 
