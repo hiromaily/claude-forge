@@ -99,7 +99,7 @@ setup_workspace() {
   "currentPhase": "${phase}",
   "currentPhaseStatus": "${status}",
   "completedPhases": ["setup"],
-  "revisions": { "designRevisions": 0, "taskRevisions": 0 },
+  "revisions": { "designRevisions": 0, "taskRevisions": 0, "designInlineRevisions": 0, "taskInlineRevisions": 0 },
   "tasks": ${tasks},
   "phaseLog": [],
   "notifyOnStop": false,
@@ -246,6 +246,30 @@ if [ "$REV" = "1" ]; then
   pass "revision-bump increments design revision"
 else
   fail "revision-bump increments design revision" "got: $REV"
+fi
+
+echo ""
+echo "--- inline-revision-bump ---"
+bash "$SM" inline-revision-bump "$SM_WS" "design"
+INLREV_DESIGN="$(jq '.revisions.designInlineRevisions' "${SM_WS}/state.json")"
+if [ "$INLREV_DESIGN" = "1" ]; then
+  pass "inline-revision-bump increments designInlineRevisions"
+else
+  fail "inline-revision-bump increments designInlineRevisions" "got: $INLREV_DESIGN"
+fi
+
+bash "$SM" inline-revision-bump "$SM_WS" "tasks"
+INLREV_TASKS="$(jq '.revisions.taskInlineRevisions' "${SM_WS}/state.json")"
+if [ "$INLREV_TASKS" = "1" ]; then
+  pass "inline-revision-bump increments taskInlineRevisions"
+else
+  fail "inline-revision-bump increments taskInlineRevisions" "got: $INLREV_TASKS"
+fi
+
+if bash "$SM" inline-revision-bump "$SM_WS" "invalid" 2>/dev/null; then
+  fail "inline-revision-bump invalid type exits non-zero" "expected non-zero exit"
+else
+  pass "inline-revision-bump invalid type exits non-zero"
 fi
 
 echo ""
