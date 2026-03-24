@@ -16,10 +16,11 @@
     "phase-4b",
     "phase-7"
   ],
-  "currentPhase": "pr-creation",
-  "currentPhaseStatus": "in_progress",
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
   "completedPhases": [
     "checkpoint-a",
+    "final-summary",
     "final-verification",
     "phase-1",
     "phase-2",
@@ -28,11 +29,15 @@
     "phase-4",
     "phase-5",
     "phase-6",
+    "post-to-source",
+    "pr-creation",
     "setup"
   ],
   "revisions": {
     "designRevisions": 0,
-    "taskRevisions": 0
+    "taskRevisions": 0,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
   },
   "checkpointRevisionPending": {
     "checkpoint-a": false,
@@ -183,8 +188,8 @@
   ],
   "timestamps": {
     "created": "2026-03-24T10:13:37Z",
-    "lastUpdated": "2026-03-24T10:40:29Z",
-    "phaseStarted": "2026-03-24T10:40:29Z"
+    "lastUpdated": "2026-03-24T10:41:42Z",
+    "phaseStarted": null
   },
   "error": null
 }

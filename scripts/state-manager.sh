@@ -316,20 +316,13 @@ _do_task_update() {
   write_state "$workspace" "$state"
 }
 
-_do_revision_bump() {
+_increment_revision_field() {
   local workspace="$1"
-  local type="$2"
+  local field="$2"
   local state
   state="$(read_state "$workspace")"
   local ts
   ts="$(now_iso)"
-  local field
-
-  case "$type" in
-    design) field="designRevisions" ;;
-    tasks)  field="taskRevisions" ;;
-    *)      die "Unknown revision type: $type (expected: design, tasks)" ;;
-  esac
 
   state="$(echo "$state" | jq \
     --arg f "$field" \
@@ -340,13 +333,23 @@ _do_revision_bump() {
   write_state "$workspace" "$state"
 }
 
+_do_revision_bump() {
+  local workspace="$1"
+  local type="$2"
+  local field
+
+  case "$type" in
+    design) field="designRevisions" ;;
+    tasks)  field="taskRevisions" ;;
+    *)      die "Unknown revision type: $type (expected: design, tasks)" ;;
+  esac
+
+  _increment_revision_field "$workspace" "$field"
+}
+
 _do_inline_revision_bump() {
   local workspace="$1"
   local type="$2"
-  local state
-  state="$(read_state "$workspace")"
-  local ts
-  ts="$(now_iso)"
   local field
 
   case "$type" in
@@ -355,13 +358,7 @@ _do_inline_revision_bump() {
     *)      die "Unknown inline revision type: $type (expected: design, tasks)" ;;
   esac
 
-  state="$(echo "$state" | jq \
-    --arg f "$field" \
-    --arg ts "$ts" \
-    '.revisions[$f] += 1 |
-     .timestamps.lastUpdated = $ts'
-  )"
-  write_state "$workspace" "$state"
+  _increment_revision_field "$workspace" "$field"
 }
 
 _do_set_branch() {
