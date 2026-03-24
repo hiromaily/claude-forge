@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "specName": "inline-revision-shortcut",
+  "workspace": ".specs/20260324-inline-revision-shortcut",
+  "branch": "feature/inline-revision-shortcut",
+  "taskType": "feature",
+  "effort": "S",
+  "flowTemplate": "light",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "notifyOnStop": false,
+  "skippedPhases": [
+    "checkpoint-b",
+    "phase-4b",
+    "phase-7"
+  ],
+  "currentPhase": "pr-creation",
+  "currentPhaseStatus": "in_progress",
+  "completedPhases": [
+    "checkpoint-a",
+    "final-verification",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-5",
+    "phase-6",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Extend state-manager.sh with inline-revision-bump",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Update test-hooks.sh fixture and add tests",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Update SKILL.md Phase 3b and 4b verdict branches",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Update subcommand count in documentation files",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Update ARCHITECTURE.md sequence diagrams",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "Mark F15 as done in BACKLOG.md",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 54024,
+      "duration_ms": 77414,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:17:19Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 74224,
+      "duration_ms": 157714,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:21:42Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 35435,
+      "duration_ms": 98641,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:24:35Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 30167,
+      "duration_ms": 43383,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:25:42Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 25191,
+      "duration_ms": 38121,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:28:26Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 47308,
+      "duration_ms": 105941,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:30:44Z"
+    },
+    {
+      "phase": "task-2-impl",
+      "tokens": 25669,
+      "duration_ms": 100770,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:33:01Z"
+    },
+    {
+      "phase": "task-3-impl",
+      "tokens": 29782,
+      "duration_ms": 90434,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:34:46Z"
+    },
+    {
+      "phase": "task-4-impl",
+      "tokens": 15000,
+      "duration_ms": 60000,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:36:06Z"
+    },
+    {
+      "phase": "task-5-impl",
+      "tokens": 20000,
+      "duration_ms": 80000,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:36:06Z"
+    },
+    {
+      "phase": "task-6-impl",
+      "tokens": 5000,
+      "duration_ms": 20000,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:36:06Z"
+    },
+    {
+      "phase": "task-1-review",
+      "tokens": 40687,
+      "duration_ms": 111088,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:38:50Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 27171,
+      "duration_ms": 84946,
+      "model": "sonnet",
+      "timestamp": "2026-03-24T10:40:25Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-24T10:13:37Z",
+    "lastUpdated": "2026-03-24T10:40:29Z",
+    "phaseStarted": "2026-03-24T10:40:29Z"
+  },
+  "error": null
+}
