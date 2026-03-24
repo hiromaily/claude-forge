@@ -12,11 +12,12 @@
   "debug": false,
   "notifyOnStop": false,
   "skippedPhases": [],
-  "currentPhase": "pr-creation",
-  "currentPhaseStatus": "in_progress",
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
   "completedPhases": [
     "checkpoint-a",
     "checkpoint-b",
+    "final-summary",
     "final-verification",
     "phase-1",
     "phase-2",
@@ -27,6 +28,8 @@
     "phase-5",
     "phase-6",
     "phase-7",
+    "post-to-source",
+    "pr-creation",
     "setup"
   ],
   "revisions": {
@@ -189,8 +192,8 @@
   ],
   "timestamps": {
     "created": "2026-03-24T11:00:19Z",
-    "lastUpdated": "2026-03-24T11:29:25Z",
-    "phaseStarted": "2026-03-24T11:29:25Z"
+    "lastUpdated": "2026-03-24T11:30:53Z",
+    "phaseStarted": null
   },
   "error": null
 }
