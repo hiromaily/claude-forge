@@ -1529,13 +1529,6 @@ _Retrospective on what would have made this work easier. Note: this run used the
 
 ---
 
-5. **Update the commit to include summary.md** — skip this step if `{task_type}` is `investigation` (no feature branch exists):
-   ```bash
-   git add {workspace}/summary.md
-   git commit --amend --no-edit
-   git push --force-with-lease
-   ```
-
 ```bash
 $SM phase-complete {workspace} final-summary
 ```
@@ -1559,6 +1552,13 @@ $SM phase-start {workspace} post-to-source
 ```bash
 $SM phase-complete {workspace} post-to-source
 ```
+
+5. **Update the commit to include summary.md and final state.json** — skip this step if `{task_type}` is `investigation` (no feature branch exists):
+   ```bash
+   git add {workspace}/summary.md {workspace}/state.json
+   git commit --amend --no-edit
+   git push --force-with-lease
+   ```
 
 ---
 
