@@ -154,8 +154,8 @@ Hooks are defined in `hooks/hooks.json` and run automatically:
 | 4b — Tasks AI Review | `task-reviewer` | `request.md`, `design.md`, `investigation.md`, `tasks.md` | `review-tasks.md` |
 | Checkpoint B | **Main agent** | `tasks.md`, `review-tasks.md` | `state.json` |
 | 5 — Implementation | `implementer` | `request.md`, `design.md`, `tasks.md`, `review-{dep}.md` | code files, `impl-{N}.md` |
-| 6 — Review | `impl-reviewer` | `request.md`, `tasks.md`, `design.md`, `impl-{N}.md`, code files | `review-{N}.md` |
-| 7 — Comprehensive Review | `comprehensive-reviewer` | `request.md`, `design.md`, `tasks.md`, all `impl-{N}.md`, all `review-{N}.md`, code diff | `comprehensive-review.md` |
+| 6 — Review | `impl-reviewer` | `request.md`, `tasks.md`, `design.md`, `impl-{N}.md`, git diff (file-scoped via main...HEAD) | `review-{N}.md` |
+| 7 — Comprehensive Review | `comprehensive-reviewer` | `request.md`, `design.md`, `tasks.md`, all `impl-{N}.md`, all `review-{N}.md`, git diff + selective structural reads | `comprehensive-review.md` |
 | Final Verification | `verifier` | feature branch | — |
 | PR Creation | **Main agent** | — | PR on GitHub |
 | Final Summary | **Main agent** | artifacts vary by task_type (see Final Summary section); also reads `analysis.md`, `investigation.md` (where present) for Improvement Report | `summary.md`, `state.json` |
