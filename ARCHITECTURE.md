@@ -355,7 +355,9 @@ The information flow is strictly forward — no agent reads output from a later 
 | impl-reviewer | request.md, tasks.md, design.md, impl-{N}.md |
 | comprehensive-reviewer | request.md, design.md, tasks.md, all impl-{N}.md, all review-{N}.md, git diff |
 | verifier | (reads code on feature branch directly) |
+| PR Creation (orchestrator) | request.md, design.md, tasks.md (for PR title and body) |
 | Final Summary (orchestrator) | artifacts vary by task_type (see Final Summary section); also reads analysis.md and investigation.md (where present) for the Improvement Report epilogue |
+| Post to Source (orchestrator) | summary.md, request.md (source metadata for comment target) |
 
 ### File-Writing Responsibility
 
