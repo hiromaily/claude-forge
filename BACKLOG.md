@@ -11,9 +11,8 @@ Ordered by priority. Higher rows should be tackled first.
 
 | # | ID | Issue | Title | Type | Effort | Why now |
 |---|-----|-------|-------|------|--------|---------|
-| 1 | **P22** | [#9](https://github.com/hiromaily/claude-forge/issues/9) | ARCHITECTURE.md "What Each Agent Reads" table incomplete | Docs | XS | Final Summary row was missing — caused implementation deviation during F16. Keep table complete for all phases including orchestrator-driven ones. |
-| 2 | **F15** | [#10](https://github.com/hiromaily/claude-forge/issues/10) | Inline revision shortcut for MINOR findings | Feature | S | When all review findings are MINOR, orchestrator edits artifacts directly + re-reviews, instead of re-spawning the full authoring agent. |
-| 3 | **F5** | [#11](https://github.com/hiromaily/claude-forge/issues/11) | Diff-based review (token reduction) | Feature | M | 60-80% token reduction for review agents. Higher ROI on large codebases. |
+| 1 | **F15** | [#10](https://github.com/hiromaily/claude-forge/issues/10) | Inline revision shortcut for MINOR findings | Feature | S | When all review findings are MINOR, orchestrator edits artifacts directly + re-reviews, instead of re-spawning the full authoring agent. |
+| 2 | **F5** | [#11](https://github.com/hiromaily/claude-forge/issues/11) | Diff-based review (token reduction) | Feature | M | 60-80% token reduction for review agents. Higher ROI on large codebases. |
 | 4 | **F10** | [#12](https://github.com/hiromaily/claude-forge/issues/12) | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
 | 5 | **F9** | [#13](https://github.com/hiromaily/claude-forge/issues/13) | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
 | 6 | **F12** | [#14](https://github.com/hiromaily/claude-forge/issues/14) | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
