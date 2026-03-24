@@ -9,20 +9,20 @@ Known issues, improvement candidates, and future direction.
 
 Ordered by priority. Higher rows should be tackled first.
 
-| # | ID | Title | Type | Effort | Why now |
-|---|-----|-------|------|--------|---------|
-| 1 | **P22** | ARCHITECTURE.md "What Each Agent Reads" table incomplete | Docs | XS | Final Summary row was missing — caused implementation deviation during F16. Keep table complete for all phases including orchestrator-driven ones. |
-| 2 | **F15** | Inline revision shortcut for MINOR findings | Feature | S | When all review findings are MINOR, orchestrator edits artifacts directly + re-reviews, instead of re-spawning the full authoring agent. |
-| 3 | **F5** | Diff-based review (token reduction) | Feature | M | 60-80% token reduction for review agents. Higher ROI on large codebases. |
-| 4 | **F10** | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
-| 5 | **F9** | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
-| 6 | **F12** | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
-| 7 | **F8** | Past pipeline reference (data flywheel) | Feature | L | Uses `.specs/` history to improve future pipelines. The accumulated data is a moat — competitors can copy code but not execution history. |
-| 8 | **F17** | Repository profiling | Feature | M | First-run analysis of repo structure, test strategy, CI config → persisted profile that tunes agent prompts. Hard to replicate without per-repo data. |
-| 9 | **F18** | Improvement report → test case generation | Feature | S | Auto-generate hook guard test cases from friction points found in improvement reports. Accelerates deterministic guard accumulation. |
-| 10 | **F19** | CI feedback loop (post-PR auto-fix) | Feature | L | After PR creation, monitor CI results and auto-trigger fix flow on failure. Closes the quality loop beyond the pipeline boundary. |
-| 11 | **F6** | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. F13 (effort axis) provides the foundation for model selection. |
-| 12 | **F2** | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
+| # | ID | Issue | Title | Type | Effort | Why now |
+|---|-----|-------|-------|------|--------|---------|
+| 1 | **P22** | [#9](https://github.com/hiromaily/claude-forge/issues/9) | ARCHITECTURE.md "What Each Agent Reads" table incomplete | Docs | XS | Final Summary row was missing — caused implementation deviation during F16. Keep table complete for all phases including orchestrator-driven ones. |
+| 2 | **F15** | [#10](https://github.com/hiromaily/claude-forge/issues/10) | Inline revision shortcut for MINOR findings | Feature | S | When all review findings are MINOR, orchestrator edits artifacts directly + re-reviews, instead of re-spawning the full authoring agent. |
+| 3 | **F5** | [#11](https://github.com/hiromaily/claude-forge/issues/11) | Diff-based review (token reduction) | Feature | M | 60-80% token reduction for review agents. Higher ROI on large codebases. |
+| 4 | **F10** | [#12](https://github.com/hiromaily/claude-forge/issues/12) | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
+| 5 | **F9** | [#13](https://github.com/hiromaily/claude-forge/issues/13) | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
+| 6 | **F12** | [#14](https://github.com/hiromaily/claude-forge/issues/14) | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
+| 7 | **F8** | [#15](https://github.com/hiromaily/claude-forge/issues/15) | Past pipeline reference (data flywheel) | Feature | L | Uses `.specs/` history to improve future pipelines. The accumulated data is a moat — competitors can copy code but not execution history. |
+| 8 | **F17** | [#16](https://github.com/hiromaily/claude-forge/issues/16) | Repository profiling | Feature | M | First-run analysis of repo structure, test strategy, CI config → persisted profile that tunes agent prompts. Hard to replicate without per-repo data. |
+| 9 | **F18** | [#17](https://github.com/hiromaily/claude-forge/issues/17) | Improvement report → test case generation | Feature | S | Auto-generate hook guard test cases from friction points found in improvement reports. Accelerates deterministic guard accumulation. |
+| 10 | **F19** | [#18](https://github.com/hiromaily/claude-forge/issues/18) | CI feedback loop (post-PR auto-fix) | Feature | L | After PR creation, monitor CI results and auto-trigger fix flow on failure. Closes the quality loop beyond the pipeline boundary. |
+| 11 | **F6** | [#19](https://github.com/hiromaily/claude-forge/issues/19) | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. F13 (effort axis) provides the foundation for model selection. |
+| 12 | **F2** | [#20](https://github.com/hiromaily/claude-forge/issues/20) | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
 
 **Effort key:** XS = < 30min, S = 1-2h, M = half day, L = 1+ day
 
@@ -37,180 +37,22 @@ Ordered by priority. Higher rows should be tackled first.
 
 ---
 
-## Feature Requests
-
-### F2: Execution log output to workspace
-
-**Want**: Write a structured execution log to `{workspace}/pipeline.log` as the pipeline runs.
-**Why**: When a pipeline fails or produces unexpected results, there is no audit trail. The conversation may be compacted, and state.json only tracks phase status, not what happened within each phase.
-**Ideas**:
-
-- Append timestamped entries for: phase start/complete/fail, agent spawn/return, checkpoint decisions, errors
-- Format: one JSON object per line (JSONL) for easy parsing
-- Could be implemented via a PostToolUse hook that appends to the log, or directly by the orchestrator before/after each phase
-- Include agent descriptions and key outputs (verdict, retry count) — but not full artifact content (too large)
-
-### F5: Diff-based review (token reduction)
-
-**Want**: Phase 6 (impl-reviewer) and Phase 7 (comprehensive-reviewer) receive only `git diff` output instead of reading full source files.
-**Why**: Review agents currently read entire files to understand changes, consuming 5-10x more tokens than necessary. The reviewer only needs to see what changed, not the unchanged surrounding code.
-**Ideas**:
-
-- Pass `git diff main...HEAD -- <changed files>` output as context instead of having agents read files
-- For impl-reviewer (per-task): `git diff HEAD~1` to see only that task's changes
-- For comprehensive-reviewer: `git diff main...HEAD` for the full feature diff
-- Include file-level context (function signatures, class definitions) via AST summary for surrounding context without full file reads
-- Estimated token savings: 60-80% for review phases on large codebases
-
-### F6: Adaptive model routing
-
-**Want**: Dynamically select the model (haiku/sonnet/opus) per agent based on task complexity and token budget.
-**Why**: All agents use sonnet, but some phases are simple enough for haiku (situation-analyst on small repos, verifier running commands) while others benefit from opus (architect on complex designs). Static model assignment wastes budget.
-**Ideas**:
-
-- situation-analyst, verifier → **haiku** by default (structural reads and command execution)
-- implementer → haiku if change scope < 50 lines, sonnet otherwise
-- architect, design-reviewer → opus if design.md > 200 lines or revision count > 0
-- Add `tokenBudget` field to state.json; orchestrator checks remaining budget before each phase and downgrades model if budget is low
-- Allow per-run override: `--model=opus` to force all agents to use a specific model
-- Log actual model used per phase in token-log.json (ties into F1)
-
-### F8: Past pipeline reference (data flywheel)
-
-**Want**: Use accumulated `.specs/` history to improve future pipeline runs — design quality, review accuracy, and implementation speed all improve with usage.
-**Why**: This is the primary competitive moat. Competitors can copy plugin code, but not the execution history accumulated per repository. A pipeline that gets smarter over time is fundamentally harder to replicate than one that starts from zero each run.
-**Ideas**:
-
-- At Phase 1, scan `.specs/*/request.md` for semantic similarity to the current request
-- If a close match is found, include relevant `design.md` and `review-*.md` excerpts as additional context for the architect
-- Store a lightweight index file (`.specs/index.json`) mapping spec-name → one-line description + tags for fast lookup
-- Accumulate review finding patterns across runs → feed to reviewer agents as "common issues in this repo"
-- Accumulate improvement report findings → build a per-repo "AI friction map" that gets passed to all agents
-- Limit context injection to top 2-3 matches to avoid bloat
-- Use file modification dates to prefer recent pipelines over old ones
-
-### F17: Repository profiling
-
-**Want**: On first pipeline run in a new repository, analyze repo structure, test strategy, CI configuration, and coding conventions. Persist the profile and use it to tune agent prompts in subsequent runs.
-**Why**: Generic agent prompts waste tokens discovering things that are stable across runs (e.g., "this repo uses pytest", "CI runs on GitHub Actions", "imports are sorted with isort"). A persisted profile makes every subsequent run more efficient and accurate.
-**Ideas**:
-
-- Generate `.specs/repo-profile.json` on first run (or when stale) with: language, test framework, CI system, linter config, directory conventions, branch naming
-- Pass relevant profile sections to each agent (e.g., implementer gets test framework + linter config, architect gets directory conventions)
-- Update profile incrementally when improvement reports flag new conventions
-- Skip profile generation on `direct` template (too small to benefit)
-
-### F18: Improvement report → test case generation
-
-**Want**: Automatically convert friction points from improvement reports into hook guard test cases or regression tests.
-**Why**: The improvement report (F16) identifies pipeline failure modes, but currently these findings sit in `summary.md` as prose. Converting them to executable tests accelerates the deterministic guard accumulation that is claude-forge's core strength.
-**Ideas**:
-
-- After improvement report generation, parse friction points for patterns that map to hook guards (e.g., "agent wrote to wrong file" → artifact guard test, "agent skipped checkpoint" → checkpoint guard test)
-- Generate test case stubs in a `suggested-tests/` directory for human review
-- Track which improvement report findings have been converted to tests vs. which remain unaddressed
-- Ties into F8: accumulated test cases from past runs form a regression safety net
-
-### F19: CI feedback loop (post-PR auto-fix)
-
-**Want**: After PR creation, monitor CI results and auto-trigger a fix flow on failure.
-**Why**: Currently the pipeline ends at PR creation. If CI fails (lint, type check, integration tests), the user must manually intervene. Closing this loop makes the pipeline truly end-to-end.
-**Ideas**:
-
-- After `gh pr create`, poll CI status with `gh pr checks`
-- On failure, extract the failing check output and feed it to a lightweight fix pipeline (`direct` template with CI error as context)
-- Limit auto-fix to N attempts (e.g., 2) to avoid infinite loops
-- Push fix commits to the same PR branch
-- Log CI fix attempts in `state.json` for metrics
-
-### F9: Structured acceptance criteria validation
-
-**Want**: Formalize acceptance criteria in tasks.md as a machine-verifiable checklist. Have implementer report pass/fail per criterion, and impl-reviewer validate against the checklist.
-**Why**: Current acceptance criteria are free-text prose. The impl-reviewer interprets them subjectively, leading to inconsistent PASS/FAIL decisions. Structured criteria make reviews faster, more precise, and reproducible.
-**Ideas**:
-
-- task-decomposer outputs acceptance criteria as a numbered checklist per task
-- implementer includes a checklist in `impl-{N}.md` with PASS/FAIL per criterion
-- impl-reviewer validates each AC against the actual code, reducing review to a verification task
-- Task-reviewer (Phase 4b) validates that each AC is testable/observable as part of its review
-
-### F10: Partial execution mode (`--until`, `--from`)
-
-**Want**: Run only a subset of the pipeline, stopping at or starting from a specified phase.
-**Why**: Users often want to scope a task (analysis + investigation + design only) without committing to implementation. Or they want to re-run just implementation after manually editing design.md. The full pipeline is all-or-nothing today.
-**Ideas**:
-
-- Parse `--until=<phase>` and `--from=<phase>` from `$ARGUMENTS`
-- Store in state.json as `untilPhase` / `fromPhase`
-- Orchestrator checks before each phase: if `currentPhase > untilPhase`, skip to Final Summary
-- `--from` skips to the specified phase (validates that prerequisite artifacts exist)
-- Common shortcuts: `--until=design` (scoping), `--from=phase-5` (re-implement), `--until=phase-4b` (get approved tasks without implementing)
-- Combine with `--auto`: `--until=design --auto` = fully autonomous scoping report
-
-### F12: Checkpoint diff preview
-
-**Want**: At Checkpoint A and B, show not just the artifact text but also relevant diffs so the human can make better-informed decisions.
-**Why**: At Checkpoint A, the user sees design.md text but has no visibility into what the AI based its design on. At Checkpoint B after revisions, the user can't easily see what changed from the previous version. After Phase 5-6, showing the code diff would help the user judge quality.
-**Ideas**:
-
-- Checkpoint A: show `investigation.md` key findings alongside design.md
-- Checkpoint A (revision): show `diff` between previous and revised design.md
-- Checkpoint B: show task count, estimated complexity, and which files will be touched
-- After Phase 6: optionally show `git diff main...HEAD --stat` for change scope overview
-
-### F15: Inline revision shortcut for MINOR findings
-
-**Want**: When all review findings are MINOR (no CRITICAL), the orchestrator edits the artifact directly instead of re-spawning the authoring agent.
-**Why**: During the F13 pipeline run, task-reviewer's Round 1 findings were all criterion-wording improvements — no structural changes. Re-spawning task-decomposer for this was unnecessary.
-**Ideas**:
-
-- Add a decision branch in SKILL.md after review: if verdict is APPROVE_WITH_NOTES and all findings are MINOR, orchestrator applies fixes inline with Edit tool, then re-runs review only (skip authoring agent)
-- If verdict is REVISE with CRITICAL findings, re-spawn the authoring agent as today
-- Track "inline revision" vs "full revision" in state.json for metrics
-- Risk: orchestrator may make incorrect fixes without the authoring agent's full context — mitigated by the subsequent re-review catching errors
-
----
-
 ## Improvement Candidates
 
-### Model selection per agent
-
-**Current**: All 10 agents use `model: sonnet`.
-**Improvement**: Use `opus` for agents that benefit from stronger reasoning:
-
-- `architect` (complex design decisions)
-- `design-reviewer` (finding subtle design flaws)
-- `implementer` (complex code generation)
-
-Leave `sonnet` for straightforward agents (situation-analyst, investigator, verifier).
-**Trade-off**: Cost increase. A full pipeline with 3 opus agents + 7 sonnet is ~2x the cost of all-sonnet.
-
-### Agent-level retry with context carry-forward
-
-**Current**: When a phase fails, the orchestrator spawns a fresh agent with the previous output appended.
-**Improvement**: Use Claude Code's `resume` parameter on the Agent tool to continue a failed agent with its full context preserved. This would give the retry agent access to its own reasoning, not just the output.
-**Risk**: Resume may not be supported for plugin-defined agents. Needs testing.
-
-### Parallel Phase 5-6 interleaving
-
-**Current**: All Phase 5 tasks run, then all Phase 6 reviews run.
-**Improvement**: As soon as a Phase 5 task completes, immediately spawn its Phase 6 review. This overlaps implementation and review, reducing total wall-clock time.
-**Complexity**: State tracking becomes more complex — a task can be in (impl: completed, review: in_progress) while other tasks are still in (impl: in_progress).
-
-### Workspace directory naming
-
-**Current**: `.specs/{date}-{spec-name}/`
-**Improvement**: Consider using `.claude-forge/` instead of `.specs/` to avoid naming collision with kiro specs.
-
-### Hook-based progress notifications
-
-**Current**: No external visibility into pipeline progress.
-**Improvement**: Add a `SubagentStart`/`SubagentStop` hook that logs phase transitions to a progress file or sends notifications (Slack, etc.).
-
-### State schema versioning
-
-**Current**: `state.json` has `"version": 1` but no migration logic. New fields were added without bumping the version — `resume-info` provides defaults for missing fields.
-**Improvement**: When the schema changes in a breaking way, add a migration function to state-manager.sh that upgrades old state files. Check version on every `read_state` call.
+| Issue | Title | Notes |
+|-------|-------|-------|
+| [#21](https://github.com/hiromaily/claude-forge/issues/21) | Model selection per agent | Use opus for architect, design-reviewer, implementer. ~2× cost increase. |
+| [#22](https://github.com/hiromaily/claude-forge/issues/22) | Agent-level retry with context carry-forward | Use `resume` parameter to preserve agent reasoning across retries. Needs feasibility testing. |
+| [#23](https://github.com/hiromaily/claude-forge/issues/23) | Parallel Phase 5-6 interleaving | Spawn Phase 6 review immediately after each Phase 5 task. Complex state tracking. |
+| [#24](https://github.com/hiromaily/claude-forge/issues/24) | Workspace directory naming | Rename `.specs/` → `.claude-forge/` to avoid collision with kiro specs. Breaking change — migration needed. |
+| [#25](https://github.com/hiromaily/claude-forge/issues/25) | Hook-based progress notifications | Log phase transitions to `progress.log`; optional Slack webhook. |
+| [#26](https://github.com/hiromaily/claude-forge/issues/26) | State schema versioning | Bump version + add migration functions when schema changes in breaking ways. |
+| [#27](https://github.com/hiromaily/claude-forge/issues/27) | Per-project setup wizard | Interactive first-run wizard persisting project conventions to a profile file. Complements F17 (automated profiling). Source: aaddrick/claude-pipeline. |
+| [#28](https://github.com/hiromaily/claude-forge/issues/28) | JSON-driven agent configuration | Declarative `agents.json` schema for agent metadata — eliminates drift across roster tables. Source: catlog22/Claude-Code-Workflow. |
+| [#29](https://github.com/hiromaily/claude-forge/issues/29) | Cold start optimization | Reduce XS/S pipeline startup overhead via lazy workspace setup and merged validation passes. Source: barkain. |
+| [#30](https://github.com/hiromaily/claude-forge/issues/30) | Agent Teams mode (Phase 5 inter-agent comms) | Collaborative mode with `comms.json` for real-time coordination. High complexity — defer until pain confirmed by phase-stats data. Source: barkain. |
+| [#31](https://github.com/hiromaily/claude-forge/issues/31) | Linear integration | Add `linear_issue` source type alongside GitHub Issues and Jira. Source: levnikolaevich. |
+| [#32](https://github.com/hiromaily/claude-forge/issues/32) | Native plan mode integration at checkpoints | Use EnterPlanMode at Checkpoint A/B for structured task/PR review. Source: barkain. |
 
 ---
 
