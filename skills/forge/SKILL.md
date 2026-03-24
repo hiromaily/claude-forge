@@ -852,7 +852,15 @@ $SM phase-complete {workspace} phase-3b
 
 - If verdict is **REVISE** (contains at least one CRITICAL finding): re-run Phase 3 with revision context, then re-run Phase 3b. Max 2 cycles before escalating to the human. (This loop applies to all task types where Phase 3 runs — everything except `investigation`.)
 - If verdict is **APPROVE** (no findings): continue to Checkpoint A.
-- If verdict is **APPROVE_WITH_NOTES** (MINOR findings only): continue to Checkpoint A. Include the MINOR findings from review-design.md in the checkpoint presentation.
+- If verdict is **APPROVE_WITH_NOTES** (MINOR findings only) — **inline revision path**:
+  1. Run: `$SM inline-revision-bump {workspace} design`
+  2. Read `{workspace}/design.md`.
+  3. For each MINOR finding listed in `{workspace}/review-design.md`, apply the fix directly to `design.md` using the Edit tool.
+  4. Re-run Phase 3b (spawn `design-reviewer` again; write return value to `{workspace}/review-design.md`; call `$SM phase-log` and `$SM phase-complete phase-3b`).
+  5. After the re-run:
+     - If the new verdict is **APPROVE**: continue to Checkpoint A.
+     - If the new verdict is **APPROVE_WITH_NOTES**: treat as APPROVE — continue to Checkpoint A. Include remaining MINOR findings in the checkpoint presentation.
+     - If the new verdict is **REVISE**: trigger the full REVISE path (re-run Phase 3 with revision context, then re-run Phase 3b). Max 2 cycles applies to this REVISE loop.
 
 ---
 
@@ -958,7 +966,15 @@ $SM phase-complete {workspace} phase-4b
 
 - If verdict is **REVISE** (contains at least one CRITICAL finding): re-run Phase 4 with revision context, then re-run Phase 4b. Max 2 cycles before escalating to the human.
 - If verdict is **APPROVE** (no findings): continue to Checkpoint B.
-- If verdict is **APPROVE_WITH_NOTES** (MINOR findings only): continue to Checkpoint B. Include the MINOR findings from review-tasks.md in the checkpoint presentation.
+- If verdict is **APPROVE_WITH_NOTES** (MINOR findings only) — **inline revision path**:
+  1. Run: `$SM inline-revision-bump {workspace} tasks`
+  2. Read `{workspace}/tasks.md`.
+  3. For each MINOR finding listed in `{workspace}/review-tasks.md`, apply the fix directly to `tasks.md` using the Edit tool.
+  4. Re-run Phase 4b (spawn `task-reviewer` again; write return value to `{workspace}/review-tasks.md`; call `$SM phase-log` and `$SM phase-complete phase-4b`).
+  5. After the re-run:
+     - If the new verdict is **APPROVE**: continue to Checkpoint B.
+     - If the new verdict is **APPROVE_WITH_NOTES**: treat as APPROVE — continue to Checkpoint B. Include remaining MINOR findings in the checkpoint presentation.
+     - If the new verdict is **REVISE**: trigger the full REVISE path (re-run Phase 4 with revision context, then re-run Phase 4b). Max 2 cycles applies to this REVISE loop.
 
 ---
 

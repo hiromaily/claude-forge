@@ -12,6 +12,7 @@
 #   task-init <workspace> <json>           Initialize tasks map from JSON
 #   task-update <workspace> <N> <field> <value>  Update a task field
 #   revision-bump <workspace> <type>       Increment design or task revision count
+#   inline-revision-bump <workspace> <type>  Increment design or task inline revision count
 #   set-branch <workspace> <branch>        Set the branch name
 #   set-task-type <workspace> <taskType>   Set the task type in state.json
 #   set-effort <workspace> <effort>        Set the effort level [XS, S, M, L]
@@ -162,7 +163,7 @@ cmd_init() {
       currentPhase: "phase-1",
       currentPhaseStatus: "pending",
       completedPhases: ["setup"],
-      revisions: { designRevisions: 0, taskRevisions: 0 },
+      revisions: { designRevisions: 0, taskRevisions: 0, designInlineRevisions: 0, taskInlineRevisions: 0 },
       checkpointRevisionPending: { "checkpoint-a": false, "checkpoint-b": false },
       tasks: {},
       phaseLog: [],
@@ -315,20 +316,13 @@ _do_task_update() {
   write_state "$workspace" "$state"
 }
 
-_do_revision_bump() {
+_increment_revision_field() {
   local workspace="$1"
-  local type="$2"
+  local field="$2"
   local state
   state="$(read_state "$workspace")"
   local ts
   ts="$(now_iso)"
-  local field
-
-  case "$type" in
-    design) field="designRevisions" ;;
-    tasks)  field="taskRevisions" ;;
-    *)      die "Unknown revision type: $type (expected: design, tasks)" ;;
-  esac
 
   state="$(echo "$state" | jq \
     --arg f "$field" \
@@ -337,6 +331,34 @@ _do_revision_bump() {
      .timestamps.lastUpdated = $ts'
   )"
   write_state "$workspace" "$state"
+}
+
+_do_revision_bump() {
+  local workspace="$1"
+  local type="$2"
+  local field
+
+  case "$type" in
+    design) field="designRevisions" ;;
+    tasks)  field="taskRevisions" ;;
+    *)      die "Unknown revision type: $type (expected: design, tasks)" ;;
+  esac
+
+  _increment_revision_field "$workspace" "$field"
+}
+
+_do_inline_revision_bump() {
+  local workspace="$1"
+  local type="$2"
+  local field
+
+  case "$type" in
+    design) field="designInlineRevisions" ;;
+    tasks)  field="taskInlineRevisions" ;;
+    *)      die "Unknown inline revision type: $type (expected: design, tasks)" ;;
+  esac
+
+  _increment_revision_field "$workspace" "$field"
 }
 
 _do_set_branch() {
@@ -675,6 +697,8 @@ case "$command" in
                      locked_update "$(state_path "$1")" _do_task_update "$@" ;;
   revision-bump)     check_args 2 $# "revision-bump <workspace> <type>"
                      locked_update "$(state_path "$1")" _do_revision_bump "$@" ;;
+  inline-revision-bump) check_args 2 $# "inline-revision-bump <workspace> <type>"
+                        locked_update "$(state_path "$1")" _do_inline_revision_bump "$@" ;;
   set-branch)        check_args 2 $# "set-branch <workspace> <branch>"
                      locked_update "$(state_path "$1")" _do_set_branch "$@" ;;
   set-task-type)     check_args 2 $# "set-task-type <workspace> <taskType>"
