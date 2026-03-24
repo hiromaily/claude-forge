@@ -126,8 +126,25 @@ sequenceDiagram
         break verdict = APPROVE
             Note over DR: APPROVE
         end
-        Note over DR: REVISE → re-run Phase 3
-        Orch->>SM: revision-bump design
+        alt verdict = APPROVE_WITH_NOTES (MINOR findings only)
+            Note over Orch: Inline revision path
+            Orch->>SM: inline-revision-bump design
+            Orch->>FS: read design.md
+            Orch->>FS: apply MINOR fixes inline (Edit tool)
+            Orch->>SM: phase-start phase-3b
+            Orch->>DR: Agent(workspace) — re-review only
+            DR-->>Orch: review-design output (2nd pass)
+            Orch->>FS: write review-design.md
+            Orch->>SM: phase-log phase-3b
+            Orch->>SM: phase-complete phase-3b
+            break verdict = APPROVE or APPROVE_WITH_NOTES
+                Note over DR: proceed to Checkpoint A
+            end
+            Note over DR: REVISE → fall through to full REVISE path
+        else verdict = REVISE (CRITICAL findings)
+            Note over DR: REVISE → re-run Phase 3
+            Orch->>SM: revision-bump design
+        end
     end
     end
 
@@ -165,8 +182,25 @@ sequenceDiagram
         break verdict = APPROVE
             Note over TR: APPROVE
         end
-        Note over TR: REVISE → re-run Phase 4
-        Orch->>SM: revision-bump tasks
+        alt verdict = APPROVE_WITH_NOTES (MINOR findings only)
+            Note over Orch: Inline revision path
+            Orch->>SM: inline-revision-bump tasks
+            Orch->>FS: read tasks.md
+            Orch->>FS: apply MINOR fixes inline (Edit tool)
+            Orch->>SM: phase-start phase-4b
+            Orch->>TR: Agent(workspace) — re-review only
+            TR-->>Orch: review-tasks output (2nd pass)
+            Orch->>FS: write review-tasks.md
+            Orch->>SM: phase-log phase-4b
+            Orch->>SM: phase-complete phase-4b
+            break verdict = APPROVE or APPROVE_WITH_NOTES
+                Note over TR: proceed to Checkpoint B
+            end
+            Note over TR: REVISE → fall through to full REVISE path
+        else verdict = REVISE (CRITICAL findings)
+            Note over TR: REVISE → re-run Phase 4
+            Orch->>SM: revision-bump tasks
+        end
     end
     end
 
