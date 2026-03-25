@@ -93,5 +93,5 @@ esac
 # Pipeline is active and not at a safe stop point — block with exit 2
 COMPLETED_PHASES="$(jq -r '.completedPhases | join(", ")' "$STATE_FILE" 2>/dev/null || echo "none")"
 
-echo "Claude-forge is still active at ${CURRENT_PHASE} (${CURRENT_STATUS}). Completed: [${COMPLETED_PHASES}]. Workspace: ${WORKSPACE}. Continue the pipeline or explicitly abandon it before stopping." >&2
+echo "Claude-forge is still active at ${CURRENT_PHASE} (${CURRENT_STATUS}). Completed: [${COMPLETED_PHASES}]. Workspace: ${WORKSPACE}. Continue the pipeline or run: bash scripts/state-manager.sh abandon ${WORKSPACE}" >&2
 exit 2
