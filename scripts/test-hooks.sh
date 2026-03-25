@@ -2270,6 +2270,56 @@ assert_exit 0 "phase-start not blocked by missing validation marker"
 reset_workspace
 
 # ============================================================
+# post-bash-hook.sh tests
+# ============================================================
+
+echo ""
+echo "========================================"
+echo "post-bash-hook.sh"
+echo "========================================"
+
+echo ""
+echo "--- non-Bash tool: ignored ---"
+run_hook "post-bash-hook.sh" '{"tool_name":"Edit","tool_input":{"command":""},"tool_response":""}'
+assert_exit 0 "Edit tool call exits 0 (ignored)"
+assert_exit 0 "Edit tool call stderr is empty (exit 0 implies no block)"
+
+echo ""
+echo "--- Bash tool, unrelated command: ignored ---"
+run_hook "post-bash-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"ls -la"},"tool_response":"file1\nfile2"}'
+assert_exit 0 "unrelated Bash command exits 0"
+
+echo ""
+echo "--- Bash tool, state-manager but not post-to-source: ignored ---"
+run_hook "post-bash-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"bash scripts/state-manager.sh phase-complete .specs/test final-summary"},"tool_response":""}'
+assert_exit 0 "phase-complete final-summary exits 0 (not post-to-source)"
+
+echo ""
+echo "--- Bash tool, phase-complete post-to-source, investigation type: skipped ---"
+reset_workspace
+WS="$(setup_workspace "post-to-source" "completed")"
+# Patch taskType to investigation
+jq '.taskType = "investigation"' "${WS}/state.json" > "${WS}/state.json.tmp" && mv "${WS}/state.json.tmp" "${WS}/state.json"
+touch "${WS}/summary.md"
+run_hook "post-bash-hook.sh" \
+  "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} post-to-source\"},\"tool_response\":\"\"}" \
+  "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "investigation type skipped (no feature branch)"
+reset_workspace
+
+echo ""
+echo "--- Bash tool, phase-complete post-to-source, no summary.md: skipped ---"
+reset_workspace
+WS="$(setup_workspace "post-to-source" "completed")"
+jq '.taskType = "feature"' "${WS}/state.json" > "${WS}/state.json.tmp" && mv "${WS}/state.json.tmp" "${WS}/state.json"
+# Do NOT create summary.md
+run_hook "post-bash-hook.sh" \
+  "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} post-to-source\"},\"tool_response\":\"\"}" \
+  "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "missing summary.md skipped gracefully"
+reset_workspace
+
+# ============================================================
 echo ""
 echo "========================================"
 echo "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
