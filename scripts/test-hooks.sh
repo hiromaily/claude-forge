@@ -2671,6 +2671,267 @@ rm -rf "${BIS_SPECS}"
 
 # ============================================================
 echo ""
+echo "=== query-specs-index.sh tests ==="
+# ============================================================
+
+QSI="${SCRIPT_DIR}/query-specs-index.sh"
+QSI_SPECS="${TMPDIR_BASE}/.specs-qsi"
+QSI_WS="${QSI_SPECS}/ws-current"
+
+# Helper: run query-specs-index.sh with QSI_WS as the workspace
+run_qsi() {
+  local task_type="${1:-}"
+  local stderr_file
+  stderr_file="$(mktemp)"
+  QSI_EXIT=0
+  if [ -n "${task_type}" ]; then
+    QSI_STDOUT="$(bash "${QSI}" "${QSI_WS}" "${task_type}" 2>"${stderr_file}")" || QSI_EXIT=$?
+  else
+    QSI_STDOUT="$(bash "${QSI}" "${QSI_WS}" 2>"${stderr_file}")" || QSI_EXIT=$?
+  fi
+  QSI_STDERR="$(cat "${stderr_file}" 2>/dev/null || true)"
+  rm -f "${stderr_file}"
+}
+
+# Cleanup helper for QSI tests
+reset_qsi() {
+  rm -rf "${QSI_SPECS}"
+  mkdir -p "${QSI_WS}"
+}
+
+# --- Test 15: Missing index.json → empty stdout, exit 0 ---
+echo ""
+echo "--- Test 15: Missing index.json → empty stdout, exit 0 ---"
+reset_qsi
+# No index.json present; QSI_WS exists but QSI_SPECS/index.json does not
+run_qsi
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "missing index.json exits 0"
+else
+  fail "missing index.json exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if [ -z "${QSI_STDOUT}" ]; then
+  pass "missing index.json produces empty stdout"
+else
+  fail "missing index.json produces empty stdout" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 16: Empty array → empty stdout, exit 0 ---
+echo ""
+echo "--- Test 16: Empty index array → empty stdout, exit 0 ---"
+reset_qsi
+echo "[]" > "${QSI_SPECS}/index.json"
+run_qsi
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "empty index array exits 0"
+else
+  fail "empty index array exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if [ -z "${QSI_STDOUT}" ]; then
+  pass "empty index array produces empty stdout"
+else
+  fail "empty index array produces empty stdout" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 17: Entries with reviewFeedback: [] → excluded, empty stdout ---
+echo ""
+echo "--- Test 17: Entries with empty reviewFeedback → excluded ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260101-no-feedback",
+    "taskType": "feature",
+    "requestSummary": "inject review feedback into pipeline prompts",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "outcome": "completed",
+    "timestamp": "2026-01-01T00:00:00Z"
+  }
+]
+EOF
+# provide matching task_type and a request.md with keywords to ensure score >= 2 without feedback
+cat > "${QSI_WS}/request.md" <<'EOF'
+Inject review feedback into prompts.
+EOF
+run_qsi "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "entries with empty reviewFeedback exit 0"
+else
+  fail "entries with empty reviewFeedback exit 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if [ -z "${QSI_STDOUT}" ]; then
+  pass "entries with empty reviewFeedback produce empty stdout"
+else
+  fail "entries with empty reviewFeedback produce empty stdout" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 18: taskType match + keyword overlap → formatted markdown output ---
+echo ""
+echo "--- Test 18: taskType + keyword match → correct formatted markdown ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260201-matching-spec",
+    "taskType": "feature",
+    "requestSummary": "inject review feedback into pipeline prompts",
+    "reviewFeedback": [
+      {
+        "source": "review-design",
+        "verdict": "REVISE",
+        "findings": ["1. [CRITICAL] Missing error handling in section 2"]
+      }
+    ],
+    "implOutcomes": [],
+    "outcome": "completed",
+    "timestamp": "2026-02-01T00:00:00Z"
+  }
+]
+EOF
+cat > "${QSI_WS}/request.md" <<'EOF'
+Inject review feedback into pipeline prompts.
+EOF
+run_qsi "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "taskType + keyword match exits 0"
+else
+  fail "taskType + keyword match exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if echo "${QSI_STDOUT}" | grep -qF "## Past Review Feedback (from similar pipelines)"; then
+  pass "output contains correct heading"
+else
+  fail "output contains correct heading" "got: ${QSI_STDOUT}"
+fi
+if echo "${QSI_STDOUT}" | grep -qF "**[review-design]**"; then
+  pass "output contains [review-design] source tag"
+else
+  fail "output contains [review-design] source tag" "got: ${QSI_STDOUT}"
+fi
+if echo "${QSI_STDOUT}" | grep -qF "_(from: 20260201-matching-spec)_"; then
+  pass "output contains _(from: specName)_ suffix"
+else
+  fail "output contains _(from: specName)_ suffix" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 19: 5 qualifying entries → only 3 returned ---
+echo ""
+echo "--- Test 19: 5 qualifying entries → only 3 returned ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260101-spec-a",
+    "taskType": "feature",
+    "requestSummary": "inject review feedback pipeline",
+    "reviewFeedback": [{"source": "review-design", "verdict": "REVISE", "findings": ["finding-a"]}],
+    "implOutcomes": [],
+    "outcome": "completed",
+    "timestamp": "2026-01-01T00:00:00Z"
+  },
+  {
+    "specName": "20260102-spec-b",
+    "taskType": "feature",
+    "requestSummary": "inject review feedback pipeline",
+    "reviewFeedback": [{"source": "review-design", "verdict": "REVISE", "findings": ["finding-b"]}],
+    "implOutcomes": [],
+    "outcome": "completed",
+    "timestamp": "2026-01-02T00:00:00Z"
+  },
+  {
+    "specName": "20260103-spec-c",
+    "taskType": "feature",
+    "requestSummary": "inject review feedback pipeline",
+    "reviewFeedback": [{"source": "review-design", "verdict": "REVISE", "findings": ["finding-c"]}],
+    "implOutcomes": [],
+    "outcome": "completed",
+    "timestamp": "2026-01-03T00:00:00Z"
+  },
+  {
+    "specName": "20260104-spec-d",
+    "taskType": "feature",
+    "requestSummary": "inject review feedback pipeline",
+    "reviewFeedback": [{"source": "review-design", "verdict": "REVISE", "findings": ["finding-d"]}],
+    "implOutcomes": [],
+    "outcome": "completed",
+    "timestamp": "2026-01-04T00:00:00Z"
+  },
+  {
+    "specName": "20260105-spec-e",
+    "taskType": "feature",
+    "requestSummary": "inject review feedback pipeline",
+    "reviewFeedback": [{"source": "review-design", "verdict": "REVISE", "findings": ["finding-e"]}],
+    "implOutcomes": [],
+    "outcome": "completed",
+    "timestamp": "2026-01-05T00:00:00Z"
+  }
+]
+EOF
+cat > "${QSI_WS}/request.md" <<'EOF'
+Inject review feedback into pipeline.
+EOF
+run_qsi "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "5 qualifying entries exits 0"
+else
+  fail "5 qualifying entries exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+BULLET_COUNT="$(echo "${QSI_STDOUT}" | grep -c '^- \*\*\[' || true)"
+if [ "${BULLET_COUNT}" -eq 3 ]; then
+  pass "5 qualifying entries returns exactly 3 bullets"
+else
+  fail "5 qualifying entries returns exactly 3 bullets" "got ${BULLET_COUNT} bullets"
+fi
+
+# --- Test 20: taskType: null entry qualifies on keyword overlap alone (score >= 2) ---
+echo ""
+echo "--- Test 20: taskType null entry qualifies on keyword overlap alone ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260301-null-type",
+    "taskType": null,
+    "requestSummary": "inject review feedback into architect prompts for better output",
+    "reviewFeedback": [
+      {
+        "source": "review-tasks",
+        "verdict": "REVISE",
+        "findings": ["1. [CRITICAL] Always update subcommand count in CLAUDE.md"]
+      }
+    ],
+    "implOutcomes": [],
+    "outcome": "completed",
+    "timestamp": "2026-03-01T00:00:00Z"
+  }
+]
+EOF
+# Use a different task_type so taskType score = 0; rely on keyword overlap >= 2
+cat > "${QSI_WS}/request.md" <<'EOF'
+Inject review feedback into architect and task-decomposer prompts for better pipeline output.
+EOF
+run_qsi "bugfix"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "taskType null entry exits 0"
+else
+  fail "taskType null entry exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if echo "${QSI_STDOUT}" | grep -qF "## Past Review Feedback (from similar pipelines)"; then
+  pass "taskType null entry with keyword overlap >= 2 produces output"
+else
+  fail "taskType null entry with keyword overlap >= 2 produces output" "got: ${QSI_STDOUT}"
+fi
+if echo "${QSI_STDOUT}" | grep -qF "_(from: 20260301-null-type)_"; then
+  pass "taskType null entry output contains correct specName"
+else
+  fail "taskType null entry output contains correct specName" "got: ${QSI_STDOUT}"
+fi
+
+# Cleanup QSI test state
+rm -rf "${QSI_SPECS}"
+
+# ============================================================
+echo ""
 echo "========================================"
 echo "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
 echo "========================================"

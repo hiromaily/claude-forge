@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "specName": "inject-past-review-feedback",
+  "workspace": ".specs/20260325-inject-past-review-feedback",
+  "branch": "feature/inject-past-review-feedback",
+  "taskType": "feature",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "notifyOnStop": true,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "final-summary",
+    "final-verification",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "post-to-source",
+    "pr-creation",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 1,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Create query-specs-index.sh script",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Add query-specs-index.sh tests to test-hooks.sh",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Inject past feedback into SKILL.md Phase 3 and Phase 4 prompts",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Update documentation",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 56671,
+      "duration_ms": 104111,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T10:24:14Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 73130,
+      "duration_ms": 246494,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T10:29:08Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 39896,
+      "duration_ms": 121641,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T10:32:20Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 26208,
+      "duration_ms": 49859,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T10:33:35Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 30401,
+      "duration_ms": 66583,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T10:35:30Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 27934,
+      "duration_ms": 68882,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T10:38:37Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 20866,
+      "duration_ms": 24068,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T10:39:24Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 45640,
+      "duration_ms": 269089,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T10:58:57Z"
+    },
+    {
+      "phase": "task-2-impl",
+      "tokens": 37156,
+      "duration_ms": 123460,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T11:01:26Z"
+    },
+    {
+      "phase": "task-3-impl",
+      "tokens": 28943,
+      "duration_ms": 112900,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T11:01:26Z"
+    },
+    {
+      "phase": "task-4-impl",
+      "tokens": 31805,
+      "duration_ms": 126735,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T11:04:04Z"
+    },
+    {
+      "phase": "task-1-review",
+      "tokens": 29774,
+      "duration_ms": 78535,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T11:05:48Z"
+    },
+    {
+      "phase": "task-2-review",
+      "tokens": 30806,
+      "duration_ms": 75695,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T11:08:37Z"
+    },
+    {
+      "phase": "task-3-review",
+      "tokens": 30485,
+      "duration_ms": 62196,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T11:08:37Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 48861,
+      "duration_ms": 148471,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T11:11:51Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 22388,
+      "duration_ms": 25167,
+      "model": "sonnet",
+      "timestamp": "2026-03-25T11:12:27Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-25T10:21:48Z",
+    "lastUpdated": "2026-03-25T11:13:42Z",
+    "phaseStarted": null
+  },
+  "error": null
+}

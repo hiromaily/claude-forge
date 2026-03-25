@@ -788,14 +788,22 @@ $SM phase-complete {workspace} phase-2
 $SM phase-start {workspace} phase-3
 ```
 
+Run:
+```bash
+past_feedback="$(bash scripts/query-specs-index.sh {workspace} {task_type} || true)"
+```
+
 Spawn the `architect` agent with:
 
 ```
 {workspace} = {workspace}
 ```
 
+If `$past_feedback` is non-empty, append it verbatim to the architect prompt before the `{workspace} = {workspace}` line (past feedback first, then revision context).
+
 If this is a revision (Phase 3b returned REVISE):
 - Append: `This is a revision. Also read {workspace}/review-design.md for AI review findings to address.`
+- Reuse `$past_feedback` captured above (do not re-run the script).
 - Run: `$SM revision-bump {workspace} design`
 
 Write the return value to `{workspace}/design.md`.
@@ -921,14 +929,22 @@ $SM checkpoint {workspace} checkpoint-a
 $SM phase-start {workspace} phase-4
 ```
 
+Run:
+```bash
+past_feedback="$(bash scripts/query-specs-index.sh {workspace} {task_type} || true)"
+```
+
 Spawn the `task-decomposer` agent with:
 
 ```
 {workspace} = {workspace}
 ```
 
+If `$past_feedback` is non-empty, append it verbatim to the task-decomposer prompt before the `{workspace} = {workspace}` line (past feedback first, then revision context).
+
 If this is a revision:
 - Append: `This is a revision. Also read {workspace}/review-tasks.md for AI review findings to address.`
+- Reuse `$past_feedback` captured above (do not re-run the script).
 - Run: `$SM revision-bump {workspace} tasks`
 
 Write the return value to `{workspace}/tasks.md`.
