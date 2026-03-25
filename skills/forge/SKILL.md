@@ -1569,12 +1569,14 @@ $SM phase-start {workspace} post-to-source
 $SM phase-complete {workspace} post-to-source
 ```
 
-5. **Update the commit to include summary.md and final state.json** — skip this step if `{task_type}` is `investigation` (no feature branch exists):
-   ```bash
-   git add {workspace}/summary.md {workspace}/state.json
-   git commit --amend --no-edit
-   git push --force-with-lease
-   ```
+> **MANDATORY — do not skip.** Amend the branch's last commit to capture the fully-completed `state.json` (all phases done) and `summary.md`. Without this step, `state.json` remains uncommitted and the pipeline's terminal state is lost from git history.
+> Skip only if `{task_type}` is `investigation` (no feature branch exists).
+>
+> ```bash
+> git add {workspace}/summary.md {workspace}/state.json
+> git commit --amend --no-edit
+> git push --force-with-lease
+> ```
 
 ---
 

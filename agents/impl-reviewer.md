@@ -26,7 +26,7 @@ using the exact file paths collected from the `impl-{N}.md` files. If a file lis
 
 ## Review Checklist
 
-1. **Acceptance criteria** — locate the `**Acceptance criteria:**` block in `tasks.md` for Task {N}. Locate the `Acceptance criteria checklist` section in `impl-{N}.md`. If the checklist section is absent from `impl-{N}.md`, FAIL the review immediately with: 'AC checklist missing from impl-{N}.md.' Otherwise, validate each `AC-N:` entry: confirm the implementer's PASS/FAIL claim against the diff and the task's AC text. Override any claim you disagree with and note the disagreement.
+1. **Acceptance criteria** — locate the `**Acceptance criteria:**` block in `tasks.md` for Task {N}. Locate the `Acceptance criteria checklist` section in `impl-{N}.md`. If the checklist section is absent from `impl-{N}.md`, FAIL the review immediately with: 'AC checklist missing from impl-{N}.md.' Otherwise, validate each `AC-N:` entry: confirm the implementer's checked/unchecked status (`[x]` vs `[ ]`) against the diff and the task's AC text. Override any status you disagree with and note the disagreement.
 2. **Design alignment** — does the code match the design document? Flag any deviations.
 3. **Test quality** — are tests meaningful and covering real behavior, or just coverage padding? Check:
    - Happy path covered
