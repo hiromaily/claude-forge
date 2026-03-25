@@ -411,7 +411,7 @@ The specs index provides cross-pipeline learning — surfacing patterns from pas
 
 | Script | Role |
 |--------|------|
-| `build-specs-index.sh` | Scans all `.specs/<workspace>/` directories and writes `.specs/index.json`. Extracts `requestSummary`, `taskType`, `reviewFeedback` (from `review-*.md` REVISE verdicts), `implOutcomes`, `implPatterns` (from `impl-*.md` file-modification sections), and `outcome`. Run via `state-manager.sh refresh-index` after each completed pipeline. |
+| `build-specs-index.sh` | Scans all workspace subdirectories within `.specs/` and writes `.specs/index.json`. Extracts `requestSummary`, `taskType`, `reviewFeedback` (from `review-*.md` REVISE verdicts), `implOutcomes`, `implPatterns` (from `impl-*.md` file-modification sections), and `outcome`. Run via `state-manager.sh refresh-index` after each completed pipeline. |
 | `query-specs-index.sh` | Reads the index and scores past entries by keyword overlap (+1 per word match in `requestSummary`) and task type match (+2). Supports two output modes: **review-feedback** (default, used before Phase 3 and Phase 4) emits a `## Past Review Feedback` block listing findings from REVISE verdicts in similar past pipelines; **impl** mode (third arg `impl`, used before Phase 5) emits a `## Similar Past Implementations` block listing file-modification patterns from `impl-*.md` files. Emits empty stdout when no entries score ≥ 2. |
 
 **Data flow:**

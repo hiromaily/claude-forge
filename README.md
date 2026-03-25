@@ -358,10 +358,10 @@ claude-forge/
     state-manager.sh        State management CLI (26 commands)
     build-specs-index.sh    Scans .specs/ and builds index.json with implPatterns
     query-specs-index.sh    Keyword-score matching against index.json; outputs markdown
-    pre-tool-hook.sh        Read-only, commit blocking, checkpoint & artifact guards
-    post-agent-hook.sh      Agent output quality validation
-    stop-hook.sh            Pipeline completion guard
-    test-hooks.sh           Automated test suite (run to see current count)
+    pre-tool-hook.sh          Read-only, commit blocking, checkpoint & artifact guards
+    post-agent-hook.sh        Agent output quality validation
+    stop-hook.sh              Pipeline completion guard
+    test-hooks.sh             Automated test suite (run to see current count)
   skills/
     forge/
       SKILL.md        Orchestrator instructions (the main skill)
