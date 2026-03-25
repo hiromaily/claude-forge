@@ -2681,14 +2681,16 @@ QSI_WS="${QSI_SPECS}/ws-current"
 # Helper: run query-specs-index.sh with QSI_WS as the workspace
 run_qsi() {
   local task_type="${1:-}"
+  local stderr_file
+  stderr_file="$(mktemp)"
   QSI_EXIT=0
   if [ -n "${task_type}" ]; then
-    QSI_STDOUT="$(bash "${QSI}" "${QSI_WS}" "${task_type}" 2>/tmp/qsi-stderr)" || QSI_EXIT=$?
+    QSI_STDOUT="$(bash "${QSI}" "${QSI_WS}" "${task_type}" 2>"${stderr_file}")" || QSI_EXIT=$?
   else
-    QSI_STDOUT="$(bash "${QSI}" "${QSI_WS}" 2>/tmp/qsi-stderr)" || QSI_EXIT=$?
+    QSI_STDOUT="$(bash "${QSI}" "${QSI_WS}" 2>"${stderr_file}")" || QSI_EXIT=$?
   fi
-  QSI_STDERR="$(cat /tmp/qsi-stderr 2>/dev/null || true)"
-  rm -f /tmp/qsi-stderr
+  QSI_STDERR="$(cat "${stderr_file}" 2>/dev/null || true)"
+  rm -f "${stderr_file}"
 }
 
 # Cleanup helper for QSI tests
