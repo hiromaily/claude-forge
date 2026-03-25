@@ -43,6 +43,10 @@ Write a brief summary of what you did to `{workspace}/impl-{N}.md`:
 - Tests added or updated
 - Any deviations from the design and why
 - Test results (pass/fail counts)
+- Acceptance criteria checklist:
+  - [x] **AC-1:** one-line evidence of how this criterion is met
+  - [ ] **AC-2:** reason it is not met (if any)
+  (One entry per AC from tasks.md, in the same order and with the same labels)
 
 ## What NOT to Do
 
@@ -53,3 +57,4 @@ Write a brief summary of what you did to `{workspace}/impl-{N}.md`:
 - Do NOT ignore project conventions from CLAUDE.md or steering files
 - Do NOT leave failing tests — if tests fail, fix them before finishing
 - Do NOT run `git checkout -b` — the branch already exists when you are spawned; check out `{branch}` if needed
+- Do NOT omit the acceptance criteria checklist from `impl-{N}.md` — the impl-reviewer will FAIL the review if it is absent

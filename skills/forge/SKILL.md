@@ -574,8 +574,8 @@ Before running any phase, establish the workspace:
    **Depends on:** None
    **Files:** (from request.md)
    **Acceptance criteria:**
-   - [ ] Change described in request.md is implemented
-   - [ ] Existing tests pass
+   - [ ] **AC-1:** Change described in request.md is implemented
+   - [ ] **AC-2:** Existing tests pass
    ```
 
    Then initialise task tracking:
@@ -731,9 +731,9 @@ $SM phase-complete {workspace} phase-1
 > **Depends on:** None
 > **Files:** (from analysis.md)
 > **Acceptance criteria:**
-> - [ ] All documentation files listed in request.md are updated
-> - [ ] No broken links introduced
-> - [ ] Formatting is consistent with surrounding content
+> - [ ] **AC-1:** All documentation files listed in request.md are updated
+> - [ ] **AC-2:** No broken links introduced
+> - [ ] **AC-3:** Formatting is consistent with surrounding content
 > ```
 >
 > Then initialise task tracking:
@@ -813,9 +813,9 @@ $SM phase-complete {workspace} phase-3
 > **Depends on:** None
 > **Files:** (from design.md architectural changes section)
 > **Acceptance criteria:**
-> - [ ] Root cause identified in investigation.md is addressed
-> - [ ] Regression test is added covering the bug scenario
-> - [ ] Existing tests continue to pass
+> - [ ] **AC-1:** Root cause identified in investigation.md is addressed
+> - [ ] **AC-2:** Regression test is added covering the bug scenario
+> - [ ] **AC-3:** Existing tests continue to pass
 > ```
 >
 > Then initialise task tracking and proceed directly to Phase 5:
@@ -1093,7 +1093,7 @@ Commit mode: {sequential|parallel}
 Dependencies completed: Tasks {deps}
 Dependency review files: {for each dep: `{workspace}/review-{dep}.md`}
 
-Acceptance criteria:
+Acceptance criteria (paste verbatim from tasks.md, preserving all AC-N: labels and ordering):
 {paste the task's acceptance criteria}
 ```
 

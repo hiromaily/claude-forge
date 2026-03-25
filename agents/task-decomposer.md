@@ -28,7 +28,7 @@ A numbered task list where each task includes:
 - **Design reference** — which section of design.md this task implements
 - **Dependencies** — which tasks must complete first (if any)
 - **Files to create or modify** — specific file paths
-- **Acceptance criteria** — 1-3 bullet points, each specific and verifiable
+- **Acceptance criteria** — 1-3 numbered items (`AC-1`, `AC-2`, …), each specific, verifiable, and testable/observable at runtime or via test
 - **Execution mode** — `[parallel]` or `[sequential]`
 
 ## Rules for Parallel vs Sequential
@@ -45,8 +45,8 @@ A numbered task list where each task includes:
 **Depends on:** None | Task N, Task M
 **Files:** `path/to/file1.go`, `path/to/file2.go`
 **Acceptance criteria:**
-- [ ] Criterion 1
-- [ ] Criterion 2
+- [ ] **AC-1:** Criterion 1
+- [ ] **AC-2:** Criterion 2
 
 ## Task 2: {title} [sequential|parallel]
 ...
@@ -57,5 +57,6 @@ A numbered task list where each task includes:
 - Do NOT make tasks too large — if a task touches more than 3-4 files, consider splitting it
 - Do NOT make tasks too granular — a task should be a meaningful unit of work, not a single line change
 - Do NOT use vague acceptance criteria like "works correctly" — be specific about what to verify
+- Do NOT write AC items without `AC-N:` labels — numbered labels are required for implementer and reviewer traceability
 - Do NOT forget deletion tasks — every file/export marked for removal in the design needs a task
 - Do NOT forget test tasks — every code change needs corresponding test updates
