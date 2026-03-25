@@ -1246,7 +1246,7 @@ Create a pull request for the feature branch:
    | Rejected push (non-fast-forward) | Exit non-zero AND error message contains `rejected`, `non-fast-forward`, `Updates were rejected` | Call `$SM phase-fail {workspace} pr-creation "git push rejected: non-fast-forward"`. Report to user with the full push error output. Ask the user whether to force-push (`git push --force-with-lease`) or investigate the branch divergence. Do not proceed automatically. |
    | Any other push failure | Exit non-zero AND does not match the above | Call `$SM phase-fail {workspace} pr-creation "git push failed: <error summary>"`. Report the full error output to the user and halt. |
 
-3. **Create the pull request** using `gh pr create`. Derive the title from `request.md` (short, under 70 chars). Build the body from `design.md` and `tasks.md`:
+3. **Create the pull request** using `gh pr create`. Derive the title from `request.md` (short, under 70 chars). Build the body from `design.md` and `tasks.md`. If `source_type` is `github_issue`, include `Closes #<source_id>` in the body so GitHub automatically closes the issue when the PR is merged:
    ```bash
    gh pr create --title "<title>" --body "$(cat <<'EOF'
    ## Summary
@@ -1257,6 +1257,9 @@ Create a pull request for the feature branch:
 
    ## Test plan
    <from design.md test strategy section>
+
+   <Only when source_type is github_issue:>
+   Closes #<source_id>
 
    ---
    Source: <source_url from request.md, if applicable>
