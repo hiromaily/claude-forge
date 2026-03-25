@@ -32,12 +32,13 @@ claude-forge/
 ├── scripts/
 │   ├── state-manager.sh   ← core state management CLI (26 commands, jq-based)
 │   ├── build-specs-index.sh ← scans .specs/ directories and builds .specs/index.json
+│   ├── query-specs-index.sh ← keyword-score matching against .specs/index.json, stdout markdown or empty
 │   ├── validate-input.sh  ← deterministic input validation (empty, too short, URL format)
 │   ├── pre-tool-hook.sh   ← read-only, commit blocking, checkpoint, artifact & input validation guards
 │   ├── post-agent-hook.sh ← agent output quality validation
 │   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md after phase-complete post-to-source
 │   ├── stop-hook.sh       ← pipeline completion guard
-│   └── test-hooks.sh      ← automated test suite (run bash scripts/test-hooks.sh for current count)
+│   └── test-hooks.sh      ← automated test suite (309 tests; run bash scripts/test-hooks.sh to verify)
 └── skills/
     └── forge/
         └── SKILL.md       ← orchestrator instructions (the main skill)
