@@ -427,6 +427,40 @@ else
 fi
 
 echo ""
+echo "--- phase-fail on pr-creation (push failure simulation) ---"
+SM_WS_PFAIL="${TMPDIR_BASE}/.specs/sm-pfail"
+mkdir -p "$SM_WS_PFAIL"
+bash "$SM" init "$SM_WS_PFAIL" "pfail-test"
+# Advance to pr-creation
+for p in phase-1 phase-2 phase-3 phase-3b checkpoint-a phase-4 phase-4b checkpoint-b phase-5 phase-6 phase-7 final-verification; do
+  bash "$SM" phase-start "$SM_WS_PFAIL" "$p"
+  bash "$SM" phase-complete "$SM_WS_PFAIL" "$p"
+done
+bash "$SM" phase-start "$SM_WS_PFAIL" "pr-creation"
+bash "$SM" phase-fail "$SM_WS_PFAIL" "pr-creation" "git push failed: network error"
+
+PFAIL_STATUS="$(jq -r '.currentPhaseStatus' "${SM_WS_PFAIL}/state.json")"
+if [ "$PFAIL_STATUS" = "failed" ]; then
+  pass "phase-fail on pr-creation sets currentPhaseStatus to failed"
+else
+  fail "phase-fail on pr-creation sets currentPhaseStatus to failed" "got: $PFAIL_STATUS"
+fi
+
+PFAIL_MSG="$(jq -r '.error.message' "${SM_WS_PFAIL}/state.json")"
+if echo "$PFAIL_MSG" | grep -qF "git push failed: network error"; then
+  pass "phase-fail on pr-creation records error message"
+else
+  fail "phase-fail on pr-creation records error message" "got: $PFAIL_MSG"
+fi
+
+run_hook "stop-hook.sh" '{"hook_event_name":"Stop","stop_hook_active":false}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 2 "stop blocked when pr-creation is in failed state"
+
+bash "$SM" abandon "$SM_WS_PFAIL" >/dev/null
+run_hook "stop-hook.sh" '{"hook_event_name":"Stop","stop_hook_active":false}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "stop allowed after abandoning failed pr-creation workspace"
+
+echo ""
 echo "--- abandon ---"
 bash "$SM" phase-complete "$SM_WS" "checkpoint-a"
 bash "$SM" phase-start "$SM_WS" "phase-4"

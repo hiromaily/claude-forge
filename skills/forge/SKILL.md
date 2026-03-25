@@ -1237,6 +1237,15 @@ Create a pull request for the feature branch:
    git push -u origin {branch}
    ```
 
+   **If `git push` fails**, determine the cause and follow the matching recovery action:
+
+   | Failure reason | How to detect | Recovery action |
+   |---|---|---|
+   | Remote branch deleted / PR already merged | Exit non-zero AND (`error: src refspec {branch} does not match any` OR the branch is absent from `git ls-remote origin {branch}`). Note: if `git ls-remote` itself fails due to a network issue, treat as Network/transient failure instead. | Set `{pr-number}` to `none`. Call `$SM phase-complete {workspace} pr-creation`, skip steps 3–4, and continue to Final Summary. Report to user: "Push failed: remote branch `{branch}` no longer exists (PR may already be merged). Marking pr-creation complete with no PR number." |
+   | Network / transient failure | Exit non-zero AND error message contains `unable to connect`, `timeout`, `could not resolve`, or similar network language | Retry `git push -u origin {branch}` once. If the retry also fails, call `$SM phase-fail {workspace} pr-creation "git push failed: network error"` and halt. Report the error output to the user and ask them to retry when connectivity is restored. |
+   | Rejected push (non-fast-forward) | Exit non-zero AND error message contains `rejected`, `non-fast-forward`, `Updates were rejected` | Call `$SM phase-fail {workspace} pr-creation "git push rejected: non-fast-forward"`. Report to user with the full push error output. Ask the user whether to force-push (`git push --force-with-lease`) or investigate the branch divergence. Do not proceed automatically. |
+   | Any other push failure | Exit non-zero AND does not match the above | Call `$SM phase-fail {workspace} pr-creation "git push failed: <error summary>"`. Report the full error output to the user and halt. |
+
 3. **Create the pull request** using `gh pr create`. Derive the title from `request.md` (short, under 70 chars). Build the body from `design.md` and `tasks.md`:
    ```bash
    gh pr create --title "<title>" --body "$(cat <<'EOF'
@@ -1598,6 +1607,7 @@ $SM phase-complete {workspace} post-to-source
 | Task checkpoint rejected | Revise tasks and re-present |
 | Implementation FAIL review | Re-implement with review as context (max 2 attempts per task); track with `$SM task-update` |
 | Test suite fails after implementation | Run `$SM phase-fail` and present the failure to the user |
+| `git push` fails during PR Creation | `phase-fail` or `phase-complete` depending on cause — see PR Creation error handling block |
 | Final verification finds new failures | Fix before summarizing — do not leave a broken branch |
 | Residual imports of deleted code found in final verification | Spawn a fix agent to update all callers; re-run verification |
 | Pipeline interrupted | On next invocation, pass workspace path as `$ARGUMENTS` to resume from `state.json` |
