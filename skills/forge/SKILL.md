@@ -1607,6 +1607,7 @@ $SM phase-complete {workspace} post-to-source
 | Task checkpoint rejected | Revise tasks and re-present |
 | Implementation FAIL review | Re-implement with review as context (max 2 attempts per task); track with `$SM task-update` |
 | Test suite fails after implementation | Run `$SM phase-fail` and present the failure to the user |
+| `git push` fails during PR Creation | `phase-fail` or `phase-complete` depending on cause — see PR Creation error handling block |
 | Final verification finds new failures | Fix before summarizing — do not leave a broken branch |
 | Residual imports of deleted code found in final verification | Spawn a fix agent to update all callers; re-run verification |
 | Pipeline interrupted | On next invocation, pass workspace path as `$ARGUMENTS` to resume from `state.json` |
