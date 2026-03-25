@@ -1569,7 +1569,7 @@ $SM phase-start {workspace} post-to-source
 $SM phase-complete {workspace} post-to-source
 ```
 
-> **MANDATORY — do not skip.** Amend the branch's last commit to capture the fully-completed `state.json` (all phases done) and `summary.md`. Without this step, `state.json` remains uncommitted and the pipeline's terminal state is lost from git history.
+> **MANDATORY — do not skip.** Amend the branch's last commit to capture the fully-completed `state.json` (all phases done) and `summary.md`. Without this step, `state.json` remains uncommitted and the pipeline's terminal state will not be persisted to the git history.
 > Skip only if `{task_type}` is `investigation` (no feature branch exists).
 >
 > ```bash
