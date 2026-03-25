@@ -159,7 +159,6 @@ cmd_init() {
       skipPr: false,
       useCurrentBranch: false,
       debug: false,
-      notifyOnStop: false,
       skippedPhases: [],
       currentPhase: "phase-1",
       currentPhaseStatus: "pending",
@@ -219,7 +218,6 @@ _do_phase_complete() {
      .completedPhases = (.completedPhases | unique) |
      .currentPhase = $next |
      .currentPhaseStatus = (if $next == "completed" then "completed" else "pending" end) |
-     .notifyOnStop = ($next == "completed") |
      .timestamps.lastUpdated = $ts |
      .timestamps.phaseStarted = null'
   )"
@@ -659,7 +657,6 @@ cmd_resume_info() {
     totalTokens: ([(.phaseLog // [])[].tokens] | add // 0),
     totalDuration_ms: ([(.phaseLog // [])[].duration_ms] | add // 0),
     debug: (.debug // false),
-    notifyOnStop: (.notifyOnStop // false),
     tasksWithRetries: [
       .tasks | to_entries[] |
       select(.value.implRetries > 0 or .value.reviewRetries > 0) |
