@@ -1017,6 +1017,7 @@ WS="$(setup_workspace "phase-3" "in_progress")"
 run_hook "stop-hook.sh" '{"hook_event_name":"Stop","stop_hook_active":false}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
 assert_exit 2 "stop blocked when pipeline active"
 assert_stderr_contains "still active" "block message mentions still active"
+assert_stderr_contains "state-manager.sh abandon" "block message includes abandon command"
 
 echo ""
 echo "--- completed pipeline: allow ---"
