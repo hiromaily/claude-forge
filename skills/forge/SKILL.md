@@ -574,8 +574,8 @@ Before running any phase, establish the workspace:
    **Depends on:** None
    **Files:** (from request.md)
    **Acceptance criteria:**
-   - [ ] Change described in request.md is implemented
-   - [ ] Existing tests pass
+   - [ ] **AC-1:** Change described in request.md is implemented
+   - [ ] **AC-2:** Existing tests pass
    ```
 
    Then initialise task tracking:
