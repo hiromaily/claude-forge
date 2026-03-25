@@ -205,9 +205,9 @@ extract_impl_patterns() {
             extracted = candidate
           }
         }
-        if (length(extracted) == 0 && line !~ /^\*\*/ && line !~ /^[A-Z]/) {
+        if (length(extracted) == 0 && line !~ /^\*\*/) {
           # No valid backtick path found; try the whole line as a path.
-          # Skip lines starting with "**" (bold markers) or uppercase (prose).
+          # Skip lines starting with '**' (bold markers).
           if (index(line, "/") > 0 || line ~ /\.[a-zA-Z0-9]+$/) {
             extracted = line
           }
