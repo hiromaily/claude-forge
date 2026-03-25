@@ -26,7 +26,7 @@ using the exact file paths collected from the `impl-{N}.md` files. If a file lis
 
 ## Review Checklist
 
-1. **Acceptance criteria** — are ALL criteria from the task definition met? Check each one explicitly.
+1. **Acceptance criteria** — locate the `**Acceptance criteria:**` block in `tasks.md` for Task {N}. Locate the `Acceptance criteria checklist` section in `impl-{N}.md`. If the checklist section is absent from `impl-{N}.md`, FAIL the review immediately with: 'AC checklist missing from impl-{N}.md.' Otherwise, validate each `AC-N:` entry: confirm the implementer's PASS/FAIL claim against the diff and the task's AC text. Override any claim you disagree with and note the disagreement.
 2. **Design alignment** — does the code match the design document? Flag any deviations.
 3. **Test quality** — are tests meaningful and covering real behavior, or just coverage padding? Check:
    - Happy path covered
@@ -45,9 +45,9 @@ using the exact file paths collected from the `impl-{N}.md` files. If a file lis
 ## Verdict: PASS | PASS_WITH_NOTES | FAIL
 
 ### Acceptance Criteria
-- [x] Criterion 1 — met (brief evidence)
-- [x] Criterion 2 — met
-- [ ] Criterion 3 — NOT met (explanation)
+- [x] **AC-1:** Criterion text — met (brief evidence)
+- [x] **AC-2:** Criterion text — met
+- [ ] **AC-3:** Criterion text — NOT met (explanation)
 
 ### Findings
 
@@ -69,3 +69,4 @@ Summary of test pass/fail status from impl-{N}.md
 - Do NOT rewrite code — only identify problems for the implementer to fix
 - Do NOT PASS if any acceptance criterion is unmet — that's an automatic FAIL
 - Do NOT FAIL for minor observations — use PASS_WITH_NOTES instead
+- Do NOT silently PASS if the AC checklist is absent from `impl-{N}.md` — that is a FAIL condition equivalent to a missing file list

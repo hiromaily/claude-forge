@@ -23,13 +23,13 @@ Read these files:
 3. **Test updates** — are there tasks to update or delete tests for every changed or removed unit? A code change with no test task is a gap.
 4. **Dependencies** — are the listed task dependencies correct and complete? Would running tasks in the stated order ever access code that doesn't exist yet?
 5. **Parallel safety** — do any `[parallel]` tasks write to the same file? If so, flag them as needing to be `[sequential]`.
-6. **Acceptance criteria** — is each criterion specific and verifiable (not vague like "works correctly")? Flag any that are too broad.
+6. **Acceptance criteria** — is each criterion specific, verifiable, and testable/observable (i.e., the implementer can confirm it by running a test or observing runtime behavior — not just by logical reasoning)? Are all criteria labeled `AC-N:`? Flag any that are too broad, missing labels, or not observable.
 
 ## Severity Classification
 
 Classify each finding as one of:
 
-- **CRITICAL**: Missing task for a design section, incorrect dependency that would break builds, parallel write conflict, or acceptance criteria so vague that the implementer cannot verify completion. These MUST be fixed before proceeding.
+- **CRITICAL**: Missing task for a design section, incorrect dependency that would break builds, parallel write conflict, acceptance criteria so vague that the implementer cannot verify completion, or acceptance criteria that lack `AC-N:` labels (labels are required for traceability). These MUST be fixed before proceeding.
 - **MINOR**: Slightly imprecise acceptance criteria wording, missing edge-case note, cosmetic task ordering preference, or optional improvement. These SHOULD be noted but do NOT block approval.
 
 ## Output Format
