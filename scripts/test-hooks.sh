@@ -2875,10 +2875,10 @@ else
   fail "5 qualifying entries exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
 fi
 BULLET_COUNT="$(echo "${QSI_STDOUT}" | grep -c '^- \*\*\[' || true)"
-if [ "${BULLET_COUNT}" -le 3 ]; then
-  pass "5 qualifying entries returns at most 3 bullets (got ${BULLET_COUNT})"
+if [ "${BULLET_COUNT}" -eq 3 ]; then
+  pass "5 qualifying entries returns exactly 3 bullets"
 else
-  fail "5 qualifying entries returns at most 3 bullets" "got ${BULLET_COUNT} bullets"
+  fail "5 qualifying entries returns exactly 3 bullets" "got ${BULLET_COUNT} bullets"
 fi
 
 # --- Test 20: taskType: null entry qualifies on keyword overlap alone (score >= 2) ---
