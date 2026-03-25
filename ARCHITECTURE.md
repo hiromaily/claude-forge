@@ -387,7 +387,7 @@ The information flow is strictly forward — no agent reads output from a later 
 | task-decomposer | request.md, design.md, investigation.md (+review-tasks.md on revision) |
 | task-reviewer | request.md, design.md, investigation.md, tasks.md |
 | Checkpoint B (orchestrator) | tasks.md, review-tasks.md (to present summary to human) |
-| implementer | request.md, design.md (may be an orchestrator-written stub for `docs` task type), tasks.md (may be a single-task stub for `bugfix` task type), review-{dep}.md (+review-{N}.md on retry) |
+| implementer | request.md, design.md (may be an orchestrator-written stub for `docs` task type), tasks.md (may be a single-task stub for `bugfix` task type), review-{dep}.md (+review-{N}.md on retry) — plus `## Similar Past Implementations` block injected by orchestrator from `query-specs-index.sh impl` mode |
 | impl-reviewer | request.md, tasks.md, design.md, impl-{N}.md, git diff (file-scoped, main...HEAD) |
 | comprehensive-reviewer | request.md, design.md, tasks.md, all impl-{N}.md, all review-{N}.md, git diff + selective structural reads |
 | verifier | (reads code on feature branch directly) |
@@ -402,6 +402,39 @@ The information flow is strictly forward — no agent reads output from a later 
 - **Phase 7**: Agent writes code fixes directly and returns comprehensive-review.md content
 - **Final Verification**: Agent fixes issues directly, no artifact file
 - **PR Creation / Post to Source**: Orchestrator handles directly (no subagent)
+
+### Specs Index System
+
+The specs index provides cross-pipeline learning — surfacing patterns from past runs to guide current agents.
+
+**Components:**
+
+| Script | Role |
+|--------|------|
+| `build-specs-index.sh` | Scans all `.specs/<workspace>/` directories and writes `.specs/index.json`. Extracts `requestSummary`, `taskType`, `reviewFeedback` (from `review-*.md` REVISE verdicts), `implOutcomes`, `implPatterns` (from `impl-*.md` file-modification sections), and `outcome`. Run via `state-manager.sh refresh-index` after each completed pipeline. |
+| `query-specs-index.sh` | Reads the index and scores past entries by keyword overlap (+1 per word match in `requestSummary`) and task type match (+2). Supports two output modes: **review-feedback** (default, used before Phase 3 and Phase 4) emits a `## Past Review Feedback` block listing findings from REVISE verdicts in similar past pipelines; **impl** mode (third arg `impl`, used before Phase 5) emits a `## Similar Past Implementations` block listing file-modification patterns from `impl-*.md` files. Emits empty stdout when no entries score ≥ 2. |
+
+**Data flow:**
+
+```
+Completed pipeline
+  └─► state-manager.sh refresh-index
+        └─► build-specs-index.sh → .specs/index.json
+
+Next pipeline, Phase 3:
+  orchestrator → query-specs-index.sh {ws} {type}
+    → injects "## Past Review Feedback" into architect prompt
+
+Next pipeline, Phase 4:
+  orchestrator → query-specs-index.sh {ws} {type}
+    → injects "## Past Review Feedback" into task-decomposer prompt
+
+Next pipeline, Phase 5 (before each task):
+  orchestrator → query-specs-index.sh {ws} {type} impl
+    → injects "## Similar Past Implementations" into implementer prompt
+```
+
+This system is append-only and read-only from the agents' perspective. Agents never write to the index; they only consume it via the orchestrator.
 
 ## State Machine
 
