@@ -29,6 +29,7 @@
 #   clear-revision-pending <workspace> <checkpoint>  Set checkpointRevisionPending[<checkpoint>] = false
 #   abandon <workspace>                    Mark pipeline as abandoned
 #   resume-info <workspace>                Print resume information as JSON
+#   refresh-index <workspace>             Rebuild .specs/index.json from all workspace directories
 
 set -euo pipefail
 
@@ -668,6 +669,17 @@ cmd_resume_info() {
   }'
 }
 
+cmd_refresh_index() {
+  local workspace="$1"
+  local specs_dir
+  specs_dir="$(dirname "$workspace")"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # Pass specs_dir as $1 so build-specs-index.sh uses the correct .specs/ parent.
+  # The script also accepts no args (uses default path relative to BASH_SOURCE[0]).
+  bash "${script_dir}/build-specs-index.sh" "$specs_dir"
+}
+
 # --- main dispatch ---
 
 require_jq
@@ -727,5 +739,6 @@ case "$command" in
   abandon)           check_args 1 $# "abandon <workspace>"
                      locked_update "$(state_path "$1")" _do_abandon "$@" ;;
   resume-info)       check_args 1 $# "resume-info <workspace>";                                   cmd_resume_info "$@" ;;
+  refresh-index)     check_args 1 $# "refresh-index <workspace>";                                  cmd_refresh_index "$@" ;;
   *)                 die "Unknown command: ${command}" ;;
 esac
