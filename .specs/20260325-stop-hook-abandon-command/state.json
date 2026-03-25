@@ -10,7 +10,7 @@
   "skipPr": false,
   "useCurrentBranch": false,
   "debug": false,
-  "notifyOnStop": true,
+  "notifyOnStop": false,
   "skippedPhases": [
     "checkpoint-b",
     "phase-4b",
