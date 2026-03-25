@@ -2615,7 +2615,38 @@ mkdir -p "${BIS_SPECS}/ws1"
 run_bis
 assert_jq '.[0].outcome' "unknown" "missing state.json produces unknown outcome"
 
-# --- Test 13: refresh-index subcommand (covered in Task 5, depends on Task 2) ---
+# --- Test 13: refresh-index subcommand ---
+echo ""
+echo "--- Test 13: refresh-index subcommand ---"
+# Use ${TMPDIR_BASE}/.specs/test-ws so dirname resolves to ${TMPDIR_BASE}/.specs
+BIS_REFRESH_DIR="${TMPDIR_BASE}/.specs"
+BIS_REFRESH_WS="${BIS_REFRESH_DIR}/test-ws"
+rm -rf "${BIS_REFRESH_DIR}"
+mkdir -p "${BIS_REFRESH_WS}"
+cat > "${BIS_REFRESH_WS}/state.json" <<'EOF'
+{"specName":"refresh-test","currentPhase":"phase-1","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+REFRESH_EXIT=0
+bash "${SCRIPT_DIR}/state-manager.sh" refresh-index "${BIS_REFRESH_WS}" 2>/tmp/refresh-stderr || REFRESH_EXIT=$?
+if [ "${REFRESH_EXIT}" -eq 0 ]; then
+  pass "refresh-index subcommand exits 0"
+else
+  REFRESH_STDERR="$(cat /tmp/refresh-stderr 2>/dev/null || true)"
+  fail "refresh-index subcommand exits 0" "got exit ${REFRESH_EXIT}: ${REFRESH_STDERR}"
+fi
+rm -f /tmp/refresh-stderr
+if [ -f "${BIS_REFRESH_DIR}/index.json" ]; then
+  pass "refresh-index produces index.json in correct location"
+else
+  fail "refresh-index produces index.json in correct location" "file not found: ${BIS_REFRESH_DIR}/index.json"
+fi
+REFRESH_LEN="$(jq 'length' "${BIS_REFRESH_DIR}/index.json" 2>/dev/null || echo -1)"
+if [ "${REFRESH_LEN}" -eq 1 ]; then
+  pass "refresh-index index.json contains 1 entry for 1 workspace"
+else
+  fail "refresh-index index.json contains 1 entry for 1 workspace" "got ${REFRESH_LEN} entries"
+fi
+rm -rf "${BIS_REFRESH_DIR}"
 
 # --- Test 14: Idempotency ---
 echo ""

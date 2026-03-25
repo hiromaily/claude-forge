@@ -355,7 +355,7 @@ claude-forge/
   agents/             11 specialist agents (.md files with YAML frontmatter)
   hooks/              Hook definitions (hooks.json)
   scripts/
-    state-manager.sh  State management CLI (25 commands)
+    state-manager.sh  State management CLI (26 commands)
     pre-tool-hook.sh  Read-only, commit blocking, checkpoint & artifact guards
     post-agent-hook.sh  Agent output quality validation
     stop-hook.sh      Pipeline completion guard

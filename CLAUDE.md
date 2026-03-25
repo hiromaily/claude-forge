@@ -30,7 +30,8 @@ claude-forge/
 ├── hooks/
 │   └── hooks.json         ← hook definitions (PreToolUse, PostToolUse, Stop)
 ├── scripts/
-│   ├── state-manager.sh   ← core state management CLI (25 commands, jq-based)
+│   ├── state-manager.sh   ← core state management CLI (26 commands, jq-based)
+│   ├── build-specs-index.sh ← scans .specs/ directories and builds .specs/index.json
 │   ├── validate-input.sh  ← deterministic input validation (empty, too short, URL format)
 │   ├── pre-tool-hook.sh   ← read-only, commit blocking, checkpoint, artifact & input validation guards
 │   ├── post-agent-hook.sh ← agent output quality validation
@@ -145,7 +146,7 @@ SKILL.md (orchestrator)
 
 **find_active_workspace** — this function is duplicated across `pre-tool-hook.sh`, `post-agent-hook.sh`, and `stop-hook.sh`. **The copies are intentionally different**: each script uses a slightly different filter predicate suited to its own enforcement context. Do not unify them into a shared library. Each copy carries a comment explaining the divergence — read it before modifying.
 
-**Subcommand count** — `state-manager.sh` currently has **25** dispatch entries. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
+**Subcommand count** — `state-manager.sh` currently has **26** dispatch entries. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
 
 ### What NOT to do
 - Do NOT add `isolation: "worktree"` to any Agent tool call — breaks inter-task visibility
