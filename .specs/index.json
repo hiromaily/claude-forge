@@ -1,0 +1,201 @@
+[
+  {
+    "specName": "architecture-agent-reads-table",
+    "timestamp": "2026-03-22T08:32:27Z",
+    "taskType": "docs",
+    "requestSummary": "P22: The \"What Each Agent Reads\" table in ARCHITECTURE.md is incomplete. Per BACKLOG.md, this table is missing entries or has gaps in the agent input file documentation. Update ARCHITECTURE.md to ensu",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "outcome": "completed"
+  },
+  {
+    "specName": "fix-checkpoint-design-review",
+    "timestamp": "2026-03-22T09:37:43Z",
+    "taskType": "bugfix",
+    "requestSummary": "I've requested revisions before, but the design review request via checkpoint sometimes doesn't work. I thought this was supposed to work regardless of the task or effort level. Please use a hook to e",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "outcome": "completed"
+  },
+  {
+    "specName": "fix-hook-sound-timing",
+    "timestamp": "2026-03-22T08:49:08Z",
+    "taskType": "bugfix",
+    "requestSummary": "Currently, we're using hooks to play a sound when we're prompted for user interaction, but the timing of the sound is incorrect. - User review request via checkpoint - Confirmation of initial task typ",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "outcome": "completed"
+  },
+  {
+    "specName": "refactor-scripts-maintainability",
+    "timestamp": "2026-03-22T10:58:35Z",
+    "taskType": "refactor",
+    "requestSummary": "Since so many features have been added to the scripts files so far, I want to refactor them to improve maintainability.",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "outcome": "completed"
+  },
+  {
+    "specName": "skill-forward-reference",
+    "timestamp": "2026-03-22T01:20:03Z",
+    "taskType": "feature",
+    "requestSummary": "P19: SKILL.md forward-reference fragility",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "outcome": "completed"
+  },
+  {
+    "specName": "skill-size-reduction",
+    "timestamp": "2026-03-22T03:57:34Z",
+    "taskType": "refactor",
+    "requestSummary": "P21: SKILL.md size reduction / split SKILL.md is currently 1,646 lines. The primary structural causes of the size are: 1. Three near-identical dispatch blocks (feature/refactor, bugfix/docs, investiga",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "outcome": "completed"
+  },
+  {
+    "specName": "architecture-agent-reads-table",
+    "timestamp": "2026-03-24T09:31:55Z",
+    "taskType": "docs",
+    "requestSummary": "# [P22] ARCHITECTURE.md \"What Each Agent Reads\" table incomplete ## Summary The \"What Each Agent Reads\" table in ARCHITECTURE.md is incomplete — the Final Summary row was missing. This caused implemen",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "outcome": "completed"
+  },
+  {
+    "specName": "diff-based-review",
+    "timestamp": "2026-03-24T11:00:19Z",
+    "taskType": "feature",
+    "requestSummary": "# [F5] Diff-based review (token reduction) ## Summary Phase 6 (impl-reviewer) and Phase 7 (comprehensive-reviewer) receive only `git diff` output instead of reading full source files. ## Motivation Re",
+    "reviewFeedback": [],
+    "implOutcomes": [
+      {
+        "reviewFile": "review-1.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-2.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-3.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-4.md",
+        "verdict": "PASS"
+      }
+    ],
+    "outcome": "completed"
+  },
+  {
+    "specName": "inline-revision-shortcut",
+    "timestamp": "2026-03-24T10:13:37Z",
+    "taskType": "feature",
+    "requestSummary": "# [F15] Inline revision shortcut for MINOR findings ## Summary When all review findings are MINOR (no CRITICAL), the orchestrator edits the artifact directly instead of re-spawning the full authoring ",
+    "reviewFeedback": [],
+    "implOutcomes": [
+      {
+        "reviewFile": "review-1.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-2.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-3.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-4.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-5.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-6.md",
+        "verdict": "PASS"
+      }
+    ],
+    "outcome": "completed"
+  },
+  {
+    "specName": "structured-ac-validation",
+    "timestamp": "2026-03-25T01:08:12Z",
+    "taskType": "feature",
+    "requestSummary": "# [F9] Structured acceptance criteria validation ## Summary Formalize acceptance criteria in tasks.md as a machine-verifiable checklist. Have the implementer report pass/fail per criterion, and impl-r",
+    "reviewFeedback": [],
+    "implOutcomes": [
+      {
+        "reviewFile": "review-1.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-2.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-3.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-4.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-5.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-6.md",
+        "verdict": "PASS"
+      }
+    ],
+    "outcome": "completed"
+  },
+  {
+    "specName": "git-push-error-recovery",
+    "timestamp": "2026-03-25T03:57:38Z",
+    "taskType": "feature",
+    "requestSummary": "# skill: no error recovery path when git push fails in PR Creation ## Summary When `git push` fails during the PR Creation phase (e.g., the remote branch no longer exists because the PR was already me",
+    "reviewFeedback": [],
+    "implOutcomes": [
+      {
+        "reviewFile": "review-1.md",
+        "verdict": "PASS_WITH_NOTES"
+      }
+    ],
+    "outcome": "completed"
+  },
+  {
+    "specName": "specs-index-extractor",
+    "timestamp": "2026-03-25T08:25:48Z",
+    "taskType": "feature",
+    "requestSummary": "# [F8-a] Build .specs/index.json extractor for feedback and implementation patterns ## Summary Extends #15 with the first concrete step of the data flywheel: a script that scans `.specs/` and builds a",
+    "reviewFeedback": [],
+    "implOutcomes": [
+      {
+        "reviewFile": "review-1.md",
+        "verdict": "PASS"
+      }
+    ],
+    "outcome": "in_progress"
+  },
+  {
+    "specName": "stop-hook-abandon-command",
+    "timestamp": "2026-03-25T03:41:26Z",
+    "taskType": "feature",
+    "requestSummary": "# Stop Hook: Include Abandon Command in Blocked Message **Issue #39:** stop-hook: message should include the abandon command so users can unblock themselves ## Summary When the stop hook fires because",
+    "reviewFeedback": [],
+    "implOutcomes": [
+      {
+        "reviewFile": "review-1.md",
+        "verdict": "PASS"
+      }
+    ],
+    "outcome": "completed"
+  }
+]

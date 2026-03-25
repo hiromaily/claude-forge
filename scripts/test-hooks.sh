@@ -2356,6 +2356,321 @@ reset_workspace
 
 # ============================================================
 echo ""
+echo "=== build-specs-index.sh tests ==="
+# ============================================================
+
+BIS="${SCRIPT_DIR}/build-specs-index.sh"
+BIS_SPECS="${TMPDIR_BASE}/.specs-bis"
+
+# Helper: run build-specs-index.sh with BIS_SPECS as the target dir
+run_bis() {
+  BIS_EXIT=0
+  BIS_STDOUT="$(bash "${BIS}" "${BIS_SPECS}" 2>/tmp/bis-stderr)" || BIS_EXIT=$?
+  BIS_STDERR="$(cat /tmp/bis-stderr 2>/dev/null || true)"
+  rm -f /tmp/bis-stderr
+}
+
+# Helper: assert jq expression on index.json
+assert_jq() {
+  local expr="$1"
+  local expected="$2"
+  local label="$3"
+  local actual
+  actual="$(jq -r "${expr}" "${BIS_SPECS}/index.json" 2>/dev/null || true)"
+  if [ "${actual}" = "${expected}" ]; then
+    pass "${label}"
+  else
+    fail "${label}" "expected '${expected}', got '${actual}'"
+  fi
+}
+
+# Cleanup helper for BIS tests
+reset_bis() {
+  rm -rf "${BIS_SPECS}"
+  mkdir -p "${BIS_SPECS}"
+}
+
+# --- Test 1: Empty .specs/ directory ---
+echo ""
+echo "--- Test 1: Empty .specs/ ---"
+reset_bis
+run_bis
+if [ "${BIS_EXIT}" -eq 0 ]; then
+  pass "empty .specs/ exits 0"
+else
+  fail "empty .specs/ exits 0" "got exit ${BIS_EXIT}: ${BIS_STDERR}"
+fi
+assert_jq 'length' "0" "empty .specs/ produces []"
+
+# --- Test 2: Single workspace, only state.json ---
+echo ""
+echo "--- Test 2: Single workspace with state.json only ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{
+  "specName": "test-spec-1",
+  "taskType": "feature",
+  "currentPhase": "phase-1",
+  "currentPhaseStatus": "in_progress",
+  "timestamps": { "created": "2026-01-01T00:00:00Z" }
+}
+EOF
+run_bis
+if [ "${BIS_EXIT}" -eq 0 ]; then
+  pass "single workspace exits 0"
+else
+  fail "single workspace exits 0" "got exit ${BIS_EXIT}: ${BIS_STDERR}"
+fi
+assert_jq 'length' "1" "single workspace produces 1 entry"
+assert_jq '.[0].specName' "test-spec-1" "specName extracted from state.json"
+assert_jq '.[0].timestamp' "2026-01-01T00:00:00Z" "timestamp extracted from state.json"
+assert_jq '.[0].taskType' "feature" "taskType extracted from state.json"
+assert_jq '.[0].requestSummary' "" "requestSummary empty when no request.md"
+assert_jq '.[0].reviewFeedback | length' "0" "reviewFeedback is [] with no review files"
+assert_jq '.[0].implOutcomes | length' "0" "implOutcomes is [] with no impl review files"
+assert_jq '.[0].outcome' "in_progress" "outcome is in_progress for phase-1/in_progress"
+
+# --- Test 3: requestSummary strips YAML frontmatter ---
+echo ""
+echo "--- Test 3: requestSummary strips YAML frontmatter ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-1","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/request.md" <<'EOF'
+---
+source_type: text
+task_type: feature
+---
+
+This is the actual body of the request. It contains no frontmatter.
+EOF
+run_bis
+# requestSummary should NOT contain "source_type" or "task_type"
+if jq -r '.[0].requestSummary' "${BIS_SPECS}/index.json" | grep -q "source_type"; then
+  fail "requestSummary excludes YAML frontmatter" "found 'source_type' in summary"
+else
+  pass "requestSummary excludes YAML frontmatter"
+fi
+assert_jq '.[0].requestSummary' "This is the actual body of the request. It contains no frontmatter." "requestSummary contains body text"
+# Verify max 200 chars
+LONG_SUMMARY_LEN="$(jq -r '.[0].requestSummary' "${BIS_SPECS}/index.json" | wc -c | tr -d ' ')"
+if [ "${LONG_SUMMARY_LEN}" -le 201 ]; then
+  pass "requestSummary is at most 200 chars"
+else
+  fail "requestSummary is at most 200 chars" "got ${LONG_SUMMARY_LEN} chars"
+fi
+
+# --- Test 4: review-design.md with REVISE verdict ---
+echo ""
+echo "--- Test 4: review-design.md with REVISE verdict ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-3","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/review-design.md" <<'EOF'
+## Verdict: REVISE
+
+### Findings
+
+**1. [CRITICAL] Missing error handling in section 2**
+
+The design does not address what happens when X fails.
+
+**2. [MINOR] Naming inconsistency**
+
+Function names do not follow snake_case convention.
+EOF
+run_bis
+assert_jq '.[0].reviewFeedback | length' "1" "reviewFeedback has 1 entry for REVISE verdict"
+assert_jq '.[0].reviewFeedback[0].source' "review-design" "reviewFeedback source is review-design"
+assert_jq '.[0].reviewFeedback[0].verdict' "REVISE" "reviewFeedback verdict is REVISE"
+assert_jq '.[0].reviewFeedback[0].findings | length > 0' "true" "reviewFeedback has findings"
+
+# --- Test 5: review-design.md with APPROVE verdict -> reviewFeedback empty ---
+echo ""
+echo "--- Test 5: review-design.md with APPROVE verdict ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-3","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/review-design.md" <<'EOF'
+## Verdict: APPROVE_WITH_NOTES
+
+Design looks good overall. Minor suggestions only.
+EOF
+run_bis
+assert_jq '.[0].reviewFeedback | length' "0" "APPROVE verdict produces empty reviewFeedback"
+
+# --- Test 6: review-1.md with PASS verdict ---
+echo ""
+echo "--- Test 6: review-1.md with PASS verdict ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-6","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/review-1.md" <<'EOF'
+## Task 1 — PASS
+All acceptance criteria met.
+EOF
+run_bis
+assert_jq '.[0].implOutcomes | length' "1" "PASS verdict produces 1 implOutcome entry"
+assert_jq '.[0].implOutcomes[0].reviewFile' "review-1.md" "implOutcomes reviewFile is review-1.md"
+assert_jq '.[0].implOutcomes[0].verdict' "PASS" "implOutcomes verdict is PASS"
+
+# --- Test 7: review-1.md with FAIL verdict ---
+echo ""
+echo "--- Test 7: review-1.md with FAIL verdict ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-6","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/review-1.md" <<'EOF'
+## Task 1 — FAIL
+Acceptance criteria not met.
+EOF
+run_bis
+assert_jq '.[0].implOutcomes[0].verdict' "FAIL" "implOutcomes verdict is FAIL"
+
+# --- Test 8: review-1.md with PASS_WITH_NOTES ---
+echo ""
+echo "--- Test 8: review-1.md with PASS_WITH_NOTES ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-6","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/review-1.md" <<'EOF'
+## Task 1 — PASS_WITH_NOTES
+All criteria met with minor notes.
+EOF
+run_bis
+assert_jq '.[0].implOutcomes[0].verdict' "PASS_WITH_NOTES" "implOutcomes verdict is PASS_WITH_NOTES (not incorrectly tokenised as PASS)"
+
+# --- Test 9: Multiple workspaces produce correct array length ---
+echo ""
+echo "--- Test 9: Multiple workspaces ---"
+reset_bis
+for ws in ws1 ws2 ws3; do
+  mkdir -p "${BIS_SPECS}/${ws}"
+  cat > "${BIS_SPECS}/${ws}/state.json" <<EOF
+{"specName":"${ws}","currentPhase":"phase-1","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+done
+run_bis
+assert_jq 'length' "3" "multiple workspaces produce correct array length"
+
+# --- Test 10: Partial pipeline outcome (in_progress) ---
+echo ""
+echo "--- Test 10: Partial pipeline outcome (in_progress) ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-3","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+run_bis
+assert_jq '.[0].outcome' "in_progress" "partial pipeline produces in_progress outcome"
+
+# --- Test 11: Completed pipeline outcome ---
+echo ""
+echo "--- Test 11: Completed pipeline outcome ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"post-to-source","currentPhaseStatus":"completed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+run_bis
+assert_jq '.[0].outcome' "completed" "post-to-source/completed produces completed outcome"
+
+# --- Test 12: Abandoned pipeline outcome ---
+echo ""
+echo "--- Test 12: Abandoned pipeline outcome ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-2","currentPhaseStatus":"abandoned","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+run_bis
+assert_jq '.[0].outcome' "abandoned" "abandoned status produces abandoned outcome"
+
+# Also test failed outcome
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-5","currentPhaseStatus":"failed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+run_bis
+assert_jq '.[0].outcome' "failed" "failed status produces failed outcome"
+
+# Also test unknown outcome (no state.json)
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+# No state.json
+run_bis
+assert_jq '.[0].outcome' "unknown" "missing state.json produces unknown outcome"
+
+# --- Test 13: refresh-index subcommand ---
+echo ""
+echo "--- Test 13: refresh-index subcommand ---"
+# Use ${TMPDIR_BASE}/.specs/test-ws so dirname resolves to ${TMPDIR_BASE}/.specs
+BIS_REFRESH_DIR="${TMPDIR_BASE}/.specs"
+BIS_REFRESH_WS="${BIS_REFRESH_DIR}/test-ws"
+rm -rf "${BIS_REFRESH_DIR}"
+mkdir -p "${BIS_REFRESH_WS}"
+cat > "${BIS_REFRESH_WS}/state.json" <<'EOF'
+{"specName":"refresh-test","currentPhase":"phase-1","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+REFRESH_EXIT=0
+bash "${SCRIPT_DIR}/state-manager.sh" refresh-index "${BIS_REFRESH_WS}" 2>/tmp/refresh-stderr || REFRESH_EXIT=$?
+if [ "${REFRESH_EXIT}" -eq 0 ]; then
+  pass "refresh-index subcommand exits 0"
+else
+  REFRESH_STDERR="$(cat /tmp/refresh-stderr 2>/dev/null || true)"
+  fail "refresh-index subcommand exits 0" "got exit ${REFRESH_EXIT}: ${REFRESH_STDERR}"
+fi
+rm -f /tmp/refresh-stderr
+if [ -f "${BIS_REFRESH_DIR}/index.json" ]; then
+  pass "refresh-index produces index.json in correct location"
+else
+  fail "refresh-index produces index.json in correct location" "file not found: ${BIS_REFRESH_DIR}/index.json"
+fi
+REFRESH_LEN="$(jq 'length' "${BIS_REFRESH_DIR}/index.json" 2>/dev/null || echo -1)"
+if [ "${REFRESH_LEN}" -eq 1 ]; then
+  pass "refresh-index index.json contains 1 entry for 1 workspace"
+else
+  fail "refresh-index index.json contains 1 entry for 1 workspace" "got ${REFRESH_LEN} entries"
+fi
+rm -rf "${BIS_REFRESH_DIR}"
+
+# --- Test 14: Idempotency ---
+echo ""
+echo "--- Test 14: Idempotency ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"test","currentPhase":"phase-1","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+run_bis
+FIRST_OUTPUT="$(cat "${BIS_SPECS}/index.json")"
+run_bis
+SECOND_OUTPUT="$(cat "${BIS_SPECS}/index.json")"
+if [ "${FIRST_OUTPUT}" = "${SECOND_OUTPUT}" ]; then
+  pass "running script twice produces identical output"
+else
+  fail "running script twice produces identical output" "outputs differ"
+fi
+
+# Cleanup BIS test state
+rm -rf "${BIS_SPECS}"
+
+# ============================================================
+echo ""
 echo "========================================"
 echo "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
 echo "========================================"
