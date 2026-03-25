@@ -10,7 +10,7 @@
   "skipPr": false,
   "useCurrentBranch": false,
   "debug": false,
-  "notifyOnStop": true,
+  "notifyOnStop": false,
   "skippedPhases": [],
   "currentPhase": "completed",
   "currentPhaseStatus": "completed",
