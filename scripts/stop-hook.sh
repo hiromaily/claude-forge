@@ -18,10 +18,9 @@ find_active_workspace() {
   local latest_file="" latest_ts=""
   for state_file in "${project_dir}"/.specs/*/state.json; do
     [ -f "$state_file" ] || continue
-    local status
-    status="$(jq -r '.currentPhaseStatus // ""' "$state_file" 2>/dev/null)"
+    local status ts
+    { read -r status; read -r ts; } < <(jq -r '(.currentPhaseStatus // ""), (.timestamps.lastUpdated // "")' "$state_file" 2>/dev/null)
     if [ "$status" != "completed" ] && [ "$status" != "abandoned" ] && [ -n "$status" ]; then
-      ts="$(jq -r '.timestamps.lastUpdated // ""' "$state_file" 2>/dev/null || true)"
       if [ -z "$latest_ts" ] || [[ "$ts" > "$latest_ts" ]]; then
         latest_ts="$ts"; latest_file="$state_file"
       fi
