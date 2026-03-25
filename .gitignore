@@ -15,6 +15,7 @@ logs
 memo.md
 COMPETITIVE-ANALYSIS.md
 /.specs/**
+!/.specs/index.json
 !/.specs/*/
 !/.specs/**/summary.md
 !/.specs/**/state.json
