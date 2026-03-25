@@ -2666,6 +2666,125 @@ else
   fail "running script twice produces identical output" "outputs differ"
 fi
 
+# --- Test 14a: implPatterns is [] when no impl-*.md files ---
+echo ""
+echo "--- Test 14a: implPatterns is [] when no impl-*.md files ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"no-impl","currentPhase":"phase-1","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+run_bis
+assert_jq '.[0] | has("implPatterns")' "true" "implPatterns key present when no impl files"
+assert_jq '.[0].implPatterns | length' "0" "implPatterns is [] when no impl files"
+
+# --- Test 14b: implPatterns extracts taskTitle and filesModified ---
+echo ""
+echo "--- Test 14b: implPatterns extracts taskTitle and filesModified ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"has-impl","currentPhase":"post-to-source","currentPhaseStatus":"completed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/impl-1.md" <<'EOF'
+# Task 1 Implementation Summary: Add new command
+
+## Files Modified
+
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/state-manager.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/test-hooks.sh`
+
+## Tests Added
+
+Some test description.
+EOF
+run_bis
+assert_jq '.[0].implPatterns | length' "1" "implPatterns has 1 entry for 1 impl file"
+assert_jq '.[0].implPatterns[0].taskTitle' "Task 1 Implementation Summary: Add new command" "taskTitle extracted from # heading"
+assert_jq '.[0].implPatterns[0].filesModified | length' "2" "filesModified has 2 entries"
+assert_jq '.[0].implPatterns[0].filesModified[0]' "scripts/state-manager.sh" "absolute prefix stripped up to claude-forge/"
+assert_jq '.[0].implPatterns[0].filesModified[1]' "scripts/test-hooks.sh" "second file also stripped"
+
+# --- Test 14c: implPatterns handles ## Files Created or Modified section ---
+echo ""
+echo "--- Test 14c: implPatterns handles Files Created or Modified section ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"created-or-modified","currentPhase":"post-to-source","currentPhaseStatus":"completed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/impl-1.md" <<'EOF'
+# Task 1: Create build-specs-index.sh
+
+## Files Created or Modified
+
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/build-specs-index.sh`
+
+## Deviations from Design
+
+None.
+EOF
+run_bis
+assert_jq '.[0].implPatterns[0].filesModified | length' "1" "Files Created or Modified section is parsed"
+assert_jq '.[0].implPatterns[0].filesModified[0]' "scripts/build-specs-index.sh" "file from Files Created or Modified is stripped correctly"
+
+# --- Test 14d: implPatterns caps at 5 files per impl file ---
+echo ""
+echo "--- Test 14d: implPatterns caps at 5 files per impl file ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"many-files","currentPhase":"post-to-source","currentPhaseStatus":"completed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/impl-1.md" <<'EOF'
+# Task 1 Implementation
+
+## Files Modified
+
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file1.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file2.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file3.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file4.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file5.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file6.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file7.sh`
+EOF
+run_bis
+assert_jq '.[0].implPatterns[0].filesModified | length' "5" "filesModified capped at 5 per impl file"
+
+# --- Test 14e: implPatterns handles multiple impl files and ## Files Created ---
+echo ""
+echo "--- Test 14e: implPatterns handles multiple impl files and Files Created section ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"multi-impl","currentPhase":"post-to-source","currentPhaseStatus":"completed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/impl-1.md" <<'EOF'
+# Task 1 Summary
+
+## Files Created
+
+- `scripts/new-tool.sh`
+
+## Notes
+
+Some notes.
+EOF
+cat > "${BIS_SPECS}/ws1/impl-2.md" <<'EOF'
+# Task 2 Summary
+
+## Files Modified
+
+- `scripts/test-hooks.sh`
+EOF
+run_bis
+assert_jq '.[0].implPatterns | length' "2" "implPatterns has 2 entries for 2 impl files"
+assert_jq '.[0].implPatterns[0].taskTitle' "Task 1 Summary" "first impl taskTitle correct"
+assert_jq '.[0].implPatterns[0].filesModified[0]' "scripts/new-tool.sh" "Files Created section parsed; no prefix to strip"
+assert_jq '.[0].implPatterns[1].taskTitle' "Task 2 Summary" "second impl taskTitle correct"
+assert_jq '.[0].implPatterns[1].filesModified[0]' "scripts/test-hooks.sh" "second impl file name correct"
+
 # Cleanup BIS test state
 rm -rf "${BIS_SPECS}"
 

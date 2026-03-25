@@ -151,6 +151,80 @@ extract_impl_outcomes() {
   fi
 }
 
+# extract_impl_patterns <workspace_dir>
+# Returns a JSON array of impl pattern objects from impl-[0-9]*.md files.
+# Each object has: taskTitle (string), filesModified (array of ≤5 file names).
+# Extracts taskTitle from the first # heading line.
+# Extracts filesModified from ## Files Modified, ## Files Created, and
+# ## Files Created or Modified sections (case-insensitive).
+# Strips absolute path prefixes up to and including "claude-forge/".
+# Returns [] if no impl files exist or none have parseable content.
+extract_impl_patterns() {
+  local dir="$1"
+  local entries=""
+
+  # Glob: impl-[0-9]*.md — digit anchor excludes impl-reviewer.md etc.
+  for impl_file in "${dir}"/impl-[0-9]*.md; do
+    if [ ! -f "${impl_file}" ]; then
+      continue
+    fi
+
+    # Extract task title from the first # heading line
+    local task_title
+    task_title="$(awk '/^# / { sub(/^# /, ""); print; exit }' "${impl_file}" 2>/dev/null || true)"
+
+    # Extract file names from ## Files Modified, ## Files Created, ## Files Created or Modified
+    # State machine: scan for matching section header, then collect bullet lines until next ## or EOF
+    local files_json
+    files_json="$(awk '
+      BEGIN { in_section=0; count=0 }
+      /^## [Ff]iles ([Mm]odified|[Cc]reated( or [Mm]odified)?)/ {
+        in_section=1; next
+      }
+      /^## / { in_section=0 }
+      in_section && /^[-*] / && count < 5 {
+        # Strip leading "- " or "* "
+        line=$0
+        sub(/^[-*] /, "", line)
+        # Strip optional surrounding backticks and any text annotation after closing backtick
+        # Handles formats like: `path/to/file` or `path/to/file` (description)
+        sub(/^`/, "", line)
+        sub(/`.*/, "", line)
+        # Strip absolute path prefix up to and including "claude-forge/"
+        sub(/.*claude-forge\//, "", line)
+        # Strip any trailing whitespace
+        sub(/[[:space:]]*$/, "", line)
+        # Only emit non-empty lines
+        if (length(line) > 0) {
+          print line
+          count++
+        }
+      }
+    ' "${impl_file}" 2>/dev/null \
+      | jq -R '.' \
+      | jq -s '.' 2>/dev/null || echo '[]')"
+
+    # Only include entries with a parseable title or at least empty files list
+    local entry
+    entry="$(jq -n \
+      --arg taskTitle "${task_title}" \
+      --argjson filesModified "${files_json}" \
+      '{taskTitle: $taskTitle, filesModified: $filesModified}')"
+
+    if [ -z "${entries}" ]; then
+      entries="${entry}"
+    else
+      entries="${entries}"$'\n'"${entry}"
+    fi
+  done
+
+  if [ -z "${entries}" ]; then
+    echo "[]"
+  else
+    printf '%s\n' "${entries}" | jq -s '.'
+  fi
+}
+
 # derive_outcome <state_json_content>
 # Maps currentPhase/currentPhaseStatus to a canonical outcome string.
 # Returns: completed | in_progress | abandoned | failed | unknown
@@ -223,6 +297,10 @@ build_entry() {
   local impl_outcomes
   impl_outcomes="$(extract_impl_outcomes "${dir}")"
 
+  # Extract implPatterns array
+  local impl_patterns
+  impl_patterns="$(extract_impl_patterns "${dir}")"
+
   # Assemble JSON record
   jq -n \
     --arg specName "${spec_name}" \
@@ -231,6 +309,7 @@ build_entry() {
     --arg requestSummary "${request_summary}" \
     --argjson reviewFeedback "${review_feedback}" \
     --argjson implOutcomes "${impl_outcomes}" \
+    --argjson implPatterns "${impl_patterns}" \
     --arg outcome "${outcome}" \
     '{
       specName: $specName,
@@ -239,6 +318,7 @@ build_entry() {
       requestSummary: $requestSummary,
       reviewFeedback: $reviewFeedback,
       implOutcomes: $implOutcomes,
+      implPatterns: $implPatterns,
       outcome: $outcome
     }'
 }
