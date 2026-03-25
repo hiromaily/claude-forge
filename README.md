@@ -251,7 +251,8 @@ The pipeline pauses and returns control to the user at the following points. Poi
 - **Parallel implementation** — Tasks marked `[parallel]` run concurrently with mkdir-based atomic locking for state updates
 - **Human checkpoints** — Pause for human approval at design and task decomposition stages; skippable with `--auto` (except `full` template)
 - **Improvement report** — Always-on retrospective appended to `summary.md` identifying documentation gaps, code readability friction, and AI agent support issues encountered during the run
-- **Disk-based state machine** — All progress tracked in `state.json` via a 22-command CLI; pipelines survive context compaction and session restarts
+- **Past implementation pattern injection** — Before each implementer invocation, `query-specs-index.sh` scans the specs index for similar past pipelines and injects their file-modification patterns into the prompt, surfacing real implementation examples rather than generic guidance
+- **Disk-based state machine** — All progress tracked in `state.json` via a 26-command CLI; pipelines survive context compaction and session restarts
 - **Resume and abandon** — Resume an interrupted pipeline from any phase; abandon cleanly when needed
 - **Input validation** — Two-layer guard: deterministic `validate-input.sh` (empty, too-short, malformed URL) + LLM semantic check blocks nonsensical or non-development requests before any tokens are spent on workspace setup
 - **Phase metrics** — Every agent invocation logged with token count, duration, and model; included in the Final Summary
@@ -354,11 +355,13 @@ claude-forge/
   agents/             11 specialist agents (.md files with YAML frontmatter)
   hooks/              Hook definitions (hooks.json)
   scripts/
-    state-manager.sh  State management CLI (26 commands)
-    pre-tool-hook.sh  Read-only, commit blocking, checkpoint & artifact guards
-    post-agent-hook.sh  Agent output quality validation
-    stop-hook.sh      Pipeline completion guard
-    test-hooks.sh     Automated test suite (run to see current count)
+    state-manager.sh        State management CLI (26 commands)
+    build-specs-index.sh    Scans .specs/ and builds index.json with implPatterns
+    query-specs-index.sh    Keyword-score matching against index.json; outputs markdown
+    pre-tool-hook.sh          Read-only, commit blocking, checkpoint & artifact guards
+    post-agent-hook.sh        Agent output quality validation
+    stop-hook.sh              Pipeline completion guard
+    test-hooks.sh             Automated test suite (run to see current count)
   skills/
     forge/
       SKILL.md        Orchestrator instructions (the main skill)
