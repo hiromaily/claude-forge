@@ -186,18 +186,41 @@ extract_impl_patterns() {
         # Strip leading "- " or "* "
         line=$0
         sub(/^[-*] /, "", line)
-        # Strip optional surrounding backticks and any text annotation after closing backtick
-        # Handles formats like: `path/to/file` or `path/to/file` (description)
-        sub(/^`/, "", line)
-        sub(/`.*/, "", line)
-        # Strip absolute path prefix up to and including "claude-forge/"
-        sub(/.*claude-forge\//, "", line)
-        # Strip any trailing whitespace
-        sub(/[[:space:]]*$/, "", line)
-        # Only emit non-empty lines
-        if (length(line) > 0) {
-          print line
-          count++
+        # Strategy: extract only genuine file paths from bullet lines.
+        # A genuine file path must contain "/" (directory separator) or end with
+        # a common file extension (.sh, .md, .json, .go, .py, .ts, .js, etc.).
+        # This filters out prose descriptions like "Added Rule 3j..." and
+        # change annotations like "**Header comment** — added ...".
+        #
+        # Two extraction patterns are tried, in order:
+        #   1. Backtick-enclosed path: look for first `...` pair, validate it looks like a path.
+        #   2. Plain absolute/relative path: line starts with "/" or known prefix,
+        #      no bold marker "**", and contains "/" or a file-extension dot.
+        extracted = ""
+        if (match(line, /`[^`]+`/)) {
+          # Extract content between the first pair of backticks
+          candidate = substr(line, RSTART + 1, RLENGTH - 2)
+          # Validate: must contain "/" or match a file-extension pattern
+          if (index(candidate, "/") > 0 || candidate ~ /\.[a-zA-Z0-9]+$/) {
+            extracted = candidate
+          }
+        }
+        if (length(extracted) == 0 && line !~ /^\*\*/ && line !~ /^[A-Z]/) {
+          # No valid backtick path found; try the whole line as a path.
+          # Skip lines starting with "**" (bold markers) or uppercase (prose).
+          if (index(line, "/") > 0 || line ~ /\.[a-zA-Z0-9]+$/) {
+            extracted = line
+          }
+        }
+        if (length(extracted) > 0) {
+          # Strip absolute path prefix up to and including "claude-forge/"
+          sub(/.*claude-forge\//, "", extracted)
+          # Strip any trailing whitespace
+          sub(/[[:space:]]*$/, "", extracted)
+          if (length(extracted) > 0) {
+            print extracted
+            count++
+          }
         }
       }
     ' "${impl_file}" 2>/dev/null \

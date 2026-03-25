@@ -26,20 +26,11 @@
     "implPatterns": [
       {
         "taskTitle": "Task 1 Implementation Summary",
-        "filesModified": [
-          "**Header comment** — added",
-          "**",
-          "**",
-          "**",
-          "**"
-        ]
+        "filesModified": []
       },
       {
         "taskTitle": "Task 2 Implementation Summary",
-        "filesModified": [
-          "Added Rule 3j description to the header comment block (after 3i)",
-          "Inserted Rule 3j guard block after Rule 3e's closing"
-        ]
+        "filesModified": []
       },
       {
         "taskTitle": "Implementation Summary — Task 3",
@@ -49,10 +40,7 @@
       },
       {
         "taskTitle": "Task 4 Implementation Summary",
-        "filesModified": [
-          "Added a new section header \"pre-tool-hook.sh: Rule 3j (checkpoint revision-pending guard) tests\" after the existing Rule 3e tests and before the Rule 3g tests",
-          "Added 6 test scenarios (3j-a through 3j-f) with a total of 13 new assertions"
-        ]
+        "filesModified": []
       }
     ],
     "outcome": "completed"
@@ -460,8 +448,47 @@
     "taskType": "feature",
     "requestSummary": "# [F8-c] Inject past implementation patterns into implementer prompts ## Summary Extends #15 and depends on #43. Uses `.specs/index.json` to surface similar past `design.md → implementation` transform",
     "reviewFeedback": [],
-    "implOutcomes": [],
-    "implPatterns": [],
+    "implOutcomes": [
+      {
+        "reviewFile": "review-1.md",
+        "verdict": "PASS_WITH_NOTES"
+      }
+    ],
+    "implPatterns": [
+      {
+        "taskTitle": "Task 1 Implementation Summary: Add `extract_impl_patterns` to `build-specs-index.sh`",
+        "filesModified": [
+          "scripts/build-specs-index.sh",
+          "scripts/test-hooks.sh",
+          ".specs/index.json"
+        ]
+      },
+      {
+        "taskTitle": "Implementation Summary — Task 2",
+        "filesModified": [
+          "scripts/query-specs-index.sh"
+        ]
+      },
+      {
+        "taskTitle": "Implementation Summary — Task 3",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation Summary: Add `run_qsi_impl` helper and Tests 21–26 to `test-hooks.sh`",
+        "filesModified": [
+          "scripts/test-hooks.sh",
+          "CLAUDE.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 5 Implementation Summary: Update documentation — `CLAUDE.md` and `scripts/README.md`",
+        "filesModified": [
+          "scripts/README.md"
+        ]
+      }
+    ],
     "outcome": "in_progress"
   },
   {
@@ -544,8 +571,8 @@
       {
         "taskTitle": "Task 1 Implementation: Create `scripts/build-specs-index.sh`",
         "filesModified": [
-          "**Created:**",
-          "**Modified:**"
+          "scripts/build-specs-index.sh",
+          "scripts/test-hooks.sh"
         ]
       },
       {
