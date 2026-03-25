@@ -2666,6 +2666,125 @@ else
   fail "running script twice produces identical output" "outputs differ"
 fi
 
+# --- Test 14a: implPatterns is [] when no impl-*.md files ---
+echo ""
+echo "--- Test 14a: implPatterns is [] when no impl-*.md files ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"no-impl","currentPhase":"phase-1","currentPhaseStatus":"in_progress","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+run_bis
+assert_jq '.[0] | has("implPatterns")' "true" "implPatterns key present when no impl files"
+assert_jq '.[0].implPatterns | length' "0" "implPatterns is [] when no impl files"
+
+# --- Test 14b: implPatterns extracts taskTitle and filesModified ---
+echo ""
+echo "--- Test 14b: implPatterns extracts taskTitle and filesModified ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"has-impl","currentPhase":"post-to-source","currentPhaseStatus":"completed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/impl-1.md" <<'EOF'
+# Task 1 Implementation Summary: Add new command
+
+## Files Modified
+
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/state-manager.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/test-hooks.sh`
+
+## Tests Added
+
+Some test description.
+EOF
+run_bis
+assert_jq '.[0].implPatterns | length' "1" "implPatterns has 1 entry for 1 impl file"
+assert_jq '.[0].implPatterns[0].taskTitle' "Task 1 Implementation Summary: Add new command" "taskTitle extracted from # heading"
+assert_jq '.[0].implPatterns[0].filesModified | length' "2" "filesModified has 2 entries"
+assert_jq '.[0].implPatterns[0].filesModified[0]' "scripts/state-manager.sh" "absolute prefix stripped up to claude-forge/"
+assert_jq '.[0].implPatterns[0].filesModified[1]' "scripts/test-hooks.sh" "second file also stripped"
+
+# --- Test 14c: implPatterns handles ## Files Created or Modified section ---
+echo ""
+echo "--- Test 14c: implPatterns handles Files Created or Modified section ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"created-or-modified","currentPhase":"post-to-source","currentPhaseStatus":"completed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/impl-1.md" <<'EOF'
+# Task 1: Create build-specs-index.sh
+
+## Files Created or Modified
+
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/build-specs-index.sh`
+
+## Deviations from Design
+
+None.
+EOF
+run_bis
+assert_jq '.[0].implPatterns[0].filesModified | length' "1" "Files Created or Modified section is parsed"
+assert_jq '.[0].implPatterns[0].filesModified[0]' "scripts/build-specs-index.sh" "file from Files Created or Modified is stripped correctly"
+
+# --- Test 14d: implPatterns caps at 5 files per impl file ---
+echo ""
+echo "--- Test 14d: implPatterns caps at 5 files per impl file ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"many-files","currentPhase":"post-to-source","currentPhaseStatus":"completed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/impl-1.md" <<'EOF'
+# Task 1 Implementation
+
+## Files Modified
+
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file1.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file2.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file3.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file4.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file5.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file6.sh`
+- `/Users/hiroki.yasui/work/hiromaily/claude-forge/scripts/file7.sh`
+EOF
+run_bis
+assert_jq '.[0].implPatterns[0].filesModified | length' "5" "filesModified capped at 5 per impl file"
+
+# --- Test 14e: implPatterns handles multiple impl files and ## Files Created ---
+echo ""
+echo "--- Test 14e: implPatterns handles multiple impl files and Files Created section ---"
+reset_bis
+mkdir -p "${BIS_SPECS}/ws1"
+cat > "${BIS_SPECS}/ws1/state.json" <<'EOF'
+{"specName":"multi-impl","currentPhase":"post-to-source","currentPhaseStatus":"completed","timestamps":{"created":"2026-01-01T00:00:00Z"}}
+EOF
+cat > "${BIS_SPECS}/ws1/impl-1.md" <<'EOF'
+# Task 1 Summary
+
+## Files Created
+
+- `scripts/new-tool.sh`
+
+## Notes
+
+Some notes.
+EOF
+cat > "${BIS_SPECS}/ws1/impl-2.md" <<'EOF'
+# Task 2 Summary
+
+## Files Modified
+
+- `scripts/test-hooks.sh`
+EOF
+run_bis
+assert_jq '.[0].implPatterns | length' "2" "implPatterns has 2 entries for 2 impl files"
+assert_jq '.[0].implPatterns[0].taskTitle' "Task 1 Summary" "first impl taskTitle correct"
+assert_jq '.[0].implPatterns[0].filesModified[0]' "scripts/new-tool.sh" "Files Created section parsed; no prefix to strip"
+assert_jq '.[0].implPatterns[1].taskTitle' "Task 2 Summary" "second impl taskTitle correct"
+assert_jq '.[0].implPatterns[1].filesModified[0]' "scripts/test-hooks.sh" "second impl file name correct"
+
 # Cleanup BIS test state
 rm -rf "${BIS_SPECS}"
 
@@ -2925,6 +3044,296 @@ if echo "${QSI_STDOUT}" | grep -qF "_(from: 20260301-null-type)_"; then
   pass "taskType null entry output contains correct specName"
 else
   fail "taskType null entry output contains correct specName" "got: ${QSI_STDOUT}"
+fi
+
+# Helper: run query-specs-index.sh with QSI_WS as the workspace in impl mode
+run_qsi_impl() {
+  local task_type="${1:-}"
+  local stderr_file
+  stderr_file="$(mktemp)"
+  QSI_EXIT=0
+  QSI_STDOUT="$(bash "${QSI}" "${QSI_WS}" "${task_type}" impl 2>"${stderr_file}")" || QSI_EXIT=$?
+  QSI_STDERR="$(cat "${stderr_file}" 2>/dev/null || true)"
+  rm -f "${stderr_file}"
+}
+
+# --- Test 21: impl mode, index absent → empty stdout, exit 0 ---
+echo ""
+echo "--- Test 21: impl mode, index absent → empty stdout, exit 0 ---"
+reset_qsi
+# No index.json present; QSI_WS exists but QSI_SPECS/index.json does not
+run_qsi_impl "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "impl mode: missing index.json exits 0"
+else
+  fail "impl mode: missing index.json exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if [ -z "${QSI_STDOUT}" ]; then
+  pass "impl mode: missing index.json produces empty stdout"
+else
+  fail "impl mode: missing index.json produces empty stdout" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 22: impl mode, outcome: "completed", empty reviewFeedback, score >= 2 → heading present ---
+echo ""
+echo "--- Test 22: impl mode, completed + score >= 2 → heading present ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260201-impl-spec",
+    "taskType": "feature",
+    "requestSummary": "inject implementation patterns into prompts",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Add extract_impl_patterns function",
+        "filesModified": ["scripts/build-specs-index.sh"]
+      }
+    ],
+    "outcome": "completed",
+    "timestamp": "2026-02-01T00:00:00Z"
+  }
+]
+EOF
+cat > "${QSI_WS}/request.md" <<'EOF'
+Inject implementation patterns into implementer prompts.
+EOF
+run_qsi_impl "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "impl mode: completed entry exits 0"
+else
+  fail "impl mode: completed entry exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if echo "${QSI_STDOUT}" | grep -qF "## Similar Past Implementations (from similar pipelines)"; then
+  pass "impl mode: output contains correct heading"
+else
+  fail "impl mode: output contains correct heading" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 23: impl mode, outcome: "in_progress" → excluded, empty stdout ---
+echo ""
+echo "--- Test 23: impl mode, outcome: in_progress → excluded ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260201-in-progress-spec",
+    "taskType": "feature",
+    "requestSummary": "inject implementation patterns into prompts",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Add extract_impl_patterns function",
+        "filesModified": ["scripts/build-specs-index.sh"]
+      }
+    ],
+    "outcome": "in_progress",
+    "timestamp": "2026-02-01T00:00:00Z"
+  }
+]
+EOF
+cat > "${QSI_WS}/request.md" <<'EOF'
+Inject implementation patterns into implementer prompts.
+EOF
+run_qsi_impl "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "impl mode: in_progress entry exits 0"
+else
+  fail "impl mode: in_progress entry exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if [ -z "${QSI_STDOUT}" ]; then
+  pass "impl mode: in_progress entry produces empty stdout"
+else
+  fail "impl mode: in_progress entry produces empty stdout" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 24: impl mode, outcome: "completed" but score < 2 → excluded ---
+# Score is calculated as: +2 if taskType matches, +1 per keyword overlap.
+# When no request.md is present (no keywords) and taskType mismatches, score = 0 < 2.
+echo ""
+echo "--- Test 24: impl mode, score < 2 → excluded ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260201-low-score-spec",
+    "taskType": "bugfix",
+    "requestSummary": "fix unrelated bug in completely different area",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Fix unrelated bug",
+        "filesModified": ["scripts/some-other-script.sh"]
+      }
+    ],
+    "outcome": "completed",
+    "timestamp": "2026-02-01T00:00:00Z"
+  }
+]
+EOF
+# No request.md created in QSI_WS: KEYWORDS_JSON defaults to [] → kw_score = 0.
+# taskType "feature" != "bugfix" → type_score = 0. Total score = 0 < 2.
+run_qsi_impl "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "impl mode: low-score entry exits 0"
+else
+  fail "impl mode: low-score entry exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if [ -z "${QSI_STDOUT}" ]; then
+  pass "impl mode: low-score entry produces empty stdout"
+else
+  fail "impl mode: low-score entry produces empty stdout" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 25: impl mode, populated implPatterns with ## Files Modified → specName and file in output ---
+echo ""
+echo "--- Test 25: impl mode, populated implPatterns → specName and file name in output ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260301-files-modified-spec",
+    "taskType": "feature",
+    "requestSummary": "inject implementation patterns into pipeline prompts",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Add extract_impl_patterns to build-specs-index.sh",
+        "filesModified": ["scripts/build-specs-index.sh", "scripts/test-hooks.sh"]
+      }
+    ],
+    "outcome": "completed",
+    "timestamp": "2026-03-01T00:00:00Z"
+  }
+]
+EOF
+cat > "${QSI_WS}/request.md" <<'EOF'
+Inject implementation patterns into pipeline prompts.
+EOF
+run_qsi_impl "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "impl mode: implPatterns entry exits 0"
+else
+  fail "impl mode: implPatterns entry exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if echo "${QSI_STDOUT}" | grep -qF "20260301-files-modified-spec"; then
+  pass "impl mode: output contains specName"
+else
+  fail "impl mode: output contains specName" "got: ${QSI_STDOUT}"
+fi
+if echo "${QSI_STDOUT}" | grep -qF "build-specs-index.sh"; then
+  pass "impl mode: output contains file name from filesModified"
+else
+  fail "impl mode: output contains file name from filesModified" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 25b: impl mode, implPatterns from ## Files Created or Modified variant → file name in output ---
+echo ""
+echo "--- Test 25b: impl mode, Files Created or Modified variant → file name in output ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260302-files-created-or-modified-spec",
+    "taskType": "feature",
+    "requestSummary": "inject implementation patterns into pipeline prompts",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Add impl mode to query-specs-index.sh",
+        "filesModified": ["scripts/query-specs-index.sh"]
+      }
+    ],
+    "outcome": "completed",
+    "timestamp": "2026-03-02T00:00:00Z"
+  }
+]
+EOF
+cat > "${QSI_WS}/request.md" <<'EOF'
+Inject implementation patterns into pipeline prompts.
+EOF
+run_qsi_impl "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "impl mode: Files Created or Modified variant exits 0"
+else
+  fail "impl mode: Files Created or Modified variant exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+if echo "${QSI_STDOUT}" | grep -qF "query-specs-index.sh"; then
+  pass "impl mode: Files Created or Modified variant contains file name"
+else
+  fail "impl mode: Files Created or Modified variant contains file name" "got: ${QSI_STDOUT}"
+fi
+
+# --- Test 26: impl mode, 3 qualifying entries with 3 implPatterns each → exactly 6 bullets ---
+echo ""
+echo "--- Test 26: impl mode, 3 qualifying entries × 3 implPatterns → exactly 6 bullets (cap) ---"
+reset_qsi
+cat > "${QSI_SPECS}/index.json" <<'EOF'
+[
+  {
+    "specName": "20260101-spec-alpha",
+    "taskType": "feature",
+    "requestSummary": "inject implementation patterns into prompts",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "implPatterns": [
+      {"taskTitle": "Task 1 alpha", "filesModified": ["scripts/alpha1.sh"]},
+      {"taskTitle": "Task 2 alpha", "filesModified": ["scripts/alpha2.sh"]},
+      {"taskTitle": "Task 3 alpha", "filesModified": ["scripts/alpha3.sh"]}
+    ],
+    "outcome": "completed",
+    "timestamp": "2026-01-01T00:00:00Z"
+  },
+  {
+    "specName": "20260102-spec-beta",
+    "taskType": "feature",
+    "requestSummary": "inject implementation patterns into prompts",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "implPatterns": [
+      {"taskTitle": "Task 1 beta", "filesModified": ["scripts/beta1.sh"]},
+      {"taskTitle": "Task 2 beta", "filesModified": ["scripts/beta2.sh"]},
+      {"taskTitle": "Task 3 beta", "filesModified": ["scripts/beta3.sh"]}
+    ],
+    "outcome": "completed",
+    "timestamp": "2026-01-02T00:00:00Z"
+  },
+  {
+    "specName": "20260103-spec-gamma",
+    "taskType": "feature",
+    "requestSummary": "inject implementation patterns into prompts",
+    "reviewFeedback": [],
+    "implOutcomes": [],
+    "implPatterns": [
+      {"taskTitle": "Task 1 gamma", "filesModified": ["scripts/gamma1.sh"]},
+      {"taskTitle": "Task 2 gamma", "filesModified": ["scripts/gamma2.sh"]},
+      {"taskTitle": "Task 3 gamma", "filesModified": ["scripts/gamma3.sh"]}
+    ],
+    "outcome": "completed",
+    "timestamp": "2026-01-03T00:00:00Z"
+  }
+]
+EOF
+cat > "${QSI_WS}/request.md" <<'EOF'
+Inject implementation patterns into prompts.
+EOF
+run_qsi_impl "feature"
+if [ "${QSI_EXIT}" -eq 0 ]; then
+  pass "impl mode: 3 entries × 3 implPatterns exits 0"
+else
+  fail "impl mode: 3 entries × 3 implPatterns exits 0" "got exit ${QSI_EXIT}: ${QSI_STDERR}"
+fi
+IMPL_BULLET_COUNT="$(echo "${QSI_STDOUT}" | grep -c '^- \*\*' || true)"
+if [ "${IMPL_BULLET_COUNT}" -eq 6 ]; then
+  pass "impl mode: 3 qualifying entries × 3 implPatterns produces exactly 6 bullets"
+else
+  fail "impl mode: 3 qualifying entries × 3 implPatterns produces exactly 6 bullets" "got ${IMPL_BULLET_COUNT} bullets; output: ${QSI_STDOUT}"
 fi
 
 # Cleanup QSI test state

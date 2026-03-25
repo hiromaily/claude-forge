@@ -1074,6 +1074,10 @@ If neither skip gate fired:
 $SM phase-start {workspace} phase-5
 ```
 
+```bash
+past_impl_patterns="$(bash scripts/query-specs-index.sh {workspace} {task_type} impl || true)"
+```
+
 **Edge case — zero tasks:** If `tasks.md` contains no implementation tasks (e.g., the design concluded no code changes are needed), skip Phase 5-6 and proceed directly to Final Verification.
 
 **Before the first task:** create a feature branch and check it out — **unless** the user chose to use the current branch:
@@ -1112,6 +1116,8 @@ Dependency review files: {for each dep: `{workspace}/review-{dep}.md`}
 Acceptance criteria (paste verbatim from tasks.md, preserving all AC-N: labels and ordering):
 {paste the task's acceptance criteria}
 ```
+
+If `$past_impl_patterns` is non-empty, append it verbatim to each implementer prompt before the `{workspace} = {workspace}` line (similar past implementations first, then workspace context).
 
 After the agent completes:
 ```bash

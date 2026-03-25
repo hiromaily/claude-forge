@@ -6,6 +6,14 @@
     "requestSummary": "P22: The \"What Each Agent Reads\" table in ARCHITECTURE.md is incomplete. Per BACKLOG.md, this table is missing entries or has gaps in the agent input file documentation. Update ARCHITECTURE.md to ensu",
     "reviewFeedback": [],
     "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Implementation Summary — Task 1",
+        "filesModified": [
+          "ARCHITECTURE.md"
+        ]
+      }
+    ],
     "outcome": "completed"
   },
   {
@@ -15,6 +23,26 @@
     "requestSummary": "I've requested revisions before, but the design review request via checkpoint sometimes doesn't work. I thought this was supposed to work regardless of the task or effort level. Please use a hook to e",
     "reviewFeedback": [],
     "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Task 1 Implementation Summary",
+        "filesModified": []
+      },
+      {
+        "taskTitle": "Task 2 Implementation Summary",
+        "filesModified": []
+      },
+      {
+        "taskTitle": "Implementation Summary — Task 3",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation Summary",
+        "filesModified": []
+      }
+    ],
     "outcome": "completed"
   },
   {
@@ -24,6 +52,17 @@
     "requestSummary": "Currently, we're using hooks to play a sound when we're prompted for user interaction, but the timing of the sound is incorrect. - User review request via checkpoint - Confirmation of initial task typ",
     "reviewFeedback": [],
     "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Implementation Summary — Task 1: Fix stop-hook.sh sound timing",
+        "filesModified": [
+          "scripts/state-manager.sh",
+          "scripts/stop-hook.sh",
+          "scripts/test-hooks.sh",
+          "README.md"
+        ]
+      }
+    ],
     "outcome": "completed"
   },
   {
@@ -33,6 +72,38 @@
     "requestSummary": "Since so many features have been added to the scripts files so far, I want to refactor them to improve maintainability.",
     "reviewFeedback": [],
     "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Implementation Summary — Task 1",
+        "filesModified": [
+          "scripts/state-manager.sh"
+        ]
+      },
+      {
+        "taskTitle": "Task 2 Implementation Summary",
+        "filesModified": [
+          "scripts/pre-tool-hook.sh"
+        ]
+      },
+      {
+        "taskTitle": "Task 3 Implementation Summary",
+        "filesModified": [
+          "scripts/pre-tool-hook.sh",
+          "scripts/post-agent-hook.sh",
+          "scripts/stop-hook.sh"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation Summary",
+        "filesModified": [
+          "scripts/README.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 5 Implementation Summary",
+        "filesModified": []
+      }
+    ],
     "outcome": "completed"
   },
   {
@@ -42,6 +113,38 @@
     "requestSummary": "P19: SKILL.md forward-reference fragility",
     "reviewFeedback": [],
     "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Task 1 Implementation Summary",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 10 — Verification and Post-Edit Acceptance Checks",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Implementation Summary — Tasks 2–7",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 8 Implementation Summary",
+        "filesModified": [
+          "ARCHITECTURE.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 9 Implementation Summary",
+        "filesModified": [
+          "BACKLOG.md"
+        ]
+      }
+    ],
     "outcome": "completed"
   },
   {
@@ -51,6 +154,42 @@
     "requestSummary": "P21: SKILL.md size reduction / split SKILL.md is currently 1,646 lines. The primary structural causes of the size are: 1. Three near-identical dispatch blocks (feature/refactor, bugfix/docs, investiga",
     "reviewFeedback": [],
     "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Task 1 Implementation Summary",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 2 Implementation Summary",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 3 Implementation Summary",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation Summary",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 5 Implementation — Verify SKILL.md Integrity and Run Test Suite",
+        "filesModified": []
+      },
+      {
+        "taskTitle": "Task 6 Implementation: Mark P21 as resolved in BACKLOG.md",
+        "filesModified": [
+          "BACKLOG.md"
+        ]
+      }
+    ],
     "outcome": "completed"
   },
   {
@@ -60,6 +199,14 @@
     "requestSummary": "# [P22] ARCHITECTURE.md \"What Each Agent Reads\" table incomplete ## Summary The \"What Each Agent Reads\" table in ARCHITECTURE.md is incomplete — the Final Summary row was missing. This caused implemen",
     "reviewFeedback": [],
     "implOutcomes": [],
+    "implPatterns": [
+      {
+        "taskTitle": "Implementation Summary — Task 1",
+        "filesModified": [
+          "ARCHITECTURE.md"
+        ]
+      }
+    ],
     "outcome": "completed"
   },
   {
@@ -84,6 +231,33 @@
       {
         "reviewFile": "review-4.md",
         "verdict": "PASS"
+      }
+    ],
+    "implPatterns": [
+      {
+        "taskTitle": "Task 1 Implementation Summary",
+        "filesModified": [
+          "agents/impl-reviewer.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 2 Implementation Summary",
+        "filesModified": [
+          "agents/comprehensive-reviewer.md"
+        ]
+      },
+      {
+        "taskTitle": "Implementation Summary: Task 3",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation Summary",
+        "filesModified": [
+          "ARCHITECTURE.md",
+          "agents/README.md"
+        ]
       }
     ],
     "outcome": "completed"
@@ -120,6 +294,46 @@
         "verdict": "PASS"
       }
     ],
+    "implPatterns": [
+      {
+        "taskTitle": "Implementation Summary — Task 1",
+        "filesModified": [
+          "scripts/state-manager.sh"
+        ]
+      },
+      {
+        "taskTitle": "Task 2 Implementation Summary",
+        "filesModified": [
+          "scripts/test-hooks.sh"
+        ]
+      },
+      {
+        "taskTitle": "Task 3 Implementation Summary",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation Summary",
+        "filesModified": [
+          "CLAUDE.md",
+          "scripts/README.md",
+          "README.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 5 Implementation Summary: Update ARCHITECTURE.md sequence diagrams",
+        "filesModified": [
+          "ARCHITECTURE.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 6 Implementation Summary — Mark F15 as done in BACKLOG.md",
+        "filesModified": [
+          "BACKLOG.md"
+        ]
+      }
+    ],
     "outcome": "completed"
   },
   {
@@ -154,6 +368,44 @@
         "verdict": "PASS"
       }
     ],
+    "implPatterns": [
+      {
+        "taskTitle": "Implementation: Task 1 — Update task-decomposer.md — numbered AC output format",
+        "filesModified": [
+          "agents/task-decomposer.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 2 Implementation: Update task-reviewer.md — AC quality vocabulary and CRITICAL threshold",
+        "filesModified": [
+          "agents/task-reviewer.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 3 Implementation Summary",
+        "filesModified": [
+          "agents/implementer.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation: Update impl-reviewer.md — AC checklist validation and FAIL on absence",
+        "filesModified": [
+          "agents/impl-reviewer.md"
+        ]
+      },
+      {
+        "taskTitle": "Implementation Summary — Task 5",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 6 Implementation Summary",
+        "filesModified": [
+          "agents/README.md"
+        ]
+      }
+    ],
     "outcome": "completed"
   },
   {
@@ -166,6 +418,139 @@
       {
         "reviewFile": "review-1.md",
         "verdict": "PASS_WITH_NOTES"
+      }
+    ],
+    "implPatterns": [
+      {
+        "taskTitle": "Implementation Summary — Task 1",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Implementation Summary — Task 2",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 3 Implementation Summary",
+        "filesModified": [
+          "scripts/test-hooks.sh"
+        ]
+      }
+    ],
+    "outcome": "completed"
+  },
+  {
+    "specName": "inject-impl-patterns",
+    "timestamp": "2026-03-25T11:28:12Z",
+    "taskType": "feature",
+    "requestSummary": "# [F8-c] Inject past implementation patterns into implementer prompts ## Summary Extends #15 and depends on #43. Uses `.specs/index.json` to surface similar past `design.md → implementation` transform",
+    "reviewFeedback": [],
+    "implOutcomes": [
+      {
+        "reviewFile": "review-1.md",
+        "verdict": "PASS_WITH_NOTES"
+      }
+    ],
+    "implPatterns": [
+      {
+        "taskTitle": "Task 1 Implementation Summary: Add `extract_impl_patterns` to `build-specs-index.sh`",
+        "filesModified": [
+          "scripts/build-specs-index.sh",
+          "scripts/test-hooks.sh",
+          ".specs/index.json"
+        ]
+      },
+      {
+        "taskTitle": "Implementation Summary — Task 2",
+        "filesModified": [
+          "scripts/query-specs-index.sh"
+        ]
+      },
+      {
+        "taskTitle": "Implementation Summary — Task 3",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation Summary: Add `run_qsi_impl` helper and Tests 21–26 to `test-hooks.sh`",
+        "filesModified": [
+          "scripts/test-hooks.sh",
+          "CLAUDE.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 5 Implementation Summary: Update documentation — `CLAUDE.md` and `scripts/README.md`",
+        "filesModified": [
+          "scripts/README.md"
+        ]
+      }
+    ],
+    "outcome": "in_progress"
+  },
+  {
+    "specName": "inject-past-review-feedback",
+    "timestamp": "2026-03-25T10:21:48Z",
+    "taskType": "feature",
+    "requestSummary": "# [F8-b] Inject past review feedback patterns into architect and task-decomposer prompts ## Summary Extends #15 and depends on #43. Uses the `.specs/index.json` built by #43 to inject relevant past RE",
+    "reviewFeedback": [
+      {
+        "source": "review-design",
+        "verdict": "REVISE",
+        "findings": [
+          "1. [MINOR] `past_feedback` variable retention across Checkpoint A user-revision re-runs is unresolved",
+          "2. [MINOR] `require_jq` error treatment is inconsistent",
+          "3. [MINOR] Score threshold of `>= 2` is reachable without keyword overlap when `taskType` matches",
+          "4. [MINOR] Test count documentation update not mentioned"
+        ]
+      }
+    ],
+    "implOutcomes": [
+      {
+        "reviewFile": "review-1.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-2.md",
+        "verdict": "PASS_WITH_NOTES"
+      },
+      {
+        "reviewFile": "review-3.md",
+        "verdict": "PASS"
+      },
+      {
+        "reviewFile": "review-4.md",
+        "verdict": "PASS"
+      }
+    ],
+    "implPatterns": [
+      {
+        "taskTitle": "Task 1 Implementation Summary: Create query-specs-index.sh",
+        "filesModified": [
+          "scripts/query-specs-index.sh"
+        ]
+      },
+      {
+        "taskTitle": "Task 2 Implementation Summary",
+        "filesModified": [
+          "scripts/test-hooks.sh"
+        ]
+      },
+      {
+        "taskTitle": "Task 3 Implementation Summary",
+        "filesModified": [
+          "skills/forge/SKILL.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation Summary: Update Documentation",
+        "filesModified": [
+          "scripts/README.md",
+          "CLAUDE.md"
+        ]
       }
     ],
     "outcome": "completed"
@@ -182,7 +567,42 @@
         "verdict": "PASS"
       }
     ],
-    "outcome": "in_progress"
+    "implPatterns": [
+      {
+        "taskTitle": "Task 1 Implementation: Create `scripts/build-specs-index.sh`",
+        "filesModified": [
+          "scripts/build-specs-index.sh",
+          "scripts/test-hooks.sh"
+        ]
+      },
+      {
+        "taskTitle": "Task 2 Implementation Summary",
+        "filesModified": [
+          "scripts/state-manager.sh"
+        ]
+      },
+      {
+        "taskTitle": "Task 3 Implementation Summary",
+        "filesModified": [
+          "CLAUDE.md",
+          "scripts/README.md",
+          "README.md"
+        ]
+      },
+      {
+        "taskTitle": "Task 4 Implementation Summary",
+        "filesModified": [
+          ".gitignore"
+        ]
+      },
+      {
+        "taskTitle": "Task 5 Implementation Summary",
+        "filesModified": [
+          "scripts/test-hooks.sh"
+        ]
+      }
+    ],
+    "outcome": "completed"
   },
   {
     "specName": "stop-hook-abandon-command",
@@ -194,6 +614,15 @@
       {
         "reviewFile": "review-1.md",
         "verdict": "PASS"
+      }
+    ],
+    "implPatterns": [
+      {
+        "taskTitle": "Implementation Summary — Task 1",
+        "filesModified": [
+          "scripts/stop-hook.sh",
+          "scripts/test-hooks.sh"
+        ]
       }
     ],
     "outcome": "completed"
