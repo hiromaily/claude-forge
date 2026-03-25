@@ -44,8 +44,8 @@ Write a brief summary of what you did to `{workspace}/impl-{N}.md`:
 - Any deviations from the design and why
 - Test results (pass/fail counts)
 - Acceptance criteria checklist:
-  - [PASS] **AC-1:** one-line evidence of how this criterion is met
-  - [FAIL] **AC-2:** reason it is not met (if any)
+  - [x] **AC-1:** one-line evidence of how this criterion is met
+  - [ ] **AC-2:** reason it is not met (if any)
   (One entry per AC from tasks.md, in the same order and with the same labels)
 
 ## What NOT to Do
