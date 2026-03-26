@@ -14,7 +14,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -126,7 +128,7 @@ func GetHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // PhaseStartHandler handles the "phase_start" MCP tool.
 // Accepts: workspace (string), phase (string).
 // Guard 3c: phase-5 requires non-empty tasks.
-func PhaseStartHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func PhaseStartHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
@@ -147,6 +149,7 @@ func PhaseStartHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if err := sm.PhaseStart(workspace, phase); err != nil {
 			return errorf("phase_start: %v", err)
 		}
+		publishEvent(bus, nil, "phase-start", phase, s.SpecName, workspace, "in_progress")
 		return okText("ok")
 	}
 }
@@ -157,7 +160,7 @@ func PhaseStartHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), phase (string).
 // Guards: 3a (artifact), 3e (awaiting_human), 3j (revision pending).
 // Warnings: 3f (phase-log missing), 3i (not in_progress).
-func PhaseCompleteHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func PhaseCompleteHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
@@ -192,6 +195,7 @@ func PhaseCompleteHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if err := sm.PhaseComplete(workspace, phase); err != nil {
 			return errorf("phase_complete: %v", err)
 		}
+		publishEvent(bus, slack, "phase-complete", phase, s.SpecName, workspace, "completed")
 		if len(warnings) > 0 {
 			return okWithWarning("ok", strings.Join(warnings, "; "))
 		}
@@ -203,7 +207,7 @@ func PhaseCompleteHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 // PhaseFailHandler handles the "phase_fail" MCP tool.
 // Accepts: workspace (string), phase (string), message (string).
-func PhaseFailHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func PhaseFailHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
@@ -214,9 +218,16 @@ func PhaseFailHandler(sm *state.StateManager) server.ToolHandlerFunc {
 			return errorf("%v", err)
 		}
 		message := req.GetString("message", "")
+		// Load state for event specName before mutation.
+		s, serr := loadState(workspace)
+		specName := ""
+		if serr == nil {
+			specName = s.SpecName
+		}
 		if err := sm.PhaseFail(workspace, phase, message); err != nil {
 			return errorf("phase_fail: %v", err)
 		}
+		publishEvent(bus, slack, "phase-fail", phase, specName, workspace, "failed")
 		return okText("ok")
 	}
 }
@@ -225,7 +236,7 @@ func PhaseFailHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 // CheckpointHandler handles the "checkpoint" MCP tool.
 // Accepts: workspace (string), phase (string).
-func CheckpointHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func CheckpointHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
@@ -235,9 +246,16 @@ func CheckpointHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if err != nil {
 			return errorf("%v", err)
 		}
+		// Load state for event specName before mutation.
+		s, serr := loadState(workspace)
+		specName := ""
+		if serr == nil {
+			specName = s.SpecName
+		}
 		if err := sm.Checkpoint(workspace, phase); err != nil {
 			return errorf("checkpoint: %v", err)
 		}
+		publishEvent(bus, nil, "checkpoint", phase, specName, workspace, "awaiting_human")
 		return okText("ok")
 	}
 }
@@ -653,15 +671,24 @@ func PhaseStatsHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 // AbandonHandler handles the "abandon" MCP tool.
 // Accepts: workspace (string).
-func AbandonHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func AbandonHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
 			return errorf("%v", err)
 		}
+		// Load state for event specName and phase before mutation.
+		s, serr := loadState(workspace)
+		specName := ""
+		phase := ""
+		if serr == nil {
+			specName = s.SpecName
+			phase = s.CurrentPhase
+		}
 		if err := sm.Abandon(workspace); err != nil {
 			return errorf("abandon: %v", err)
 		}
+		publishEvent(bus, slack, "abandon", phase, specName, workspace, "abandoned")
 		return okText("ok")
 	}
 }
@@ -716,4 +743,21 @@ func RefreshIndexHandlerWithScript(sm *state.StateManager, scriptPath string) se
 // for guard checks).  The StateManager methods do their own locking for mutations.
 func loadState(workspace string) (*state.State, error) {
 	return state.ReadState(workspace)
+}
+
+// publishEvent constructs an Event and publishes it to bus. If slack is non-nil,
+// it also calls slack.Notify so callers can pass nil when Slack is not needed.
+func publishEvent(bus *events.EventBus, slack *events.SlackNotifier, eventType, phase, specName, workspace, outcome string) {
+	e := events.Event{
+		Event:     eventType,
+		Phase:     phase,
+		SpecName:  specName,
+		Workspace: workspace,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Outcome:   outcome,
+	}
+	bus.Publish(e)
+	if slack != nil {
+		slack.Notify(e)
+	}
 }

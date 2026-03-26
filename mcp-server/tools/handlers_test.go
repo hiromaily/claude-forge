@@ -1,6 +1,6 @@
 // Package tools — integration tests for handler registration and compilation.
 // Full guard-enforcement tests live in Task 7; here we verify that:
-//   - RegisterAll compiles and adds exactly 27 tools
+//   - RegisterAll compiles and adds exactly 28 tools
 //   - Each handler calls the StateManager without panicking on valid input
 package tools
 
@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -44,7 +45,7 @@ func callTool(t *testing.T, handler server.ToolHandlerFunc, args map[string]any)
 func TestRegisterAllCount(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
-	RegisterAll(srv, sm)
+	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "")
 
 	// Extract tools via ListTools to count them.
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
@@ -57,8 +58,8 @@ func TestRegisterAllCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 27 {
-		t.Errorf("RegisterAll: expected 27 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 28 {
+		t.Errorf("RegisterAll: expected 28 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
 		}
@@ -70,7 +71,7 @@ func TestRegisterAllCount(t *testing.T) {
 func TestToolNamesUseUnderscores(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
-	RegisterAll(srv, sm)
+	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "")
 
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	var resp struct {
@@ -155,7 +156,7 @@ func TestPhaseStartHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
 	sm := state.NewStateManager()
 
-	h := PhaseStartHandler(sm)
+	h := PhaseStartHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace": dir,
 		"phase":     "phase-1",
@@ -171,7 +172,7 @@ func TestPhaseStartHandlerGuard3c(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
 	sm := state.NewStateManager()
 
-	h := PhaseStartHandler(sm)
+	h := PhaseStartHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace": dir,
 		"phase":     "phase-5",
@@ -191,7 +192,7 @@ func TestPhaseCompleteHandlerWarning3i(t *testing.T) {
 		t.Fatal(err)
 	}
 	// phase-1 is pending, not in_progress — should produce a warning but NOT block.
-	h := PhaseCompleteHandler(sm)
+	h := PhaseCompleteHandler(sm, events.NewEventBus(), events.NewSlackNotifier(""))
 	res := callTool(t, h, map[string]any{
 		"workspace": dir,
 		"phase":     "phase-1",
@@ -207,7 +208,7 @@ func TestPhaseCompleteHandlerGuard3a(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
 	sm := state.NewStateManager()
 	// Do NOT create analysis.md — artifact is missing.
-	h := PhaseCompleteHandler(sm)
+	h := PhaseCompleteHandler(sm, events.NewEventBus(), events.NewSlackNotifier(""))
 	res := callTool(t, h, map[string]any{
 		"workspace": dir,
 		"phase":     "phase-1",
@@ -226,7 +227,7 @@ func TestPhaseFailHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := PhaseFailHandler(sm)
+	h := PhaseFailHandler(sm, events.NewEventBus(), events.NewSlackNotifier(""))
 	res := callTool(t, h, map[string]any{
 		"workspace": dir,
 		"phase":     "phase-1",
@@ -243,7 +244,7 @@ func TestAbandonHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
 	sm := state.NewStateManager()
 
-	h := AbandonHandler(sm)
+	h := AbandonHandler(sm, events.NewEventBus(), events.NewSlackNotifier(""))
 	res := callTool(t, h, map[string]any{
 		"workspace": dir,
 	})
@@ -360,7 +361,7 @@ func TestPhaseCompleteHandlerGuard3j(t *testing.T) {
 		t.Fatalf("SetRevisionPending: %v", err)
 	}
 
-	h := PhaseCompleteHandler(sm)
+	h := PhaseCompleteHandler(sm, events.NewEventBus(), events.NewSlackNotifier(""))
 	res := callTool(t, h, map[string]any{
 		"workspace": dir,
 		"phase":     "checkpoint-a",
@@ -438,6 +439,192 @@ func TestPhaseLogHandlerWarn3d(t *testing.T) {
 	}
 	if !hasWarning(res) {
 		t.Errorf("PhaseLogHandler duplicate: expected warning key in content")
+	}
+}
+
+// ---------- event publish tests ----------
+
+// drainEvent reads the first event from ch with a short timeout, or returns zero value.
+func drainEvent(ch <-chan events.Event) (events.Event, bool) {
+	select {
+	case e, ok := <-ch:
+		return e, ok
+	default:
+		return events.Event{}, false
+	}
+}
+
+func TestPhaseStartHandlerPublishesEvent(t *testing.T) {
+	dir := setupWorkspace(t, "my-spec")
+	sm := state.NewStateManager()
+	bus := events.NewEventBus()
+	_, ch := bus.Subscribe()
+
+	h := PhaseStartHandler(sm, bus)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "phase-1",
+	})
+	if res.IsError {
+		t.Fatalf("PhaseStartHandler returned error: %v", textContent(res))
+	}
+
+	e, ok := drainEvent(ch)
+	if !ok {
+		t.Fatal("no event published by PhaseStartHandler")
+	}
+	if e.Event != "phase-start" {
+		t.Errorf("Event.Event: got %q, want %q", e.Event, "phase-start")
+	}
+	if e.Outcome != "in_progress" {
+		t.Errorf("Event.Outcome: got %q, want %q", e.Outcome, "in_progress")
+	}
+	if e.Phase != "phase-1" {
+		t.Errorf("Event.Phase: got %q, want %q", e.Phase, "phase-1")
+	}
+	if e.SpecName != "my-spec" {
+		t.Errorf("Event.SpecName: got %q, want %q", e.SpecName, "my-spec")
+	}
+	if e.Workspace != dir {
+		t.Errorf("Event.Workspace: got %q, want %q", e.Workspace, dir)
+	}
+	if e.Timestamp == "" {
+		t.Error("Event.Timestamp is empty")
+	}
+}
+
+func TestPhaseStartHandlerNoPublishOnError(t *testing.T) {
+	dir := setupWorkspace(t, "my-spec")
+	sm := state.NewStateManager()
+	bus := events.NewEventBus()
+	_, ch := bus.Subscribe()
+
+	// phase-5 with empty tasks triggers guard error — no publish
+	h := PhaseStartHandler(sm, bus)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "phase-5",
+	})
+	if !res.IsError {
+		t.Fatal("expected error from PhaseStartHandler guard")
+	}
+	if _, ok := drainEvent(ch); ok {
+		t.Error("event should not be published when handler returns an error")
+	}
+}
+
+func TestPhaseCompleteHandlerPublishesEvent(t *testing.T) {
+	dir := setupWorkspace(t, "my-spec")
+	sm := state.NewStateManager()
+	bus := events.NewEventBus()
+	_, ch := bus.Subscribe()
+	// Write required artifact for phase-1.
+	if err := os.WriteFile(filepath.Join(dir, "analysis.md"), []byte("analysis"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := PhaseCompleteHandler(sm, bus, events.NewSlackNotifier(""))
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "phase-1",
+	})
+	if res.IsError {
+		t.Fatalf("PhaseCompleteHandler returned error: %v", textContent(res))
+	}
+
+	e, ok := drainEvent(ch)
+	if !ok {
+		t.Fatal("no event published by PhaseCompleteHandler")
+	}
+	if e.Event != "phase-complete" {
+		t.Errorf("Event.Event: got %q, want %q", e.Event, "phase-complete")
+	}
+	if e.Outcome != "completed" {
+		t.Errorf("Event.Outcome: got %q, want %q", e.Outcome, "completed")
+	}
+}
+
+func TestPhaseFailHandlerPublishesEvent(t *testing.T) {
+	dir := setupWorkspace(t, "my-spec")
+	sm := state.NewStateManager()
+	if err := sm.PhaseStart(dir, "phase-1"); err != nil {
+		t.Fatal(err)
+	}
+	bus := events.NewEventBus()
+	_, ch := bus.Subscribe()
+
+	h := PhaseFailHandler(sm, bus, events.NewSlackNotifier(""))
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "phase-1",
+		"message":   "test failure",
+	})
+	if res.IsError {
+		t.Fatalf("PhaseFailHandler returned error: %v", textContent(res))
+	}
+
+	e, ok := drainEvent(ch)
+	if !ok {
+		t.Fatal("no event published by PhaseFailHandler")
+	}
+	if e.Event != "phase-fail" {
+		t.Errorf("Event.Event: got %q, want %q", e.Event, "phase-fail")
+	}
+	if e.Outcome != "failed" {
+		t.Errorf("Event.Outcome: got %q, want %q", e.Outcome, "failed")
+	}
+}
+
+func TestCheckpointHandlerPublishesEvent(t *testing.T) {
+	dir := setupWorkspace(t, "my-spec")
+	sm := state.NewStateManager()
+	bus := events.NewEventBus()
+	_, ch := bus.Subscribe()
+
+	h := CheckpointHandler(sm, bus)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "checkpoint-a",
+	})
+	if res.IsError {
+		t.Fatalf("CheckpointHandler returned error: %v", textContent(res))
+	}
+
+	e, ok := drainEvent(ch)
+	if !ok {
+		t.Fatal("no event published by CheckpointHandler")
+	}
+	if e.Event != "checkpoint" {
+		t.Errorf("Event.Event: got %q, want %q", e.Event, "checkpoint")
+	}
+	if e.Outcome != "awaiting_human" {
+		t.Errorf("Event.Outcome: got %q, want %q", e.Outcome, "awaiting_human")
+	}
+}
+
+func TestAbandonHandlerPublishesEvent(t *testing.T) {
+	dir := setupWorkspace(t, "my-spec")
+	sm := state.NewStateManager()
+	bus := events.NewEventBus()
+	_, ch := bus.Subscribe()
+
+	h := AbandonHandler(sm, bus, events.NewSlackNotifier(""))
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+	})
+	if res.IsError {
+		t.Fatalf("AbandonHandler returned error: %v", textContent(res))
+	}
+
+	e, ok := drainEvent(ch)
+	if !ok {
+		t.Fatal("no event published by AbandonHandler")
+	}
+	if e.Event != "abandon" {
+		t.Errorf("Event.Event: got %q, want %q", e.Event, "abandon")
+	}
+	if e.Outcome != "abandoned" {
+		t.Errorf("Event.Outcome: got %q, want %q", e.Outcome, "abandoned")
 	}
 }
 
