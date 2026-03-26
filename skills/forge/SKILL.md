@@ -828,7 +828,8 @@ mcp__forge-state__phase_start(workspace={workspace}, phase="phase-3")
 
 Run:
 ```bash
-past_feedback="$(bash scripts/query-specs-index.sh {workspace} {task_type} || true)"
+past_feedback="$(mcp__forge-state__search_patterns(workspace={workspace}, task_type={task_type}, top_k=3, mode="review-feedback") || true)"
+# FALLBACK: past_feedback="$(bash scripts/query-specs-index.sh {workspace} {task_type} || true)"
 ```
 
 Spawn the `architect` agent with:
@@ -994,7 +995,9 @@ mcp__forge-state__phase_start(workspace={workspace}, phase="phase-4")
 
 Run:
 ```bash
-past_feedback="$(bash scripts/query-specs-index.sh {workspace} {task_type} || true)"
+past_feedback="$(mcp__forge-state__search_patterns(workspace={workspace}, task_type={task_type}, top_k=3, mode="review-feedback") || true)"
+# FALLBACK: past_feedback="$(bash scripts/query-specs-index.sh {workspace} {task_type} || true)"
+# Note: shell fallback omits the mode argument because the default (no 3rd arg) is review-feedback mode
 ```
 
 Spawn the `task-decomposer` agent with:
@@ -1163,7 +1166,8 @@ mcp__forge-state__phase_start(workspace={workspace}, phase="phase-5")
 ```
 
 ```bash
-past_impl_patterns="$(bash scripts/query-specs-index.sh {workspace} {task_type} impl || true)"
+past_impl_patterns="$(mcp__forge-state__search_patterns(workspace={workspace}, task_type={task_type}, top_k=2, mode="impl") || true)"
+# FALLBACK: past_impl_patterns="$(bash scripts/query-specs-index.sh {workspace} {task_type} impl || true)"
 ```
 
 **Edge case — zero tasks:** If `tasks.md` contains no implementation tasks (e.g., the design concluded no code changes are needed), skip Phase 5-6 and proceed directly to Final Verification.
