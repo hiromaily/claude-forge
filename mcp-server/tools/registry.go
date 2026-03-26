@@ -1,4 +1,4 @@
-// Package tools registers all 28 MCP tool handlers with the MCP server.
+// Package tools registers all 30 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -9,7 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// RegisterAll registers all 28 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 30 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
@@ -265,5 +265,24 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 			mcp.WithDescription("Return the SSE endpoint URL for real-time phase transition events. Returns {\"endpoint\":\"http://localhost:<port>/events\"} when FORGE_EVENTS_PORT is set, or an informational message when SSE is not configured."),
 		),
 		SubscribeEventsHandler(eventsPort),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("ast_summary",
+			mcp.WithDescription("Parse a source file with tree-sitter and return a compact markdown summary of exported function signatures, type definitions, and constants. Supports Go, TypeScript, Python, and Bash."),
+			mcp.WithString("file_path", mcp.Required(), mcp.Description("Absolute path to the source file to summarize")),
+			mcp.WithString("language", mcp.Description("Language override: go, typescript, python, bash. When omitted, language is auto-detected from the file extension.")),
+		),
+		AstSummaryHandler(),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("ast_find_definition",
+			mcp.WithDescription("Search a source file for a named symbol declaration using tree-sitter AST parsing. Returns the definition text; multiple matches are prefixed with a count header."),
+			mcp.WithString("file_path", mcp.Required(), mcp.Description("Absolute path to the source file to search")),
+			mcp.WithString("symbol", mcp.Required(), mcp.Description("Symbol name to look up (function name, type name, etc.)")),
+			mcp.WithString("language", mcp.Description("Language override: go, typescript, python, bash. When omitted, language is auto-detected from the file extension.")),
+		),
+		AstFindDefinitionHandler(),
 	)
 }

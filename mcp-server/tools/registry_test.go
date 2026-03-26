@@ -1,6 +1,6 @@
 // Package tools — tests for updated RegisterAll signature and tool count.
-// These tests verify that RegisterAll accepts 5 parameters and registers 28 tools
-// including the subscribe_events tool.
+// These tests verify that RegisterAll accepts 5 parameters and registers 30 tools
+// including the subscribe_events, ast_summary, and ast_find_definition tools.
 package tools
 
 import (
@@ -14,7 +14,7 @@ import (
 )
 
 // TestRegisterAllNewSignatureCount verifies that the updated 5-arg RegisterAll
-// registers exactly 28 tools, including subscribe_events.
+// registers exactly 30 tools, including subscribe_events, ast_summary, and ast_find_definition.
 func TestRegisterAllNewSignatureCount(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
@@ -32,8 +32,8 @@ func TestRegisterAllNewSignatureCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 28 {
-		t.Errorf("RegisterAll: expected 28 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 30 {
+		t.Errorf("RegisterAll: expected 30 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
 		}
