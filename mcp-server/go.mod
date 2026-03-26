@@ -2,7 +2,10 @@ module github.com/hiromaily/claude-forge/mcp-server
 
 go 1.26
 
-require github.com/mark3labs/mcp-go v0.45.0
+require (
+	github.com/mark3labs/mcp-go v0.45.0
+	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
+)
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
