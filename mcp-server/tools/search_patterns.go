@@ -104,26 +104,34 @@ func searchPatternsWithPaths(
 }
 
 // stripFrontmatter removes YAML frontmatter delimited by leading --- lines.
-// If the content starts with "---\n", everything up to and including the closing
-// "---\n" line is stripped. If no matching closing delimiter exists, the content
+// If the content starts with "---", everything up to and including the closing
+// "---" line is stripped. If no matching closing delimiter exists, the content
 // is returned unchanged.
 func stripFrontmatter(content string) string {
-	if !strings.HasPrefix(content, "---\n") && content != "---" {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 || lines[0] != "---" {
 		return content
 	}
-	// Find the closing delimiter.
-	rest := content[4:] // skip "---\n"
-	idx := strings.Index(rest, "\n---\n")
-	if idx == -1 {
-		// Check if the content ends with "\n---" (no trailing newline)
-		if strings.HasSuffix(rest, "\n---") {
-			return ""
+
+	// Found opening "---"; search for closing "---".
+	endIdx := -1
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			endIdx = i
+			break
 		}
-		// No closing --- found; return content unchanged.
+	}
+
+	if endIdx == -1 {
+		// No closing "---" found; return content unchanged.
 		return content
 	}
-	// Return everything after the closing "---\n".
-	return rest[idx+5:] // skip "\n---\n"
+
+	if endIdx+1 >= len(lines) {
+		return "" // No content after closing delimiter.
+	}
+
+	return strings.Join(lines[endIdx+1:], "\n")
 }
 
 // formatReviewFeedbackOutput formats BM25 results in review-feedback mode.
