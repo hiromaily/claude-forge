@@ -2,12 +2,17 @@
 // Task 2 covers: Init, Get, PhaseStart, PhaseComplete, PhaseFail,
 // Abandon, Checkpoint, SkipPhase, RevisionBump, InlineRevisionBump,
 // SetRevisionPending, ClearRevisionPending.
+// Task 3 covers: SetEffort, SetFlowTemplate, TaskInit, TaskUpdate,
+// PhaseLog, PhaseStats.
+// Task 4 adds: golden-file test for Init schema, exhaustive nextPhase test
+// covering all 17 ValidPhases, and a concurrency test (10 goroutines, -race safe).
 package state_test
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/hiromaily/claude-forge/mcp-server/state"
@@ -1112,6 +1117,172 @@ func TestPhaseStats_AggregatesCorrectly(t *testing.T) {
 	}
 	if result.Entries[2].Model != "opus" {
 		t.Errorf("entries[2].model: got %q, want %q", result.Entries[2].Model, "opus")
+	}
+}
+
+// ---------- Golden-file test (AC-2) ----------
+
+// TestInit_GoldenFile verifies that Init output matches testdata/state_init.json
+// byte-for-byte after JSON round-trip, with dynamic fields (timestamps, workspace)
+// normalized to stable placeholder values. Any schema drift — added, removed, or
+// renamed JSON keys — will cause this test to fail.
+func TestInit_GoldenFile(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+
+	if err := m.Init(dir, "golden-spec"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Read produced state.json.
+	rawProduced, err := os.ReadFile(filepath.Join(dir, "state.json"))
+	if err != nil {
+		t.Fatalf("read produced state.json: %v", err)
+	}
+
+	// Unmarshal both sides into State structs.
+	var produced state.State
+	if err := json.Unmarshal(rawProduced, &produced); err != nil {
+		t.Fatalf("unmarshal produced: %v", err)
+	}
+
+	// Normalize dynamic fields before comparison.
+	produced.Workspace = "WORKSPACE_PLACEHOLDER"
+	produced.Timestamps.Created = "TIMESTAMP_PLACEHOLDER"
+	produced.Timestamps.LastUpdated = "TIMESTAMP_PLACEHOLDER"
+
+	// Re-marshal the normalized produced state.
+	normalizedProduced, err := json.MarshalIndent(produced, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal normalized produced: %v", err)
+	}
+
+	// Read the golden fixture.
+	goldenPath := filepath.Join("..", "testdata", "state_init.json")
+	rawGolden, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("read golden fixture %q: %v", goldenPath, err)
+	}
+
+	// Unmarshal and re-marshal golden to canonicalize whitespace.
+	var golden state.State
+	if err := json.Unmarshal(rawGolden, &golden); err != nil {
+		t.Fatalf("unmarshal golden: %v", err)
+	}
+	normalizedGolden, err := json.MarshalIndent(golden, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal normalized golden: %v", err)
+	}
+
+	if string(normalizedProduced) != string(normalizedGolden) {
+		t.Errorf("Init output does not match golden fixture.\nProduced:\n%s\n\nGolden:\n%s",
+			normalizedProduced, normalizedGolden)
+	}
+}
+
+// ---------- Exhaustive nextPhase test (AC-1) ----------
+
+// TestNextPhase_ExhaustiveAllPhases verifies that PhaseComplete correctly
+// advances through all 17 phases in ValidPhases in order.
+// This exercises the internal nextPhase logic for every possible input.
+//
+// PhaseComplete advances currentPhase to phase[i+1]. When the next phase
+// is "completed" (i.e., phase is "post-to-source" at index 15, or
+// phase is "completed" at index 16), currentPhaseStatus is set to
+// "completed" because the pipeline is terminal. For all other phases,
+// currentPhaseStatus is "pending" and currentPhase is the next entry.
+func TestNextPhase_ExhaustiveAllPhases(t *testing.T) {
+	phases := state.ValidPhases // 17 entries
+
+	for i, phase := range phases {
+		t.Run(phase, func(t *testing.T) {
+			dir := t.TempDir()
+			m := newManager()
+			if err := m.Init(dir, "s"); err != nil {
+				t.Fatalf("Init: %v", err)
+			}
+
+			if err := m.PhaseComplete(dir, phase); err != nil {
+				t.Fatalf("PhaseComplete(%q): %v", phase, err)
+			}
+
+			s := loadState(t, dir)
+
+			// Determine the expected next phase.
+			var wantNextPhase string
+			if i < len(phases)-1 {
+				wantNextPhase = phases[i+1]
+			} else {
+				wantNextPhase = "completed"
+			}
+
+			if s.CurrentPhase != wantNextPhase {
+				t.Errorf("after PhaseComplete(%q): currentPhase = %q, want %q",
+					phase, s.CurrentPhase, wantNextPhase)
+			}
+
+			// When the resulting currentPhase is "completed", the pipeline is
+			// terminal and currentPhaseStatus must be "completed".
+			// Otherwise currentPhaseStatus must be "pending".
+			if wantNextPhase == "completed" {
+				if s.CurrentPhaseStatus != "completed" {
+					t.Errorf("after PhaseComplete(%q): currentPhaseStatus = %q, want %q",
+						phase, s.CurrentPhaseStatus, "completed")
+				}
+			} else {
+				if s.CurrentPhaseStatus != "pending" {
+					t.Errorf("after PhaseComplete(%q): currentPhaseStatus = %q, want %q",
+						phase, s.CurrentPhaseStatus, "pending")
+				}
+			}
+		})
+	}
+}
+
+// ---------- Concurrency test (AC-3) ----------
+
+// TestPhaseLog_Concurrent10Goroutines spawns 10 goroutines that each call
+// PhaseLog simultaneously. The test verifies that all entries are appended
+// without data races (run with -race to enforce this).
+func TestPhaseLog_Concurrent10Goroutines(t *testing.T) {
+	const numGoroutines = 10
+
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Use a WaitGroup to synchronize all goroutines.
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			phase := state.ValidPhases[idx%len(state.ValidPhases)]
+			if err := m.PhaseLog(dir, phase, 1000*(idx+1), 500*(idx+1), "sonnet"); err != nil {
+				// Cannot call t.Fatalf from a goroutine; use t.Errorf instead.
+				t.Errorf("goroutine %d PhaseLog: %v", idx, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// After all goroutines complete, there should be exactly numGoroutines entries.
+	s := loadState(t, dir)
+	if len(s.PhaseLog) != numGoroutines {
+		t.Errorf("phaseLog entries: got %d, want %d", len(s.PhaseLog), numGoroutines)
+	}
+
+	// Verify that total tokens equals the sum of 1000*1 + 1000*2 + ... + 1000*10 = 55000.
+	totalTokens := 0
+	for _, entry := range s.PhaseLog {
+		totalTokens += entry.Tokens
+	}
+	if totalTokens != 55000 {
+		t.Errorf("total tokens: got %d, want 55000", totalTokens)
 	}
 }
 

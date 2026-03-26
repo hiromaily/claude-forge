@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "specName": "golden-spec",
+  "workspace": "WORKSPACE_PLACEHOLDER",
+  "branch": null,
+  "taskType": null,
+  "effort": null,
+  "flowTemplate": null,
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "phase-1",
+  "currentPhaseStatus": "pending",
+  "completedPhases": [
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {},
+  "phaseLog": [],
+  "timestamps": {
+    "created": "TIMESTAMP_PLACEHOLDER",
+    "lastUpdated": "TIMESTAMP_PLACEHOLDER",
+    "phaseStarted": null
+  },
+  "error": null
+}
