@@ -149,6 +149,37 @@ SKILL.md (orchestrator)
 
 **Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes the same **26** commands as typed tool calls. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
 
+**Canonical command list** (shell name → MCP tool name):
+
+| Shell command | MCP tool | Category |
+|---|---|---|
+| `init` | `init` | Lifecycle |
+| `get` | `get` | Read |
+| `phase-start` | `phase_start` | Phase |
+| `phase-complete` | `phase_complete` | Phase |
+| `phase-fail` | `phase_fail` | Phase |
+| `checkpoint` | `checkpoint` | Phase |
+| `skip-phase` | `skip_phase` | Phase |
+| `abandon` | `abandon` | Phase |
+| `revision-bump` | `revision_bump` | Revision |
+| `inline-revision-bump` | `inline_revision_bump` | Revision |
+| `set-revision-pending` | `set_revision_pending` | Revision |
+| `clear-revision-pending` | `clear_revision_pending` | Revision |
+| `set-branch` | `set_branch` | Config |
+| `set-task-type` | `set_task_type` | Config |
+| `set-effort` | `set_effort` | Config |
+| `set-flow-template` | `set_flow_template` | Config |
+| `set-auto-approve` | `set_auto_approve` | Config |
+| `set-skip-pr` | `set_skip_pr` | Config |
+| `set-debug` | `set_debug` | Config |
+| `set-use-current-branch` | `set_use_current_branch` | Config |
+| `task-init` | `task_init` | Task |
+| `task-update` | `task_update` | Task |
+| `phase-log` | `phase_log` | Metrics |
+| `phase-stats` | `phase_stats` | Metrics |
+| `resume-info` | `resume_info` | Query |
+| `refresh-index` | `refresh_index` | Utility |
+
 ### What NOT to do
 - Do NOT add `isolation: "worktree"` to any Agent tool call — breaks inter-task visibility
 - Do NOT duplicate agent instructions in SKILL.md prompts — agents have their own system prompts
@@ -188,6 +219,40 @@ After saving, restart Claude Code. The `mcp__forge-state__*` tool calls in `SKIL
 ### Fallback
 
 `scripts/state-manager.sh` remains fully functional as a fallback. All 26 commands still execute correctly. The script includes a deprecation notice at the top pointing to this section.
+
+### MCP library usage (`github.com/mark3labs/mcp-go`)
+
+Key API surface used in `mcp-server/`:
+
+```go
+// Server construction and stdio transport
+srv := server.NewMCPServer("forge-state", "1.0.0")
+server.ServeStdio(srv)   // package-level function, not a method on srv
+
+// Registering a tool
+srv.AddTool(mcp.NewTool("tool_name",
+    mcp.WithDescription("..."),
+    mcp.WithString("param", mcp.Required(), mcp.Description("...")),
+    mcp.WithNumber("num_param", mcp.Description("...")),
+), HandlerFunc)
+
+// Reading parameters inside a handler
+workspace, err := req.RequireString("workspace")   // returns error if missing
+value := req.GetString("key", "default")           // returns default if missing
+num := req.GetInt("tokens", 0)
+flag := req.GetBool("validated", false)
+args := req.GetArguments()                         // map[string]any for complex params
+
+// Returning results
+mcp.NewToolResultText("ok")                        // success with text
+mcp.NewToolResultError("error message")            // IsError=true response
+```
+
+Tool names use underscores (`phase_complete`), not hyphens — MCP protocol requirement. The corresponding MCP tool call name is `mcp__forge-state__phase_complete`.
+
+### Go module setup
+
+The MCP server lives in `mcp-server/` as a **separate Go module** (`go.mod` with its own `module` path). This keeps the Go build hermetic from the rest of the repo (which has no Go code). Run `go mod tidy` from inside `mcp-server/` after adding dependencies. The `make build` / `make install` targets handle this automatically.
 
 ---
 

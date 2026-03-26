@@ -815,6 +815,30 @@ This rule extends to diff output: review agents (Phase 6 impl-reviewer, Phase 7 
 3. Model can be configured per-agent in frontmatter
 4. The orchestrator SKILL.md stays small (~500 lines vs ~900 with inline prompts)
 
+### Guard migration pattern (shell → Go MCP handler)
+
+When a new guard is added to `pre-tool-hook.sh` (e.g., Rule 3a–3j), the same invariant
+must also be enforced inside the corresponding Go MCP tool handler in `mcp-server/tools/`.
+The pattern:
+
+1. **Shell hook** (`pre-tool-hook.sh`): guards that fire on bash/edit tool calls. These use
+   `state.json` on disk, read with `jq`. They block the bash command via exit 2. This layer
+   is always active — even when the MCP server is not installed.
+
+2. **Go handler** (`tools/guards.go`): guards that fire when MCP tools are called. These read
+   `state.State` already loaded from `state.ReadState()`. Blocking guards return
+   `IsError=true`; non-blocking warnings are included under the `"warning"` JSON key.
+
+The two layers are **independent and complementary**. When the MCP server is in use, the Go
+handler fires first. The shell hook still fires on any `Bash` tool calls.
+
+**Migration checklist** when adding a new guard:
+- [ ] Add a named check function to `pre-tool-hook.sh` (do not inline in dispatch block)
+- [ ] Add a corresponding function in `mcp-server/tools/guards.go` (blocking: returns `error`; warning: returns `string`)
+- [ ] Call it from the relevant handler(s) in `mcp-server/tools/handlers.go`
+- [ ] Add tests for both the shell guard (`test-hooks.sh`) and the Go guard (`tools/guards_test.go`)
+- [ ] Document the new rule in the "Guard catalogue" in ARCHITECTURE.md (see below)
+
 ### Why inline comment anchors for SKILL.md cross-references?
 
 SKILL.md is consumed by an LLM reading raw Markdown, not a renderer. HTML anchors

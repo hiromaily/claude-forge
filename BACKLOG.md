@@ -50,6 +50,7 @@ Ordered by priority. Higher rows should be tackled first.
 | [#30](https://github.com/hiromaily/claude-forge/issues/30) | Agent Teams mode (Phase 5 inter-agent comms) | Collaborative mode with `comms.json` for real-time coordination. High complexity — defer until pain confirmed by phase-stats data. Source: barkain. |
 | [#31](https://github.com/hiromaily/claude-forge/issues/31) | Linear integration | Add `linear_issue` source type alongside GitHub Issues and Jira. Source: levnikolaevich. |
 | [#32](https://github.com/hiromaily/claude-forge/issues/32) | Native plan mode integration at checkpoints | Use EnterPlanMode at Checkpoint A/B for structured task/PR review. Source: barkain. |
+| — | Split `state-manager.sh` into domain files | 700+ line single-file script makes it time-consuming for analyst agents to map all 26 commands. Candidate split: `state-manager-phases.sh`, `state-manager-tasks.sh`, `state-manager-config.sh`, `state-manager-metrics.sh`, with a thin dispatcher as the entry point. Blocked by the fact that `locked_update` must be shared — would need a `lib/state-manager-lib.sh` pattern. |
 
 ---
 
