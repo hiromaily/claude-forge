@@ -345,6 +345,52 @@ func TestTaskInitHandlerGuard3g(t *testing.T) {
 	}
 }
 
+// ---------- phase_complete guard 3j (checkpoint revision pending) ----------
+
+func TestPhaseCompleteHandlerGuard3j(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	// Put checkpoint-a into awaiting_human status (required by guard 3e).
+	if err := sm.Checkpoint(dir, "checkpoint-a"); err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+	// Set checkpointRevisionPending["checkpoint-a"] = true (triggers guard 3j).
+	if err := sm.SetRevisionPending(dir, "checkpoint-a"); err != nil {
+		t.Fatalf("SetRevisionPending: %v", err)
+	}
+
+	h := PhaseCompleteHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "checkpoint-a",
+	})
+	if !res.IsError {
+		t.Errorf("PhaseCompleteHandler should block when checkpointRevisionPending is true")
+	}
+}
+
+// ---------- task_init guard 3g — checkpoint-b skipped (positive path) ----------
+
+func TestTaskInitHandlerGuard3gSkipped(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	// Mark checkpoint-b as skipped — guard 3g should allow task_init.
+	if err := sm.SkipPhase(dir, "checkpoint-b"); err != nil {
+		t.Fatalf("SkipPhase: %v", err)
+	}
+
+	h := TaskInitHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"tasks":     map[string]any{},
+	})
+	if res.IsError {
+		t.Errorf("TaskInitHandler should succeed when checkpoint-b is skipped: %v", textContent(res))
+	}
+}
+
 // ---------- phase_log handler ----------
 
 func TestPhaseLogHandler(t *testing.T) {
