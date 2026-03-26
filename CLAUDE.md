@@ -147,13 +147,49 @@ SKILL.md (orchestrator)
 
 **find_active_workspace** — this function is duplicated across `pre-tool-hook.sh`, `post-agent-hook.sh`, and `stop-hook.sh`. **The copies are intentionally different**: each script uses a slightly different filter predicate suited to its own enforcement context. Do not unify them into a shared library. Each copy carries a comment explaining the divergence — read it before modifying.
 
-**Subcommand count** — `state-manager.sh` currently has **26** dispatch entries. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
+**Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes the same **26** commands as typed tool calls. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
 
 ### What NOT to do
 - Do NOT add `isolation: "worktree"` to any Agent tool call — breaks inter-task visibility
 - Do NOT duplicate agent instructions in SKILL.md prompts — agents have their own system prompts
 - Do NOT store state in memory/conversation — use state.json via state-manager.sh
 - Do NOT use bare `flock` without a mkdir fallback — macOS lacks `flock` by default. The existing `locked_update` helper in state-manager.sh already handles both cases; use it instead of reimplementing locking
+
+## MCP Server Registration
+
+The `forge-state` MCP server replaces direct `bash scripts/state-manager.sh` calls with typed MCP tool calls. To use it:
+
+### 1. Build and install the binary
+
+```bash
+make install
+```
+
+This compiles `mcp-server/` and copies the binary (`forge-state-mcp`) to `$(GOBIN)` or `~/.local/bin`.
+
+### 2. Register the server in `.claude/settings.json`
+
+Add the following `mcpServers` entry to your `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "forge-state": {
+      "command": "forge-state-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}
+```
+
+After saving, restart Claude Code. The `mcp__forge-state__*` tool calls in `SKILL.md` will route to the running server process.
+
+### Fallback
+
+`scripts/state-manager.sh` remains fully functional as a fallback. All 26 commands still execute correctly. The script includes a deprecation notice at the top pointing to this section.
+
+---
 
 ## Before You Start Working
 

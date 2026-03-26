@@ -87,43 +87,54 @@ Pipeline state is tracked in `{workspace}/state.json` and managed by `scripts/st
 
 ### State Manager Commands
 
-The orchestrator calls the state manager via Bash before and after each phase:
+The orchestrator calls the state manager via MCP tool calls before and after each phase:
 
-```bash
-SM="scripts/state-manager.sh"
-
+```
 # Initialize state (during Workspace Setup)
-$SM init {workspace} {spec-name}
+mcp__forge-state__init(workspace={workspace}, spec_name={spec-name}, validated=true)
+# FALLBACK: bash scripts/state-manager.sh init {workspace} {spec-name}
 
 # Before spawning a phase agent
-$SM phase-start {workspace} {phase}
+mcp__forge-state__phase_start(workspace={workspace}, phase={phase})
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} {phase}
 
 # After a phase agent completes successfully
-$SM phase-complete {workspace} {phase}
+mcp__forge-state__phase_complete(workspace={workspace}, phase={phase})
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} {phase}
 
 # On phase failure
-$SM phase-fail {workspace} {phase} "error message"
+mcp__forge-state__phase_fail(workspace={workspace}, phase={phase}, message="error message")
+# FALLBACK: bash scripts/state-manager.sh phase-fail {workspace} {phase} "error message"
 
 # At human checkpoints
-$SM checkpoint {workspace} {phase}
+mcp__forge-state__checkpoint(workspace={workspace}, phase={phase})
+# FALLBACK: bash scripts/state-manager.sh checkpoint {workspace} {phase}
 
 # After Checkpoint B approval — populate tasks from tasks.md
-$SM task-init {workspace} '{"1": {"title": "...", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}, ...}'
+mcp__forge-state__task_init(workspace={workspace}, tasks={"1": {"title": "...", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}, ...})
+# FALLBACK: bash scripts/state-manager.sh task-init {workspace} '{"1": {"title": "...", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}, ...}'
 
 # During Phase 5-6 — update individual task progress
-$SM task-update {workspace} {N} implStatus in_progress
-$SM task-update {workspace} {N} implStatus completed
-$SM task-update {workspace} {N} reviewStatus completed_pass
+mcp__forge-state__task_update(workspace={workspace}, task_num={N}, field="implStatus", value="in_progress")
+# FALLBACK: bash scripts/state-manager.sh task-update {workspace} {N} implStatus in_progress
+mcp__forge-state__task_update(workspace={workspace}, task_num={N}, field="implStatus", value="completed")
+# FALLBACK: bash scripts/state-manager.sh task-update {workspace} {N} implStatus completed
+mcp__forge-state__task_update(workspace={workspace}, task_num={N}, field="reviewStatus", value="completed_pass")
+# FALLBACK: bash scripts/state-manager.sh task-update {workspace} {N} reviewStatus completed_pass
 
 # Track revisions
-$SM revision-bump {workspace} design
-$SM revision-bump {workspace} tasks
+mcp__forge-state__revision_bump(workspace={workspace}, rev_type="design")
+# FALLBACK: bash scripts/state-manager.sh revision-bump {workspace} design
+mcp__forge-state__revision_bump(workspace={workspace}, rev_type="tasks")
+# FALLBACK: bash scripts/state-manager.sh revision-bump {workspace} tasks
 
 # Set branch name when created
-$SM set-branch {workspace} feature/{spec-name}
+mcp__forge-state__set_branch(workspace={workspace}, branch="feature/{spec-name}")
+# FALLBACK: bash scripts/state-manager.sh set-branch {workspace} feature/{spec-name}
 
 # Get resume information
-$SM resume-info {workspace}
+mcp__forge-state__resume_info(workspace={workspace})
+# FALLBACK: bash scripts/state-manager.sh resume-info {workspace}
 ```
 
 ### Hooks (Automatic Enforcement)
@@ -176,10 +187,11 @@ with the previous output as additional context.
 
 1. Check if `$ARGUMENTS` matches an existing workspace path (contains `.specs/` or `state.json`).
 2. If yes, set `{workspace}` to that path. Run:
-   ```bash
-   scripts/state-manager.sh resume-info {workspace}
    ```
-   If the command fails (non-zero exit), `state.json` may be corrupted. Inform the user and offer to either reinitialize the workspace or abort.
+   mcp__forge-state__resume_info(workspace={workspace})
+   # FALLBACK: bash scripts/state-manager.sh resume-info {workspace}
+   ```
+   If the call fails, `state.json` may be corrupted. Inform the user and offer to either reinitialize the workspace or abort.
 
 3. From the resume info, restore `{spec-name}`, `{branch}`, and determine the resume point:
 
@@ -371,8 +383,9 @@ Before running any phase, establish the workspace:
        Do NOT strip `--debug=<value>` from the task description in this case.
 
        After detection, if `{debug_mode}` is `true`:
-       ```bash
-       $SM set-debug {workspace}
+       ```
+       mcp__forge-state__set_debug(workspace={workspace})
+       # FALLBACK: bash scripts/state-manager.sh set-debug {workspace}
        ```
 
    c. **Jira issue type** (only when `source_type` is `jira_issue`): map `issuetype.name`
@@ -452,12 +465,12 @@ Before running any phase, establish the workspace:
    f-4. **Default**: `M` (safe fallback — matches current single-template behavior).
         Set `{effort_is_heuristic}` = false.
 
-   After determining `{effort}`, store as in-context variable `{effort}`. The `$SM set-effort` call
+   After determining `{effort}`, store as in-context variable `{effort}`. The `mcp__forge-state__set_effort` call
    happens in step 7 after workspace initialization.
 
    **Flow template derivation (step 5g):**
 
-   After effort detection, derive `{flow_template}` from the flow template matrix in ARCHITECTURE.md (§ Flow Template Matrix). Store `{flow_template}` as an in-context variable. The `$SM set-flow-template` call happens in step 7
+   After effort detection, derive `{flow_template}` from the flow template matrix in ARCHITECTURE.md (§ Flow Template Matrix). Store `{flow_template}` as an in-context variable. The `mcp__forge-state__set_flow_template` call happens in step 7
    after workspace initialization.
 
    **`full` template + `--auto` conflict**: if `{flow_template}` is `full` AND `{auto_approve}` is `true`:
@@ -466,8 +479,8 @@ Before running any phase, establish the workspace:
    > Passing --auto conflicts with this requirement.
    > Continue without auto-approve? (yes / abort)"
 
-   On yes: do NOT call `set-auto-approve`. Set `{auto_approve}` = false.
-   On abort: stop (workspace not yet initialized — no `$SM abandon` needed).
+   On yes: do NOT call `set_auto_approve`. Set `{auto_approve}` = false.
+   On abort: stop (workspace not yet initialized — no `mcp__forge-state__abandon` needed).
 
 6. Write `.specs/{date}-{spec-name}/request.md` with YAML front matter and body:
    ```markdown
@@ -481,23 +494,30 @@ Before running any phase, establish the workspace:
    <$ARGUMENTS and any fetched issue context>
    ```
 7. **Initialize state** — run these commands in order (**`set-task-type`, `set-effort`, and `set-flow-template` are MANDATORY immediately after `init`** — see "Mandatory Calls" section):
-   ```bash
-   scripts/state-manager.sh init {workspace} {spec-name}
-   scripts/state-manager.sh set-task-type {workspace} {task_type}
-   scripts/state-manager.sh set-effort {workspace} {effort}
-   scripts/state-manager.sh set-flow-template {workspace} {flow_template}
+   ```
+   mcp__forge-state__init(workspace={workspace}, spec_name={spec-name}, validated=true)
+   # FALLBACK: bash scripts/state-manager.sh init {workspace} {spec-name}
+   mcp__forge-state__set_task_type(workspace={workspace}, task_type={task_type})
+   # FALLBACK: bash scripts/state-manager.sh set-task-type {workspace} {task_type}
+   mcp__forge-state__set_effort(workspace={workspace}, effort={effort})
+   # FALLBACK: bash scripts/state-manager.sh set-effort {workspace} {effort}
+   mcp__forge-state__set_flow_template(workspace={workspace}, flow_template={flow_template})
+   # FALLBACK: bash scripts/state-manager.sh set-flow-template {workspace} {flow_template}
    ```
    If `--auto` was present AND the conflict check passed (i.e. `{auto_approve}` is `true`), also record it:
-   ```bash
-   scripts/state-manager.sh set-auto-approve {workspace}
+   ```
+   mcp__forge-state__set_auto_approve(workspace={workspace})
+   # FALLBACK: bash scripts/state-manager.sh set-auto-approve {workspace}
    ```
    If `--nopr` was present (i.e. `{skip_pr}` is `true`), also record it:
-   ```bash
-   scripts/state-manager.sh set-skip-pr {workspace}
+   ```
+   mcp__forge-state__set_skip_pr(workspace={workspace})
+   # FALLBACK: bash scripts/state-manager.sh set-skip-pr {workspace}
    ```
    If the user chose to use the current branch (i.e. `{use_current_branch}` is `true`), record it:
-   ```bash
-   scripts/state-manager.sh set-use-current-branch {workspace} {existing_branch}
+   ```
+   mcp__forge-state__set_use_current_branch(workspace={workspace}, branch={existing_branch})
+   # FALLBACK: bash scripts/state-manager.sh set-use-current-branch {workspace} {existing_branch}
    ```
    Then call `skip-phase` for each phase in the canonical skip sequence for `({task_type}, {effort})`,
    in canonical PHASES-array order, one call at a time with no gaps.
@@ -529,11 +549,15 @@ Before running any phase, establish the workspace:
    | `(investigation, L)` | `standard` | `phase-3`, `phase-3b`, `checkpoint-a`, `phase-4`, `phase-4b`, `checkpoint-b`, `phase-5`, `phase-6`, `phase-7`, `final-verification`, `pr-creation` | (none) |
 
    Example for `(bugfix, M)` → `light` template:
-   ```bash
-   SM="scripts/state-manager.sh"
-   for phase in phase-4 phase-4b checkpoint-b phase-7; do
-     $SM skip-phase {workspace} $phase
-   done
+   ```
+   mcp__forge-state__skip_phase(workspace={workspace}, phase="phase-4")
+   # FALLBACK: bash scripts/state-manager.sh skip-phase {workspace} phase-4
+   mcp__forge-state__skip_phase(workspace={workspace}, phase="phase-4b")
+   # FALLBACK: bash scripts/state-manager.sh skip-phase {workspace} phase-4b
+   mcp__forge-state__skip_phase(workspace={workspace}, phase="checkpoint-b")
+   # FALLBACK: bash scripts/state-manager.sh skip-phase {workspace} checkpoint-b
+   mcp__forge-state__skip_phase(workspace={workspace}, phase="phase-7")
+   # FALLBACK: bash scripts/state-manager.sh skip-phase {workspace} phase-7
    ```
 
    **Important:** `skip-phase` advances `currentPhase` to the next phase in the PHASES array.
@@ -579,8 +603,9 @@ Before running any phase, establish the workspace:
    ```
 
    Then initialise task tracking:
-   ```bash
-   $SM task-init {workspace} '{"1": {"title": "Implement", "implStatus": "pending", "reviewStatus": "pending", "executionMode": "sequential", "implRetries": 0, "reviewRetries": 0}}'
+   ```
+   mcp__forge-state__task_init(workspace={workspace}, tasks={"1": {"title": "Implement", "implStatus": "pending", "reviewStatus": "pending", "executionMode": "sequential", "implRetries": 0, "reviewRetries": 0}})
+   # FALLBACK: bash scripts/state-manager.sh task-init {workspace} '{"1": {"title": "Implement", "implStatus": "pending", "reviewStatus": "pending", "executionMode": "sequential", "implRetries": 0, "reviewRetries": 0}}'
    ```
 
    After stub synthesis and task-init, proceed to Phase 3b (which reviews the stub design.md)
@@ -602,13 +627,13 @@ Before running any phase, establish the workspace:
 
 | When | Command | Consequence if skipped |
 |------|---------|----------------------|
-| **The Initialize-state step of Workspace Setup** (immediately after `$SM init`) | `$SM set-task-type {workspace} {task_type}` | `taskType: null` → Final Summary dispatch error, wrong phase skipping |
-| **The Initialize-state step of Workspace Setup** (after `set-task-type`) | `$SM set-effort {workspace} {effort}` | `effort: null` → pre-tool-hook Rule 3f warning on every phase-1 start; effort missing from resume-info |
-| **The Initialize-state step of Workspace Setup** (after `set-effort`) | `$SM set-flow-template {workspace} {flow_template}` | `flowTemplate: null` → flow template missing from resume-info; wrong template restored on resume |
-| **After every Agent tool call** | `$SM phase-log {workspace} {phase-id} {tokens} {duration} {model}` | Execution Stats table in Final Summary is empty |
-| **At every Checkpoint (A/B)** | `$SM checkpoint {workspace} {phase}` before `$SM phase-complete` | `currentPhaseStatus` never reaches `awaiting_human` → checkpoint hook guard blocks `phase-complete` (exit 2), stop-hook safety net bypassed |
-| **When the USER requests a revision at Checkpoint A or B** | `$SM set-revision-pending {workspace} checkpoint-a` (or `checkpoint-b`) | Revision-pending flag not set → Rule 3j hook safety net cannot block premature `phase-complete`; auto-approve may fire on a revised artifact the user has not seen |
-| **After the user explicitly approves the revised artifact at Checkpoint A or B** | `$SM clear-revision-pending {workspace} checkpoint-a` (or `checkpoint-b`) before `$SM phase-complete` | `phase-complete` blocked by Rule 3j hook (exit 2) — only needed if `set-revision-pending` was previously called for this checkpoint |
+| **The Initialize-state step of Workspace Setup** (immediately after `init`) | `mcp__forge-state__set_task_type(workspace={workspace}, task_type={task_type})` | `taskType: null` → Final Summary dispatch error, wrong phase skipping |
+| **The Initialize-state step of Workspace Setup** (after `set_task_type`) | `mcp__forge-state__set_effort(workspace={workspace}, effort={effort})` | `effort: null` → pre-tool-hook Rule 3f warning on every phase-1 start; effort missing from resume-info |
+| **The Initialize-state step of Workspace Setup** (after `set_effort`) | `mcp__forge-state__set_flow_template(workspace={workspace}, flow_template={flow_template})` | `flowTemplate: null` → flow template missing from resume-info; wrong template restored on resume |
+| **After every Agent tool call** | `mcp__forge-state__phase_log(workspace={workspace}, phase={phase-id}, tokens={tokens}, duration_ms={duration}, model={model})` | Execution Stats table in Final Summary is empty |
+| **At every Checkpoint (A/B)** | `mcp__forge-state__checkpoint(workspace={workspace}, phase={phase})` before `mcp__forge-state__phase_complete(...)` | `currentPhaseStatus` never reaches `awaiting_human` → checkpoint hook guard blocks `phase-complete` (exit 2), stop-hook safety net bypassed |
+| **When the USER requests a revision at Checkpoint A or B** | `mcp__forge-state__set_revision_pending(workspace={workspace}, checkpoint="checkpoint-a")` (or `checkpoint-b`) | Revision-pending flag not set → Rule 3j hook safety net cannot block premature `phase-complete`; auto-approve may fire on a revised artifact the user has not seen |
+| **After the user explicitly approves the revised artifact at Checkpoint A or B** | `mcp__forge-state__clear_revision_pending(workspace={workspace}, checkpoint="checkpoint-a")` (or `checkpoint-b`) before `mcp__forge-state__phase_complete(...)` | `phase-complete` blocked by Rule 3j hook (exit 2) — only needed if `set_revision_pending` was previously called for this checkpoint |
 
 > **Note — skip matrix precedes flag logic:** Investigation tasks skip `checkpoint-a` entirely during Workspace Setup (the skip matrix adds `checkpoint-a` to `skippedPhases`). Skip gate 1 fires first and the entire checkpoint block is bypassed, so `checkpointRevisionPending` is never evaluated for those tasks. Tasks that skip `checkpoint-a` are therefore unaffected by this flag.
 
@@ -618,11 +643,10 @@ Before running any phase, establish the workspace:
 
 **State update pattern** — wrap every phase like this. **All three post-agent calls (write artifact → phase-log → phase-complete) are mandatory. Do NOT skip phase-log.**
 
-```bash
-SM="scripts/state-manager.sh"
-
+```
 # Before spawning the agent:
-$SM phase-start {workspace} {phase-id}
+mcp__forge-state__phase_start(workspace={workspace}, phase={phase-id})
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} {phase-id}
 
 # Spawn agent... (Agent tool call)
 # The Agent tool returns metadata including: total_tokens, duration_ms
@@ -630,15 +654,18 @@ $SM phase-start {workspace} {phase-id}
 # After agent returns successfully — ALL THREE STEPS ARE REQUIRED:
 # 1. Write artifact file (orchestrator responsibility for Phases 1-4b, 6)
 # 2. Log phase metrics (MANDATORY — do NOT skip):
-$SM phase-log {workspace} {phase-id} {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_log(workspace={workspace}, phase={phase-id}, tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} {phase-id} {total_tokens} {duration_ms} {model}
 # 3. Advance state:
-$SM phase-complete {workspace} {phase-id}
+mcp__forge-state__phase_complete(workspace={workspace}, phase={phase-id})
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} {phase-id}
 
 # If agent fails or returns empty:
-$SM phase-fail {workspace} {phase-id} "description of failure"
+mcp__forge-state__phase_fail(workspace={workspace}, phase={phase-id}, message="description of failure")
+# FALLBACK: bash scripts/state-manager.sh phase-fail {workspace} {phase-id} "description of failure"
 ```
 
-**Metrics logging** — after every Agent tool call, extract `total_tokens` and `duration_ms` from the agent's response metadata and call `phase-log`. For Phase 5-6 (per-task agents), use `phase-log {workspace} "task-{N}-impl" {tokens} {duration} {model}` and `phase-log {workspace} "task-{N}-review" {tokens} {duration} {model}` to track each task agent individually. This data is used in the Final Summary to produce a cost/time breakdown table.
+**Metrics logging** — after every Agent tool call, extract `total_tokens` and `duration_ms` from the agent's response metadata and call `phase_log`. For Phase 5-6 (per-task agents), use `phase_log(workspace={workspace}, phase="task-{N}-impl", tokens={tokens}, duration_ms={duration}, model={model})` and `phase_log(workspace={workspace}, phase="task-{N}-review", tokens={tokens}, duration_ms={duration}, model={model})` to track each task agent individually. This data is used in the Final Summary to produce a cost/time breakdown table.
 
 ---
 
@@ -647,8 +674,9 @@ $SM phase-fail {workspace} {phase-id} "description of failure"
 **Agent**: `situation-analyst` (standard flow) or `analyst` (lite template)
 **Output**: Return value → orchestrator writes to `analysis.md` (and `investigation.md` for lite template)
 
-```bash
-$SM phase-start {workspace} phase-1
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="phase-1")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} phase-1
 ```
 
 **Conditional branch on `{flow_template}`:**
@@ -665,16 +693,19 @@ Write the return value to **both**:
 
 Both files must be written before proceeding.
 
-```bash
-$SM phase-log {workspace} phase-1 {total_tokens} {duration_ms} {model}
-$SM phase-complete {workspace} phase-1
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="phase-1", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} phase-1 {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-1")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-1
 ```
 
 Then skip phase-2 — but only if it is NOT already in `{skipped_phases}` (for `(docs, M)`, phase-2 is already in Workspace Setup skips; for `(investigation, XS/S)`, phase-2 is not in Workspace Setup skips so this call proceeds):
 
-```bash
+```
 # Only call this if phase-2 is NOT already in {skipped_phases}:
-$SM skip-phase {workspace} phase-2
+mcp__forge-state__skip_phase(workspace={workspace}, phase="phase-2")
+# FALLBACK: bash scripts/state-manager.sh skip-phase {workspace} phase-2
 ```
 
 > **Important:** This is the ONLY place `skip-phase phase-2` is called for the `lite` template. It is NOT called in Workspace Setup. Do NOT call `phase-start phase-2`.
@@ -687,9 +718,11 @@ $SM skip-phase {workspace} phase-2
 
 Write the return value to `{workspace}/analysis.md`.
 
-```bash
-$SM phase-log {workspace} phase-1 {total_tokens} {duration_ms} {model}
-$SM phase-complete {workspace} phase-1
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="phase-1", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} phase-1 {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-1")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-1
 ```
 
 > **`docs/M` and `docs/L` flow — stub synthesis after Phase 1:** For `(docs, M)` (`lite` template) and
@@ -738,8 +771,9 @@ $SM phase-complete {workspace} phase-1
 >
 > Then initialise task tracking:
 >
-> ```bash
-> $SM task-init {workspace} '{"1": {"title": "Apply documentation edits", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}}'
+> ```
+> mcp__forge-state__task_init(workspace={workspace}, tasks={"1": {"title": "Apply documentation edits", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}})
+> # FALLBACK: bash scripts/state-manager.sh task-init {workspace} '{"1": {"title": "Apply documentation edits", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}}'
 > ```
 >
 > After stub synthesis and task-init, proceed to Phase 3b (AI reviews the stub design.md) and
@@ -758,8 +792,9 @@ $SM phase-complete {workspace} phase-1
 **Agent**: `investigator`
 **Output**: Return value → orchestrator writes to `investigation.md`
 
-```bash
-$SM phase-start {workspace} phase-2
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="phase-2")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} phase-2
 ```
 
 Spawn the `investigator` agent with:
@@ -770,9 +805,11 @@ Spawn the `investigator` agent with:
 
 Write the return value to `{workspace}/investigation.md`.
 
-```bash
-$SM phase-log {workspace} phase-2 {total_tokens} {duration_ms} {model}
-$SM phase-complete {workspace} phase-2
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="phase-2", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} phase-2 {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-2")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-2
 ```
 
 ---
@@ -784,8 +821,9 @@ $SM phase-complete {workspace} phase-2
 **Agent**: `architect`
 **Output**: Return value → orchestrator writes to `design.md`
 
-```bash
-$SM phase-start {workspace} phase-3
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="phase-3")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} phase-3
 ```
 
 Run:
@@ -804,13 +842,19 @@ If `$past_feedback` is non-empty, append it verbatim to the architect prompt bef
 If this is a revision (Phase 3b returned REVISE):
 - Append: `This is a revision. Also read {workspace}/review-design.md for AI review findings to address.`
 - Reuse `$past_feedback` captured above (do not re-run the script).
-- Run: `$SM revision-bump {workspace} design`
+- Run:
+  ```
+  mcp__forge-state__revision_bump(workspace={workspace}, rev_type="design")
+  # FALLBACK: bash scripts/state-manager.sh revision-bump {workspace} design
+  ```
 
 Write the return value to `{workspace}/design.md`.
 
-```bash
-$SM phase-log {workspace} phase-3 {total_tokens} {duration_ms} {model}
-$SM phase-complete {workspace} phase-3
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="phase-3", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} phase-3 {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-3")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-3
 ```
 
 > **`bugfix` flow — stub synthesis:** If `{task_type}` is `bugfix`, after Phase 3 completes, synthesise a `tasks.md` stub and initialise task tracking before proceeding to Phase 3b. (Phase 4, Phase 4b, and checkpoint-b were already skipped during Workspace Setup. `task-init` is allowed here because checkpoint-b is in `skippedPhases`.) Write `{workspace}/tasks.md` with the following content:
@@ -828,8 +872,9 @@ $SM phase-complete {workspace} phase-3
 >
 > Then initialise task tracking and proceed directly to Phase 5:
 >
-> ```bash
-> $SM task-init {workspace} '{"1": {"title": "Implement bug fix", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}}'
+> ```
+> mcp__forge-state__task_init(workspace={workspace}, tasks={"1": {"title": "Implement bug fix", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}})
+> # FALLBACK: bash scripts/state-manager.sh task-init {workspace} '{"1": {"title": "Implement bug fix", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}}'
 > ```
 
 ---
@@ -841,8 +886,9 @@ $SM phase-complete {workspace} phase-3
 **Agent**: `design-reviewer`
 **Output**: Return value → orchestrator writes to `review-design.md`
 
-```bash
-$SM phase-start {workspace} phase-3b
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="phase-3b")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} phase-3b
 ```
 
 Immediately after Phase 3 completes, spawn the `design-reviewer` agent with:
@@ -853,18 +899,24 @@ Immediately after Phase 3 completes, spawn the `design-reviewer` agent with:
 
 Write the return value to `{workspace}/review-design.md`.
 
-```bash
-$SM phase-log {workspace} phase-3b {total_tokens} {duration_ms} {model}
-$SM phase-complete {workspace} phase-3b
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="phase-3b", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} phase-3b {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-3b")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-3b
 ```
 
 - If verdict is **REVISE** (contains at least one CRITICAL finding): re-run Phase 3 with revision context, then re-run Phase 3b. Max 2 cycles before escalating to the human. (This loop applies to all task types where Phase 3 runs — everything except `investigation`.)
 - If verdict is **APPROVE** (no findings): continue to Checkpoint A.
 - If verdict is **APPROVE_WITH_NOTES** (MINOR findings only) — **inline revision path**:
-  1. Run: `$SM inline-revision-bump {workspace} design`
+  1. Run:
+     ```
+     mcp__forge-state__inline_revision_bump(workspace={workspace}, rev_type="design")
+     # FALLBACK: bash scripts/state-manager.sh inline-revision-bump {workspace} design
+     ```
   2. Read `{workspace}/design.md`.
   3. For each MINOR finding listed in `{workspace}/review-design.md`, apply the fix directly to `design.md` using the Edit tool.
-  4. Re-run Phase 3b (spawn `design-reviewer` again; write return value to `{workspace}/review-design.md`; call `$SM phase-log` and `$SM phase-complete phase-3b`).
+  4. Re-run Phase 3b (spawn `design-reviewer` again; write return value to `{workspace}/review-design.md`; call `mcp__forge-state__phase_log` and `mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-3b")`).
   5. After the re-run:
      - If the new verdict is **APPROVE**: continue to Checkpoint A.
      - If the new verdict is **APPROVE_WITH_NOTES**: treat as APPROVE — continue to Checkpoint A. Include remaining MINOR findings in the checkpoint presentation.
@@ -880,18 +932,21 @@ $SM phase-complete {workspace} phase-3b
 > This prose condition is the primary guard; Rule 3j in the hook is the safety net if the orchestrator bypasses this condition.
 > Print: "Auto-approving Checkpoint A (AI verdict: APPROVE_WITH_NOTES)." (or APPROVE)
 > Call:
-> ```bash
-> $SM checkpoint {workspace} checkpoint-a
-> $SM phase-complete {workspace} checkpoint-a
+> ```
+> mcp__forge-state__checkpoint(workspace={workspace}, phase="checkpoint-a")
+> # FALLBACK: bash scripts/state-manager.sh checkpoint {workspace} checkpoint-a
+> mcp__forge-state__phase_complete(workspace={workspace}, phase="checkpoint-a")
+> # FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} checkpoint-a
 > ```
 > Proceed directly to the next phase block.
 
 **If neither skip gate fired: do not proceed until the user approves.**
 
-> **MANDATORY** — call `$SM checkpoint` before presenting to the user. This sets `currentPhaseStatus: "awaiting_human"`, which is required for `phase-complete` to succeed (enforced by hook guard).
+> **MANDATORY** — call `mcp__forge-state__checkpoint` before presenting to the user. This sets `currentPhaseStatus: "awaiting_human"`, which is required for `phase-complete` to succeed (enforced by hook guard).
 
-```bash
-$SM checkpoint {workspace} checkpoint-a
+```
+mcp__forge-state__checkpoint(workspace={workspace}, phase="checkpoint-a")
+# FALLBACK: bash scripts/state-manager.sh checkpoint {workspace} checkpoint-a
 ```
 
 1. Read `{workspace}/review-design.md` for the AI reviewer's verdict and notes.
@@ -901,20 +956,27 @@ $SM checkpoint {workspace} checkpoint-a
    - The workspace path `{workspace}` (so the user can reference it if the session is interrupted)
 3. Ask: "Does this design look right? Approve to continue to task decomposition, or share feedback to revise."
 4. If the user requests changes:
-   ```bash
-   $SM set-revision-pending {workspace} checkpoint-a
+   ```
+   mcp__forge-state__set_revision_pending(workspace={workspace}, checkpoint="checkpoint-a")
+   # FALLBACK: bash scripts/state-manager.sh set-revision-pending {workspace} checkpoint-a
    ```
    (Only call this when the USER at this checkpoint requests a change.
    Do NOT call this for AI REVISE cycles where Phase 3b returns REVISE without user input at the checkpoint.)
    - Re-run Phase 3 with user feedback appended, then re-run Phase 3b.
-   - After Phase 3b completes, call: `$SM checkpoint {workspace} checkpoint-a`
+   - After Phase 3b completes, call:
+     ```
+     mcp__forge-state__checkpoint(workspace={workspace}, phase="checkpoint-a")
+     # FALLBACK: bash scripts/state-manager.sh checkpoint {workspace} checkpoint-a
+     ```
    - Re-present the updated design to the user. STOP AND WAIT.
 5. Once approved:
-   ```bash
-   $SM clear-revision-pending {workspace} checkpoint-a
-   $SM phase-complete {workspace} checkpoint-a
    ```
-   (Call `clear-revision-pending` before `phase-complete`, but only if `set-revision-pending` was previously called for this checkpoint.)
+   mcp__forge-state__clear_revision_pending(workspace={workspace}, checkpoint="checkpoint-a")
+   # FALLBACK: bash scripts/state-manager.sh clear-revision-pending {workspace} checkpoint-a
+   mcp__forge-state__phase_complete(workspace={workspace}, phase="checkpoint-a")
+   # FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} checkpoint-a
+   ```
+   (Call `clear_revision_pending` before `phase_complete`, but only if `set_revision_pending` was previously called for this checkpoint.)
 
 ---
 
@@ -925,8 +987,9 @@ $SM checkpoint {workspace} checkpoint-a
 **Agent**: `task-decomposer`
 **Output**: Return value → orchestrator writes to `tasks.md`
 
-```bash
-$SM phase-start {workspace} phase-4
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="phase-4")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} phase-4
 ```
 
 Run:
@@ -945,13 +1008,19 @@ If `$past_feedback` is non-empty, append it verbatim to the task-decomposer prom
 If this is a revision:
 - Append: `This is a revision. Also read {workspace}/review-tasks.md for AI review findings to address.`
 - Reuse `$past_feedback` captured above (do not re-run the script).
-- Run: `$SM revision-bump {workspace} tasks`
+- Run:
+  ```
+  mcp__forge-state__revision_bump(workspace={workspace}, rev_type="tasks")
+  # FALLBACK: bash scripts/state-manager.sh revision-bump {workspace} tasks
+  ```
 
 Write the return value to `{workspace}/tasks.md`.
 
-```bash
-$SM phase-log {workspace} phase-4 {total_tokens} {duration_ms} {model}
-$SM phase-complete {workspace} phase-4
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="phase-4", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} phase-4 {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-4")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-4
 ```
 
 ---
@@ -963,8 +1032,9 @@ $SM phase-complete {workspace} phase-4
 **Agent**: `task-reviewer`
 **Output**: Return value → orchestrator writes to `review-tasks.md`
 
-```bash
-$SM phase-start {workspace} phase-4b
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="phase-4b")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} phase-4b
 ```
 
 Immediately after Phase 4 completes, spawn the `task-reviewer` agent with:
@@ -975,18 +1045,24 @@ Immediately after Phase 4 completes, spawn the `task-reviewer` agent with:
 
 Write the return value to `{workspace}/review-tasks.md`.
 
-```bash
-$SM phase-log {workspace} phase-4b {total_tokens} {duration_ms} {model}
-$SM phase-complete {workspace} phase-4b
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="phase-4b", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} phase-4b {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-4b")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-4b
 ```
 
 - If verdict is **REVISE** (contains at least one CRITICAL finding): re-run Phase 4 with revision context, then re-run Phase 4b. Max 2 cycles before escalating to the human.
 - If verdict is **APPROVE** (no findings): continue to Checkpoint B.
 - If verdict is **APPROVE_WITH_NOTES** (MINOR findings only) — **inline revision path**:
-  1. Run: `$SM inline-revision-bump {workspace} tasks`
+  1. Run:
+     ```
+     mcp__forge-state__inline_revision_bump(workspace={workspace}, rev_type="tasks")
+     # FALLBACK: bash scripts/state-manager.sh inline-revision-bump {workspace} tasks
+     ```
   2. Read `{workspace}/tasks.md`.
   3. For each MINOR finding listed in `{workspace}/review-tasks.md`, apply the fix directly to `tasks.md` using the Edit tool.
-  4. Re-run Phase 4b (spawn `task-reviewer` again; write return value to `{workspace}/review-tasks.md`; call `$SM phase-log` and `$SM phase-complete phase-4b`).
+  4. Re-run Phase 4b (spawn `task-reviewer` again; write return value to `{workspace}/review-tasks.md`; call `mcp__forge-state__phase_log` and `mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-4b")`).
   5. After the re-run:
      - If the new verdict is **APPROVE**: continue to Checkpoint B.
      - If the new verdict is **APPROVE_WITH_NOTES**: treat as APPROVE — continue to Checkpoint B. Include remaining MINOR findings in the checkpoint presentation.
@@ -1010,9 +1086,11 @@ $SM phase-complete {workspace} phase-4b
 >
 > Print: "Auto-approving Checkpoint B (AI verdict: APPROVE_WITH_NOTES)." (or APPROVE)
 > Call:
-> ```bash
-> $SM checkpoint {workspace} checkpoint-b
-> $SM phase-complete {workspace} checkpoint-b
+> ```
+> mcp__forge-state__checkpoint(workspace={workspace}, phase="checkpoint-b")
+> # FALLBACK: bash scripts/state-manager.sh checkpoint {workspace} checkpoint-b
+> mcp__forge-state__phase_complete(workspace={workspace}, phase="checkpoint-b")
+> # FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} checkpoint-b
 > ```
 > Proceed to the change-request step below.
 
@@ -1020,13 +1098,14 @@ $SM phase-complete {workspace} phase-4b
 
 If neither skip gate fired:
 
-> **MANDATORY** — call `$SM checkpoint` before presenting to the user. This sets `currentPhaseStatus: "awaiting_human"`, which is required for `phase-complete` to succeed (enforced by hook guard).
+> **MANDATORY** — call `mcp__forge-state__checkpoint` before presenting to the user. This sets `currentPhaseStatus: "awaiting_human"`, which is required for `phase-complete` to succeed (enforced by hook guard).
 
 1. Call:
-   ```bash
-   $SM checkpoint {workspace} checkpoint-b
    ```
-   This sets `currentPhaseStatus = "awaiting_human"`. **DO NOT call `phase-complete` until the user replies.**
+   mcp__forge-state__checkpoint(workspace={workspace}, phase="checkpoint-b")
+   # FALLBACK: bash scripts/state-manager.sh checkpoint {workspace} checkpoint-b
+   ```
+   This sets `currentPhaseStatus = "awaiting_human"`. **DO NOT call `phase_complete` until the user replies.**
 
 2. Read `{workspace}/review-tasks.md` for the AI reviewer's verdict and notes.
 3. Present to the user:
@@ -1038,27 +1117,35 @@ If neither skip gate fired:
 5. **WAIT FOR USER RESPONSE. Do not proceed further in this message.**
 
 6. **Change-request step** — If the user requests changes:
-   ```bash
-   $SM set-revision-pending {workspace} checkpoint-b
+   ```
+   mcp__forge-state__set_revision_pending(workspace={workspace}, checkpoint="checkpoint-b")
+   # FALLBACK: bash scripts/state-manager.sh set-revision-pending {workspace} checkpoint-b
    ```
    (Only call this when the USER at this checkpoint requests a change.
    Do NOT call this for AI REVISE cycles where Phase 4b returns REVISE without user input at the checkpoint.)
    - Re-run Phase 4 with user feedback appended, then re-run Phase 4b.
-   - After Phase 4b completes, call: `$SM checkpoint {workspace} checkpoint-b`
+   - After Phase 4b completes, call:
+     ```
+     mcp__forge-state__checkpoint(workspace={workspace}, phase="checkpoint-b")
+     # FALLBACK: bash scripts/state-manager.sh checkpoint {workspace} checkpoint-b
+     ```
    - Re-present the updated tasks to the user. STOP AND WAIT.
 7. Once the user approves, call:
-   ```bash
-   $SM clear-revision-pending {workspace} checkpoint-b
-   $SM phase-complete {workspace} checkpoint-b
    ```
-   (Call `clear-revision-pending` before `phase-complete`, but only if `set-revision-pending` was previously called for this checkpoint.)
+   mcp__forge-state__clear_revision_pending(workspace={workspace}, checkpoint="checkpoint-b")
+   # FALLBACK: bash scripts/state-manager.sh clear-revision-pending {workspace} checkpoint-b
+   mcp__forge-state__phase_complete(workspace={workspace}, phase="checkpoint-b")
+   # FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} checkpoint-b
+   ```
+   (Call `clear_revision_pending` before `phase_complete`, but only if `set_revision_pending` was previously called for this checkpoint.)
 
 8. **Populate task state** — parse `tasks.md` and initialize task tracking (runs after human approval OR after the auto-approve path above):
-   ```bash
-   $SM task-init {workspace} '{
+   ```
+   mcp__forge-state__task_init(workspace={workspace}, tasks={
      "1": {"title": "Task 1 title", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0},
      "2": {"title": "Task 2 title", "executionMode": "parallel", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}
-   }'
+   })
+   # FALLBACK: bash scripts/state-manager.sh task-init {workspace} '{"1": {"title": "Task 1 title", "executionMode": "sequential", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}, "2": {"title": "Task 2 title", "executionMode": "parallel", "implStatus": "pending", "implRetries": 0, "reviewStatus": "pending", "reviewRetries": 0}}'
    ```
 
 ---
@@ -1070,8 +1157,9 @@ If neither skip gate fired:
 **Agent**: `implementer` (one per task)
 **One agent per task** (parallel for `[parallel]` tasks, sequential for `[sequential]` tasks)
 
-```bash
-$SM phase-start {workspace} phase-5
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="phase-5")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} phase-5
 ```
 
 ```bash
@@ -1086,7 +1174,10 @@ past_impl_patterns="$(bash scripts/query-specs-index.sh {workspace} {task_type} 
 - Otherwise: create a new feature branch as usual:
   ```bash
   git checkout -b feature/{spec-name}
-  $SM set-branch {workspace} feature/{spec-name}
+  ```
+  ```
+  mcp__forge-state__set_branch(workspace={workspace}, branch="feature/{spec-name}")
+  # FALLBACK: bash scripts/state-manager.sh set-branch {workspace} feature/{spec-name}
   ```
 All implementation agents work on this branch. Do NOT use `isolation: worktree`.
 
@@ -1098,8 +1189,9 @@ All implementation agents work on this branch. Do NOT use `isolation: worktree`.
 
 For each task, update state and spawn the `implementer` agent:
 
-```bash
-$SM task-update {workspace} {N} implStatus in_progress
+```
+mcp__forge-state__task_update(workspace={workspace}, task_num={N}, field="implStatus", value="in_progress")
+# FALLBACK: bash scripts/state-manager.sh task-update {workspace} {N} implStatus in_progress
 ```
 
 ```
@@ -1120,9 +1212,11 @@ Acceptance criteria (paste verbatim from tasks.md, preserving all AC-N: labels a
 If `$past_impl_patterns` is non-empty, append it verbatim to each implementer prompt before the `{workspace} = {workspace}` line (similar past implementations first, then workspace context).
 
 After the agent completes:
-```bash
-$SM phase-log {workspace} "task-{N}-impl" {total_tokens} {duration_ms} {model}
-$SM task-update {workspace} {N} implStatus completed
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="task-{N}-impl", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} "task-{N}-impl" {total_tokens} {duration_ms} {model}
+mcp__forge-state__task_update(workspace={workspace}, task_num={N}, field="implStatus", value="completed")
+# FALLBACK: bash scripts/state-manager.sh task-update {workspace} {N} implStatus completed
 ```
 
 For `[parallel]` tasks: launch all agents in the group simultaneously. Wait for all to finish,
@@ -1143,8 +1237,9 @@ For `[sequential]` tasks: launch one at a time and wait for completion (each age
 
 After each task (or batch of tasks) completes, update state and spawn the `impl-reviewer` agent:
 
-```bash
-$SM task-update {workspace} {N} reviewStatus in_progress
+```
+mcp__forge-state__task_update(workspace={workspace}, task_num={N}, field="reviewStatus", value="in_progress")
+# FALLBACK: bash scripts/state-manager.sh task-update {workspace} {N} reviewStatus in_progress
 ```
 
 ```
@@ -1156,23 +1251,29 @@ Task number: {N}
 Write the review output to `{workspace}/review-{N}.md`.
 
 After review:
-```bash
-$SM phase-log {workspace} "task-{N}-review" {total_tokens} {duration_ms} {model}
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="task-{N}-review", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} "task-{N}-review" {total_tokens} {duration_ms} {model}
 
 # If PASS or PASS_WITH_NOTES:
-$SM task-update {workspace} {N} reviewStatus completed_pass
+mcp__forge-state__task_update(workspace={workspace}, task_num={N}, field="reviewStatus", value="completed_pass")
+# FALLBACK: bash scripts/state-manager.sh task-update {workspace} {N} reviewStatus completed_pass
 
 # If FAIL — increment retry counter and re-run:
-$SM task-update {workspace} {N} reviewStatus completed_fail
-$SM task-update {workspace} {N} implRetries 1  # increment: 0→1→2
+mcp__forge-state__task_update(workspace={workspace}, task_num={N}, field="reviewStatus", value="completed_fail")
+# FALLBACK: bash scripts/state-manager.sh task-update {workspace} {N} reviewStatus completed_fail
+mcp__forge-state__task_update(workspace={workspace}, task_num={N}, field="implRetries", value="1")  # increment: 0→1→2
+# FALLBACK: bash scripts/state-manager.sh task-update {workspace} {N} implRetries 1  # increment: 0→1→2
 ```
 
 If a review returns `FAIL`: re-run Phase 5 for that task (passing the review file as additional context), then re-run Phase 6. Max 2 attempts per task — check `implRetries` before retrying. If retries exhausted, report to the user and ask how to proceed.
 
 When all tasks are reviewed and passing:
-```bash
-$SM phase-complete {workspace} phase-5
-$SM phase-complete {workspace} phase-6
+```
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-5")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-5
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-6")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-6
 ```
 
 ---
@@ -1186,8 +1287,9 @@ $SM phase-complete {workspace} phase-6
 
 After all tasks pass individual review, run a holistic review across the entire feature branch.
 
-```bash
-$SM phase-start {workspace} phase-7
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="phase-7")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} phase-7
 ```
 
 Spawn the `comprehensive-reviewer` agent with:
@@ -1199,9 +1301,11 @@ Spawn the `comprehensive-reviewer` agent with:
 
 Write the return value to `{workspace}/comprehensive-review.md`.
 
-```bash
-$SM phase-log {workspace} phase-7 {total_tokens} {duration_ms} {model}
-$SM phase-complete {workspace} phase-7
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="phase-7", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} phase-7 {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_complete(workspace={workspace}, phase="phase-7")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} phase-7
 ```
 
 If the comprehensive reviewer made fixes (verdict: IMPROVED), those changes are already committed by the agent. Proceed to Final Verification to confirm nothing is broken.
@@ -1214,8 +1318,9 @@ If the comprehensive reviewer made fixes (verdict: IMPROVED), those changes are 
 
 **Agent**: `verifier`
 
-```bash
-$SM phase-start {workspace} final-verification
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="final-verification")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} final-verification
 ```
 
 Spawn the `verifier` agent with:
@@ -1227,9 +1332,11 @@ Spawn the `verifier` agent with:
 
 If new failures are found: the verifier will fix them. If it cannot, report to the user.
 
-```bash
-$SM phase-log {workspace} final-verification {total_tokens} {duration_ms} {model}
-$SM phase-complete {workspace} final-verification
+```
+mcp__forge-state__phase_log(workspace={workspace}, phase="final-verification", tokens={total_tokens}, duration_ms={duration_ms}, model={model})
+# FALLBACK: bash scripts/state-manager.sh phase-log {workspace} final-verification {total_tokens} {duration_ms} {model}
+mcp__forge-state__phase_complete(workspace={workspace}, phase="final-verification")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} final-verification
 ```
 
 ---
@@ -1241,8 +1348,9 @@ $SM phase-complete {workspace} final-verification
 > **Skip gate 2 (--nopr):** If `{skip_pr}` is `true`: run the stage-commit step and the push step, but skip the gh-pr-create and capture-PR-number steps. Set `{pr-number}` to `none`. Print:
 > "Skipping PR creation (--nopr flag). Branch pushed to origin."
 
-```bash
-$SM phase-start {workspace} pr-creation
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="pr-creation")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} pr-creation
 ```
 
 Create a pull request for the feature branch:
@@ -1263,10 +1371,10 @@ Create a pull request for the feature branch:
 
    | Failure reason | How to detect | Recovery action |
    |---|---|---|
-   | Remote branch deleted / PR already merged | Exit non-zero AND (`error: src refspec {branch} does not match any` OR the branch is absent from `git ls-remote origin {branch}`). Note: if `git ls-remote` itself fails due to a network issue, treat as Network/transient failure instead. | Set `{pr-number}` to `none`. Call `$SM phase-complete {workspace} pr-creation`, skip steps 3–4, and continue to Final Summary. Report to user: "Push failed: remote branch `{branch}` no longer exists (PR may already be merged). Marking pr-creation complete with no PR number." |
-   | Network / transient failure | Exit non-zero AND error message contains `unable to connect`, `timeout`, `could not resolve`, or similar network language | Retry `git push -u origin {branch}` once. If the retry also fails, call `$SM phase-fail {workspace} pr-creation "git push failed: network error"` and halt. Report the error output to the user and ask them to retry when connectivity is restored. |
-   | Rejected push (non-fast-forward) | Exit non-zero AND error message contains `rejected`, `non-fast-forward`, `Updates were rejected` | Call `$SM phase-fail {workspace} pr-creation "git push rejected: non-fast-forward"`. Report to user with the full push error output. Ask the user whether to force-push (`git push --force-with-lease`) or investigate the branch divergence. Do not proceed automatically. |
-   | Any other push failure | Exit non-zero AND does not match the above | Call `$SM phase-fail {workspace} pr-creation "git push failed: <error summary>"`. Report the full error output to the user and halt. |
+   | Remote branch deleted / PR already merged | Exit non-zero AND (`error: src refspec {branch} does not match any` OR the branch is absent from `git ls-remote origin {branch}`). Note: if `git ls-remote` itself fails due to a network issue, treat as Network/transient failure instead. | Set `{pr-number}` to `none`. Call `mcp__forge-state__phase_complete(workspace={workspace}, phase="pr-creation")`, skip steps 3–4, and continue to Final Summary. Report to user: "Push failed: remote branch `{branch}` no longer exists (PR may already be merged). Marking pr-creation complete with no PR number." |
+   | Network / transient failure | Exit non-zero AND error message contains `unable to connect`, `timeout`, `could not resolve`, or similar network language | Retry `git push -u origin {branch}` once. If the retry also fails, call `mcp__forge-state__phase_fail(workspace={workspace}, phase="pr-creation", message="git push failed: network error")` and halt. Report the error output to the user and ask them to retry when connectivity is restored. |
+   | Rejected push (non-fast-forward) | Exit non-zero AND error message contains `rejected`, `non-fast-forward`, `Updates were rejected` | Call `mcp__forge-state__phase_fail(workspace={workspace}, phase="pr-creation", message="git push rejected: non-fast-forward")`. Report to user with the full push error output. Ask the user whether to force-push (`git push --force-with-lease`) or investigate the branch divergence. Do not proceed automatically. |
+   | Any other push failure | Exit non-zero AND does not match the above | Call `mcp__forge-state__phase_fail(workspace={workspace}, phase="pr-creation", message="git push failed: <error summary>")`. Report the full error output to the user and halt. |
 
 3. **Create the pull request** using `gh pr create`. Derive the title from `request.md` (short, under 70 chars). Build the body from `design.md` and `tasks.md`. If `source_type` is `github_issue`, include `Closes #<source_id>` in the body so GitHub automatically closes the issue when the PR is merged:
    ```bash
@@ -1292,19 +1400,21 @@ Create a pull request for the feature branch:
 
 4. **Capture the PR number** from the `gh pr create` output (it prints the PR URL). Extract the number and store as `{pr-number}`.
 
-```bash
-$SM phase-complete {workspace} pr-creation
+```
+mcp__forge-state__phase_complete(workspace={workspace}, phase="pr-creation")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} pr-creation
 ```
 
 ---
 
 ## Final Summary
 
-```bash
-$SM phase-start {workspace} final-summary
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="final-summary")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} final-summary
 ```
 
-Before writing summary.md: run `$SM phase-stats {workspace}` and capture its output for the Execution Stats section.
+Before writing summary.md: call `mcp__forge-state__phase_stats(workspace={workspace})` and capture its output for the Execution Stats section.
 
 **Dispatch on `{task_type}`** — select exactly one block below and follow only those steps:
 
@@ -1454,7 +1564,8 @@ If `{debug_mode}` is `false`, skip this section entirely and proceed to the impr
 
 If `{debug_mode}` is `true`:
 
-1. Run `$SM resume-info {workspace}` and capture its JSON output as `{debug_data}`.
+1. Call `mcp__forge-state__resume_info(workspace={workspace})` and capture its JSON output as `{debug_data}`.
+   (Or: `# FALLBACK: bash scripts/state-manager.sh resume-info {workspace}`)
    (Note: `currentPhaseStatus` in `{debug_data}` will show `in_progress` rather than
    `completed` at this point — `phase-complete final-summary` has not yet been called.
    This is expected; the debug report does not read or display `currentPhaseStatus`.)
@@ -1579,8 +1690,9 @@ _Retrospective on what would have made this work easier. Note: this run used the
 
 ---
 
-```bash
-$SM phase-complete {workspace} final-summary
+```
+mcp__forge-state__phase_complete(workspace={workspace}, phase="final-summary")
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} final-summary
 ```
 
 ---
@@ -1589,8 +1701,9 @@ $SM phase-complete {workspace} final-summary
 
 After Final Summary, check `request.md` front matter for `source_type`:
 
-```bash
-$SM phase-start {workspace} post-to-source
+```
+mcp__forge-state__phase_start(workspace={workspace}, phase="post-to-source")
+# FALLBACK: bash scripts/state-manager.sh phase-start {workspace} post-to-source
 ```
 
 | `source_type` | Action |
@@ -1599,11 +1712,12 @@ $SM phase-start {workspace} post-to-source
 | `jira_issue` | Post summary as a comment using `mcp__atlassian__addCommentToJiraIssue` with `issueIdOrKey: <source_id>` and the summary content as the comment body. |
 | `text` | Skip — no external posting. |
 
-```bash
-$SM phase-complete {workspace} post-to-source
+```
+mcp__forge-state__post_to_source(workspace={workspace})
+# FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} post-to-source
 ```
 
-> **MANDATORY — do not skip.** Amend the branch's last commit to capture the fully-completed `state.json` (all phases done) and `summary.md`. Without this step, `state.json` remains uncommitted and the pipeline's terminal state will not be persisted to the git history.
+> **MANDATORY — do not skip.** After `mcp__forge-state__post_to_source` completes, commit the fully-completed `state.json` (all phases done) and `summary.md` to the branch. This explicit git commit is required because `post-bash-hook.sh` auto-commit does NOT fire for MCP calls — the commit must be done manually. Without this step, `state.json` remains uncommitted and the pipeline's terminal state will not be persisted to the git history.
 > Skip only if `{task_type}` is `investigation` (no feature branch exists).
 >
 > ```bash
@@ -1627,12 +1741,12 @@ $SM phase-complete {workspace} post-to-source
 
 | Situation | Action |
 |-----------|--------|
-| Subagent returns empty or incoherent output | Retry once with the same prompt; if it fails again, run `$SM phase-fail` and report to user |
+| Subagent returns empty or incoherent output | Retry once with the same prompt; if it fails again, call `mcp__forge-state__phase_fail(workspace={workspace}, phase={phase}, message="...")` and report to user |
 | Design checkpoint rejected | Revise design with user feedback and re-present (max 2 revisions before asking user to clarify the request) |
 | Task checkpoint rejected | Revise tasks and re-present |
-| Implementation FAIL review | Re-implement with review as context (max 2 attempts per task); track with `$SM task-update` |
-| Test suite fails after implementation | Run `$SM phase-fail` and present the failure to the user |
-| `git push` fails during PR Creation | `phase-fail` or `phase-complete` depending on cause — see PR Creation error handling block |
+| Implementation FAIL review | Re-implement with review as context (max 2 attempts per task); track with `mcp__forge-state__task_update(...)` |
+| Test suite fails after implementation | Call `mcp__forge-state__phase_fail(...)` and present the failure to the user |
+| `git push` fails during PR Creation | `phase_fail` or `phase_complete` depending on cause — see PR Creation error handling block |
 | Final verification finds new failures | Fix before summarizing — do not leave a broken branch |
 | Residual imports of deleted code found in final verification | Spawn a fix agent to update all callers; re-run verification |
 | Pipeline interrupted | On next invocation, pass workspace path as `$ARGUMENTS` to resume from `state.json` |
