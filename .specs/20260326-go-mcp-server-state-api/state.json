@@ -1,0 +1,366 @@
+{
+  "version": 1,
+  "specName": "go-mcp-server-state-api",
+  "workspace": ".specs/20260326-go-mcp-server-state-api",
+  "branch": "feature/go-mcp-server-state-api",
+  "taskType": "feature",
+  "effort": "L",
+  "flowTemplate": "full",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "final-summary",
+    "final-verification",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "post-to-source",
+    "pr-creation",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 1,
+    "taskInlineRevisions": 1
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Go module scaffold and data model",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "StateManager phase lifecycle methods",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "StateManager config/task/log methods",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "StateManager unit tests and golden fixture",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 1,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Guard functions",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "MCP tool handlers and registry",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "7": {
+      "title": "Tool handler integration tests",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "8": {
+      "title": "Server entry point",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "9": {
+      "title": "Makefile additions and .gitignore update",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "10": {
+      "title": "SKILL.md migration to MCP tool calls",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "11": {
+      "title": "state-manager.sh deprecation and CLAUDE.md update",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 50559,
+      "duration_ms": 95686,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T01:50:28Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 95566,
+      "duration_ms": 266806,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T01:55:29Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 36774,
+      "duration_ms": 118120,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T01:58:47Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 31856,
+      "duration_ms": 71203,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:00:26Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 23923,
+      "duration_ms": 35297,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:02:01Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 27639,
+      "duration_ms": 81919,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:06:48Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 26349,
+      "duration_ms": 37478,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:07:49Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 31430,
+      "duration_ms": 64991,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:09:42Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 37312,
+      "duration_ms": 185408,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:28:19Z"
+    },
+    {
+      "phase": "task-1-review",
+      "tokens": 33768,
+      "duration_ms": 53764,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:29:38Z"
+    },
+    {
+      "phase": "task-2-impl",
+      "tokens": 61114,
+      "duration_ms": 247746,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:34:34Z"
+    },
+    {
+      "phase": "task-2-review",
+      "tokens": 51750,
+      "duration_ms": 71381,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:36:08Z"
+    },
+    {
+      "phase": "task-3-impl",
+      "tokens": 54082,
+      "duration_ms": 139363,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:38:58Z"
+    },
+    {
+      "phase": "task-3-review",
+      "tokens": 50077,
+      "duration_ms": 55971,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:40:12Z"
+    },
+    {
+      "phase": "task-4-impl",
+      "tokens": 69352,
+      "duration_ms": 209397,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:44:17Z"
+    },
+    {
+      "phase": "task-4-review",
+      "tokens": 54712,
+      "duration_ms": 115239,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:46:26Z"
+    },
+    {
+      "phase": "task-4-impl",
+      "tokens": 63596,
+      "duration_ms": 158227,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:49:31Z"
+    },
+    {
+      "phase": "task-4-review",
+      "tokens": 58406,
+      "duration_ms": 86645,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:51:11Z"
+    },
+    {
+      "phase": "task-5-impl",
+      "tokens": 53205,
+      "duration_ms": 182179,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:54:45Z"
+    },
+    {
+      "phase": "task-5-review",
+      "tokens": 33109,
+      "duration_ms": 33492,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T02:55:52Z"
+    },
+    {
+      "phase": "task-6-impl",
+      "tokens": 81528,
+      "duration_ms": 324082,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:01:48Z"
+    },
+    {
+      "phase": "task-6-review",
+      "tokens": 54847,
+      "duration_ms": 107315,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:03:50Z"
+    },
+    {
+      "phase": "task-7-impl",
+      "tokens": 51101,
+      "duration_ms": 99815,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:05:52Z"
+    },
+    {
+      "phase": "task-7-review",
+      "tokens": 31104,
+      "duration_ms": 43712,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:06:49Z"
+    },
+    {
+      "phase": "task-8-impl",
+      "tokens": 35824,
+      "duration_ms": 102344,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:08:59Z"
+    },
+    {
+      "phase": "task-8-review",
+      "tokens": 26281,
+      "duration_ms": 33236,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:09:45Z"
+    },
+    {
+      "phase": "task-9-impl",
+      "tokens": 30564,
+      "duration_ms": 91065,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:22:21Z"
+    },
+    {
+      "phase": "task-10-impl",
+      "tokens": 120572,
+      "duration_ms": 563208,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:22:21Z"
+    },
+    {
+      "phase": "task-11-impl",
+      "tokens": 44230,
+      "duration_ms": 95336,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:22:21Z"
+    },
+    {
+      "phase": "task-9-review",
+      "tokens": 56846,
+      "duration_ms": 84450,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:22:21Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 67371,
+      "duration_ms": 230862,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:26:51Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 23439,
+      "duration_ms": 44338,
+      "model": "sonnet",
+      "timestamp": "2026-03-26T03:27:50Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-26T01:47:48Z",
+    "lastUpdated": "2026-03-26T03:29:16Z",
+    "phaseStarted": null
+  },
+  "error": null
+}
