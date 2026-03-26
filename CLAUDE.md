@@ -149,7 +149,7 @@ SKILL.md (orchestrator)
 
 **Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes all 26 `state-manager.sh` subcommands as typed tool calls, plus additional MCP-only tools (currently `search_patterns` and `subscribe_events`). The total MCP tool count is 28. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
 
-**MCP-only tools** — `search_patterns` is exposed as an MCP tool but has no `state-manager.sh` shell equivalent. It performs BM25 scoring over `.specs/index.json` and is MCP-only by design (see design rationale in `ARCHITECTURE.md`). The shell fallback for environments without the MCP server is `query-specs-index.sh`.
+**MCP-only tools** — `search_patterns` and `subscribe_events` are exposed as MCP tools but have no `state-manager.sh` shell equivalents. `search_patterns` performs BM25 scoring over `.specs/index.json` (see design rationale in `ARCHITECTURE.md`); the shell fallback is `query-specs-index.sh`. `subscribe_events` is a discovery tool that returns the SSE endpoint URL when `FORGE_EVENTS_PORT` is set; there is no shell equivalent.
 
 **Canonical command list** (shell name → MCP tool name):
 
