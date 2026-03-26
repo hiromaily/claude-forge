@@ -1,0 +1,89 @@
+// Package state defines the State data model for the forge-state MCP server.
+// The Go struct field json tags must remain in 1:1 correspondence with the
+// state.json schema produced by scripts/state-manager.sh.
+package state
+
+// ValidPhases enumerates all legal phase identifiers.
+var ValidPhases = []string{
+	"setup", "phase-1", "phase-2", "phase-3", "phase-3b",
+	"checkpoint-a", "phase-4", "phase-4b", "checkpoint-b",
+	"phase-5", "phase-6", "phase-7", "final-verification",
+	"pr-creation", "final-summary", "post-to-source", "completed",
+}
+
+// ValidEfforts enumerates legal effort labels.
+var ValidEfforts = []string{"XS", "S", "M", "L"}
+
+// ValidTemplates enumerates legal flow template names.
+var ValidTemplates = []string{"direct", "lite", "light", "standard", "full"}
+
+// ValidRevTypes enumerates legal revision type identifiers.
+var ValidRevTypes = []string{"design", "tasks"}
+
+// State mirrors the top-level state.json object written by state-manager.sh.
+type State struct {
+	Version                   int             `json:"version"`
+	SpecName                  string          `json:"specName"`
+	Workspace                 string          `json:"workspace"`
+	Branch                    *string         `json:"branch"`
+	TaskType                  *string         `json:"taskType"`
+	Effort                    *string         `json:"effort"`
+	FlowTemplate              *string         `json:"flowTemplate"`
+	AutoApprove               bool            `json:"autoApprove"`
+	SkipPr                    bool            `json:"skipPr"`
+	UseCurrentBranch          bool            `json:"useCurrentBranch"`
+	Debug                     bool            `json:"debug"`
+	SkippedPhases             []string        `json:"skippedPhases"`
+	CurrentPhase              string          `json:"currentPhase"`
+	CurrentPhaseStatus        string          `json:"currentPhaseStatus"`
+	CompletedPhases           []string        `json:"completedPhases"`
+	Revisions                 Revisions       `json:"revisions"`
+	CheckpointRevisionPending map[string]bool `json:"checkpointRevisionPending"`
+	Tasks                     map[string]Task `json:"tasks"`
+	PhaseLog                  []PhaseLogEntry `json:"phaseLog"`
+	Timestamps                Timestamps      `json:"timestamps"`
+	Error                     *PhaseError     `json:"error"`
+}
+
+// Revisions holds counters for design/task review revision cycles.
+type Revisions struct {
+	DesignRevisions       int `json:"designRevisions"`
+	TaskRevisions         int `json:"taskRevisions"`
+	DesignInlineRevisions int `json:"designInlineRevisions"`
+	TaskInlineRevisions   int `json:"taskInlineRevisions"`
+}
+
+// Task represents a single implementation task entry inside state.Tasks.
+// ImplRetries and ReviewRetries are JSON numbers (int), not strings.
+type Task struct {
+	Title         string `json:"title"`
+	ExecutionMode string `json:"executionMode"`
+	ImplStatus    string `json:"implStatus"`
+	ReviewStatus  string `json:"reviewStatus"`
+	ImplRetries   int    `json:"implRetries"`
+	ReviewRetries int    `json:"reviewRetries"`
+}
+
+// PhaseLogEntry records token/duration metrics for a completed phase.
+// DurationMs maps to the "duration_ms" JSON key to match shell-script output.
+type PhaseLogEntry struct {
+	Phase      string `json:"phase"`
+	Tokens     int    `json:"tokens"`
+	DurationMs int    `json:"duration_ms"`
+	Model      string `json:"model"`
+	Timestamp  string `json:"timestamp"`
+}
+
+// Timestamps holds ISO-8601/RFC-3339 wall-clock timestamps for the pipeline.
+type Timestamps struct {
+	Created      string  `json:"created"`
+	LastUpdated  string  `json:"lastUpdated"`
+	PhaseStarted *string `json:"phaseStarted"`
+}
+
+// PhaseError captures error details when a phase fails.
+type PhaseError struct {
+	Phase     string `json:"phase"`
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp"`
+}
