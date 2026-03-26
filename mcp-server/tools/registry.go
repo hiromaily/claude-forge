@@ -1,4 +1,4 @@
-// Package tools registers all 27 MCP tool handlers with the MCP server.
+// Package tools registers all 28 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -9,9 +9,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// RegisterAll registers all 27 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 28 tool handlers with srv, delegating to sm.
+// bus receives published events from the five state-mutation handlers.
+// slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
+// eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
 // This is the single entry point called from main.go.
-func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
+func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier, eventsPort string) {
 	srv.AddTool(
 		mcp.NewTool("init",
 			mcp.WithDescription("Initialise a new pipeline workspace (state.json). Requires validated=true after validate-input.sh succeeds."),
@@ -37,7 +40,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier, e.g. phase-1, phase-2")),
 		),
-		PhaseStartHandler(sm, events.NewEventBus()),
+		PhaseStartHandler(sm, bus),
 	)
 
 	srv.AddTool(
@@ -46,7 +49,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier")),
 		),
-		PhaseCompleteHandler(sm, events.NewEventBus(), events.NewSlackNotifier("")),
+		PhaseCompleteHandler(sm, bus, slack),
 	)
 
 	srv.AddTool(
@@ -56,7 +59,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier")),
 			mcp.WithString("message", mcp.Description("Human-readable failure reason")),
 		),
-		PhaseFailHandler(sm, events.NewEventBus(), events.NewSlackNotifier("")),
+		PhaseFailHandler(sm, bus, slack),
 	)
 
 	srv.AddTool(
@@ -65,7 +68,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("phase", mcp.Required(), mcp.Description("checkpoint-a or checkpoint-b")),
 		),
-		CheckpointHandler(sm, events.NewEventBus()),
+		CheckpointHandler(sm, bus),
 	)
 
 	srv.AddTool(
@@ -227,7 +230,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithDescription("Mark the pipeline as abandoned."),
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 		),
-		AbandonHandler(sm, events.NewEventBus(), events.NewSlackNotifier("")),
+		AbandonHandler(sm, bus, slack),
 	)
 
 	srv.AddTool(
@@ -255,5 +258,12 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("mode", mcp.Description("Output mode: \"impl\" for implementation patterns; any other value means review-feedback mode")),
 		),
 		SearchPatternsHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("subscribe_events",
+			mcp.WithDescription("Return the SSE endpoint URL for real-time phase transition events. Returns {\"endpoint\":\"http://localhost:<port>/events\"} when FORGE_EVENTS_PORT is set, or an informational message when SSE is not configured."),
+		),
+		SubscribeEventsHandler(eventsPort),
 	)
 }
