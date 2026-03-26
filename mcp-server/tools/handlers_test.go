@@ -441,7 +441,6 @@ func TestPhaseLogHandlerWarn3d(t *testing.T) {
 	}
 }
 
-
 // ---------- helpers ----------
 
 // textContent extracts the text from the first TextContent item in a result.
