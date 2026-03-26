@@ -640,3 +640,496 @@ func TestPhaseStart_MissingStateFile_ReturnsError(t *testing.T) {
 		t.Error("PhaseStart on missing state.json: expected error, got nil")
 	}
 }
+
+// ---------- SetEffort ----------
+
+func TestSetEffort_ValidValues_Accepted(t *testing.T) {
+	for _, effort := range state.ValidEfforts {
+		dir := t.TempDir()
+		m := newManager()
+		if err := m.Init(dir, "s"); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+
+		if err := m.SetEffort(dir, effort); err != nil {
+			t.Errorf("SetEffort(%q): unexpected error: %v", effort, err)
+			continue
+		}
+
+		s := loadState(t, dir)
+		if s.Effort == nil || *s.Effort != effort {
+			t.Errorf("SetEffort(%q): effort field not set correctly, got %v", effort, s.Effort)
+		}
+	}
+}
+
+func TestSetEffort_InvalidValue_ReturnsDescriptiveError(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	err := m.SetEffort(dir, "INVALID")
+	if err == nil {
+		t.Fatal("SetEffort(INVALID): expected error, got nil")
+	}
+	// Error must be descriptive — it should mention the invalid value or valid options.
+	msg := err.Error()
+	if msg == "" {
+		t.Error("SetEffort error message must not be empty")
+	}
+	// Check that it references "INVALID" or lists valid options
+	if !containsAny(msg, "INVALID", "XS", "S", "M", "L") {
+		t.Errorf("SetEffort error not descriptive enough: %q", msg)
+	}
+}
+
+func TestSetEffort_InvalidValues_AllRejected(t *testing.T) {
+	invalid := []string{"", "xs", "XL", "LARGE", "medium"}
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	for _, v := range invalid {
+		if err := m.SetEffort(dir, v); err == nil {
+			t.Errorf("SetEffort(%q): expected error, got nil", v)
+		}
+	}
+}
+
+// ---------- SetFlowTemplate ----------
+
+func TestSetFlowTemplate_ValidValues_Accepted(t *testing.T) {
+	for _, tmpl := range state.ValidTemplates {
+		dir := t.TempDir()
+		m := newManager()
+		if err := m.Init(dir, "s"); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+
+		if err := m.SetFlowTemplate(dir, tmpl); err != nil {
+			t.Errorf("SetFlowTemplate(%q): unexpected error: %v", tmpl, err)
+			continue
+		}
+
+		s := loadState(t, dir)
+		if s.FlowTemplate == nil || *s.FlowTemplate != tmpl {
+			t.Errorf("SetFlowTemplate(%q): flowTemplate field not set correctly, got %v", tmpl, s.FlowTemplate)
+		}
+	}
+}
+
+func TestSetFlowTemplate_InvalidValue_ReturnsDescriptiveError(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	err := m.SetFlowTemplate(dir, "heavy")
+	if err == nil {
+		t.Fatal("SetFlowTemplate(heavy): expected error, got nil")
+	}
+	msg := err.Error()
+	if msg == "" {
+		t.Error("SetFlowTemplate error message must not be empty")
+	}
+	// Error must mention the invalid value or list valid options.
+	if !containsAny(msg, "heavy", "direct", "lite", "standard", "full") {
+		t.Errorf("SetFlowTemplate error not descriptive enough: %q", msg)
+	}
+}
+
+func TestSetFlowTemplate_InvalidValues_AllRejected(t *testing.T) {
+	invalid := []string{"", "LITE", "Full", "medium", "custom"}
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	for _, v := range invalid {
+		if err := m.SetFlowTemplate(dir, v); err == nil {
+			t.Errorf("SetFlowTemplate(%q): expected error, got nil", v)
+		}
+	}
+}
+
+// ---------- TaskInit ----------
+
+func TestTaskInit_StoresAllTasks_WritesState(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	tasks := map[string]state.Task{
+		"1": {Title: "First task", ExecutionMode: "sequential", ImplStatus: "pending", ReviewStatus: "pending"},
+		"2": {Title: "Second task", ExecutionMode: "parallel", ImplStatus: "pending", ReviewStatus: "pending"},
+		"3": {Title: "Third task", ExecutionMode: "sequential", ImplStatus: "pending", ReviewStatus: "pending", ImplRetries: 0, ReviewRetries: 0},
+	}
+
+	if err := m.TaskInit(dir, tasks); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	s := loadState(t, dir)
+	if len(s.Tasks) != 3 {
+		t.Errorf("tasks count: got %d, want 3", len(s.Tasks))
+	}
+	for num, want := range tasks {
+		got, ok := s.Tasks[num]
+		if !ok {
+			t.Errorf("task %q not found in state", num)
+			continue
+		}
+		if got.Title != want.Title {
+			t.Errorf("task %q title: got %q, want %q", num, got.Title, want.Title)
+		}
+		if got.ExecutionMode != want.ExecutionMode {
+			t.Errorf("task %q executionMode: got %q, want %q", num, got.ExecutionMode, want.ExecutionMode)
+		}
+	}
+}
+
+func TestTaskInit_EmptyMap_WritesEmptyTasks(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.TaskInit(dir, map[string]state.Task{}); err != nil {
+		t.Fatalf("TaskInit(empty): %v", err)
+	}
+
+	s := loadState(t, dir)
+	if len(s.Tasks) != 0 {
+		t.Errorf("tasks: got %d entries, want 0", len(s.Tasks))
+	}
+}
+
+// ---------- TaskUpdate ----------
+
+func TestTaskUpdate_ImplStatus_UpdatesOnly(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	tasks := map[string]state.Task{
+		"1": {Title: "Task one", ImplStatus: "pending", ReviewStatus: "pending"},
+	}
+	if err := m.TaskInit(dir, tasks); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	if err := m.TaskUpdate(dir, "1", "implStatus", "completed"); err != nil {
+		t.Fatalf("TaskUpdate(implStatus): %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.Tasks["1"].ImplStatus != "completed" {
+		t.Errorf("implStatus: got %q, want %q", s.Tasks["1"].ImplStatus, "completed")
+	}
+	// Other fields should remain unchanged.
+	if s.Tasks["1"].ReviewStatus != "pending" {
+		t.Errorf("reviewStatus: got %q, want %q (should be unchanged)", s.Tasks["1"].ReviewStatus, "pending")
+	}
+	if s.Tasks["1"].Title != "Task one" {
+		t.Errorf("title: got %q, want %q (should be unchanged)", s.Tasks["1"].Title, "Task one")
+	}
+}
+
+func TestTaskUpdate_ReviewStatus_UpdatesOnly(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	tasks := map[string]state.Task{
+		"1": {Title: "Task one", ImplStatus: "completed", ReviewStatus: "pending"},
+	}
+	if err := m.TaskInit(dir, tasks); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	if err := m.TaskUpdate(dir, "1", "reviewStatus", "completed_pass"); err != nil {
+		t.Fatalf("TaskUpdate(reviewStatus): %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.Tasks["1"].ReviewStatus != "completed_pass" {
+		t.Errorf("reviewStatus: got %q, want %q", s.Tasks["1"].ReviewStatus, "completed_pass")
+	}
+	// implStatus should be untouched.
+	if s.Tasks["1"].ImplStatus != "completed" {
+		t.Errorf("implStatus: got %q, want %q (should be unchanged)", s.Tasks["1"].ImplStatus, "completed")
+	}
+}
+
+func TestTaskUpdate_ImplRetries_ParsesInt(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	tasks := map[string]state.Task{
+		"1": {Title: "T", ImplRetries: 0, ReviewRetries: 0},
+	}
+	if err := m.TaskInit(dir, tasks); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	if err := m.TaskUpdate(dir, "1", "implRetries", "3"); err != nil {
+		t.Fatalf("TaskUpdate(implRetries): %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.Tasks["1"].ImplRetries != 3 {
+		t.Errorf("implRetries: got %d, want 3", s.Tasks["1"].ImplRetries)
+	}
+	// reviewRetries should remain 0.
+	if s.Tasks["1"].ReviewRetries != 0 {
+		t.Errorf("reviewRetries: got %d, want 0 (should be unchanged)", s.Tasks["1"].ReviewRetries)
+	}
+}
+
+func TestTaskUpdate_ReviewRetries_ParsesInt(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	tasks := map[string]state.Task{
+		"1": {Title: "T"},
+	}
+	if err := m.TaskInit(dir, tasks); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	if err := m.TaskUpdate(dir, "1", "reviewRetries", "2"); err != nil {
+		t.Fatalf("TaskUpdate(reviewRetries): %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.Tasks["1"].ReviewRetries != 2 {
+		t.Errorf("reviewRetries: got %d, want 2", s.Tasks["1"].ReviewRetries)
+	}
+}
+
+func TestTaskUpdate_ImplRetries_InvalidInt_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	tasks := map[string]state.Task{"1": {Title: "T"}}
+	if err := m.TaskInit(dir, tasks); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	if err := m.TaskUpdate(dir, "1", "implRetries", "not-a-number"); err == nil {
+		t.Error("TaskUpdate(implRetries, not-a-number): expected error, got nil")
+	}
+}
+
+func TestTaskUpdate_UnknownTask_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if err := m.TaskInit(dir, map[string]state.Task{"1": {Title: "T"}}); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	if err := m.TaskUpdate(dir, "99", "implStatus", "completed"); err == nil {
+		t.Error("TaskUpdate on unknown task: expected error, got nil")
+	}
+}
+
+func TestTaskUpdate_UnknownField_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if err := m.TaskInit(dir, map[string]state.Task{"1": {Title: "T"}}); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	if err := m.TaskUpdate(dir, "1", "unknownField", "value"); err == nil {
+		t.Error("TaskUpdate with unknown field: expected error, got nil")
+	}
+}
+
+// ---------- PhaseLog ----------
+
+func TestPhaseLog_AppendsSingleEntry(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.PhaseLog(dir, "phase-1", 5000, 30000, "sonnet"); err != nil {
+		t.Fatalf("PhaseLog: %v", err)
+	}
+
+	s := loadState(t, dir)
+	if len(s.PhaseLog) != 1 {
+		t.Fatalf("phaseLog length: got %d, want 1", len(s.PhaseLog))
+	}
+	entry := s.PhaseLog[0]
+	if entry.Phase != "phase-1" {
+		t.Errorf("phase: got %q, want %q", entry.Phase, "phase-1")
+	}
+	if entry.Tokens != 5000 {
+		t.Errorf("tokens: got %d, want 5000", entry.Tokens)
+	}
+	if entry.DurationMs != 30000 {
+		t.Errorf("duration_ms: got %d, want 30000", entry.DurationMs)
+	}
+	if entry.Model != "sonnet" {
+		t.Errorf("model: got %q, want %q", entry.Model, "sonnet")
+	}
+	if entry.Timestamp == "" {
+		t.Error("timestamp: want non-empty RFC3339 value")
+	}
+}
+
+func TestPhaseLog_AppendsMultipleEntries(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	entries := []struct {
+		phase      string
+		tokens     int
+		durationMs int
+		model      string
+	}{
+		{"phase-1", 1000, 10000, "sonnet"},
+		{"phase-2", 2000, 20000, "opus"},
+		{"phase-3", 3000, 30000, "sonnet"},
+	}
+
+	for _, e := range entries {
+		if err := m.PhaseLog(dir, e.phase, e.tokens, e.durationMs, e.model); err != nil {
+			t.Fatalf("PhaseLog(%q): %v", e.phase, err)
+		}
+	}
+
+	s := loadState(t, dir)
+	if len(s.PhaseLog) != 3 {
+		t.Fatalf("phaseLog length: got %d, want 3", len(s.PhaseLog))
+	}
+	for i, want := range entries {
+		got := s.PhaseLog[i]
+		if got.Phase != want.phase {
+			t.Errorf("entry[%d].phase: got %q, want %q", i, got.Phase, want.phase)
+		}
+		if got.Tokens != want.tokens {
+			t.Errorf("entry[%d].tokens: got %d, want %d", i, got.Tokens, want.tokens)
+		}
+		if got.DurationMs != want.durationMs {
+			t.Errorf("entry[%d].duration_ms: got %d, want %d", i, got.DurationMs, want.durationMs)
+		}
+		if got.Model != want.model {
+			t.Errorf("entry[%d].model: got %q, want %q", i, got.Model, want.model)
+		}
+		if got.Timestamp == "" {
+			t.Errorf("entry[%d].timestamp: want non-empty", i)
+		}
+	}
+}
+
+// ---------- PhaseStats ----------
+
+func TestPhaseStats_EmptyLog_ReturnsZeroes(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	result, err := m.PhaseStats(dir)
+	if err != nil {
+		t.Fatalf("PhaseStats: %v", err)
+	}
+	if result.TotalTokens != 0 {
+		t.Errorf("totalTokens: got %d, want 0", result.TotalTokens)
+	}
+	if result.TotalDurationMs != 0 {
+		t.Errorf("totalDurationMs: got %d, want 0", result.TotalDurationMs)
+	}
+	if len(result.Entries) != 0 {
+		t.Errorf("entries: got %d, want 0", len(result.Entries))
+	}
+}
+
+func TestPhaseStats_AggregatesCorrectly(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.PhaseLog(dir, "phase-1", 1000, 10000, "sonnet"); err != nil {
+		t.Fatalf("PhaseLog 1: %v", err)
+	}
+	if err := m.PhaseLog(dir, "phase-2", 2000, 20000, "sonnet"); err != nil {
+		t.Fatalf("PhaseLog 2: %v", err)
+	}
+	if err := m.PhaseLog(dir, "phase-3", 3000, 30000, "opus"); err != nil {
+		t.Fatalf("PhaseLog 3: %v", err)
+	}
+
+	result, err := m.PhaseStats(dir)
+	if err != nil {
+		t.Fatalf("PhaseStats: %v", err)
+	}
+
+	if result.TotalTokens != 6000 {
+		t.Errorf("totalTokens: got %d, want 6000", result.TotalTokens)
+	}
+	if result.TotalDurationMs != 60000 {
+		t.Errorf("totalDurationMs: got %d, want 60000", result.TotalDurationMs)
+	}
+	if len(result.Entries) != 3 {
+		t.Errorf("entries count: got %d, want 3", len(result.Entries))
+	}
+	// Verify per-phase data is present.
+	if result.Entries[0].Phase != "phase-1" {
+		t.Errorf("entries[0].phase: got %q, want %q", result.Entries[0].Phase, "phase-1")
+	}
+	if result.Entries[2].Model != "opus" {
+		t.Errorf("entries[2].model: got %q, want %q", result.Entries[2].Model, "opus")
+	}
+}
+
+// ---------- helper ----------
+
+// containsAny returns true if s contains any of the given substrings.
+func containsAny(s string, substrings ...string) bool {
+	for _, sub := range substrings {
+		if len(sub) > 0 {
+			idx := 0
+			for i := 0; i <= len(s)-len(sub); i++ {
+				if s[i:i+len(sub)] == sub {
+					idx = i + 1
+					_ = idx
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
