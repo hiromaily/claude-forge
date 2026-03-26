@@ -1,0 +1,247 @@
+// Package tools registers all 26 MCP tool handlers with the MCP server.
+// Tool names use underscores (hyphens from state-manager.sh commands are converted).
+package tools
+
+import (
+	"github.com/hiromaily/claude-forge/mcp-server/state"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+)
+
+// RegisterAll registers all 26 tool handlers with srv, delegating to sm.
+// This is the single entry point called from main.go.
+func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
+	srv.AddTool(
+		mcp.NewTool("init",
+			mcp.WithDescription("Initialise a new pipeline workspace (state.json). Requires validated=true after validate-input.sh succeeds."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("spec_name", mcp.Required(), mcp.Description("Spec/project identifier")),
+			mcp.WithBoolean("validated", mcp.Required(), mcp.Description("Must be true — pass only after validate-input.sh exits 0")),
+		),
+		InitHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("get",
+			mcp.WithDescription("Read a single field from state.json. Supports top-level and dot-notation sub-fields."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("field", mcp.Required(), mcp.Description("Field name, e.g. specName, currentPhase, revisions.designRevisions")),
+		),
+		GetHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("phase_start",
+			mcp.WithDescription("Mark a phase as in_progress. Blocked when tasks are empty for phase-5."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier, e.g. phase-1, phase-2")),
+		),
+		PhaseStartHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("phase_complete",
+			mcp.WithDescription("Mark a phase as completed and advance to the next phase. Enforces artifact, checkpoint, and revision-pending guards."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier")),
+		),
+		PhaseCompleteHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("phase_fail",
+			mcp.WithDescription("Record a phase failure with an error message."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier")),
+			mcp.WithString("message", mcp.Description("Human-readable failure reason")),
+		),
+		PhaseFailHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("checkpoint",
+			mcp.WithDescription("Register a human-review pause by setting currentPhaseStatus to awaiting_human."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("phase", mcp.Required(), mcp.Description("checkpoint-a or checkpoint-b")),
+		),
+		CheckpointHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("task_init",
+			mcp.WithDescription("Populate state.Tasks with the task map. Requires checkpoint-b to be completed or skipped."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithObject("tasks", mcp.Required(), mcp.Description("Map of task number → task object")),
+		),
+		TaskInitHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("task_update",
+			mcp.WithDescription("Update a single field in a task entry. Enforces review-file guard when setting reviewStatus=completed_pass."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("task_num", mcp.Required(), mcp.Description("Task number key, e.g. 1, 2")),
+			mcp.WithString("field", mcp.Required(), mcp.Description("Field to update: implStatus, reviewStatus, implRetries, reviewRetries")),
+			mcp.WithString("value", mcp.Required(), mcp.Description("New value for the field")),
+		),
+		TaskUpdateHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("revision_bump",
+			mcp.WithDescription("Increment the design or tasks revision counter."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("rev_type", mcp.Required(), mcp.Description("design or tasks")),
+		),
+		RevisionBumpHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("inline_revision_bump",
+			mcp.WithDescription("Increment the design or tasks inline revision counter."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("rev_type", mcp.Required(), mcp.Description("design or tasks")),
+		),
+		InlineRevisionBumpHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("set_branch",
+			mcp.WithDescription("Set the branch field in state.json."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("branch", mcp.Required(), mcp.Description("Git branch name")),
+		),
+		SetBranchHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("set_task_type",
+			mcp.WithDescription("Set the taskType field in state.json."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("task_type", mcp.Required(), mcp.Description("Task type identifier, e.g. feature, bugfix")),
+		),
+		SetTaskTypeHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("set_effort",
+			mcp.WithDescription("Set the effort field. Valid values: XS, S, M, L."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("effort", mcp.Required(), mcp.Description("XS, S, M, or L")),
+		),
+		SetEffortHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("set_flow_template",
+			mcp.WithDescription("Set the flowTemplate field. Valid values: direct, lite, light, standard, full."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("flow_template", mcp.Required(), mcp.Description("direct, lite, light, standard, or full")),
+		),
+		SetFlowTemplateHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("set_auto_approve",
+			mcp.WithDescription("Set autoApprove = true in state.json."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+		),
+		SetAutoApproveHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("set_skip_pr",
+			mcp.WithDescription("Set skipPr = true in state.json."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+		),
+		SetSkipPrHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("set_debug",
+			mcp.WithDescription("Set debug = true in state.json."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+		),
+		SetDebugHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("set_use_current_branch",
+			mcp.WithDescription("Set useCurrentBranch = true and branch = the provided value."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("branch", mcp.Required(), mcp.Description("Existing git branch name")),
+		),
+		SetUseCurrentBranchHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("set_revision_pending",
+			mcp.WithDescription("Set checkpointRevisionPending[checkpoint] = true to indicate a user-requested revision."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("checkpoint", mcp.Required(), mcp.Description("checkpoint-a or checkpoint-b")),
+		),
+		SetRevisionPendingHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("clear_revision_pending",
+			mcp.WithDescription("Clear checkpointRevisionPending[checkpoint] after the user approves the revision."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("checkpoint", mcp.Required(), mcp.Description("checkpoint-a or checkpoint-b")),
+		),
+		ClearRevisionPendingHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("skip_phase",
+			mcp.WithDescription("Add a phase to skippedPhases and advance currentPhase."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier to skip")),
+		),
+		SkipPhaseHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("phase_log",
+			mcp.WithDescription("Append a token/duration metrics entry to phaseLog. Issues a warning when a duplicate entry for the same phase already exists."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier")),
+			mcp.WithNumber("tokens", mcp.Required(), mcp.Description("Token count for this phase")),
+			mcp.WithNumber("duration_ms", mcp.Required(), mcp.Description("Wall-clock duration in milliseconds")),
+			mcp.WithString("model", mcp.Required(), mcp.Description("Model identifier, e.g. sonnet")),
+		),
+		PhaseLogHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("phase_stats",
+			mcp.WithDescription("Return aggregated token and duration statistics from phaseLog."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+		),
+		PhaseStatsHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("abandon",
+			mcp.WithDescription("Mark the pipeline as abandoned."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+		),
+		AbandonHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("resume_info",
+			mcp.WithDescription("Return a structured summary of pipeline state for orchestrator resume logic."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+		),
+		ResumeInfoHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("refresh_index",
+			mcp.WithDescription("Execute build-specs-index.sh via os/exec to rebuild .specs/index.json. Returns an error if the script exits non-zero."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+		),
+		RefreshIndexHandler(sm),
+	)
+}

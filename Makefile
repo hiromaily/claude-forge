@@ -1,4 +1,30 @@
 
+MCP_DIR    := mcp-server
+MCP_BINARY := forge-state-mcp
+INSTALL_DIR := $(or $(GOBIN),$(HOME)/.local/bin)
+
+# build: Compile the MCP server binary to bin/forge-state-mcp
+.PHONY: build
+build:
+	mkdir -p bin
+	cd $(MCP_DIR) && go build -o ../bin/$(MCP_BINARY) .
+
+# install: Build and copy the binary to $(GOBIN) or ~/.local/bin
+.PHONY: install
+install: build
+	mkdir -p $(INSTALL_DIR)
+	cp bin/$(MCP_BINARY) $(INSTALL_DIR)/$(MCP_BINARY)
+
+# test: Run the Go test suite for mcp-server/
+.PHONY: test
+test:
+	cd $(MCP_DIR) && go test ./...
+
+# clean: Remove the built binary
+.PHONY: clean
+clean:
+	rm -f bin/$(MCP_BINARY)
+
 # update-tag: Update the version tag in marketplace.json and plugin metadata to new version
 # e.g. make update-tag new=1.1.0 old=1.0.0
 .PHONY: update-tag

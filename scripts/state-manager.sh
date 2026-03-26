@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# DEPRECATED: Use the forge-state MCP server instead.
+# Register the MCP server in .claude/settings.json (mcpServers.forge-state) and
+# run `make install` to install the binary. See the "MCP Server Registration"
+# section in CLAUDE.md for full instructions.
+# This script remains as a fallback — all 26 commands continue to work.
 # state-manager.sh — Core state management for claude-forge
 # Usage: state-manager.sh <command> <workspace> [args...]
 #

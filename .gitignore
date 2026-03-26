@@ -1,4 +1,7 @@
 
+# Compiled binaries
+bin/
+
 # Dependency directories
 node_modules/
 
