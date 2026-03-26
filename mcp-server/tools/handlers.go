@@ -20,11 +20,13 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// defaultScriptPath resolves the path to build-specs-index.sh relative to the
-// repository root. When running tests from mcp-server/ the repo root is one
-// level up; adjust as needed via RefreshIndexHandlerWithScript.
+// defaultScriptPath resolves the path to build-specs-index.sh.
+// FORGE_SCRIPTS_PATH env var takes precedence; otherwise the path is derived
+// from this file's location at compile time; fallback is a relative path.
 func defaultScriptPath() string {
-	// Walk up from this file's directory to find scripts/build-specs-index.sh.
+	if p := os.Getenv("FORGE_SCRIPTS_PATH"); p != "" {
+		return filepath.Join(p, "build-specs-index.sh")
+	}
 	_, file, _, ok := runtime.Caller(0)
 	if ok {
 		// file is .../mcp-server/tools/handlers.go
@@ -713,14 +715,5 @@ func RefreshIndexHandlerWithScript(sm *state.StateManager, scriptPath string) se
 // loadState reads state.json from workspace without locking (handler-level read
 // for guard checks).  The StateManager methods do their own locking for mutations.
 func loadState(workspace string) (*state.State, error) {
-	path := filepath.Join(workspace, "state.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("loadState: %w", err)
-	}
-	var s state.State
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, fmt.Errorf("loadState unmarshal: %w", err)
-	}
-	return &s, nil
+	return state.ReadState(workspace)
 }

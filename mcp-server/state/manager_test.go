@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -1765,15 +1766,8 @@ func TestRefreshIndex_ErrorWhenScriptNotFound(t *testing.T) {
 // containsAny returns true if s contains any of the given substrings.
 func containsAny(s string, substrings ...string) bool {
 	for _, sub := range substrings {
-		if len(sub) > 0 {
-			idx := 0
-			for i := 0; i <= len(s)-len(sub); i++ {
-				if s[i:i+len(sub)] == sub {
-					idx = i + 1
-					_ = idx
-					return true
-				}
-			}
+		if len(sub) > 0 && strings.Contains(s, sub) {
+			return true
 		}
 	}
 	return false

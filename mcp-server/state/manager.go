@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,12 @@ func nowISO() string {
 // readState reads and unmarshals state.json from workspace.
 // The caller must hold an appropriate lock.
 func readState(workspace string) (*State, error) {
+	return ReadState(workspace)
+}
+
+// ReadState reads and unmarshals state.json from workspace.
+// Exported so that tools package can reuse it without duplicating read logic.
+func ReadState(workspace string) (*State, error) {
 	path := statePath(workspace)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -726,15 +733,15 @@ func (m *StateManager) TaskUpdate(workspace, taskNum, field, value string) error
 	case "title":
 		task.Title = value
 	case "implRetries":
-		var n int
-		if _, err := fmt.Sscanf(value, "%d", &n); err != nil {
-			return fmt.Errorf("TaskUpdate: implRetries value %q is not an integer", value)
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("TaskUpdate: implRetries value %q is not an integer: %w", value, err)
 		}
 		task.ImplRetries = n
 	case "reviewRetries":
-		var n int
-		if _, err := fmt.Sscanf(value, "%d", &n); err != nil {
-			return fmt.Errorf("TaskUpdate: reviewRetries value %q is not an integer", value)
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("TaskUpdate: reviewRetries value %q is not an integer: %w", value, err)
 		}
 		task.ReviewRetries = n
 	default:
