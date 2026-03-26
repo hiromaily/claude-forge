@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -190,7 +191,7 @@ func PhaseCompleteHandler(sm *state.StateManager) server.ToolHandlerFunc {
 			return errorf("phase_complete: %v", err)
 		}
 		if len(warnings) > 0 {
-			return okWithWarning("ok", warnings[0])
+			return okWithWarning("ok", strings.Join(warnings, "; "))
 		}
 		return okText("ok")
 	}

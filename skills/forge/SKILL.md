@@ -1713,11 +1713,11 @@ mcp__forge-state__phase_start(workspace={workspace}, phase="post-to-source")
 | `text` | Skip — no external posting. |
 
 ```
-mcp__forge-state__post_to_source(workspace={workspace})
+mcp__forge-state__phase_complete(workspace={workspace}, phase="post-to-source")
 # FALLBACK: bash scripts/state-manager.sh phase-complete {workspace} post-to-source
 ```
 
-> **MANDATORY — do not skip.** After `mcp__forge-state__post_to_source` completes, commit the fully-completed `state.json` (all phases done) and `summary.md` to the branch. This explicit git commit is required because `post-bash-hook.sh` auto-commit does NOT fire for MCP calls — the commit must be done manually. Without this step, `state.json` remains uncommitted and the pipeline's terminal state will not be persisted to the git history.
+> **MANDATORY — do not skip.** After `mcp__forge-state__phase_complete(phase="post-to-source")` completes, commit the fully-completed `state.json` (all phases done) and `summary.md` to the branch. This explicit git commit is required because `post-bash-hook.sh` auto-commit does NOT fire for MCP calls — the commit must be done manually. Without this step, `state.json` remains uncommitted and the pipeline's terminal state will not be persisted to the git history.
 > Skip only if `{task_type}` is `investigation` (no feature branch exists).
 >
 > ```bash
