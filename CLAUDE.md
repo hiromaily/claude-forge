@@ -147,7 +147,9 @@ SKILL.md (orchestrator)
 
 **find_active_workspace** — this function is duplicated across `pre-tool-hook.sh`, `post-agent-hook.sh`, and `stop-hook.sh`. **The copies are intentionally different**: each script uses a slightly different filter predicate suited to its own enforcement context. Do not unify them into a shared library. Each copy carries a comment explaining the divergence — read it before modifying.
 
-**Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes the same **26** commands as typed tool calls. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
+**Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes all 26 `state-manager.sh` subcommands as typed tool calls, plus additional MCP-only tools (currently `search_patterns`). The total MCP tool count is 27. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
+
+**MCP-only tools** — `search_patterns` is exposed as an MCP tool but has no `state-manager.sh` shell equivalent. It performs BM25 scoring over `.specs/index.json` and is MCP-only by design (see design rationale in `ARCHITECTURE.md`). The shell fallback for environments without the MCP server is `query-specs-index.sh`.
 
 **Canonical command list** (shell name → MCP tool name):
 
@@ -178,6 +180,7 @@ SKILL.md (orchestrator)
 | `phase-log` | `phase_log` | Metrics |
 | `phase-stats` | `phase_stats` | Metrics |
 | `resume-info` | `resume_info` | Query |
+| _(MCP-only)_ | `search_patterns` | Query |
 | `refresh-index` | `refresh_index` | Utility |
 
 ### What NOT to do
@@ -218,7 +221,7 @@ After saving, restart Claude Code. The `mcp__forge-state__*` tool calls in `SKIL
 
 ### Fallback
 
-`scripts/state-manager.sh` remains fully functional as a fallback. All 26 commands still execute correctly. The script includes a deprecation notice at the top pointing to this section.
+`scripts/state-manager.sh` remains fully functional as a fallback. All 26 subcommands still execute correctly. For the MCP-only `search_patterns` tool, the shell fallback is `query-specs-index.sh`. The script includes a deprecation notice at the top pointing to this section.
 
 ### MCP library usage (`github.com/mark3labs/mcp-go`)
 
