@@ -138,8 +138,8 @@ func nodeNameForLang(node *sitter.Node, src []byte, lang Language) string {
 	}
 	// For Python decorated_definition, look inside for the function_definition
 	if lang == Python && node.Type() == "decorated_definition" {
-		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
+		for i := 0; i < int(node.NamedChildCount()); i++ {
+			child := node.NamedChild(i)
 			if child.Type() == "function_definition" || child.Type() == "class_definition" {
 				inner := child.ChildByFieldName("name")
 				if inner != nil {
@@ -260,20 +260,22 @@ func Summarize(ctx context.Context, src []byte, lang Language) (Summary, error) 
 	err = iter.ForEach(func(node *sitter.Node) error {
 		nodeType := node.Type()
 
-		if fnTypes[nodeType] {
+		if fnTypes[nodeType] || typeTypes[nodeType] {
 			name := nodeNameForLang(node, src, lang)
-			if isExported(name, lang) {
-				sig := extractSignature(src, node, lang)
-				if sig != "" {
-					summary.Functions = append(summary.Functions, sig)
-				}
+			exported := isExported(name, lang)
+			if lang == TypeScript {
+				// TypeScript uses explicit `export` keyword. A declaration is exported
+				// only when its immediate parent is an export_statement node.
+				exported = node.Parent() != nil && node.Parent().Type() == "export_statement"
 			}
-		} else if typeTypes[nodeType] {
-			name := nodeNameForLang(node, src, lang)
-			if isExported(name, lang) {
+			if exported {
 				sig := extractSignature(src, node, lang)
 				if sig != "" {
-					summary.Types = append(summary.Types, sig)
+					if fnTypes[nodeType] {
+						summary.Functions = append(summary.Functions, sig)
+					} else {
+						summary.Types = append(summary.Types, sig)
+					}
 				}
 			}
 		} else if constTypes[nodeType] {

@@ -3,6 +3,7 @@ package tools
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -23,14 +24,9 @@ func writeTestFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
-// parentDir returns the parent directory of path using filepath logic.
+// parentDir returns the parent directory of path.
 func parentDir(path string) string {
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' || path[i] == '\\' {
-			return path[:i]
-		}
-	}
-	return "."
+	return filepath.Dir(path)
 }
 
 // assertNotError fails t with a descriptive message if result is an error result.
