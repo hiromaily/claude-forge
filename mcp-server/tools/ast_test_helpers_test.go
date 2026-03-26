@@ -2,8 +2,6 @@
 package tools
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -14,19 +12,6 @@ import (
 // with the non-AST handlers' helper.
 func toolResultText(res *mcp.CallToolResult) string {
 	return textContent(res)
-}
-
-// writeTestFile writes content to path, creating parent directories as needed.
-func writeTestFile(path, content string) error {
-	if err := os.MkdirAll(parentDir(path), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(content), 0644)
-}
-
-// parentDir returns the parent directory of path.
-func parentDir(path string) string {
-	return filepath.Dir(path)
 }
 
 // assertNotError fails t with a descriptive message if result is an error result.
