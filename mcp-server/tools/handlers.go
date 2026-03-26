@@ -149,15 +149,7 @@ func PhaseStartHandler(sm *state.StateManager, bus *events.EventBus) server.Tool
 		if err := sm.PhaseStart(workspace, phase); err != nil {
 			return errorf("phase_start: %v", err)
 		}
-		e := events.Event{
-			Event:     "phase-start",
-			Phase:     phase,
-			SpecName:  s.SpecName,
-			Workspace: workspace,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Outcome:   "in_progress",
-		}
-		bus.Publish(e)
+		publishEvent(bus, nil, "phase-start", phase, s.SpecName, workspace, "in_progress")
 		return okText("ok")
 	}
 }
@@ -203,16 +195,7 @@ func PhaseCompleteHandler(sm *state.StateManager, bus *events.EventBus, slack *e
 		if err := sm.PhaseComplete(workspace, phase); err != nil {
 			return errorf("phase_complete: %v", err)
 		}
-		e := events.Event{
-			Event:     "phase-complete",
-			Phase:     phase,
-			SpecName:  s.SpecName,
-			Workspace: workspace,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Outcome:   "completed",
-		}
-		bus.Publish(e)
-		slack.Notify(e)
+		publishEvent(bus, slack, "phase-complete", phase, s.SpecName, workspace, "completed")
 		if len(warnings) > 0 {
 			return okWithWarning("ok", strings.Join(warnings, "; "))
 		}
@@ -244,16 +227,7 @@ func PhaseFailHandler(sm *state.StateManager, bus *events.EventBus, slack *event
 		if err := sm.PhaseFail(workspace, phase, message); err != nil {
 			return errorf("phase_fail: %v", err)
 		}
-		e := events.Event{
-			Event:     "phase-fail",
-			Phase:     phase,
-			SpecName:  specName,
-			Workspace: workspace,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Outcome:   "failed",
-		}
-		bus.Publish(e)
-		slack.Notify(e)
+		publishEvent(bus, slack, "phase-fail", phase, specName, workspace, "failed")
 		return okText("ok")
 	}
 }
@@ -281,15 +255,7 @@ func CheckpointHandler(sm *state.StateManager, bus *events.EventBus) server.Tool
 		if err := sm.Checkpoint(workspace, phase); err != nil {
 			return errorf("checkpoint: %v", err)
 		}
-		e := events.Event{
-			Event:     "checkpoint",
-			Phase:     phase,
-			SpecName:  specName,
-			Workspace: workspace,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Outcome:   "awaiting_human",
-		}
-		bus.Publish(e)
+		publishEvent(bus, nil, "checkpoint", phase, specName, workspace, "awaiting_human")
 		return okText("ok")
 	}
 }
@@ -722,16 +688,7 @@ func AbandonHandler(sm *state.StateManager, bus *events.EventBus, slack *events.
 		if err := sm.Abandon(workspace); err != nil {
 			return errorf("abandon: %v", err)
 		}
-		e := events.Event{
-			Event:     "abandon",
-			Phase:     phase,
-			SpecName:  specName,
-			Workspace: workspace,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Outcome:   "abandoned",
-		}
-		bus.Publish(e)
-		slack.Notify(e)
+		publishEvent(bus, slack, "abandon", phase, specName, workspace, "abandoned")
 		return okText("ok")
 	}
 }
@@ -786,4 +743,21 @@ func RefreshIndexHandlerWithScript(sm *state.StateManager, scriptPath string) se
 // for guard checks).  The StateManager methods do their own locking for mutations.
 func loadState(workspace string) (*state.State, error) {
 	return state.ReadState(workspace)
+}
+
+// publishEvent constructs an Event and publishes it to bus. If slack is non-nil,
+// it also calls slack.Notify so callers can pass nil when Slack is not needed.
+func publishEvent(bus *events.EventBus, slack *events.SlackNotifier, eventType, phase, specName, workspace, outcome string) {
+	e := events.Event{
+		Event:     eventType,
+		Phase:     phase,
+		SpecName:  specName,
+		Workspace: workspace,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Outcome:   outcome,
+	}
+	bus.Publish(e)
+	if slack != nil {
+		slack.Notify(e)
+	}
 }

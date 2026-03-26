@@ -2,6 +2,7 @@ package events
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -72,7 +73,14 @@ func (n *SlackNotifier) post(e Event) error {
 		return fmt.Errorf("marshal slack payload: %w", err)
 	}
 
-	resp, err := n.httpClient.Post(n.webhookURL, "application/json", bytes.NewReader(body)) //nolint:noctx
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, n.webhookURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create slack request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := n.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("post to slack webhook: %w", err)
 	}
