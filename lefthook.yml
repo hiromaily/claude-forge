@@ -43,7 +43,7 @@
 pre-commit:
   parallel: true
   commands:
-    gofmt:
+    go-fmt:
       root: "/mcp-server"
       glob: "*.go"
       run: make go-fmt
@@ -51,7 +51,7 @@ pre-commit:
 
 pre-push:
   commands:
-    lint:
+    go-lint:
       root: "/mcp-server"
       glob: "*.go"
       run: make go-lint

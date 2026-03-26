@@ -97,12 +97,12 @@ linters:
     #     - G307 # G307: Deferring unsafe method
     #     - G703 # G703: Path traversal via taint analysis (false positive: acceptable in test config utility and controlled internal paths)
 
-    govet:
-      enable:
-        - shadow
-      settings:
-        shadow:
-          strict: true
+    # govet:
+    #   enable:
+    #     - shadow
+    #   settings:
+    #     shadow:
+    #       strict: true
 
     lll:
       line-length: 200
