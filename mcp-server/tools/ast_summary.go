@@ -18,9 +18,9 @@ import (
 // source file. It has no dependency on StateManager.
 func AstSummaryHandler() server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filePath := req.GetString("file_path", "")
-		if filePath == "" {
-			return errorf("file_path parameter is required")
+		filePath, err := req.RequireString("file_path")
+		if err != nil {
+			return errorf("%v", err)
 		}
 		language := req.GetString("language", "")
 		return astSummaryFromPath(ctx, filePath, language)
