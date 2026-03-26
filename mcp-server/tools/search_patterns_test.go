@@ -177,7 +177,7 @@ func TestSearchPatternsHandler(t *testing.T) {
 			t.Errorf("review-feedback: output does not start with expected header constant\ngot: %q", got)
 		}
 		// Assert exact bullet format for a known finding.
-		wantBullet := fmt.Sprintf(reviewFeedbackBullet, "pass", "finding one", "review-1.md")
+		wantBullet := fmt.Sprintf(reviewFeedbackBullet, "review-1.md", "finding one", "spec-alpha")
 		if !strings.Contains(got, wantBullet) {
 			t.Errorf("review-feedback: expected bullet %q in output:\n%s", wantBullet, got)
 		}
@@ -223,8 +223,8 @@ func TestSearchPatternsHandler(t *testing.T) {
 		}
 		// Assert exact bullet format for completed entry.
 		wantBullet := fmt.Sprintf(implBullet,
-			"Task 1: Add handler", "spec-completed",
-			"implement mcp server golang feature tools patterns",
+			"spec-completed", *ft,
+			"Task 1: Add handler",
 			"tools/handler.go, tools/registry.go")
 		if !strings.Contains(got, wantBullet) {
 			t.Errorf("impl mode: expected bullet %q in output:\n%s", wantBullet, got)

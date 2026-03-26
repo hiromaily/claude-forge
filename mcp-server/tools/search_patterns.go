@@ -138,7 +138,7 @@ func formatReviewFeedbackOutput(scored []search.ScoredEntry, topK int) (*mcp.Cal
 	for _, se := range top {
 		for _, rf := range se.Entry.ReviewFeedback {
 			for _, finding := range rf.Findings {
-				sb.WriteString(fmt.Sprintf(reviewFeedbackBullet, rf.Verdict, finding, rf.Source))
+				sb.WriteString(fmt.Sprintf(reviewFeedbackBullet, rf.Source, finding, se.Entry.SpecName))
 			}
 		}
 	}
@@ -169,9 +169,13 @@ func formatImplOutput(scored []search.ScoredEntry, topK int) (*mcp.CallToolResul
 
 	var sb strings.Builder
 	for _, se := range top {
+		taskType := ""
+		if se.Entry.TaskType != nil {
+			taskType = *se.Entry.TaskType
+		}
 		for _, pat := range se.Entry.ImplPatterns {
 			files := strings.Join(pat.FilesModified, ", ")
-			sb.WriteString(fmt.Sprintf(implBullet, pat.TaskTitle, se.Entry.SpecName, se.Entry.RequestSummary, files))
+			sb.WriteString(fmt.Sprintf(implBullet, se.Entry.SpecName, taskType, pat.TaskTitle, files))
 		}
 	}
 
