@@ -1,0 +1,429 @@
+// Package tools — integration tests for handler registration and compilation.
+// Full guard-enforcement tests live in Task 7; here we verify that:
+//   - RegisterAll compiles and adds exactly 26 tools
+//   - Each handler calls the StateManager without panicking on valid input
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/hiromaily/claude-forge/mcp-server/state"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+)
+
+// setupWorkspace creates a temp dir with a state.json initialised to the given specName.
+func setupWorkspace(t *testing.T, specName string) string {
+	t.Helper()
+	dir := t.TempDir()
+	sm := state.NewStateManager()
+	if err := sm.Init(dir, specName); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	return dir
+}
+
+// callTool invokes handler directly, bypassing MCP transport.
+func callTool(t *testing.T, handler server.ToolHandlerFunc, args map[string]any) *mcp.CallToolResult {
+	t.Helper()
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = args
+	res, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handler returned Go error (unexpected): %v", err)
+	}
+	return res
+}
+
+// ---------- registry count test ----------
+
+func TestRegisterAllCount(t *testing.T) {
+	srv := server.NewMCPServer("forge-state", "1.0.0")
+	sm := state.NewStateManager()
+	RegisterAll(srv, sm)
+
+	// Extract tools via ListTools to count them.
+	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	var resp struct {
+		Result struct {
+			Tools []map[string]any `json:"tools"`
+		} `json:"result"`
+	}
+	raw, _ := json.Marshal(msg)
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("unmarshal tools/list: %v", err)
+	}
+	if got := len(resp.Result.Tools); got != 26 {
+		t.Errorf("RegisterAll: expected 26 tools, got %d", got)
+		for _, tool := range resp.Result.Tools {
+			t.Logf("  tool: %v", tool["name"])
+		}
+	}
+}
+
+// ---------- tool naming convention test ----------
+
+func TestToolNamesUseUnderscores(t *testing.T) {
+	srv := server.NewMCPServer("forge-state", "1.0.0")
+	sm := state.NewStateManager()
+	RegisterAll(srv, sm)
+
+	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	var resp struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	raw, _ := json.Marshal(msg)
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, tool := range resp.Result.Tools {
+		for _, ch := range tool.Name {
+			if ch == '-' {
+				t.Errorf("tool name %q contains hyphen; expected underscores only", tool.Name)
+			}
+		}
+	}
+}
+
+// ---------- init handler ----------
+
+func TestInitHandlerValidated(t *testing.T) {
+	dir := t.TempDir()
+	sm := state.NewStateManager()
+	// Remove state.json so init creates it fresh.
+	_ = os.Remove(filepath.Join(dir, "state.json"))
+
+	h := InitHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"spec_name": "test-spec",
+		"validated": true,
+	})
+	if res.IsError {
+		t.Errorf("InitHandler with validated=true returned error: %v", textContent(res))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "state.json")); err != nil {
+		t.Errorf("state.json not created: %v", err)
+	}
+}
+
+func TestInitHandlerNotValidated(t *testing.T) {
+	dir := t.TempDir()
+	sm := state.NewStateManager()
+
+	h := InitHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"spec_name": "test-spec",
+		"validated": false,
+	})
+	if !res.IsError {
+		t.Errorf("InitHandler with validated=false should return error")
+	}
+}
+
+// ---------- get handler ----------
+
+func TestGetHandler(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := GetHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"field":     "specName",
+	})
+	if res.IsError {
+		t.Errorf("GetHandler returned error: %v", textContent(res))
+	}
+	if got := textContent(res); got != "test-spec" {
+		t.Errorf("GetHandler specName: got %q, want %q", got, "test-spec")
+	}
+}
+
+// ---------- phase_start handler ----------
+
+func TestPhaseStartHandler(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := PhaseStartHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "phase-1",
+	})
+	if res.IsError {
+		t.Errorf("PhaseStartHandler returned error: %v", textContent(res))
+	}
+}
+
+// ---------- phase_start guard 3c (tasks empty for phase-5) ----------
+
+func TestPhaseStartHandlerGuard3c(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := PhaseStartHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "phase-5",
+	})
+	if !res.IsError {
+		t.Errorf("PhaseStartHandler phase-5 with empty tasks should return error")
+	}
+}
+
+// ---------- phase_complete handler with warning ----------
+
+func TestPhaseCompleteHandlerWarning3i(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+	// Create the required artifact for phase-1.
+	if err := os.WriteFile(filepath.Join(dir, "analysis.md"), []byte("analysis"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// phase-1 is pending, not in_progress — should produce a warning but NOT block.
+	h := PhaseCompleteHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "phase-1",
+	})
+	if res.IsError {
+		t.Errorf("PhaseCompleteHandler should not error for pending phase: %v", textContent(res))
+	}
+}
+
+// ---------- phase_complete guard 3a (artifact missing) ----------
+
+func TestPhaseCompleteHandlerGuard3a(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+	// Do NOT create analysis.md — artifact is missing.
+	h := PhaseCompleteHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "phase-1",
+	})
+	if !res.IsError {
+		t.Errorf("PhaseCompleteHandler should block when artifact is missing")
+	}
+}
+
+// ---------- phase_fail handler ----------
+
+func TestPhaseFailHandler(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+	if err := sm.PhaseStart(dir, "phase-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	h := PhaseFailHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"phase":     "phase-1",
+		"message":   "something went wrong",
+	})
+	if res.IsError {
+		t.Errorf("PhaseFailHandler returned error: %v", textContent(res))
+	}
+}
+
+// ---------- abandon handler ----------
+
+func TestAbandonHandler(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := AbandonHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+	})
+	if res.IsError {
+		t.Errorf("AbandonHandler returned error: %v", textContent(res))
+	}
+}
+
+// ---------- set_branch handler ----------
+
+func TestSetBranchHandler(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := SetBranchHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"branch":    "feature/test",
+	})
+	if res.IsError {
+		t.Errorf("SetBranchHandler returned error: %v", textContent(res))
+	}
+}
+
+// ---------- set_effort handler ----------
+
+func TestSetEffortHandler(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := SetEffortHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"effort":    "M",
+	})
+	if res.IsError {
+		t.Errorf("SetEffortHandler returned error: %v", textContent(res))
+	}
+}
+
+func TestSetEffortHandlerInvalid(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := SetEffortHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"effort":    "INVALID",
+	})
+	if !res.IsError {
+		t.Errorf("SetEffortHandler with invalid effort should return error")
+	}
+}
+
+// ---------- resume_info handler ----------
+
+func TestResumeInfoHandler(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := ResumeInfoHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+	})
+	if res.IsError {
+		t.Errorf("ResumeInfoHandler returned error: %v", textContent(res))
+	}
+}
+
+// ---------- refresh_index handler ----------
+
+func TestRefreshIndexHandlerScriptMissing(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	// Call with a non-existent script path — the handler must use os/exec.
+	h := RefreshIndexHandlerWithScript(sm, "/nonexistent/path/build-specs-index.sh")
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+	})
+	if !res.IsError {
+		t.Errorf("RefreshIndexHandler should return error when script is missing")
+	}
+}
+
+// ---------- task_init guard 3g (checkpoint-b not done) ----------
+
+func TestTaskInitHandlerGuard3g(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := TaskInitHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"tasks":     map[string]any{},
+	})
+	if !res.IsError {
+		t.Errorf("TaskInitHandler should block when checkpoint-b not done")
+	}
+}
+
+// ---------- phase_log handler ----------
+
+func TestPhaseLogHandler(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := PhaseLogHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace":   dir,
+		"phase":       "phase-1",
+		"tokens":      1000,
+		"duration_ms": 5000,
+		"model":       "sonnet",
+	})
+	if res.IsError {
+		t.Errorf("PhaseLogHandler returned error: %v", textContent(res))
+	}
+}
+
+// ---------- phase_log duplicate warning (Warn3d) ----------
+
+func TestPhaseLogHandlerWarn3d(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	h := PhaseLogHandler(sm)
+	// First call — no warning.
+	callTool(t, h, map[string]any{
+		"workspace":   dir,
+		"phase":       "phase-1",
+		"tokens":      100,
+		"duration_ms": 1000,
+		"model":       "sonnet",
+	})
+	// Second call — duplicate warning expected.
+	res := callTool(t, h, map[string]any{
+		"workspace":   dir,
+		"phase":       "phase-1",
+		"tokens":      200,
+		"duration_ms": 2000,
+		"model":       "sonnet",
+	})
+	if res.IsError {
+		t.Errorf("PhaseLogHandler duplicate should not block: %v", textContent(res))
+	}
+	if !hasWarning(res) {
+		t.Errorf("PhaseLogHandler duplicate: expected warning key in content")
+	}
+}
+
+// ---------- helpers ----------
+
+// textContent extracts the text from the first TextContent item in a result.
+func textContent(res *mcp.CallToolResult) string {
+	if res == nil {
+		return ""
+	}
+	for _, c := range res.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			return tc.Text
+		}
+	}
+	return ""
+}
+
+// hasWarning returns true if the result content contains a "warning" key.
+func hasWarning(res *mcp.CallToolResult) bool {
+	if res == nil {
+		return false
+	}
+	for _, c := range res.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			var m map[string]any
+			if err := json.Unmarshal([]byte(tc.Text), &m); err == nil {
+				if _, ok := m["warning"]; ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
