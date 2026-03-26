@@ -1286,6 +1286,480 @@ func TestPhaseLog_Concurrent10Goroutines(t *testing.T) {
 	}
 }
 
+// ---------- SetBranch ----------
+
+func TestSetBranch_SetsBranchField(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetBranch(dir, "feature/my-branch"); err != nil {
+		t.Fatalf("SetBranch: %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.Branch == nil {
+		t.Fatal("branch: want non-nil")
+	}
+	if *s.Branch != "feature/my-branch" {
+		t.Errorf("branch: got %q, want %q", *s.Branch, "feature/my-branch")
+	}
+}
+
+func TestSetBranch_OverwritesPreviousBranch(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetBranch(dir, "feature/old"); err != nil {
+		t.Fatalf("SetBranch(old): %v", err)
+	}
+	if err := m.SetBranch(dir, "feature/new"); err != nil {
+		t.Fatalf("SetBranch(new): %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.Branch == nil || *s.Branch != "feature/new" {
+		t.Errorf("branch: got %v, want %q", s.Branch, "feature/new")
+	}
+}
+
+// ---------- SetTaskType ----------
+
+func TestSetTaskType_SetsTaskTypeField(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetTaskType(dir, "bugfix"); err != nil {
+		t.Fatalf("SetTaskType: %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.TaskType == nil {
+		t.Fatal("taskType: want non-nil")
+	}
+	if *s.TaskType != "bugfix" {
+		t.Errorf("taskType: got %q, want %q", *s.TaskType, "bugfix")
+	}
+}
+
+func TestSetTaskType_OverwritesPreviousValue(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetTaskType(dir, "feature"); err != nil {
+		t.Fatalf("SetTaskType(feature): %v", err)
+	}
+	if err := m.SetTaskType(dir, "docs"); err != nil {
+		t.Fatalf("SetTaskType(docs): %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.TaskType == nil || *s.TaskType != "docs" {
+		t.Errorf("taskType: got %v, want %q", s.TaskType, "docs")
+	}
+}
+
+// ---------- SetAutoApprove ----------
+
+func TestSetAutoApprove_SetsAutoApproveTrue(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Verify initial value is false.
+	s := loadState(t, dir)
+	if s.AutoApprove {
+		t.Error("autoApprove: initial value should be false")
+	}
+
+	if err := m.SetAutoApprove(dir); err != nil {
+		t.Fatalf("SetAutoApprove: %v", err)
+	}
+
+	s = loadState(t, dir)
+	if !s.AutoApprove {
+		t.Error("autoApprove: got false, want true")
+	}
+}
+
+func TestSetAutoApprove_PersistsToStateJSON(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetAutoApprove(dir); err != nil {
+		t.Fatalf("SetAutoApprove: %v", err)
+	}
+
+	// Verify via Get that the field reads back correctly.
+	got, err := m.Get(dir, "autoApprove")
+	if err != nil {
+		t.Fatalf("Get(autoApprove): %v", err)
+	}
+	if got != "true" {
+		t.Errorf("Get(autoApprove): got %q, want %q", got, "true")
+	}
+}
+
+// ---------- SetSkipPr ----------
+
+func TestSetSkipPr_SetsSkipPrTrue(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Verify initial value is false.
+	s := loadState(t, dir)
+	if s.SkipPr {
+		t.Error("skipPr: initial value should be false")
+	}
+
+	if err := m.SetSkipPr(dir); err != nil {
+		t.Fatalf("SetSkipPr: %v", err)
+	}
+
+	s = loadState(t, dir)
+	if !s.SkipPr {
+		t.Error("skipPr: got false, want true")
+	}
+}
+
+func TestSetSkipPr_PersistsToStateJSON(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetSkipPr(dir); err != nil {
+		t.Fatalf("SetSkipPr: %v", err)
+	}
+
+	got, err := m.Get(dir, "skipPr")
+	if err != nil {
+		t.Fatalf("Get(skipPr): %v", err)
+	}
+	if got != "true" {
+		t.Errorf("Get(skipPr): got %q, want %q", got, "true")
+	}
+}
+
+// ---------- SetDebug ----------
+
+func TestSetDebug_SetsDebugTrue(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Verify initial value is false.
+	s := loadState(t, dir)
+	if s.Debug {
+		t.Error("debug: initial value should be false")
+	}
+
+	if err := m.SetDebug(dir); err != nil {
+		t.Fatalf("SetDebug: %v", err)
+	}
+
+	s = loadState(t, dir)
+	if !s.Debug {
+		t.Error("debug: got false, want true")
+	}
+}
+
+func TestSetDebug_PersistsToStateJSON(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetDebug(dir); err != nil {
+		t.Fatalf("SetDebug: %v", err)
+	}
+
+	got, err := m.Get(dir, "debug")
+	if err != nil {
+		t.Fatalf("Get(debug): %v", err)
+	}
+	if got != "true" {
+		t.Errorf("Get(debug): got %q, want %q", got, "true")
+	}
+}
+
+// ---------- SetUseCurrentBranch ----------
+
+func TestSetUseCurrentBranch_SetsFieldsCorrectly(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetUseCurrentBranch(dir, "feature/existing"); err != nil {
+		t.Fatalf("SetUseCurrentBranch: %v", err)
+	}
+
+	s := loadState(t, dir)
+	if !s.UseCurrentBranch {
+		t.Error("useCurrentBranch: got false, want true")
+	}
+	if s.Branch == nil {
+		t.Fatal("branch: want non-nil after SetUseCurrentBranch")
+	}
+	if *s.Branch != "feature/existing" {
+		t.Errorf("branch: got %q, want %q", *s.Branch, "feature/existing")
+	}
+}
+
+func TestSetUseCurrentBranch_PersistsToStateJSON(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetUseCurrentBranch(dir, "main"); err != nil {
+		t.Fatalf("SetUseCurrentBranch: %v", err)
+	}
+
+	ucb, err := m.Get(dir, "useCurrentBranch")
+	if err != nil {
+		t.Fatalf("Get(useCurrentBranch): %v", err)
+	}
+	if ucb != "true" {
+		t.Errorf("Get(useCurrentBranch): got %q, want %q", ucb, "true")
+	}
+
+	branch, err := m.Get(dir, "branch")
+	if err != nil {
+		t.Fatalf("Get(branch): %v", err)
+	}
+	if branch != "main" {
+		t.Errorf("Get(branch): got %q, want %q", branch, "main")
+	}
+}
+
+// ---------- ResumeInfo ----------
+
+func TestResumeInfo_DefaultState(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	info, err := m.ResumeInfo(dir)
+	if err != nil {
+		t.Fatalf("ResumeInfo: %v", err)
+	}
+
+	if info.CurrentPhase != "phase-1" {
+		t.Errorf("currentPhase: got %q, want %q", info.CurrentPhase, "phase-1")
+	}
+	if info.CurrentPhaseStatus != "pending" {
+		t.Errorf("currentPhaseStatus: got %q, want %q", info.CurrentPhaseStatus, "pending")
+	}
+	if info.SpecName != "s" {
+		t.Errorf("specName: got %q, want %q", info.SpecName, "s")
+	}
+	if info.AutoApprove {
+		t.Error("autoApprove: want false")
+	}
+	if info.SkipPr {
+		t.Error("skipPr: want false")
+	}
+	if info.Debug {
+		t.Error("debug: want false")
+	}
+	if info.UseCurrentBranch {
+		t.Error("useCurrentBranch: want false")
+	}
+	if info.TotalTasks != 0 {
+		t.Errorf("totalTasks: got %d, want 0", info.TotalTasks)
+	}
+	if info.PhaseLogEntries != 0 {
+		t.Errorf("phaseLogEntries: got %d, want 0", info.PhaseLogEntries)
+	}
+	if info.TotalTokens != 0 {
+		t.Errorf("totalTokens: got %d, want 0", info.TotalTokens)
+	}
+	if info.TotalDurationMs != 0 {
+		t.Errorf("totalDuration_ms: got %d, want 0", info.TotalDurationMs)
+	}
+	if info.CheckpointRevisionPending == nil {
+		t.Fatal("checkpointRevisionPending: want non-nil")
+	}
+	if info.CheckpointRevisionPending["checkpoint-a"] {
+		t.Error("checkpointRevisionPending[checkpoint-a]: want false")
+	}
+	if info.CheckpointRevisionPending["checkpoint-b"] {
+		t.Error("checkpointRevisionPending[checkpoint-b]: want false")
+	}
+}
+
+func TestResumeInfo_ReflectsSetAutoApprove(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.SetAutoApprove(dir); err != nil {
+		t.Fatalf("SetAutoApprove: %v", err)
+	}
+
+	info, err := m.ResumeInfo(dir)
+	if err != nil {
+		t.Fatalf("ResumeInfo: %v", err)
+	}
+	if !info.AutoApprove {
+		t.Error("autoApprove: want true after SetAutoApprove")
+	}
+}
+
+func TestResumeInfo_PhaseLogEntriesCount(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	if err := m.PhaseLog(dir, "phase-1", 1000, 5000, "sonnet"); err != nil {
+		t.Fatalf("PhaseLog 1: %v", err)
+	}
+	if err := m.PhaseLog(dir, "phase-2", 2000, 10000, "sonnet"); err != nil {
+		t.Fatalf("PhaseLog 2: %v", err)
+	}
+
+	info, err := m.ResumeInfo(dir)
+	if err != nil {
+		t.Fatalf("ResumeInfo: %v", err)
+	}
+	if info.PhaseLogEntries != 2 {
+		t.Errorf("phaseLogEntries: got %d, want 2", info.PhaseLogEntries)
+	}
+	if info.TotalTokens != 3000 {
+		t.Errorf("totalTokens: got %d, want 3000", info.TotalTokens)
+	}
+	if info.TotalDurationMs != 15000 {
+		t.Errorf("totalDuration_ms: got %d, want 15000", info.TotalDurationMs)
+	}
+}
+
+func TestResumeInfo_PendingAndCompletedTasks(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	tasks := map[string]state.Task{
+		"1": {Title: "T1", ImplStatus: "completed", ReviewStatus: "completed_pass"},
+		"2": {Title: "T2", ImplStatus: "pending", ReviewStatus: "pending"},
+		"3": {Title: "T3", ImplStatus: "completed", ReviewStatus: "completed_fail"},
+	}
+	if err := m.TaskInit(dir, tasks); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	info, err := m.ResumeInfo(dir)
+	if err != nil {
+		t.Fatalf("ResumeInfo: %v", err)
+	}
+
+	if info.TotalTasks != 3 {
+		t.Errorf("totalTasks: got %d, want 3", info.TotalTasks)
+	}
+	// Task 1: implStatus=completed + reviewStatus=completed_pass → completed.
+	// Task 2: implStatus=pending → pending.
+	// Task 3: reviewStatus=completed_fail → pending (even though impl completed).
+	if len(info.CompletedTasks) != 1 {
+		t.Errorf("completedTasks: got %d, want 1", len(info.CompletedTasks))
+	}
+	if len(info.PendingTasks) != 2 {
+		t.Errorf("pendingTasks: got %d, want 2", len(info.PendingTasks))
+	}
+}
+
+func TestResumeInfo_TasksWithRetries(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	tasks := map[string]state.Task{
+		"1": {Title: "T1", ImplRetries: 2, ReviewRetries: 0},
+		"2": {Title: "T2", ImplRetries: 0, ReviewRetries: 1},
+		"3": {Title: "T3", ImplRetries: 0, ReviewRetries: 0},
+	}
+	if err := m.TaskInit(dir, tasks); err != nil {
+		t.Fatalf("TaskInit: %v", err)
+	}
+
+	info, err := m.ResumeInfo(dir)
+	if err != nil {
+		t.Fatalf("ResumeInfo: %v", err)
+	}
+
+	// Tasks 1 and 2 have retries; task 3 does not.
+	if len(info.TasksWithRetries) != 2 {
+		t.Errorf("tasksWithRetries: got %d entries, want 2", len(info.TasksWithRetries))
+	}
+}
+
+func TestResumeInfo_MissingStateFile_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+
+	_, err := m.ResumeInfo(dir)
+	if err == nil {
+		t.Error("ResumeInfo on missing state.json: expected error, got nil")
+	}
+}
+
+// ---------- RefreshIndex ----------
+
+// TestRefreshIndex_ErrorWhenScriptNotFound verifies that RefreshIndex returns
+// a non-nil error gracefully when the build-specs-index.sh script is not found.
+// The current implementation delegates to the tools package and returns an
+// "not implemented" error, which satisfies the contract of failing gracefully.
+func TestRefreshIndex_ErrorWhenScriptNotFound(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// RefreshIndex is intentionally not implemented in the state package
+	// (delegated to tools.RefreshIndexHandler via os/exec). It must return
+	// a non-nil error rather than panic or silently succeed.
+	err := m.RefreshIndex(dir)
+	if err == nil {
+		t.Error("RefreshIndex: expected non-nil error when script not in state package, got nil")
+	}
+}
+
 // ---------- helper ----------
 
 // containsAny returns true if s contains any of the given substrings.
