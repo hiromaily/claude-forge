@@ -63,7 +63,7 @@ interface Calculator {
   add(a: string, b: string): string;
 }
 `
-	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
 		t.Fatalf("write temp file: %v", err)
 	}
 
@@ -142,7 +142,7 @@ func TestAstFindDefinitionFromPath_AutoDetect(t *testing.T) {
 func TestAstFindDefinitionFromPath_UnknownExtension(t *testing.T) {
 	ctx := context.Background()
 	tmpFile := t.TempDir() + "/code.rb"
-	if err := os.WriteFile(tmpFile, []byte("def foo; end"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("def foo; end"), 0o644); err != nil {
 		t.Fatalf("write temp file: %v", err)
 	}
 	result, err := astFindDefinitionFromPath(ctx, tmpFile, "", "foo")

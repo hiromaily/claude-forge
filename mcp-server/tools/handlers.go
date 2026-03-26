@@ -16,10 +16,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hiromaily/claude-forge/mcp-server/events"
-	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
 // defaultScriptPath resolves the path to build-specs-index.sh.

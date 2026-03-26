@@ -19,8 +19,7 @@ func TestSSEHandlerHeaders(t *testing.T) {
 	srv := httptest.NewServer(events.SSEHandler(bus))
 	defer srv.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events", nil)
 	if err != nil {
@@ -51,8 +50,7 @@ func TestSSEHandlerReceivesEvent(t *testing.T) {
 	srv := httptest.NewServer(events.SSEHandler(bus))
 	defer srv.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events", nil)
 	if err != nil {
@@ -165,8 +163,7 @@ func TestSSEHandlerWorkspaceFilter(t *testing.T) {
 	srv := httptest.NewServer(events.SSEHandler(bus))
 	defer srv.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events?workspace=/workspace/target", nil)
 	if err != nil {

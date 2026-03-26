@@ -13,10 +13,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hiromaily/claude-forge/mcp-server/search"
-	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/hiromaily/claude-forge/mcp-server/search"
+	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
 // Output format constants — must match query-specs-index.sh printf strings exactly.
@@ -146,7 +147,7 @@ func formatReviewFeedbackOutput(scored []search.ScoredEntry, topK int) (*mcp.Cal
 	for _, se := range top {
 		for _, rf := range se.Entry.ReviewFeedback {
 			for _, finding := range rf.Findings {
-				sb.WriteString(fmt.Sprintf(reviewFeedbackBullet, rf.Source, finding, se.Entry.SpecName))
+				fmt.Fprintf(&sb, reviewFeedbackBullet, rf.Source, finding, se.Entry.SpecName)
 			}
 		}
 	}
@@ -183,7 +184,7 @@ func formatImplOutput(scored []search.ScoredEntry, topK int) (*mcp.CallToolResul
 		}
 		for _, pat := range se.Entry.ImplPatterns {
 			files := strings.Join(pat.FilesModified, ", ")
-			sb.WriteString(fmt.Sprintf(implBullet, se.Entry.SpecName, taskType, pat.TaskTitle, files))
+			fmt.Fprintf(&sb, implBullet, se.Entry.SpecName, taskType, pat.TaskTitle, files)
 		}
 	}
 

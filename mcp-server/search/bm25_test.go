@@ -5,7 +5,8 @@ import (
 	"testing"
 )
 
-func strPtr(s string) *string { return &s }
+//go:fix inline
+func strPtr(s string) *string { return new(s) }
 
 // TestTokenize verifies lowercasing, splitting on non-word chars, and filtering < 4 chars.
 func TestTokenize(t *testing.T) {
@@ -60,8 +61,8 @@ func TestTokenize(t *testing.T) {
 // but strictly less than 2× (BM25 saturation).
 func TestScoreTermFrequency(t *testing.T) {
 	entries := []IndexEntry{
-		{SpecName: "one", RequestSummary: "alpha alpha"}, // tf=2
-		{SpecName: "two", RequestSummary: "alpha beta"},  // tf=1
+		{SpecName: "one", RequestSummary: "alpha"},      // tf=2
+		{SpecName: "two", RequestSummary: "alpha beta"}, // tf=1
 	}
 	results := Score(entries, "alpha", "", DefaultBM25Params())
 	if len(results) < 2 {
@@ -84,9 +85,9 @@ func TestScoreTermFrequency(t *testing.T) {
 // TestScoreIDF verifies that a rare term scores higher than a ubiquitous term.
 func TestScoreIDF(t *testing.T) {
 	entries := []IndexEntry{
-		{SpecName: "a", RequestSummary: "common common common rare"},
-		{SpecName: "b", RequestSummary: "common common common"},
-		{SpecName: "c", RequestSummary: "common common"},
+		{SpecName: "a", RequestSummary: "common rare"},
+		{SpecName: "b", RequestSummary: "common "},
+		{SpecName: "c", RequestSummary: "common"},
 	}
 	// "common" appears in all 3 docs (high df, low IDF)
 	// "rare" appears in only 1 doc (low df, high IDF)
@@ -119,8 +120,8 @@ func TestScoreOrdering(t *testing.T) {
 	// Additional filler terms keep document lengths equal (6 tokens each).
 	entries := []IndexEntry{
 		{SpecName: "low", RequestSummary: "alpha beta gamma delta epsilon zeta"},
-		{SpecName: "high", RequestSummary: "alpha alpha alpha beta gamma delta"},
-		{SpecName: "mid", RequestSummary: "alpha alpha beta gamma delta epsilon"},
+		{SpecName: "high", RequestSummary: "alpha beta gamma delta"},
+		{SpecName: "mid", RequestSummary: "alpha beta gamma delta epsilon"},
 	}
 	results := Score(entries, "alpha", "", DefaultBM25Params())
 	if len(results) < 3 {
@@ -167,8 +168,8 @@ func TestScoreTaskTypeBoost(t *testing.T) {
 	// Identical requestSummary means equal BM25, but one has matching taskType
 	taskType := "feature"
 	entries := []IndexEntry{
-		{SpecName: "noboosted", RequestSummary: "implement search scoring", TaskType: strPtr("bugfix")},
-		{SpecName: "boosted", RequestSummary: "implement search scoring", TaskType: strPtr("feature")},
+		{SpecName: "noboosted", RequestSummary: "implement search scoring", TaskType: new("bugfix")},
+		{SpecName: "boosted", RequestSummary: "implement search scoring", TaskType: new("feature")},
 	}
 	results := Score(entries, "implement search scoring", taskType, DefaultBM25Params())
 	if len(results) < 2 {

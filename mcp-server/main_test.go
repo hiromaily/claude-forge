@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,14 +22,14 @@ func freePort(t *testing.T) string {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
-	return fmt.Sprintf("%d", port)
+	return strconv.Itoa(port)
 }
 
 // TestStartSSEServer_BindsAndServesEvents verifies that startSSEServer returns a non-nil
 // server that listens on the given address and serves SSE events from the bus.
 func TestStartSSEServer_BindsAndServesEvents(t *testing.T) {
 	port := freePort(t)
-	addr := fmt.Sprintf(":%s", port)
+	addr := ":" + port
 	bus := events.NewEventBus()
 
 	srv := startSSEServer(addr, bus)
@@ -46,12 +47,11 @@ func TestStartSSEServer_BindsAndServesEvents(t *testing.T) {
 
 	// Open an SSE connection.
 	url := fmt.Sprintf("http://localhost%s/events", addr)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		t.Fatalf("http.NewRequest: %v", err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	req = req.WithContext(ctx)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -129,7 +129,7 @@ func TestStartSSEServer_NoopWhenPortEmpty(t *testing.T) {
 	var httpSrv *http.Server
 	if eventsPort != "" {
 		bus := events.NewEventBus()
-		httpSrv = startSSEServer(fmt.Sprintf(":%s", eventsPort), bus)
+		httpSrv = startSSEServer(":"+eventsPort, bus)
 	}
 	if httpSrv != nil {
 		t.Fatal("expected no HTTP server when eventsPort is empty")
@@ -140,7 +140,7 @@ func TestStartSSEServer_NoopWhenPortEmpty(t *testing.T) {
 // after Shutdown is called the server stops accepting new connections.
 func TestStartSSEServer_ShutdownPath(t *testing.T) {
 	port := freePort(t)
-	addr := fmt.Sprintf(":%s", port)
+	addr := ":" + port
 	bus := events.NewEventBus()
 
 	srv := startSSEServer(addr, bus)
@@ -169,7 +169,7 @@ func TestStartSSEServer_ShutdownPath(t *testing.T) {
 // newline formatting for the data lines.
 func TestSSEResponseWriterFlushes(t *testing.T) {
 	port := freePort(t)
-	addr := fmt.Sprintf(":%s", port)
+	addr := ":" + port
 	bus := events.NewEventBus()
 
 	srv := startSSEServer(addr, bus)
@@ -184,10 +184,9 @@ func TestSSEResponseWriterFlushes(t *testing.T) {
 
 	time.Sleep(20 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
-	req, _ := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("http://localhost%s/events", addr), nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost%s/events", addr), nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET /events: %v", err)
@@ -225,4 +224,3 @@ func TestSSEResponseWriterFlushes(t *testing.T) {
 		t.Fatal("timed out waiting for SSE event")
 	}
 }
-

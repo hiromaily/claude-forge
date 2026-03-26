@@ -72,7 +72,7 @@ func TestAstSummaryFromPath_UnsupportedLanguage(t *testing.T) {
 func TestAstSummaryFromPath_UnknownExtension(t *testing.T) {
 	// language="" with a .rb path — should return IsError=true (unrecognized extension).
 	tmpFile := filepath.Join(t.TempDir(), "code.rb")
-	if err := os.WriteFile(tmpFile, []byte("def foo; end"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("def foo; end"), 0o644); err != nil {
 		t.Fatalf("write temp file: %v", err)
 	}
 	result, err := astSummaryFromPath(context.Background(), tmpFile, "")

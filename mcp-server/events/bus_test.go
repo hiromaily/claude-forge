@@ -96,7 +96,7 @@ func TestSlowSubscriberDoesNotBlockFastSubscribers(t *testing.T) {
 	// Publish many events — well beyond the 64-event buffer
 	const numEvents = 200
 	start := time.Now()
-	for i := 0; i < numEvents; i++ {
+	for range numEvents {
 		bus.Publish(events.Event{Event: "phase-start", Outcome: "in_progress"})
 	}
 	elapsed := time.Since(start)
@@ -129,10 +129,10 @@ func TestConcurrentPublishSubscribe(t *testing.T) {
 
 	// Concurrent publishers
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < publishesPerGoroutine; j++ {
+			for range publishesPerGoroutine {
 				bus.Publish(events.Event{Event: "phase-start", Outcome: "in_progress"})
 			}
 		}()
@@ -140,7 +140,7 @@ func TestConcurrentPublishSubscribe(t *testing.T) {
 
 	// Concurrent subscribe/unsubscribe
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			id, _ := bus.Subscribe()

@@ -11,10 +11,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hiromaily/claude-forge/mcp-server/events"
-	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
 // setupWorkspace creates a temp dir with a state.json initialised to the given specName.
@@ -188,7 +189,7 @@ func TestPhaseCompleteHandlerWarning3i(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
 	sm := state.NewStateManager()
 	// Create the required artifact for phase-1.
-	if err := os.WriteFile(filepath.Join(dir, "analysis.md"), []byte("analysis"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "analysis.md"), []byte("analysis"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// phase-1 is pending, not in_progress — should produce a warning but NOT block.
@@ -519,7 +520,7 @@ func TestPhaseCompleteHandlerPublishesEvent(t *testing.T) {
 	bus := events.NewEventBus()
 	_, ch := bus.Subscribe()
 	// Write required artifact for phase-1.
-	if err := os.WriteFile(filepath.Join(dir, "analysis.md"), []byte("analysis"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "analysis.md"), []byte("analysis"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

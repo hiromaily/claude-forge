@@ -19,14 +19,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hiromaily/claude-forge/mcp-server/search"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/hiromaily/claude-forge/mcp-server/search"
 )
 
 // ---------- helpers for search_patterns tests ----------
 
 // strPtr returns a pointer to s, for use in IndexEntry.TaskType.
-func strPtr(s string) *string { return &s }
+//
+//go:fix inline
+func strPtr(s string) *string { return new(s) }
 
 // buildIndex marshals entries as JSON and writes them to indexPath.
 func buildIndex(t *testing.T, indexPath string, entries []search.IndexEntry) {
@@ -35,7 +38,7 @@ func buildIndex(t *testing.T, indexPath string, entries []search.IndexEntry) {
 	if err != nil {
 		t.Fatalf("marshal index: %v", err)
 	}
-	if err := os.WriteFile(indexPath, data, 0644); err != nil {
+	if err := os.WriteFile(indexPath, data, 0o644); err != nil {
 		t.Fatalf("write index: %v", err)
 	}
 }
@@ -43,10 +46,10 @@ func buildIndex(t *testing.T, indexPath string, entries []search.IndexEntry) {
 // buildRequest writes text content to requestPath, creating parent dirs as needed.
 func buildRequest(t *testing.T, requestPath, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(requestPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(requestPath), 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", filepath.Dir(requestPath), err)
 	}
-	if err := os.WriteFile(requestPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(requestPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("write request: %v", err)
 	}
 }
@@ -189,7 +192,7 @@ func TestSearchPatternsHandler(t *testing.T) {
 		indexPath := filepath.Join(dir, "index.json")
 		requestPath := filepath.Join(dir, "workspace", "request.md")
 
-		ft := strPtr("feature")
+		ft := new("feature")
 		entries := []search.IndexEntry{
 			makeEntry("spec-completed", "implement mcp server golang feature tools patterns", "completed", ft,
 				nil,
@@ -293,8 +296,8 @@ func TestSearchPatternsHandler(t *testing.T) {
 		indexPath := filepath.Join(dir, "index.json")
 		requestPath := filepath.Join(dir, "workspace", "request.md")
 
-		ft := strPtr("feature")
-		bx := strPtr("bugfix")
+		ft := new("feature")
+		bx := new("bugfix")
 		// Both entries have identical requestSummary → equal BM25 scores.
 		// spec-feature matches task_type "feature" and receives a 2× boost.
 		entries := []search.IndexEntry{

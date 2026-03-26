@@ -10,9 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hiromaily/claude-forge/mcp-server/ast"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/hiromaily/claude-forge/mcp-server/ast"
 )
 
 // AstFindDefinitionHandler returns a ToolHandlerFunc for the ast_find_definition tool.

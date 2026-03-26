@@ -12,10 +12,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/mark3labs/mcp-go/server"
+
 	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/hiromaily/claude-forge/mcp-server/tools"
-	"github.com/mark3labs/mcp-go/server"
 )
 
 // startSSEServer attempts to bind an HTTP server for the SSE /events endpoint on
@@ -52,7 +53,7 @@ func main() {
 	// to ServeStdio so the MCP stdio transport remains functional.
 	var httpSrv *http.Server
 	if eventsPort != "" {
-		httpSrv = startSSEServer(fmt.Sprintf(":%s", eventsPort), bus)
+		httpSrv = startSSEServer(":"+eventsPort, bus)
 	}
 
 	// Run the MCP stdio transport. This blocks until stdin is closed.

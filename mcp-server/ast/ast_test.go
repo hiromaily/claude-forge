@@ -434,9 +434,9 @@ func TestTokenReduction(t *testing.T) {
 // file extensions.
 func TestLangFromExtension(t *testing.T) {
 	cases := []struct {
-		ext     string
+		ext      string
 		wantLang Language
-		wantOK  bool
+		wantOK   bool
 	}{
 		{".go", Go, true},
 		{".ts", TypeScript, true},
