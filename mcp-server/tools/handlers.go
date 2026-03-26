@@ -14,7 +14,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -126,7 +128,7 @@ func GetHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // PhaseStartHandler handles the "phase_start" MCP tool.
 // Accepts: workspace (string), phase (string).
 // Guard 3c: phase-5 requires non-empty tasks.
-func PhaseStartHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func PhaseStartHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
@@ -147,6 +149,15 @@ func PhaseStartHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if err := sm.PhaseStart(workspace, phase); err != nil {
 			return errorf("phase_start: %v", err)
 		}
+		e := events.Event{
+			Event:     "phase-start",
+			Phase:     phase,
+			SpecName:  s.SpecName,
+			Workspace: workspace,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Outcome:   "in_progress",
+		}
+		bus.Publish(e)
 		return okText("ok")
 	}
 }
@@ -157,7 +168,7 @@ func PhaseStartHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), phase (string).
 // Guards: 3a (artifact), 3e (awaiting_human), 3j (revision pending).
 // Warnings: 3f (phase-log missing), 3i (not in_progress).
-func PhaseCompleteHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func PhaseCompleteHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
@@ -192,6 +203,16 @@ func PhaseCompleteHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if err := sm.PhaseComplete(workspace, phase); err != nil {
 			return errorf("phase_complete: %v", err)
 		}
+		e := events.Event{
+			Event:     "phase-complete",
+			Phase:     phase,
+			SpecName:  s.SpecName,
+			Workspace: workspace,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Outcome:   "completed",
+		}
+		bus.Publish(e)
+		slack.Notify(e)
 		if len(warnings) > 0 {
 			return okWithWarning("ok", strings.Join(warnings, "; "))
 		}
@@ -203,7 +224,7 @@ func PhaseCompleteHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 // PhaseFailHandler handles the "phase_fail" MCP tool.
 // Accepts: workspace (string), phase (string), message (string).
-func PhaseFailHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func PhaseFailHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
@@ -214,9 +235,25 @@ func PhaseFailHandler(sm *state.StateManager) server.ToolHandlerFunc {
 			return errorf("%v", err)
 		}
 		message := req.GetString("message", "")
+		// Load state for event specName before mutation.
+		s, serr := loadState(workspace)
+		specName := ""
+		if serr == nil {
+			specName = s.SpecName
+		}
 		if err := sm.PhaseFail(workspace, phase, message); err != nil {
 			return errorf("phase_fail: %v", err)
 		}
+		e := events.Event{
+			Event:     "phase-fail",
+			Phase:     phase,
+			SpecName:  specName,
+			Workspace: workspace,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Outcome:   "failed",
+		}
+		bus.Publish(e)
+		slack.Notify(e)
 		return okText("ok")
 	}
 }
@@ -225,7 +262,7 @@ func PhaseFailHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 // CheckpointHandler handles the "checkpoint" MCP tool.
 // Accepts: workspace (string), phase (string).
-func CheckpointHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func CheckpointHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
@@ -235,9 +272,24 @@ func CheckpointHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if err != nil {
 			return errorf("%v", err)
 		}
+		// Load state for event specName before mutation.
+		s, serr := loadState(workspace)
+		specName := ""
+		if serr == nil {
+			specName = s.SpecName
+		}
 		if err := sm.Checkpoint(workspace, phase); err != nil {
 			return errorf("checkpoint: %v", err)
 		}
+		e := events.Event{
+			Event:     "checkpoint",
+			Phase:     phase,
+			SpecName:  specName,
+			Workspace: workspace,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Outcome:   "awaiting_human",
+		}
+		bus.Publish(e)
 		return okText("ok")
 	}
 }
@@ -653,15 +705,33 @@ func PhaseStatsHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 // AbandonHandler handles the "abandon" MCP tool.
 // Accepts: workspace (string).
-func AbandonHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func AbandonHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
 			return errorf("%v", err)
 		}
+		// Load state for event specName and phase before mutation.
+		s, serr := loadState(workspace)
+		specName := ""
+		phase := ""
+		if serr == nil {
+			specName = s.SpecName
+			phase = s.CurrentPhase
+		}
 		if err := sm.Abandon(workspace); err != nil {
 			return errorf("abandon: %v", err)
 		}
+		e := events.Event{
+			Event:     "abandon",
+			Phase:     phase,
+			SpecName:  specName,
+			Workspace: workspace,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Outcome:   "abandoned",
+		}
+		bus.Publish(e)
+		slack.Notify(e)
 		return okText("ok")
 	}
 }

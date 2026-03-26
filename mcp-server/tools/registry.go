@@ -3,6 +3,7 @@
 package tools
 
 import (
+	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -36,7 +37,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier, e.g. phase-1, phase-2")),
 		),
-		PhaseStartHandler(sm),
+		PhaseStartHandler(sm, events.NewEventBus()),
 	)
 
 	srv.AddTool(
@@ -45,7 +46,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier")),
 		),
-		PhaseCompleteHandler(sm),
+		PhaseCompleteHandler(sm, events.NewEventBus(), events.NewSlackNotifier("")),
 	)
 
 	srv.AddTool(
@@ -55,7 +56,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier")),
 			mcp.WithString("message", mcp.Description("Human-readable failure reason")),
 		),
-		PhaseFailHandler(sm),
+		PhaseFailHandler(sm, events.NewEventBus(), events.NewSlackNotifier("")),
 	)
 
 	srv.AddTool(
@@ -64,7 +65,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("phase", mcp.Required(), mcp.Description("checkpoint-a or checkpoint-b")),
 		),
-		CheckpointHandler(sm),
+		CheckpointHandler(sm, events.NewEventBus()),
 	)
 
 	srv.AddTool(
@@ -226,7 +227,7 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithDescription("Mark the pipeline as abandoned."),
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 		),
-		AbandonHandler(sm),
+		AbandonHandler(sm, events.NewEventBus(), events.NewSlackNotifier("")),
 	)
 
 	srv.AddTool(
