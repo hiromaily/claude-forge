@@ -1,4 +1,4 @@
-// Package tools registers all 26 MCP tool handlers with the MCP server.
+// Package tools registers all 27 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// RegisterAll registers all 26 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 27 tool handlers with srv, delegating to sm.
 // This is the single entry point called from main.go.
 func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 	srv.AddTool(
@@ -243,5 +243,16 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager) {
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 		),
 		RefreshIndexHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("search_patterns",
+			mcp.WithDescription("Score .specs/index.json entries against request.md using BM25. Returns ranked markdown output (review-feedback or impl patterns)."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("task_type", mcp.Description("Task type used for BM25 taskType boost, e.g. feature, bugfix")),
+			mcp.WithNumber("top_k", mcp.Description("Maximum number of results (0 = mode-specific default: 3 for review-feedback, 2 for impl)")),
+			mcp.WithString("mode", mcp.Description("Output mode: \"impl\" for implementation patterns; any other value means review-feedback mode")),
+		),
+		SearchPatternsHandler(sm),
 	)
 }
