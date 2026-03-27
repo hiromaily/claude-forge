@@ -147,9 +147,9 @@ SKILL.md (orchestrator)
 
 **find_active_workspace** — this function is duplicated across `pre-tool-hook.sh`, `post-agent-hook.sh`, and `stop-hook.sh`. **The copies are intentionally different**: each script uses a slightly different filter predicate suited to its own enforcement context. Do not unify them into a shared library. Each copy carries a comment explaining the divergence — read it before modifying.
 
-**Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes all 26 `state-manager.sh` subcommands as typed tool calls, plus additional MCP-only tools (currently `search_patterns`, `subscribe_events`, `ast_summary`, and `ast_find_definition`). The total MCP tool count is 30. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
+**Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes all 26 `state-manager.sh` subcommands as typed tool calls, plus additional MCP-only tools (currently `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, and `impact_scope`). The total MCP tool count is **32**. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
 
-**MCP-only tools** — `search_patterns`, `subscribe_events`, `ast_summary`, and `ast_find_definition` are exposed as MCP tools but have no `state-manager.sh` shell equivalents. `search_patterns` performs BM25 scoring over `.specs/index.json` (see design rationale in `ARCHITECTURE.md`); the shell fallback is `query-specs-index.sh`. `subscribe_events` is a discovery tool that returns the SSE endpoint URL when `FORGE_EVENTS_PORT` is set; there is no shell equivalent. `ast_summary` parses a source file with tree-sitter and returns a compact markdown summary of exported signatures only. `ast_find_definition` locates and returns the definition of a named symbol in a source file.
+**MCP-only tools** — `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, and `impact_scope` are exposed as MCP tools but have no `state-manager.sh` shell equivalents. `search_patterns` performs BM25 scoring over `.specs/index.json` (see design rationale in `ARCHITECTURE.md`); the shell fallback is `query-specs-index.sh`. `subscribe_events` is a discovery tool that returns the SSE endpoint URL when `FORGE_EVENTS_PORT` is set; there is no shell equivalent. `ast_summary` parses a source file with tree-sitter and returns a compact markdown summary of exported signatures only. `ast_find_definition` locates and returns the definition of a named symbol in a source file. `dependency_graph` walks a source tree and returns a file-level import graph as JSON (nodes = files, edges = imports). `impact_scope` identifies files that call a given symbol via a two-pass import+call-site scan; returns a ranked list (`distance: -1` for TypeScript/Python).
 
 **Canonical command list** (shell name → MCP tool name):
 
@@ -184,6 +184,8 @@ SKILL.md (orchestrator)
 | _(MCP-only)_ | `subscribe_events` | Query |
 | _(MCP-only)_ | `ast_summary` | Query |
 | _(MCP-only)_ | `ast_find_definition` | Query |
+| _(MCP-only)_ | `dependency_graph` | Query |
+| _(MCP-only)_ | `impact_scope` | Query |
 | `refresh-index` | `refresh_index` | Utility |
 
 ### What NOT to do

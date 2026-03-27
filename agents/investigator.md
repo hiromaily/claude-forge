@@ -25,6 +25,21 @@ Read these files before starting:
    - Search the **entire codebase** (source AND tests) for every import/reference to those items
    - List ALL callers — the design must address every one, not just the obvious ones
 
+   **Preferred tool for rename/interface-change impact:** Call `mcp__forge-state__impact_scope`.
+
+   Parameters: `root_path` (abs path to repo root), `file_path` (abs path to file with changed symbol), `symbol_name` (function/type/constant name), `language` (`go`/`typescript`/`python`/`bash`).
+
+   The tool performs a two-pass scan: import filter then call-site filter. The `affected_files` array lists confirmed callers. For Go and Bash, `distance` is a positive BFS import distance (1 = direct importer). For TypeScript and Python, `distance` is `-1` (confirmed caller, BFS not computed — not "same file as target").
+
+   **Filter warnings:**
+   - Do NOT filter with `distance > 0` — silently drops all TypeScript and Python entries.
+   - Do NOT filter with `distance == -1` exclusively — silently drops all Go and Bash entries.
+   Iterate the full array. Use `distance >= 1` only when the explicit intent is to retrieve direct Go/Bash importers.
+
+   **Fallback when unavailable:** Use Grep to search the codebase for the symbol name. List all matches under "Deletion/rename impact."
+
+   Include the `affected_files` array in `investigation.md` under "Deletion/rename impact".
+
 ## Output Format
 
 Return a structured markdown report with:

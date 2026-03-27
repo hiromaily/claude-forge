@@ -1,4 +1,4 @@
-// Package tools registers all 30 MCP tool handlers with the MCP server.
+// Package tools registers all 32 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -10,7 +10,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// RegisterAll registers all 30 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 32 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
@@ -288,5 +288,26 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 			mcp.WithString("language", mcp.Description("Language override: go, typescript, python, bash. When omitted, language is auto-detected from the file extension.")),
 		),
 		AstFindDefinitionHandler(),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("dependency_graph",
+			mcp.WithDescription("Walks a source tree and returns a file-level import dependency graph as JSON (nodes = files, edges = imports)."),
+			mcp.WithString("root_path", mcp.Required(), mcp.Description("Absolute path to the root of the source tree.")),
+			mcp.WithString("language", mcp.Required(), mcp.Description("Language to analyse: go, typescript, python, or bash.")),
+		),
+		AstDependencyGraphHandler(),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("impact_scope",
+			mcp.WithDescription("Identify files that call a given symbol via a two-pass import+call-site scan. "+
+				"Returns a ranked list of affected files with BFS distance (distance=-1 for TypeScript/Python)."),
+			mcp.WithString("root_path", mcp.Required(), mcp.Description("Absolute path to the root directory of the source tree")),
+			mcp.WithString("file_path", mcp.Required(), mcp.Description("Absolute path to the file containing the changed symbol")),
+			mcp.WithString("symbol_name", mcp.Required(), mcp.Description("Function, type, or constant name to search for callers of")),
+			mcp.WithString("language", mcp.Required(), mcp.Description("Language: go, typescript, python, or bash")),
+		),
+		AstImpactScopeHandler(),
 	)
 }
