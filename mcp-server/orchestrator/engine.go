@@ -153,7 +153,10 @@ func (*Engine) handleDocsStubSynthesis(st *state.State) (Action, error) {
 
 	// Step 1: design.md absent → write stub
 	designPath := filepath.Join(workspace, "design.md")
-	if _, err := os.Stat(designPath); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(designPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return Action{}, fmt.Errorf("handleDocsStubSynthesis: stat %s: %w", designPath, err)
+		}
 		content := "# Design\n\n_Auto-generated stub for docs task type. " +
 			"Fill in the design details or leave as-is._\n"
 		return NewWriteFileAction(designPath, content), nil
@@ -161,7 +164,10 @@ func (*Engine) handleDocsStubSynthesis(st *state.State) (Action, error) {
 
 	// Step 2: tasks.md absent → write stub
 	tasksPath := filepath.Join(workspace, "tasks.md")
-	if _, err := os.Stat(tasksPath); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(tasksPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return Action{}, fmt.Errorf("handleDocsStubSynthesis: stat %s: %w", tasksPath, err)
+		}
 		content := "## Task 1: Implement documentation [sequential]\n\n" +
 			"**Depends on:** None\n**Files:** TBD\n\n" +
 			"**Acceptance criteria:**\n- [ ] **AC-1:** Documentation is complete.\n"
@@ -220,7 +226,10 @@ func (*Engine) handleBugfixStubSynthesis(st *state.State) (Action, error) {
 
 	// Step 1: design.md absent → write stub
 	designPath := filepath.Join(workspace, "design.md")
-	if _, err := os.Stat(designPath); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(designPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return Action{}, fmt.Errorf("handleBugfixStubSynthesis: stat %s: %w", designPath, err)
+		}
 		content := "# Design\n\n_Auto-generated stub for bugfix task type. " +
 			"Fill in the fix description or leave as-is._\n"
 		return NewWriteFileAction(designPath, content), nil
@@ -228,7 +237,10 @@ func (*Engine) handleBugfixStubSynthesis(st *state.State) (Action, error) {
 
 	// Step 2: tasks.md absent → write stub
 	tasksPath := filepath.Join(workspace, "tasks.md")
-	if _, err := os.Stat(tasksPath); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(tasksPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return Action{}, fmt.Errorf("handleBugfixStubSynthesis: stat %s: %w", tasksPath, err)
+		}
 		content := "## Task 1: Apply bugfix [sequential]\n\n" +
 			"**Depends on:** None\n**Files:** TBD\n\n" +
 			"**Acceptance criteria:**\n- [ ] **AC-1:** Bug is fixed.\n"
@@ -256,7 +268,10 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 	reviewPath := filepath.Join(st.Workspace, "review-design.md")
 
 	// If review file doesn't exist yet, spawn the design reviewer.
-	if _, err := os.Stat(reviewPath); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(reviewPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return Action{}, fmt.Errorf("handlePhaseThreeB: stat %s: %w", reviewPath, err)
+		}
 		return NewSpawnAgentAction(
 			agentDesignReviewer,
 			"Review the design document.",
@@ -346,7 +361,10 @@ func (e *Engine) handlePhaseFourB(st *state.State) (Action, error) {
 	reviewPath := filepath.Join(st.Workspace, "review-tasks.md")
 
 	// If review file doesn't exist yet, spawn the task reviewer.
-	if _, err := os.Stat(reviewPath); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(reviewPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return Action{}, fmt.Errorf("handlePhaseFourB: stat %s: %w", reviewPath, err)
+		}
 		return NewSpawnAgentAction(
 			agentTaskReviewer,
 			"Review the task decomposition.",
@@ -457,16 +475,14 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 				break
 			}
 		}
-		if len(parallelKeys) > 1 {
-			return NewParallelSpawnAction(
-				agentImplementer,
-				"Implement tasks in parallel.",
-				"sonnet",
-				PhaseFive,
-				[]string{"tasks.md", "design.md"},
-				parallelKeys,
-			), nil
-		}
+		return NewParallelSpawnAction(
+			agentImplementer,
+			"Implement tasks in parallel.",
+			"sonnet",
+			PhaseFive,
+			[]string{"tasks.md", "design.md"},
+			parallelKeys,
+		), nil
 	}
 
 	// Sequential: spawn first pending task
@@ -492,7 +508,10 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 			reviewFile := filepath.Join(st.Workspace, "review-"+k+".md")
 
 			// If review file doesn't exist, spawn reviewer
-			if _, err := os.Stat(reviewFile); errors.Is(err, os.ErrNotExist) {
+			if _, err := os.Stat(reviewFile); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					return Action{}, fmt.Errorf("handlePhaseSix: stat %s: %w", reviewFile, err)
+				}
 				return NewSpawnAgentAction(
 					agentImplReviewer,
 					"Review implementation for task "+k+".",

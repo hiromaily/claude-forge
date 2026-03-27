@@ -593,6 +593,23 @@ func TestNextAction(t *testing.T) {
 			wantParallelIDs: []string{"1", "2"},
 		},
 
+		// ── Decision 22: phase-5 single parallel task dispatches via ParallelSpawnAction ──
+		{
+			name: "phase5_parallel_one",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "parallel", ImplStatus: "pending"},
+						"2": {Title: "Task 2", ExecutionMode: "sequential", ImplStatus: "pending"},
+					}
+					return nil
+				})
+			},
+			wantType:        ActionSpawnAgent,
+			wantParallelIDs: []string{"1"},
+		},
+
 		// ── Decision 22: phase-5 three parallel tasks ────────────────────────
 		{
 			name: "phase5_parallel_three",
