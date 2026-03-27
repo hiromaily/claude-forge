@@ -1,6 +1,6 @@
 // Package tools — integration tests for handler registration and compilation.
 // Full guard-enforcement tests live in Task 7; here we verify that:
-//   - RegisterAll compiles and adds exactly 32 tools
+//   - RegisterAll compiles and adds exactly 34 tools
 //   - Each handler calls the StateManager without panicking on valid input
 package tools
 
@@ -59,8 +59,8 @@ func TestRegisterAllCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 32 {
-		t.Errorf("RegisterAll: expected 32 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 34 {
+		t.Errorf("RegisterAll: expected 34 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
 		}
@@ -626,6 +626,47 @@ func TestAbandonHandlerPublishesEvent(t *testing.T) {
 	}
 	if e.Outcome != "abandoned" {
 		t.Errorf("Event.Outcome: got %q, want %q", e.Outcome, "abandoned")
+	}
+}
+
+// ---------- validate_artifact handler smoke test ----------
+
+// TestValidateArtifactHandler_Phase6 is a smoke test that calls ValidateArtifactHandler
+// directly using t.Context() (not the callTool helper which uses context.Background()).
+// It verifies the handler returns a valid JSON array with valid:true for a PASS impl file.
+func TestValidateArtifactHandler_Phase6(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "impl-1.md"), []byte("## Summary\n\nPASS\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	h := ValidateArtifactHandler()
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"workspace": dir,
+		"phase":     "phase-6",
+	}
+	res, err := h(t.Context(), req)
+	if err != nil {
+		t.Fatalf("ValidateArtifactHandler returned Go error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("ValidateArtifactHandler phase-6 returned MCP error: %v", textContent(res))
+	}
+
+	var results []struct {
+		Valid bool `json:"valid"`
+	}
+	if err := json.Unmarshal([]byte(textContent(res)), &results); err != nil {
+		t.Fatalf("unmarshal results array: %v (content: %s)", err, textContent(res))
+	}
+	if len(results) == 0 {
+		t.Fatalf("expected at least one result, got 0")
+	}
+	if !results[0].Valid {
+		t.Errorf("TestValidateArtifactHandler_Phase6: got valid=false, want valid=true")
 	}
 }
 

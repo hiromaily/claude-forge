@@ -7,8 +7,6 @@
 # 3. Artifact guards — deterministic checks that prevent state advancement
 # 4. No git checkout -b when state.json.branch is already set
 # 5. No git checkout/switch to main/master during active pipeline
-# 6. Input validation guard — blocks state-manager.sh init without prior validate-input.sh call
-#    when required files are missing or preconditions are unmet:
 #    3a. phase-complete requires the phase's artifact file to exist
 #    3b. task-update reviewStatus completed_pass requires review-{N}.md to exist
 #    3c. phase-start phase-5 requires tasks to be initialized (non-empty)
@@ -42,35 +40,6 @@ INPUT="$(cat)"
 # Extract tool name from input
 TOOL_NAME="$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null || true)"
 [ -z "$TOOL_NAME" ] && exit 0
-
-# --- Rule 6: Input validation guard for state-manager.sh init ---
-# Fires BEFORE find_active_workspace because init creates the workspace (none exists yet).
-# Checks that validate-input.sh was called recently (within 120s) by verifying a marker file.
-# Skips git commands to avoid false positives (e.g., commit messages mentioning
-# "state-manager.sh init" as text).
-if [ "$TOOL_NAME" = "Bash" ]; then
-  INIT_CMD="$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null || true)"
-  # Skip Rule 6 for git commands — commit messages may mention "state-manager.sh init" as text
-  if echo "$INIT_CMD" | grep -qE '^\s*(git|GIT)\b'; then
-    : # not a state-manager invocation, skip
-  elif echo "$INIT_CMD" | grep -qE 'state-manager\.sh[[:space:]]+init\b'; then
-    MARKER="${TMPDIR:-/tmp}/dev-pipeline-input-validated"
-    if [ ! -f "$MARKER" ]; then
-      echo "BLOCKED: state-manager.sh init called without prior input validation. Run 'bash scripts/validate-input.sh \"\$ARGUMENTS\"' first." >&2
-      exit 2
-    fi
-    # Check marker freshness (within 120 seconds)
-    MARKER_TS="$(cat "$MARKER" 2>/dev/null || echo "0")"
-    NOW_TS="$(date +%s)"
-    AGE=$(( NOW_TS - MARKER_TS ))
-    if [ "$AGE" -gt 120 ]; then
-      echo "BLOCKED: Input validation marker is stale (${AGE}s old). Re-run 'bash scripts/validate-input.sh \"\$ARGUMENTS\"' before init." >&2
-      exit 2
-    fi
-    # Validation passed — clean up marker to prevent reuse
-    rm -f "$MARKER" 2>/dev/null || true
-  fi
-fi
 
 # Helper: resolve workspace path (may be relative to CLAUDE_PROJECT_DIR)
 resolve_ws() {

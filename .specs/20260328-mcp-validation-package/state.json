@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "specName": "mcp-validation-package",
+  "workspace": ".specs/20260328-mcp-validation-package",
+  "branch": "feature/mcp-validation-package",
+  "taskType": "feature",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "final-verification",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "setup",
+    "summary"
+  ],
+  "revisions": {
+    "designRevisions": 1,
+    "taskRevisions": 0,
+    "designInlineRevisions": 1,
+    "taskInlineRevisions": 1
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "validation/input.go — ValidateInput logic",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "validation/artifact.go — ValidateArtifacts logic",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "testdata fixtures (12 files)",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Unit tests for validation/ package",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "MCP handlers: validate_input.go, validate_artifact.go",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "Register tools in registry.go; update main.go",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "7": {
+      "title": "Update count assertions + phase-6 smoke test",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "8": {
+      "title": "guards.go error string update",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "9": {
+      "title": "pre-tool-hook.sh — remove Rule 6",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "10": {
+      "title": "Remove Rule 6 tests from test-hooks.sh",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "11": {
+      "title": "SKILL.md — replace validate-input.sh with MCP call",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "12": {
+      "title": "validate-input.sh — add deprecation comment",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "13": {
+      "title": "Docs: CLAUDE.md / README.md / scripts/README.md",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "14": {
+      "title": "Final build and test verification gate",
+      "executionMode": "sequential",
+      "implStatus": "pending",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 55750,
+      "duration_ms": 106510,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:55:12Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 99903,
+      "duration_ms": 256418,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T23:02:19Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 50675,
+      "duration_ms": 113740,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T23:05:36Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 43280,
+      "duration_ms": 71044,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T23:07:05Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 39248,
+      "duration_ms": 132048,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T23:11:07Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 50531,
+      "duration_ms": 87499,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T23:12:49Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 41951,
+      "duration_ms": 55935,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T23:15:15Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 55981,
+      "duration_ms": 125113,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T23:18:56Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 30482,
+      "duration_ms": 41067,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T23:19:55Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 33578,
+      "duration_ms": 62982,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T23:22:12Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-27T22:52:16Z",
+    "lastUpdated": "2026-03-27T23:47:28Z",
+    "phaseStarted": null
+  },
+  "error": null
+}

@@ -257,16 +257,19 @@ If `$ARGUMENTS` does NOT match an existing workspace, proceed to Input Validatio
 
 **Before Workspace Setup**, validate that `$ARGUMENTS` represents a coherent, actionable development request. This prevents wasting tokens on nonsensical or clearly invalid input.
 
-### Step 1: Deterministic checks (script-enforced)
+### Step 1: Deterministic checks (MCP-enforced)
 
-Run the validation script:
-```bash
-bash scripts/validate-input.sh "$ARGUMENTS"
+Call the `mcp__forge-state__validate_input` tool:
+```
+mcp__forge-state__validate_input({"arguments": "$ARGUMENTS"})
 ```
 
-If the script exits non-zero, **stop the pipeline immediately** and relay the error message from stderr to the user. Do NOT proceed to Workspace Setup.
+Parse the response JSON object. The response contains three fields: `valid` (boolean), `errors` (array of strings), and `parsed` (object with `flags`, `bare_flags`, `core_text`, and `source_type`).
 
-The script checks: empty input, minimum length after flag stripping, and URL format validation.
+- If `valid` is `false`: display the contents of `errors` to the user and **stop the pipeline immediately**. Do NOT proceed to Workspace Setup.
+- If `valid` is `true`: continue to Steps 2 and 3 below, then call `mcp__forge-state__init` with `validated: true` during Workspace Setup.
+
+The tool checks: empty input, minimum length after flag stripping, and URL format validation.
 
 ### Step 2: Semantic validation (LLM assessment)
 

@@ -112,7 +112,7 @@ flowchart TD
     START(["▶ /forge"])
     START --> RC{state.json<br>exists?}
     RC -->|yes| RESUME[Load state.json<br>restore variables]
-    RC -->|no| IV["🛡️ Input Validation<br>validate-input.sh + LLM check"]
+    RC -->|no| IV["🛡️ Input Validation<br>validate_input MCP tool + LLM check"]
     IV -->|invalid| REJECT(["❌ Reject — show error"])
     IV -->|valid| WS[Workspace Setup<br>request.md + state.json]
     RESUME --> REJOIN(("resume at<br>current phase"))
@@ -215,7 +215,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 1 | `validate-input.sh` exits non-zero (empty, too short, malformed URL) | Error message from the script; pipeline stops | Yes — pipeline aborts |
+| 1 | `mcp__forge-state__validate_input` returns `valid: false` (empty, too short, malformed URL) | Error messages from the `errors` field; pipeline stops | Yes — pipeline aborts |
 | 2 | LLM judges input as gibberish or unrelated to software development | Rejection message with specific reason and valid-input examples; pipeline stops | Yes — pipeline aborts |
 | 3 | Jira URL provided but `mcp__atlassian__getJiraIssue` tool unavailable | Error with plugin install instructions; pipeline stops | Yes — pipeline aborts |
 
@@ -278,9 +278,9 @@ The pipeline pauses and returns control to the user at the following points. Poi
 - **Human checkpoints** — Pause for human approval at design and task decomposition stages; skippable with `--auto` (except `full` template)
 - **Improvement report** — Always-on retrospective appended to `summary.md` identifying documentation gaps, code readability friction, and AI agent support issues encountered during the run
 - **Past implementation pattern injection** — Before each implementer invocation, `mcp__forge-state__search_patterns` (BM25 scorer) or the shell fallback `query-specs-index.sh` scans the specs index for similar past pipelines and injects their file-modification patterns into the prompt, surfacing real implementation examples rather than generic guidance
-- **Disk-based state machine** — All progress tracked in `state.json` via a 26-subcommand CLI (32 MCP tools including `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, and `impact_scope`); pipelines survive context compaction and session restarts
+- **Disk-based state machine** — All progress tracked in `state.json` via a 26-subcommand CLI (34 MCP tools including `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, and `validate_artifact`); pipelines survive context compaction and session restarts
 - **Resume and abandon** — Resume an interrupted pipeline from any phase; abandon cleanly when needed
-- **Input validation** — Two-layer guard: deterministic `validate-input.sh` (empty, too-short, malformed URL) + LLM semantic check blocks nonsensical or non-development requests before any tokens are spent on workspace setup
+- **Input validation** — Two-layer guard: deterministic `mcp__forge-state__validate_input` MCP tool (empty, too-short, malformed URL) + LLM semantic check blocks nonsensical or non-development requests before any tokens are spent on workspace setup
 - **Phase metrics** — Every agent invocation logged with token count, duration, and model; included in the Final Summary
 - **Source integration** — Accepts GitHub Issue URLs or Jira Issue URLs as input; posts the final summary back as a comment
 - **Automatic PR creation** — Commits, pushes, and opens a GitHub PR with a structured summary; skippable with `--nopr`
@@ -381,7 +381,7 @@ claude-forge/
   agents/             11 specialist agents (.md files with YAML frontmatter)
   hooks/              Hook definitions (hooks.json)
   scripts/
-    state-manager.sh        State management CLI (26 subcommands; MCP server exposes 32 tools)
+    state-manager.sh        State management CLI (26 subcommands; MCP server exposes 34 tools)
     build-specs-index.sh    Scans .specs/ and builds index.json with implPatterns
     query-specs-index.sh    Keyword-score matching against index.json; outputs markdown
     pre-tool-hook.sh          Read-only, commit blocking, checkpoint & artifact guards
