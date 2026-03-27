@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
@@ -1758,6 +1759,347 @@ func TestRefreshIndex_ErrorWhenScriptNotFound(t *testing.T) {
 	err := m.RefreshIndex(dir)
 	if err == nil {
 		t.Error("RefreshIndex: expected non-nil error when script not in state package, got nil")
+	}
+}
+
+// ---------- LoadFromFile ----------
+
+// TestLoadFromFile_PopulatesCache verifies that after calling LoadFromFile,
+// GetState() returns the loaded state (cache is warmed, Version == 2).
+func TestLoadFromFile_PopulatesCache(t *testing.T) {
+	dir := t.TempDir()
+
+	// Use a separate manager to seed the workspace via Init.
+	seeder := newManager()
+	if err := seeder.Init(dir, "spec-cache"); err != nil {
+		t.Fatalf("Init (seeder): %v", err)
+	}
+
+	// Now create a new manager and load from the file written above.
+	m := newManager()
+	if err := m.LoadFromFile(dir); err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+
+	s, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if s == nil {
+		t.Fatal("GetState: returned nil, want non-nil state")
+	}
+	if s.Version != 2 {
+		t.Errorf("Version: got %d, want 2", s.Version)
+	}
+	if s.SpecName != "spec-cache" {
+		t.Errorf("SpecName: got %q, want %q", s.SpecName, "spec-cache")
+	}
+}
+
+// TestLoadFromFile_WorkspaceMismatch verifies that calling a mutating method
+// with a different workspace after LoadFromFile returns a workspace-mismatch error.
+func TestLoadFromFile_WorkspaceMismatch(t *testing.T) {
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+
+	// Seed both workspaces.
+	seeder1 := newManager()
+	if err := seeder1.Init(dir1, "spec-ws1"); err != nil {
+		t.Fatalf("Init (ws1): %v", err)
+	}
+	seeder2 := newManager()
+	if err := seeder2.Init(dir2, "spec-ws2"); err != nil {
+		t.Fatalf("Init (ws2): %v", err)
+	}
+
+	// Bind manager to dir1 via LoadFromFile.
+	m := newManager()
+	if err := m.LoadFromFile(dir1); err != nil {
+		t.Fatalf("LoadFromFile(dir1): %v", err)
+	}
+
+	// Attempt to call PhaseStart with dir2 — should fail with workspace mismatch.
+	err := m.PhaseStart(dir2, "phase-1")
+	if err == nil {
+		t.Fatal("PhaseStart with different workspace: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "workspace mismatch") {
+		t.Errorf("error message: got %q, want it to contain %q", err.Error(), "workspace mismatch")
+	}
+}
+
+// TestLoadFromFile_MigratesV1File verifies that LoadFromFile on a v1 JSON file
+// returns state with Version == 2 (auto-migration is applied).
+func TestLoadFromFile_MigratesV1File(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a minimal v1 state.json directly to the workspace.
+	v1JSON := `{
+  "version": 1,
+  "specName": "v1-spec",
+  "workspace": "` + dir + `",
+  "branch": null,
+  "taskType": null,
+  "effort": null,
+  "flowTemplate": null,
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "phase-1",
+  "currentPhaseStatus": "pending",
+  "completedPhases": ["setup"],
+  "revisions": {"designRevisions": 0, "taskRevisions": 0, "designInlineRevisions": 0, "taskInlineRevisions": 0},
+  "checkpointRevisionPending": {"checkpoint-a": false, "checkpoint-b": false},
+  "tasks": {},
+  "phaseLog": [],
+  "timestamps": {"created": "2024-01-01T00:00:00Z", "lastUpdated": "2024-01-01T00:00:00Z", "phaseStarted": null},
+  "error": null
+}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(v1JSON), 0o600); err != nil {
+		t.Fatalf("WriteFile v1 state: %v", err)
+	}
+
+	m := newManager()
+	if err := m.LoadFromFile(dir); err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+
+	s, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if s.Version != 2 {
+		t.Errorf("Version after migration: got %d, want 2", s.Version)
+	}
+}
+
+// ---------- Update ----------
+
+// TestUpdate_PersistsToDisk verifies that after Update mutates a field,
+// reading the JSON file from disk reflects the change.
+func TestUpdate_PersistsToDisk(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Mutate SpecName via Update.
+	if err := m.Update(func(s *state.State) error {
+		s.SpecName = "updated-spec"
+		return nil
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	// Read the file directly from disk and verify the change.
+	data, err := os.ReadFile(filepath.Join(dir, "state.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var disk state.State
+	if err := json.Unmarshal(data, &disk); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if disk.SpecName != "updated-spec" {
+		t.Errorf("SpecName on disk: got %q, want %q", disk.SpecName, "updated-spec")
+	}
+}
+
+// TestUpdate_StampsLastUpdated verifies that Update stamps Timestamps.LastUpdated
+// with RFC3339Nano precision and that the stamped time is strictly after a
+// reference time captured before the Update call.
+func TestUpdate_StampsLastUpdated(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Capture the LastUpdated set by Init as the "before" reference.
+	s0, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState (before): %v", err)
+	}
+	before, err := time.Parse(time.RFC3339Nano, s0.Timestamps.LastUpdated)
+	if err != nil {
+		t.Fatalf("parse before LastUpdated %q: %v", s0.Timestamps.LastUpdated, err)
+	}
+
+	// Sleep a nanosecond to ensure strict ordering.
+	time.Sleep(time.Nanosecond)
+
+	// Call Update with a no-op mutation to trigger the timestamp stamp.
+	if err := m.Update(func(s *state.State) error {
+		s.Debug = true
+		return nil
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	s1, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState (after): %v", err)
+	}
+	after, err := time.Parse(time.RFC3339Nano, s1.Timestamps.LastUpdated)
+	if err != nil {
+		t.Fatalf("parse after LastUpdated %q: %v", s1.Timestamps.LastUpdated, err)
+	}
+
+	if !after.After(before) {
+		t.Errorf("LastUpdated not strictly advanced: before=%v after=%v", before, after)
+	}
+}
+
+// TestUpdate_ConcurrentSafe spawns 50 goroutines that each append a PhaseLogEntry
+// via Update. The test verifies no data races (run with -race) and that the
+// final count is exactly 50.
+func TestUpdate_ConcurrentSafe(t *testing.T) {
+	const numGoroutines = 50
+
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := range numGoroutines {
+		go func(idx int) {
+			defer wg.Done()
+			if err := m.Update(func(s *state.State) error {
+				s.PhaseLog = append(s.PhaseLog, state.PhaseLogEntry{
+					Phase:      "phase-1",
+					Tokens:     idx + 1,
+					DurationMs: (idx + 1) * 100,
+					Model:      "sonnet",
+					Timestamp:  "2024-01-01T00:00:00Z",
+				})
+				return nil
+			}); err != nil {
+				t.Errorf("goroutine %d Update: %v", idx, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	s, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if len(s.PhaseLog) != numGoroutines {
+		t.Errorf("PhaseLog entries: got %d, want %d", len(s.PhaseLog), numGoroutines)
+	}
+}
+
+// TestUpdate_PersistFailureReturnsError verifies that Update returns a non-nil
+// error when persistToFile fails (directory placed at state.json path), and
+// that sm.state is mutated in memory even though the disk write failed.
+func TestUpdate_PersistFailureReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	statePath := filepath.Join(dir, "state.json")
+
+	// Replace state.json with a directory of the same name — this makes
+	// os.WriteFile (or os.Rename) fail regardless of whether the process is root.
+	if err := os.Remove(statePath); err != nil {
+		t.Fatalf("Remove state.json: %v", err)
+	}
+	if err := os.Mkdir(statePath, 0o755); err != nil {
+		t.Fatalf("Mkdir at state.json path: %v", err)
+	}
+
+	// Call Update — the mutation itself should succeed, but persistToFile must fail.
+	updateErr := m.Update(func(s *state.State) error {
+		s.SpecName = "mutated"
+		return nil
+	})
+	if updateErr == nil {
+		t.Fatal("Update with unpersistable path: expected error, got nil")
+	}
+
+	// The in-memory state should still reflect the mutation (no rollback).
+	s, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState after failed persist: %v", err)
+	}
+	if s.SpecName != "mutated" {
+		t.Errorf("SpecName in memory: got %q, want %q (state should not be rolled back)", s.SpecName, "mutated")
+	}
+}
+
+// ---------- GetState ----------
+
+// TestGetState_ReturnsCopy verifies that mutating a field of the returned copy
+// does not affect subsequent GetState() calls.
+func TestGetState_ReturnsCopy(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "spec-copy"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Get the first copy.
+	copy1, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState (first): %v", err)
+	}
+
+	// Mutate the returned copy.
+	copy1.SpecName = "mutated-copy"
+	copy1.AutoApprove = true
+
+	// Get a second copy — should not reflect the mutations made to copy1.
+	copy2, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState (second): %v", err)
+	}
+	if copy2.SpecName != "spec-copy" {
+		t.Errorf("SpecName: got %q, want %q (mutation of copy1 should not affect sm.state)", copy2.SpecName, "spec-copy")
+	}
+	if copy2.AutoApprove != false {
+		t.Errorf("AutoApprove: got %v, want false (mutation of copy1 should not affect sm.state)", copy2.AutoApprove)
+	}
+}
+
+// ---------- Unbound manager ----------
+
+// TestUnboundManager_AutoBindsOnFirstCall verifies that a NewStateManager()
+// with no prior Init or LoadFromFile auto-binds to a workspace on the first
+// mutating method call, and that a subsequent GetState() returns non-nil state.
+func TestUnboundManager_AutoBindsOnFirstCall(t *testing.T) {
+	dir := t.TempDir()
+
+	// Seed a valid state.json using a separate manager (simulates a pre-existing workspace).
+	seeder := newManager()
+	if err := seeder.Init(dir, "spec-autobind"); err != nil {
+		t.Fatalf("Init (seeder): %v", err)
+	}
+
+	// Create an unbound manager — no Init or LoadFromFile called.
+	m := newManager()
+
+	// First mutating call: should auto-bind to dir and succeed.
+	if err := m.PhaseStart(dir, "phase-1"); err != nil {
+		t.Fatalf("PhaseStart on unbound manager: %v", err)
+	}
+
+	// GetState() (no workspace argument) should now return non-nil state.
+	s, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState after auto-bind: %v", err)
+	}
+	if s == nil {
+		t.Fatal("GetState after auto-bind: returned nil, want non-nil")
 	}
 }
 
