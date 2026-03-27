@@ -11,7 +11,7 @@
   "useCurrentBranch": false,
   "debug": false,
   "skippedPhases": [],
-  "currentPhase": "phase-5",
+  "currentPhase": "phase-7",
   "currentPhaseStatus": "in_progress",
   "completedPhases": [
     "checkpoint-a",
@@ -22,6 +22,8 @@
     "phase-3b",
     "phase-4",
     "phase-4b",
+    "phase-5",
+    "phase-6",
     "setup"
   ],
   "revisions": {
@@ -62,7 +64,7 @@
     "4": {
       "title": "Unit tests for validation/ package",
       "executionMode": "sequential",
-      "implStatus": "pending",
+      "implStatus": "completed",
       "implRetries": 0,
       "reviewStatus": "pending",
       "reviewRetries": 0
@@ -70,7 +72,7 @@
     "5": {
       "title": "MCP handlers: validate_input.go, validate_artifact.go",
       "executionMode": "sequential",
-      "implStatus": "pending",
+      "implStatus": "completed",
       "implRetries": 0,
       "reviewStatus": "pending",
       "reviewRetries": 0
@@ -78,7 +80,7 @@
     "6": {
       "title": "Register tools in registry.go; update main.go",
       "executionMode": "sequential",
-      "implStatus": "pending",
+      "implStatus": "completed",
       "implRetries": 0,
       "reviewStatus": "pending",
       "reviewRetries": 0
@@ -86,7 +88,7 @@
     "7": {
       "title": "Update count assertions + phase-6 smoke test",
       "executionMode": "sequential",
-      "implStatus": "pending",
+      "implStatus": "completed",
       "implRetries": 0,
       "reviewStatus": "pending",
       "reviewRetries": 0
@@ -110,7 +112,7 @@
     "10": {
       "title": "Remove Rule 6 tests from test-hooks.sh",
       "executionMode": "sequential",
-      "implStatus": "pending",
+      "implStatus": "completed",
       "implRetries": 0,
       "reviewStatus": "pending",
       "reviewRetries": 0
@@ -222,8 +224,8 @@
   ],
   "timestamps": {
     "created": "2026-03-27T22:52:16Z",
-    "lastUpdated": "2026-03-27T23:27:36Z",
-    "phaseStarted": "2026-03-27T23:23:07Z"
+    "lastUpdated": "2026-03-27T23:41:59Z",
+    "phaseStarted": "2026-03-27T23:41:59Z"
   },
   "error": null
 }
