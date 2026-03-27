@@ -21,23 +21,6 @@ type impactScopeResult struct {
 	AffectedFiles []ast.ImpactEntry `json:"affected_files"`
 }
 
-// writeImpactGoFile writes a .go file at relPath within dir with given content.
-// It also creates parent directories as needed.
-// Note: uses the same logic as writeTempGoFile; defined here to avoid a dependency
-// between test files (both are in the same package so the shared helper in the
-// ast_dependency_graph_test.go file is available, but for clarity we inline the
-// setup calls using writeTempGoMod / writeTempGoFile which are already defined there).
-func writeImpactGoFile(t *testing.T, dir, relPath, content string) {
-	t.Helper()
-	absPath := filepath.Join(dir, relPath)
-	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", filepath.Dir(absPath), err)
-	}
-	if err := os.WriteFile(absPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("write %s: %v", relPath, err)
-	}
-}
-
 // TestAstImpactScopeFromRoot_GoCallerConfirmed verifies that a Go caller which
 // imports the target package AND calls the target symbol appears in affected_files
 // with distance == 1.
@@ -46,13 +29,13 @@ func TestAstImpactScopeFromRoot_GoCallerConfirmed(t *testing.T) {
 	writeTempGoMod(t, dir, "example.com/test")
 
 	// lib/target.go — defines TargetSymbol
-	writeImpactGoFile(t, dir, "lib/target.go", `package lib
+	writeTempGoFile(t, dir, "lib/target.go", `package lib
 
 func TargetSymbol() {}
 `)
 
 	// caller/caller.go — imports lib and calls TargetSymbol
-	writeImpactGoFile(t, dir, "caller/caller.go", `package caller
+	writeTempGoFile(t, dir, "caller/caller.go", `package caller
 
 import "example.com/test/lib"
 
@@ -109,14 +92,14 @@ func TestAstImpactScopeFromRoot_ImportsButNoCallNegative(t *testing.T) {
 	writeTempGoMod(t, dir, "example.com/test")
 
 	// lib/target.go — defines TargetSymbol
-	writeImpactGoFile(t, dir, "lib/target.go", `package lib
+	writeTempGoFile(t, dir, "lib/target.go", `package lib
 
 func TargetSymbol() {}
 func OtherFunc() {}
 `)
 
 	// caller/caller.go — imports lib but only calls OtherFunc, NOT TargetSymbol
-	writeImpactGoFile(t, dir, "caller/caller.go", `package caller
+	writeTempGoFile(t, dir, "caller/caller.go", `package caller
 
 import "example.com/test/lib"
 
@@ -159,7 +142,7 @@ func TestAstImpactScopeFromRoot_NoCallers(t *testing.T) {
 	writeTempGoMod(t, dir, "example.com/test")
 
 	// lib/target.go — defines TargetSymbol but nobody calls it
-	writeImpactGoFile(t, dir, "lib/target.go", `package lib
+	writeTempGoFile(t, dir, "lib/target.go", `package lib
 
 func TargetSymbol() {}
 `)

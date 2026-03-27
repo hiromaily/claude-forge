@@ -290,8 +290,14 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 		AstFindDefinitionHandler(),
 	)
 
-	depGraphTool, depGraphHandler := AstDependencyGraphHandler()
-	srv.AddTool(depGraphTool, depGraphHandler)
+	srv.AddTool(
+		mcp.NewTool("dependency_graph",
+			mcp.WithDescription("Walks a source tree and returns a file-level import dependency graph as JSON (nodes = files, edges = imports)."),
+			mcp.WithString("root_path", mcp.Required(), mcp.Description("Absolute path to the root of the source tree.")),
+			mcp.WithString("language", mcp.Required(), mcp.Description("Language to analyse: go, typescript, python, or bash.")),
+		),
+		AstDependencyGraphHandler(),
+	)
 
 	srv.AddTool(
 		mcp.NewTool("impact_scope",

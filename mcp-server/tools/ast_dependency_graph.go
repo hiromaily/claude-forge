@@ -19,13 +19,8 @@ import (
 //   - language (required): the language to analyse ("go", "typescript", "python", "bash").
 //
 // It has no state manager (sm) dependency.
-func AstDependencyGraphHandler() (mcp.Tool, server.ToolHandlerFunc) {
-	tool := mcp.NewTool("dependency_graph",
-		mcp.WithDescription("Walks a source tree and returns a file-level import dependency graph as JSON (nodes = files, edges = imports)."),
-		mcp.WithString("root_path", mcp.Required(), mcp.Description("Absolute path to the root of the source tree.")),
-		mcp.WithString("language", mcp.Required(), mcp.Description("Language to analyse: go, typescript, python, or bash.")),
-	)
-	handler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func AstDependencyGraphHandler() server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		rootPath, err := req.RequireString("root_path")
 		if err != nil {
 			return errorf("%v", err)
@@ -36,7 +31,6 @@ func AstDependencyGraphHandler() (mcp.Tool, server.ToolHandlerFunc) {
 		}
 		return astDependencyGraphFromRoot(ctx, rootPath, language)
 	}
-	return tool, handler
 }
 
 // astDependencyGraphFromRoot is the testable core of AstDependencyGraphHandler.
