@@ -18,7 +18,9 @@ import (
 
 // StateManager owns the mutex and provides all methods that correspond to the
 // state-manager.sh commands.  All mutating methods acquire mu.Lock() for the
-// full read-modify-write cycle; read-only methods use mu.RLock().
+// full read-modify-write cycle. Read-only methods (Get, PhaseStats, ResumeInfo)
+// delegate to GetState(), which also acquires mu.Lock() to handle the lazy-load
+// write path; mu.RLock() is not used in this implementation.
 type StateManager struct {
 	mu        sync.RWMutex
 	state     *State // in-memory cache; nil until LoadFromFile or Init
@@ -247,7 +249,8 @@ func (m *StateManager) Update(fn func(*State) error) error {
 	return m.persistToFile()
 }
 
-// GetState returns a deep copy of the current in-memory state under RLock.
+// GetState returns a deep copy of the current in-memory state.
+// It acquires mu.Lock() (not RLock) because the lazy-load path writes sm.state.
 // If sm.workspace is empty, returns "state not loaded" error.
 // If sm.state is nil but sm.workspace is set, lazy-loads from disk.
 // Takes no workspace argument — routing is by sm.workspace.

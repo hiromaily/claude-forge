@@ -10,6 +10,7 @@ package state_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1965,6 +1966,11 @@ func TestUpdate_ConcurrentSafe(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 
+	// Use a buffered channel to collect errors from goroutines safely.
+	// Calling t.Errorf directly from a goroutine can panic if the goroutine
+	// outlives the test (e.g., after a t.Fatalf in the main goroutine).
+	errs := make(chan error, numGoroutines)
+
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
@@ -1981,12 +1987,17 @@ func TestUpdate_ConcurrentSafe(t *testing.T) {
 				})
 				return nil
 			}); err != nil {
-				t.Errorf("goroutine %d Update: %v", idx, err)
+				errs <- fmt.Errorf("goroutine %d Update: %w", idx, err)
 			}
 		}(i)
 	}
 
 	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Error(err)
+	}
 
 	s, err := m.GetState()
 	if err != nil {
