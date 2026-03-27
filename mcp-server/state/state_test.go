@@ -33,7 +33,7 @@ func TestStateJSONRoundTrip(t *testing.T) {
 	phaseStarted := "2026-03-26T01:47:48Z"
 
 	original := State{
-		Version:            1,
+		Version:            2,
 		SpecName:           "test-spec",
 		Workspace:          ".specs/test",
 		Branch:             &branch,
