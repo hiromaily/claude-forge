@@ -1,0 +1,111 @@
+package orchestrator
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestActionTypeConstants(t *testing.T) {
+	t.Parallel()
+
+	if ActionSpawnAgent != "spawn_agent" {
+		t.Errorf("ActionSpawnAgent = %q; want %q", ActionSpawnAgent, "spawn_agent")
+	}
+
+	if ActionCheckpoint != "checkpoint" {
+		t.Errorf("ActionCheckpoint = %q; want %q", ActionCheckpoint, "checkpoint")
+	}
+
+	if ActionExec != "exec" {
+		t.Errorf("ActionExec = %q; want %q", ActionExec, "exec")
+	}
+
+	if ActionWriteFile != "write_file" {
+		t.Errorf("ActionWriteFile = %q; want %q", ActionWriteFile, "write_file")
+	}
+
+	if ActionDone != "done" {
+		t.Errorf("ActionDone = %q; want %q", ActionDone, "done")
+	}
+}
+
+func TestNewActions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		build func() Action
+		want  Action
+	}{
+		{
+			name: "SpawnAgent",
+			build: func() Action {
+				return NewSpawnAgentAction("implementer", "do the task", "sonnet", "phase-5", []string{"design.md"}, "impl-1.md")
+			},
+			want: Action{
+				Type:       ActionSpawnAgent,
+				Agent:      "implementer",
+				Prompt:     "do the task",
+				Model:      "sonnet",
+				Phase:      "phase-5",
+				InputFiles: []string{"design.md"},
+				OutputFile: "impl-1.md",
+			},
+		},
+		{
+			name: "Checkpoint",
+			build: func() Action {
+				return NewCheckpointAction("design-review", "Please review the design", []string{"Approve", "Revise"})
+			},
+			want: Action{
+				Type:          ActionCheckpoint,
+				Name:          "design-review",
+				PresentToUser: "Please review the design",
+				Options:       []string{"Approve", "Revise"},
+			},
+		},
+		{
+			name: "Exec",
+			build: func() Action {
+				return NewExecAction([]string{"go build ./...", "go test ./..."})
+			},
+			want: Action{
+				Type:     ActionExec,
+				Commands: []string{"go build ./...", "go test ./..."},
+			},
+		},
+		{
+			name: "WriteFile",
+			build: func() Action {
+				return NewWriteFileAction("/workspace/output.md", "# Output\nHello world")
+			},
+			want: Action{
+				Type:    ActionWriteFile,
+				Path:    "/workspace/output.md",
+				Content: "# Output\nHello world",
+			},
+		},
+		{
+			name: "Done",
+			build: func() Action {
+				return NewDoneAction("Pipeline complete", "/workspace/final-summary.md")
+			},
+			want: Action{
+				Type:        ActionDone,
+				Summary:     "Pipeline complete",
+				SummaryPath: "/workspace/final-summary.md",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tc.build()
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("got %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
