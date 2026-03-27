@@ -4,7 +4,7 @@ version: "2"
 # go tool golangci-lint run -v
 
 run:
-  go: "1.25.6"
+  go: "1.26"
   timeout: 5m
   concurrency: 8
   modules-download-mode: readonly
@@ -38,7 +38,6 @@ linters:
     - asasalint # Detects "[]any" used as argument for variadic "func(...any)".
     - bodyclose
     - copyloopvar # Detects places where loop variables are copied.
-    - depguard
     - dogsled # Detects assignments with too many blank identifiers.
     - dupword # Detects duplicate words.
     - durationcheck # Detect cases where two time.Duration values are being multiplied in possibly erroneous ways.
@@ -88,14 +87,11 @@ linters:
     gocyclo:
       min-complexity: 16
 
-    # gosec:
-    #   excludes:
-    #     - G104 # G104: Errors unhandled;
-    #     - G115 # G115: integer overflow conversion;
-    #     - G117 # G117: Exported struct field matches secret pattern (false positive: intentionally named config/domain fields like Pass, Secret, PrivateKey)
-    #     - G306 # G306: Expect WriteFile permissions to be 0600 or less (too restrictive; also flags "0o644" permissions)
-    #     - G307 # G307: Deferring unsafe method
-    #     - G703 # G703: Path traversal via taint analysis (false positive: acceptable in test config utility and controlled internal paths)
+    gosec:
+      excludes:
+        - G112 # G112: Potential Slowloris Attack (ReadHeaderTimeout); MCP stdio server, not a public-facing HTTP server
+        - G204 # G204: Subprocess launched with variable; expected for MCP tools that run shell scripts
+        - G304 # G304: Potential file inclusion via variable; expected for tools that process user-supplied file paths
 
     # govet:
     #   enable:
@@ -146,6 +142,11 @@ linters:
       - path: _test\.go
         linters:
           - gosec
+          - errcheck    # defer resp.Body.Close(), srv.Shutdown(), ln.Close() are acceptable in tests
+          - errchkjson  # json.Marshal on known-safe types in test helpers
+          - bodyclose   # HTTP client calls in tests where t.Fatalf handles errors before the defer
+          - gocyclo     # complex test functions with many assertions are acceptable
+          - dogsled     # multiple blank identifiers acceptable in test helpers (e.g. runtime.Caller)
 
     # Exclude files from all linters.
     paths:

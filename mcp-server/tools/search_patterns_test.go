@@ -26,11 +26,6 @@ import (
 
 // ---------- helpers for search_patterns tests ----------
 
-// strPtr returns a pointer to s, for use in IndexEntry.TaskType.
-//
-//go:fix inline
-func strPtr(s string) *string { return new(s) }
-
 // buildIndex marshals entries as JSON and writes them to indexPath.
 func buildIndex(t *testing.T, indexPath string, entries []search.IndexEntry) {
 	t.Helper()

@@ -67,7 +67,7 @@ func writeState(workspace string, s *State) error {
 		return fmt.Errorf("writeState marshal: %w", err)
 	}
 	tmp := statePath(workspace) + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("writeState write tmp: %w", err)
 	}
 	if err := os.Rename(tmp, statePath(workspace)); err != nil {
@@ -201,6 +201,8 @@ func (m *StateManager) Get(workspace, field string) (string, error) {
 
 // getField extracts a field from a State by name using a switch over all
 // allowed field names, including dot-notation sub-fields.
+//
+//nolint:gocyclo // complexity is inherent in the dispatch table (one case per field)
 func getField(s *State, field string) (string, error) {
 	switch field {
 	case "version":
@@ -919,7 +921,7 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 
 // RefreshIndex executes build-specs-index.sh for the workspace,
 // equivalent to cmd_refresh_index.  Implementation deferred to tools package.
-func (m *StateManager) RefreshIndex(workspace string) error {
+func (m *StateManager) RefreshIndex(workspace string) error { //nolint:revive // m is intentionally unused; this is a documented stub
 	// Delegated to tools.RefreshIndexHandler via os/exec.
 	// Not implemented here to keep the state package dependency-free of os/exec.
 	return errors.New("RefreshIndex: not implemented in state package; use tools.RefreshIndexHandler")

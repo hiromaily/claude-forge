@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-//go:fix inline
-func strPtr(s string) *string { return new(s) }
-
 // TestTokenize verifies lowercasing, splitting on non-word chars, and filtering < 4 chars.
 func TestTokenize(t *testing.T) {
 	tests := []struct {
@@ -106,7 +103,7 @@ func TestScoreIDF(t *testing.T) {
 
 	// The IDF of "rare" (df=1, N=3) should be higher than IDF of "common" (df=3, N=3)
 	idfRare := math.Log((3-1+0.5)/(1+0.5) + 1)
-	idfCommon := math.Log((3-3+0.5)/(3+0.5) + 1)
+	idfCommon := math.Log((0+0.5)/(3+0.5) + 1)
 	if idfRare <= idfCommon {
 		t.Errorf("IDF of rare term %f should be > IDF of common term %f", idfRare, idfCommon)
 	}

@@ -46,7 +46,7 @@ func SearchPatternsHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // searchPatternsWithPaths is the testable variant that accepts explicit file paths.
 // It is unexported but accessible to tests within package tools.
 func searchPatternsWithPaths(
-	ctx context.Context,
+	_ context.Context,
 	req mcp.CallToolRequest,
 	indexPath string,
 	requestPath string,
