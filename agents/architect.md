@@ -30,6 +30,7 @@ A **DESIGN document** covering:
 
 1. **Chosen approach and rationale** — why this approach vs alternatives considered
 2. **Architectural changes** — new files, modified interfaces, deleted code (with specific file paths)
+   - **Impact scope** (when provided): If `investigation.md` includes `impact_scope` output, add a dedicated "Impact Scope" subsection listing each affected file, its BFS distance (or `-1` for TypeScript/Python), and interface changes required in that file.
 3. **Data model or type changes** — schema, struct, or type modifications
 4. **Test strategy** — what to test and at which layer (unit, integration, e2e)
 5. **Risk mitigation** — how the issues identified in investigation.md are addressed
