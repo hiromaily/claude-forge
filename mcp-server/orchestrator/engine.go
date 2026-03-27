@@ -509,27 +509,27 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 				return Action{}, fmt.Errorf("handlePhaseSix: read verdict for task %s: %w", k, err)
 			}
 
-			if verdict == VerdictFail || verdict == VerdictPass {
-				if verdict == VerdictFail {
-					// Check retry limit
-					if task.ImplRetries >= 2 {
-						return NewCheckpointAction(
-							"impl-retry-limit-"+k,
-							"Implementation retry limit reached for task "+k+" (2 retries). Human review required.",
-							[]string{"approve", "abandon"},
-						), nil
-					}
-					// Retry implementation
-					return NewSpawnAgentAction(
-						agentImplementer,
-						"Retry implementation for task "+k+" after review failure.",
-						"sonnet",
-						PhaseFive,
-						[]string{"tasks.md", "design.md", "review-" + k + ".md"},
-						"impl-"+k+".md",
+			if verdict == VerdictFail {
+				// Check retry limit
+				if task.ImplRetries >= 2 {
+					return NewCheckpointAction(
+						"impl-retry-limit-"+k,
+						"Implementation retry limit reached for task "+k+" (2 retries). Human review required.",
+						[]string{"approve", "abandon"},
 					), nil
 				}
+				// Retry implementation
+				return NewSpawnAgentAction(
+					agentImplementer,
+					"Retry implementation for task "+k+" after review failure.",
+					"sonnet",
+					PhaseFive,
+					[]string{"tasks.md", "design.md", "review-" + k + ".md"},
+					"impl-"+k+".md",
+				), nil
 			}
+			// VerdictPass, VerdictPassWithNotes, or any other passing verdict:
+			// task is considered reviewed; continue to next task in loop.
 		}
 	}
 
