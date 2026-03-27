@@ -308,7 +308,7 @@ func readGoModuleName(rootPath string) string {
 // given language, and returns a file-level import dependency graph.
 // Nodes are relative paths from rootPath. For Go, module-prefix stripping is
 // applied to resolve import paths to relative file paths.
-func BuildDependencyGraph(ctx context.Context, rootPath string, lang Language) (DependencyGraph, error) {
+func BuildDependencyGraph(ctx context.Context, rootPath string, lang Language) (DependencyGraph, error) { //nolint:gocyclo // complexity is inherent in the multi-language dispatch
 	ext := langExtension(lang)
 	if ext == "" {
 		return DependencyGraph{}, &unsupportedLangError{lang: string(lang)}
