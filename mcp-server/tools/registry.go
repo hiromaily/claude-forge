@@ -301,7 +301,8 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 
 	srv.AddTool(
 		mcp.NewTool("impact_scope",
-			mcp.WithDescription("Identify files that call a given symbol via a two-pass import+call-site scan. Returns a ranked list of affected files with BFS distance (distance=-1 for TypeScript/Python)."),
+			mcp.WithDescription("Identify files that call a given symbol via a two-pass import+call-site scan. "+
+				"Returns a ranked list of affected files with BFS distance (distance=-1 for TypeScript/Python)."),
 			mcp.WithString("root_path", mcp.Required(), mcp.Description("Absolute path to the root directory of the source tree")),
 			mcp.WithString("file_path", mcp.Required(), mcp.Description("Absolute path to the file containing the changed symbol")),
 			mcp.WithString("symbol_name", mcp.Required(), mcp.Description("Function, type, or constant name to search for callers of")),

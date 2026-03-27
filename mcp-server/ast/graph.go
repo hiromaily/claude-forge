@@ -392,12 +392,13 @@ func BuildDependencyGraph(ctx context.Context, rootPath string, lang Language) (
 
 		for _, imp := range imports {
 			var toFile string
-			if lang == Go && moduleName != "" {
+			switch {
+			case lang == Go && moduleName != "":
 				// Resolve module-qualified import path to relative file path.
 				if f, ok := importPathToFile[imp]; ok {
 					toFile = f
 				}
-			} else if lang == Bash {
+			case lang == Bash:
 				// Bash: import is a sourced file path, relative to the script's directory.
 				// Resolve relative to rootPath.
 				scriptDir := filepath.Dir(filepath.Join(rootPath, relFile))
@@ -406,9 +407,8 @@ func BuildDependencyGraph(ctx context.Context, rootPath string, lang Language) (
 				if relErr == nil && fileSet[rel] {
 					toFile = rel
 				}
-			} else {
+			default:
 				// TypeScript/Python: use import path directly if it matches a known file.
-				// Try with and without extension.
 				if fileSet[imp] {
 					toFile = imp
 				}
@@ -571,7 +571,7 @@ func findCallersSinglePass(ctx context.Context, rootPath string, lang Language, 
 			return nil
 		}
 
-		src, readErr := os.ReadFile(path)
+		src, readErr := os.ReadFile(path) //nolint:gosec // path is constructed from WalkDir, not user input
 		if readErr != nil {
 			return fmt.Errorf("read %s: %w", rel, readErr)
 		}

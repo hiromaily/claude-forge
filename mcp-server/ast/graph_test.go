@@ -438,9 +438,10 @@ func TestReverseDependencies_Circular(t *testing.T) {
 
 // ── FindCallers ───────────────────────────────────────────────────────────────
 
-// writeTempGoModule creates a temporary Go module in dir with the given module name.
-func writeTempGoModule(t *testing.T, dir, moduleName string) {
+// writeTempGoModule creates a temporary Go module in dir with module name "example.com/test".
+func writeTempGoModule(t *testing.T, dir string) {
 	t.Helper()
+	const moduleName = "example.com/test"
 	goMod := []byte("module " + moduleName + "\n\ngo 1.21\n")
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), goMod, 0o600); err != nil {
 		t.Fatalf("write go.mod: %v", err)
@@ -451,7 +452,7 @@ func writeTempGoModule(t *testing.T, dir, moduleName string) {
 // → returned with distance=1.
 func TestFindCallers_GoImportsAndCalls(t *testing.T) {
 	dir := t.TempDir()
-	writeTempGoModule(t, dir, "example.com/test")
+	writeTempGoModule(t, dir)
 
 	// Target file: pkg/target.go
 	if err := os.MkdirAll(filepath.Join(dir, "pkg"), 0o700); err != nil {
@@ -498,7 +499,7 @@ func main() {
 // only OtherFunc() → NOT returned.
 func TestFindCallers_GoImportsButWrongCall(t *testing.T) {
 	dir := t.TempDir()
-	writeTempGoModule(t, dir, "example.com/test")
+	writeTempGoModule(t, dir)
 
 	// Target file: pkg/target.go
 	if err := os.MkdirAll(filepath.Join(dir, "pkg"), 0o700); err != nil {
@@ -538,7 +539,7 @@ func main() {
 // TestFindCallers_GoNoImport verifies: Go file does not import target → not returned.
 func TestFindCallers_GoNoImport(t *testing.T) {
 	dir := t.TempDir()
-	writeTempGoModule(t, dir, "example.com/test")
+	writeTempGoModule(t, dir)
 
 	// Target file: pkg/target.go
 	if err := os.MkdirAll(filepath.Join(dir, "pkg"), 0o700); err != nil {
@@ -575,7 +576,7 @@ func main() {
 // TestFindCallers_TargetNotFound verifies: target file not found → empty result, no error.
 func TestFindCallers_TargetNotFound(t *testing.T) {
 	dir := t.TempDir()
-	writeTempGoModule(t, dir, "example.com/test")
+	writeTempGoModule(t, dir)
 
 	// Write a Go file with no imports
 	src := []byte("package main\n\nfunc main() {}\n")
