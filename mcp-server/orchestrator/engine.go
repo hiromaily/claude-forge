@@ -148,7 +148,7 @@ func (e *Engine) handlePhaseOne(st *state.State) (Action, error) {
 
 // handleDocsStubSynthesis implements Decision 16 — docs M/L stub synthesis.
 // Returns stub write actions one at a time based on file existence.
-func (e *Engine) handleDocsStubSynthesis(st *state.State) (Action, error) {
+func (*Engine) handleDocsStubSynthesis(st *state.State) (Action, error) {
 	workspace := st.Workspace
 
 	// Step 1: design.md absent → write stub
@@ -185,7 +185,7 @@ func (e *Engine) handleDocsStubSynthesis(st *state.State) (Action, error) {
 }
 
 // handlePhaseTwo handles Phase 2 (investigator).
-func (e *Engine) handlePhaseTwo(_ *state.State) (Action, error) {
+func (*Engine) handlePhaseTwo(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentInvestigator,
 		"Run Phase 2 deep-dive investigation.",
@@ -215,7 +215,7 @@ func (e *Engine) handlePhaseThree(st *state.State) (Action, error) {
 }
 
 // handleBugfixStubSynthesis implements Decision 17 — bugfix stub synthesis.
-func (e *Engine) handleBugfixStubSynthesis(st *state.State) (Action, error) {
+func (*Engine) handleBugfixStubSynthesis(st *state.State) (Action, error) {
 	workspace := st.Workspace
 
 	// Step 1: design.md absent → write stub
@@ -321,7 +321,7 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 }
 
 // handleCheckpointA handles checkpoint-a (between design review and task decomposition).
-func (e *Engine) handleCheckpointA(st *state.State) (Action, error) {
+func (*Engine) handleCheckpointA(_ *state.State) (Action, error) {
 	return NewCheckpointAction(
 		"checkpoint-a",
 		"Checkpoint A reached. Design approved. Proceed to Phase 4 (task decomposition)?",
@@ -330,7 +330,7 @@ func (e *Engine) handleCheckpointA(st *state.State) (Action, error) {
 }
 
 // handlePhaseFour handles Phase 4 (task decomposer).
-func (e *Engine) handlePhaseFour(_ *state.State) (Action, error) {
+func (*Engine) handlePhaseFour(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentTaskDecomposer,
 		"Decompose the design into implementation tasks.",
@@ -411,7 +411,7 @@ func (e *Engine) handlePhaseFourB(st *state.State) (Action, error) {
 }
 
 // handleCheckpointB handles checkpoint-b (between task review and implementation).
-func (e *Engine) handleCheckpointB(_ *state.State) (Action, error) {
+func (*Engine) handleCheckpointB(_ *state.State) (Action, error) {
 	return NewCheckpointAction(
 		"checkpoint-b",
 		"Checkpoint B reached. Tasks approved. Proceed to Phase 5 (implementation)?",
@@ -420,7 +420,7 @@ func (e *Engine) handleCheckpointB(_ *state.State) (Action, error) {
 }
 
 // handlePhaseFive handles Phase 5 (implementation) — Decision 22.
-func (e *Engine) handlePhaseFive(st *state.State) (Action, error) {
+func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 	// Decision 22 — Phase 5 parallel/sequential ordering
 	taskKeys := sortedTaskKeys(st.Tasks)
 	if len(taskKeys) == 0 {
@@ -545,7 +545,7 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 }
 
 // handlePhaseSeven handles Phase 7 (verifier).
-func (e *Engine) handlePhaseSeven(_ *state.State) (Action, error) {
+func (*Engine) handlePhaseSeven(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentVerifier,
 		"Run full build and test verification.",
@@ -557,7 +557,7 @@ func (e *Engine) handlePhaseSeven(_ *state.State) (Action, error) {
 }
 
 // handleFinalVerification handles the final-verification phase.
-func (e *Engine) handleFinalVerification(_ *state.State) (Action, error) {
+func (*Engine) handleFinalVerification(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentVerifier,
 		"Run final verification of the complete pipeline output.",
@@ -569,7 +569,7 @@ func (e *Engine) handleFinalVerification(_ *state.State) (Action, error) {
 }
 
 // handlePRCreation handles the pr-creation phase — Decision 24.
-func (e *Engine) handlePRCreation(st *state.State) (Action, error) {
+func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 	// Decision 24 — PR skip (runtime SkipPr flag)
 	// Note: Decision 14 already handles the case where pr-creation is in SkippedPhases.
 	if st.SkipPr {
@@ -584,7 +584,7 @@ func (e *Engine) handlePRCreation(st *state.State) (Action, error) {
 }
 
 // handleFinalSummary handles the final-summary phase — Decision 25.
-func (e *Engine) handleFinalSummary(st *state.State) (Action, error) {
+func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
 	// Decision 25 — Final Summary template
 	taskType := TaskTypeFeature
 	if st.TaskType != nil {
@@ -595,7 +595,7 @@ func (e *Engine) handleFinalSummary(st *state.State) (Action, error) {
 	case TaskTypeBugfix, TaskTypeDocs:
 		// summary reads review-{N}.md files; no comprehensive-review.md
 		taskKeys := sortedTaskKeys(st.Tasks)
-		var inputFiles []string
+		inputFiles := make([]string, 0, len(taskKeys))
 		for _, k := range taskKeys {
 			inputFiles = append(inputFiles, "review-"+k+".md")
 		}
@@ -676,10 +676,10 @@ func readSourceType(workspace string) string {
 			break
 		}
 		if inFrontMatter {
-			if strings.HasPrefix(line, "source_type:") {
-				value := strings.TrimSpace(strings.TrimPrefix(line, "source_type:"))
-				if value != "" {
-					return value
+			if val, ok := strings.CutPrefix(line, "source_type:"); ok {
+				val = strings.TrimSpace(val)
+				if val != "" {
+					return val
 				}
 			}
 		}
