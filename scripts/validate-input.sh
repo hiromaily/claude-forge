@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# DEPRECATED: Use the mcp__forge-state__validate_input MCP tool instead.
+# This script is kept as a fallback for non-MCP flows.
+# BEHAVIORAL NOTE: This script also accepts workspace paths where state.json exists
+# at the path. The MCP tool uses string-only detection: only paths containing ".specs/"
+# are classified as workspace paths. An absolute workspace path that does not contain
+# ".specs/" but has a valid state.json will be treated differently by the MCP tool.
 # validate-input.sh — Deterministic input validation for claude-forge
 #
 # Usage: bash scripts/validate-input.sh <arguments>

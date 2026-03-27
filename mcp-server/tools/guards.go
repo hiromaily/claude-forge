@@ -138,12 +138,12 @@ func Guard3jCheckpointRevisionPending(phase string, s *state.State) error {
 }
 
 // GuardInitValidated enforces the init guard (AC-3): the MCP init tool must be
-// called with validated=true (i.e. after validate-input.sh succeeded).
+// called with validated=true (i.e. after mcp__forge-state__validate_input succeeded).
 // Returns a non-nil error when validated is false or absent (false default).
 func GuardInitValidated(validated bool) error {
 	if !validated {
 		return errors.New("BLOCKED: init requires validated=true. " +
-			"Call bash scripts/validate-input.sh first and pass validated=true only when it succeeds",
+			"Call mcp__forge-state__validate_input first and pass validated=true only when it succeeds",
 		)
 	}
 	return nil
