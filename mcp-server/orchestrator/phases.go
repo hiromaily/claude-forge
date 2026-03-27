@@ -1,5 +1,5 @@
 // Package orchestrator provides pure-logic building blocks for the pipeline engine.
-// It has no dependency on the state/ package or any sibling package.
+// It may import the state/ package for state types used by the engine.
 package orchestrator
 
 // Phase ID constants — must match state.ValidPhases string values exactly.

@@ -5,6 +5,88 @@ import (
 	"testing"
 )
 
+func TestSkipSummaryPrefix(t *testing.T) {
+	t.Parallel()
+
+	if SkipSummaryPrefix != "skip:" {
+		t.Errorf("SkipSummaryPrefix = %q; want %q", SkipSummaryPrefix, "skip:")
+	}
+}
+
+func TestNewParallelSpawnAction(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		agent      string
+		prompt     string
+		model      string
+		phase      string
+		inputFiles []string
+		taskIDs    []string
+		want       Action
+	}{
+		{
+			name:       "parallel_two_tasks",
+			agent:      "implementer",
+			prompt:     "implement tasks",
+			model:      "sonnet",
+			phase:      "phase-5",
+			inputFiles: []string{"design.md", "tasks.md"},
+			taskIDs:    []string{"1", "2"},
+			want: Action{
+				Type:            ActionSpawnAgent,
+				Agent:           "implementer",
+				Prompt:          "implement tasks",
+				Model:           "sonnet",
+				Phase:           "phase-5",
+				InputFiles:      []string{"design.md", "tasks.md"},
+				ParallelTaskIDs: []string{"1", "2"},
+				OutputFile:      "",
+			},
+		},
+		{
+			name:       "parallel_three_tasks",
+			agent:      "implementer",
+			prompt:     "implement all",
+			model:      "sonnet",
+			phase:      "phase-5",
+			inputFiles: []string{"design.md"},
+			taskIDs:    []string{"1", "2", "3"},
+			want: Action{
+				Type:            ActionSpawnAgent,
+				Agent:           "implementer",
+				Prompt:          "implement all",
+				Model:           "sonnet",
+				Phase:           "phase-5",
+				InputFiles:      []string{"design.md"},
+				ParallelTaskIDs: []string{"1", "2", "3"},
+				OutputFile:      "",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := NewParallelSpawnAction(tc.agent, tc.prompt, tc.model, tc.phase, tc.inputFiles, tc.taskIDs)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("NewParallelSpawnAction() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewSpawnAgentActionHasNilParallelTaskIDs(t *testing.T) {
+	t.Parallel()
+
+	got := NewSpawnAgentAction("implementer", "do the task", "sonnet", "phase-5", []string{"design.md"}, "impl-1.md")
+	if got.ParallelTaskIDs != nil {
+		t.Errorf("NewSpawnAgentAction().ParallelTaskIDs = %v; want nil", got.ParallelTaskIDs)
+	}
+}
+
 func TestActionTypeConstants(t *testing.T) {
 	t.Parallel()
 
