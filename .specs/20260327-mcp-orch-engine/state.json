@@ -1,0 +1,220 @@
+{
+  "version": 1,
+  "specName": "mcp-orch-engine",
+  "workspace": ".specs/20260327-mcp-orch-engine",
+  "branch": "feature/mcp-orch-engine",
+  "taskType": "feature",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "phase-pr",
+    "phase-summary",
+    "phase-verify",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 2,
+    "taskRevisions": 1,
+    "designInlineRevisions": 3,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Extend actions.go with ParallelTaskIDs, SkipSummaryPrefix, NewParallelSpawnAction",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Fix stale comment in phases.go",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Create engine.go — Engine struct, NextAction, all 26 decisions",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Create engine_test.go — table-driven tests for all 26 decision branches",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Create import_cycle_test.go — machine-verified no-cycle guard",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "Build, lint, and full test verification",
+      "executionMode": "sequential",
+      "implStatus": "pending",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 64980,
+      "duration_ms": 139381,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T14:08:30Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 118333,
+      "duration_ms": 267298,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T21:42:16Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 49945,
+      "duration_ms": 133365,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T21:45:59Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 37447,
+      "duration_ms": 49688,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T21:47:11Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 41533,
+      "duration_ms": 68522,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T21:49:32Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 30829,
+      "duration_ms": 113499,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T21:55:17Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 42357,
+      "duration_ms": 65215,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T21:56:39Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 40770,
+      "duration_ms": 121291,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:02:12Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 39380,
+      "duration_ms": 57140,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:03:21Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 37679,
+      "duration_ms": 56605,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:06:15Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 44711,
+      "duration_ms": 63515,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:08:19Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 40048,
+      "duration_ms": 51122,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:10:26Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 29756,
+      "duration_ms": 46344,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:11:54Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 18860,
+      "duration_ms": 30603,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:12:42Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 31724,
+      "duration_ms": 50173,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:13:44Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 36483,
+      "duration_ms": 86658,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:18:23Z"
+    },
+    {
+      "phase": "task-2-impl",
+      "tokens": 28527,
+      "duration_ms": 46168,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T22:18:23Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-27T14:05:19Z",
+    "lastUpdated": "2026-03-27T22:41:14Z",
+    "phaseStarted": null
+  },
+  "error": null
+}
