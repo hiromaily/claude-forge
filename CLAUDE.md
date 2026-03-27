@@ -48,14 +48,13 @@ claude-forge/
 
 ```
 SKILL.md (orchestrator)
-  ├── calls scripts/validate-input.sh before workspace setup
+  ├── calls mcp__forge-state__validate_input before workspace setup
   ├── invokes agents/ by name via Agent tool
   ├── calls scripts/state-manager.sh for state transitions
   └── hooks/ enforce constraints automatically
        ├── pre-tool-hook.sh reads state.json → blocks writes in Phase 1-2,
        │     blocks git commit in parallel Phase 5, checkpoint guard,
-       │     artifact guard, input validation guard (blocks init without
-       │     prior validate-input.sh call)
+       │     artifact guard
        ├── post-agent-hook.sh reads state.json → warns on bad output
        ├── post-bash-hook.sh reads state.json → auto-commits state.json+summary.md after post-to-source
        └── stop-hook.sh reads state.json → blocks premature stop
@@ -149,7 +148,7 @@ SKILL.md (orchestrator)
 
 **Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes all 26 `state-manager.sh` subcommands as typed tool calls, plus additional MCP-only tools (currently `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, and `validate_artifact`). The total MCP tool count is **34**. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
 
-**MCP-only tools** — `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, and `impact_scope` are exposed as MCP tools but have no `state-manager.sh` shell equivalents. `search_patterns` performs BM25 scoring over `.specs/index.json` (see design rationale in `ARCHITECTURE.md`); the shell fallback is `query-specs-index.sh`. `subscribe_events` is a discovery tool that returns the SSE endpoint URL when `FORGE_EVENTS_PORT` is set; there is no shell equivalent. `ast_summary` parses a source file with tree-sitter and returns a compact markdown summary of exported signatures only. `ast_find_definition` locates and returns the definition of a named symbol in a source file. `dependency_graph` walks a source tree and returns a file-level import graph as JSON (nodes = files, edges = imports). `impact_scope` identifies files that call a given symbol via a two-pass import+call-site scan; returns a ranked list (`distance: -1` for TypeScript/Python).
+**MCP-only tools** — `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, and `validate_artifact` are exposed as MCP tools but have no `state-manager.sh` shell equivalents. `search_patterns` performs BM25 scoring over `.specs/index.json` (see design rationale in `ARCHITECTURE.md`); the shell fallback is `query-specs-index.sh`. `subscribe_events` is a discovery tool that returns the SSE endpoint URL when `FORGE_EVENTS_PORT` is set; there is no shell equivalent. `ast_summary` parses a source file with tree-sitter and returns a compact markdown summary of exported signatures only. `ast_find_definition` locates and returns the definition of a named symbol in a source file. `dependency_graph` walks a source tree and returns a file-level import graph as JSON (nodes = files, edges = imports). `impact_scope` identifies files that call a given symbol via a two-pass import+call-site scan; returns a ranked list (`distance: -1` for TypeScript/Python). `validate_input` validates the raw pipeline input string (empty, too-short, URL format); the shell fallback is `validate-input.sh`. `validate_artifact` checks that the expected artifact file exists for a given phase and meets content constraints; always returns a JSON array.
 
 **Canonical command list** (shell name → MCP tool name):
 

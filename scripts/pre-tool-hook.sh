@@ -7,7 +7,6 @@
 # 3. Artifact guards — deterministic checks that prevent state advancement
 # 4. No git checkout -b when state.json.branch is already set
 # 5. No git checkout/switch to main/master during active pipeline
-#    when required files are missing or preconditions are unmet:
 #    3a. phase-complete requires the phase's artifact file to exist
 #    3b. task-update reviewStatus completed_pass requires review-{N}.md to exist
 #    3c. phase-start phase-5 requires tasks to be initialized (non-empty)

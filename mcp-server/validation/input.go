@@ -5,6 +5,7 @@ package validation
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -210,26 +211,7 @@ func normalizeBareFlags(in []string) []string {
 	return in
 }
 
-// itoa converts an int to a decimal string without importing strconv.
+// itoa converts an int to a decimal string.
 func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	digits := make([]byte, 0, 10) //nolint:mnd // capacity estimate
-	for n > 0 {
-		digits = append(digits, byte('0'+n%10)) //nolint:mnd // base-10 digit extraction
-		n /= 10                                 //nolint:mnd // base-10 division
-	}
-	// Reverse.
-	for i, j := 0, len(digits)-1; i < j; i, j = i+1, j-1 {
-		digits[i], digits[j] = digits[j], digits[i]
-	}
-	if neg {
-		return "-" + string(digits)
-	}
-	return string(digits)
+	return strconv.Itoa(n)
 }
