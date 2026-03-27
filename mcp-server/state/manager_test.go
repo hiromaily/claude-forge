@@ -2009,14 +2009,21 @@ func TestUpdate_ConcurrentSafe(t *testing.T) {
 }
 
 // TestUpdate_PersistFailureReturnsError verifies that Update returns a non-nil
-// error when persistToFile fails (directory placed at state.json path), and
-// that sm.state is mutated in memory even though the disk write failed.
+// error when the disk write fails (directory placed at state.json path), and
+// that sm.state is NOT mutated — the in-memory cache is only replaced after a
+// successful write.
 func TestUpdate_PersistFailureReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager()
 	if err := m.Init(dir, "s"); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
+
+	original, err := m.GetState()
+	if err != nil {
+		t.Fatalf("GetState before failure: %v", err)
+	}
+	originalSpecName := original.SpecName
 
 	statePath := filepath.Join(dir, "state.json")
 
@@ -2029,7 +2036,7 @@ func TestUpdate_PersistFailureReturnsError(t *testing.T) {
 		t.Fatalf("Mkdir at state.json path: %v", err)
 	}
 
-	// Call Update — the mutation itself should succeed, but persistToFile must fail.
+	// Call Update — the mutation itself should succeed, but the disk write must fail.
 	updateErr := m.Update(func(s *state.State) error {
 		s.SpecName = "mutated"
 		return nil
@@ -2038,13 +2045,13 @@ func TestUpdate_PersistFailureReturnsError(t *testing.T) {
 		t.Fatal("Update with unpersistable path: expected error, got nil")
 	}
 
-	// The in-memory state should still reflect the mutation (no rollback).
+	// In-memory state must be unchanged — Update rolls back on persist failure.
 	s, err := m.GetState()
 	if err != nil {
 		t.Fatalf("GetState after failed persist: %v", err)
 	}
-	if s.SpecName != "mutated" {
-		t.Errorf("SpecName in memory: got %q, want %q (state should not be rolled back)", s.SpecName, "mutated")
+	if s.SpecName != originalSpecName {
+		t.Errorf("SpecName in memory: got %q, want %q (state must not be mutated on persist failure)", s.SpecName, originalSpecName)
 	}
 }
 

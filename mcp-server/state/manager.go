@@ -219,9 +219,8 @@ func (m *StateManager) LoadFromFile(workspace string) error {
 // If sm.state is nil but sm.workspace is set, lazy-loads from disk before calling fn.
 // The lazy-load disk read executes under the already-held mu.Lock(); no nested
 // lock acquisition occurs inside the lazy-load path.
-// After fn returns nil, stamps Timestamps.LastUpdated using time.RFC3339Nano
-// precision, then calls persistToFile. If persistToFile fails, the error is returned
-// but sm.state is NOT rolled back (Timestamps.LastUpdated remains stamped in memory).
+// Mutations are applied to a deep copy; sm.state is only replaced after a
+// successful write to disk, ensuring in-memory and on-disk state stay consistent.
 // fn must not call any StateManager method (would deadlock).
 func (m *StateManager) Update(fn func(*State) error) error {
 	m.mu.Lock()
@@ -241,12 +240,21 @@ func (m *StateManager) Update(fn func(*State) error) error {
 		m.state = s
 	}
 
-	if err := fn(m.state); err != nil {
+	// Work on a deep copy so that a persist failure leaves sm.state untouched.
+	stateCopy := deepCopyState(m.state)
+
+	if err := fn(stateCopy); err != nil {
 		return err
 	}
 
-	m.state.Timestamps.LastUpdated = nowISO()
-	return m.persistToFile()
+	stateCopy.Timestamps.LastUpdated = nowISO()
+
+	// Only promote the copy to the live cache after a successful disk write.
+	if err := writeState(m.workspace, stateCopy); err != nil {
+		return err
+	}
+	m.state = stateCopy
+	return nil
 }
 
 // GetState returns a deep copy of the current in-memory state.
@@ -273,12 +281,6 @@ func (m *StateManager) GetState() (*State, error) {
 	}
 
 	return deepCopyState(m.state), nil
-}
-
-// persistToFile marshals sm.state and writes atomically to
-// sm.workspace/state.json. Caller must hold mu.Lock().
-func (m *StateManager) persistToFile() error {
-	return writeState(m.workspace, m.state)
 }
 
 // deepCopyState returns a deep copy of s such that mutating the returned struct
