@@ -290,16 +290,32 @@ func deepCopyState(s *State) *State {
 	// Marshal and unmarshal is the simplest correct deep-copy for this struct.
 	data, err := json.Marshal(s)
 	if err != nil {
-		// Marshal of our own struct should never fail; return a zero-value copy.
-		cp := *s
-		return &cp
+		// Should never happen with our own State struct; panic to surface the bug immediately.
+		panic(fmt.Sprintf("deepCopyState: failed to marshal state: %v", err))
 	}
 	var cp State
 	if err := json.Unmarshal(data, &cp); err != nil {
-		fallback := *s
-		return &fallback
+		// Should never happen with data we just marshaled from State.
+		panic(fmt.Sprintf("deepCopyState: failed to unmarshal state: %v", err))
 	}
 	return &cp
+}
+
+// bindWorkspace performs the workspace entry-point guard under mu.Lock so that
+// auto-bind (m.workspace == "") and mismatch checks are race-free.
+// It must be called before any lock-free read of m.workspace, and callers
+// must NOT hold mu when calling it.
+func (m *StateManager) bindWorkspace(workspace string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.workspace == "" {
+		m.workspace = workspace
+		return nil
+	}
+	if m.workspace != workspace {
+		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	}
+	return nil
 }
 
 // Get returns the string representation of field from state.json.
@@ -308,10 +324,8 @@ func deepCopyState(s *State) *State {
 // Null pointer fields are rendered as "null".
 func (m *StateManager) Get(workspace, field string) (string, error) {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return "", fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return "", err
 	}
 
 	if !allowedGetFields[field] {
@@ -423,10 +437,8 @@ func marshalJSON(v any) (string, error) {
 // PhaseStart marks phase as in_progress, equivalent to cmd_phase_start.
 func (m *StateManager) PhaseStart(workspace, phase string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	if !containsPhase(phase) {
@@ -447,10 +459,8 @@ func (m *StateManager) PhaseStart(workspace, phase string) error {
 // next phase in ValidPhases, equivalent to cmd_phase_complete.
 func (m *StateManager) PhaseComplete(workspace, phase string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	if !containsPhase(phase) {
@@ -476,10 +486,8 @@ func (m *StateManager) PhaseComplete(workspace, phase string) error {
 // PhaseFail records a phase failure with message, equivalent to cmd_phase_fail.
 func (m *StateManager) PhaseFail(workspace, phase, message string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	if !containsPhase(phase) {
@@ -502,10 +510,8 @@ func (m *StateManager) PhaseFail(workspace, phase, message string) error {
 // Only checkpoint-a and checkpoint-b are valid values.
 func (m *StateManager) Checkpoint(workspace, phase string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	if phase != "checkpoint-a" && phase != "checkpoint-b" {
@@ -522,10 +528,8 @@ func (m *StateManager) Checkpoint(workspace, phase string) error {
 // Abandon sets currentPhaseStatus to "abandoned", equivalent to _do_abandon.
 func (m *StateManager) Abandon(workspace string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -538,10 +542,8 @@ func (m *StateManager) Abandon(workspace string) error {
 // equivalent to _do_skip_phase.
 func (m *StateManager) SkipPhase(workspace, phase string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	if !containsPhase(phase) {
@@ -561,10 +563,8 @@ func (m *StateManager) SkipPhase(workspace, phase string) error {
 // equivalent to _do_revision_bump.
 func (m *StateManager) RevisionBump(workspace, revType string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	if !containsRevType(revType) {
@@ -587,10 +587,8 @@ func (m *StateManager) RevisionBump(workspace, revType string) error {
 // equivalent to _do_inline_revision_bump.
 func (m *StateManager) InlineRevisionBump(workspace, revType string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	if !containsRevType(revType) {
@@ -612,10 +610,8 @@ func (m *StateManager) InlineRevisionBump(workspace, revType string) error {
 // SetBranch sets the branch field, equivalent to _do_set_branch.
 func (m *StateManager) SetBranch(workspace, branch string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -627,10 +623,8 @@ func (m *StateManager) SetBranch(workspace, branch string) error {
 // SetTaskType sets the taskType field, equivalent to _do_set_task_type.
 func (m *StateManager) SetTaskType(workspace, taskType string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -643,10 +637,8 @@ func (m *StateManager) SetTaskType(workspace, taskType string) error {
 // Returns error for values outside ValidEfforts.
 func (m *StateManager) SetEffort(workspace, effort string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	if !containsEffort(effort) {
@@ -664,10 +656,8 @@ func (m *StateManager) SetEffort(workspace, effort string) error {
 // equivalent to _do_set_flow_template.
 func (m *StateManager) SetFlowTemplate(workspace, flowTemplate string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	if !containsTemplate(flowTemplate) {
@@ -684,10 +674,8 @@ func (m *StateManager) SetFlowTemplate(workspace, flowTemplate string) error {
 // SetAutoApprove sets autoApprove = true, equivalent to _do_set_auto_approve.
 func (m *StateManager) SetAutoApprove(workspace string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -699,10 +687,8 @@ func (m *StateManager) SetAutoApprove(workspace string) error {
 // SetSkipPr sets skipPr = true, equivalent to _do_set_skip_pr.
 func (m *StateManager) SetSkipPr(workspace string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -714,10 +700,8 @@ func (m *StateManager) SetSkipPr(workspace string) error {
 // SetDebug sets debug = true, equivalent to _do_set_debug.
 func (m *StateManager) SetDebug(workspace string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -730,10 +714,8 @@ func (m *StateManager) SetDebug(workspace string) error {
 // equivalent to _do_set_use_current_branch.
 func (m *StateManager) SetUseCurrentBranch(workspace, branch string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -747,10 +729,8 @@ func (m *StateManager) SetUseCurrentBranch(workspace, branch string) error {
 // Only "checkpoint-a" and "checkpoint-b" are valid checkpoint values.
 func (m *StateManager) SetRevisionPending(workspace, checkpoint string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -762,10 +742,8 @@ func (m *StateManager) SetRevisionPending(workspace, checkpoint string) error {
 // Only "checkpoint-a" and "checkpoint-b" are valid checkpoint values.
 func (m *StateManager) ClearRevisionPending(workspace, checkpoint string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -793,10 +771,8 @@ func applyRevisionPending(s *State, checkpoint string, value bool) error {
 // equivalent to _do_task_init.
 func (m *StateManager) TaskInit(workspace string, tasks map[string]Task) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -809,10 +785,8 @@ func (m *StateManager) TaskInit(workspace string, tasks map[string]Task) error {
 // equivalent to _do_task_update.
 func (m *StateManager) TaskUpdate(workspace, taskNum, field, value string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -855,10 +829,8 @@ func (m *StateManager) TaskUpdate(workspace, taskNum, field, value string) error
 // equivalent to _do_phase_log.
 func (m *StateManager) PhaseLog(workspace, phase string, tokens, durationMs int, model string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	return m.Update(func(s *State) error {
@@ -886,10 +858,8 @@ type PhaseStatsResult struct {
 // It is read-only.
 func (m *StateManager) PhaseStats(workspace string) (*PhaseStatsResult, error) {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return nil, fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return nil, err
 	}
 
 	s, err := m.GetState()
@@ -945,10 +915,8 @@ type TaskRetryInfo struct {
 // equivalent to cmd_resume_info.  It is read-only.
 func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return nil, fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return nil, err
 	}
 
 	s, err := m.GetState()
@@ -1028,10 +996,8 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 // equivalent to cmd_refresh_index.  Implementation deferred to tools package.
 func (m *StateManager) RefreshIndex(workspace string) error {
 	// Workspace entry-point guard.
-	if m.workspace == "" {
-		m.workspace = workspace
-	} else if m.workspace != workspace {
-		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
 	}
 
 	// Delegated to tools.RefreshIndexHandler via os/exec.
