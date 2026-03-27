@@ -5,6 +5,7 @@ package validation
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -171,12 +172,19 @@ func validateArtifactPhase6(workspace string) []ArtifactResult {
 	pattern := filepath.Join(workspace, "impl-*.md")
 
 	matches, err := filepath.Glob(pattern)
-	if err != nil || len(matches) == 0 {
+	if err != nil {
+		return []ArtifactResult{{
+			Valid: false,
+			Error: "error searching for impl-*.md files: " + err.Error(),
+		}}
+	}
+	if len(matches) == 0 {
 		return []ArtifactResult{{
 			Valid: false,
 			Error: "no impl-*.md files found in workspace",
 		}}
 	}
+	sort.Strings(matches)
 
 	verdictSet := []string{"PASS_WITH_NOTES", "PASS", "FAIL"}
 	results := make([]ArtifactResult, 0, len(matches))
