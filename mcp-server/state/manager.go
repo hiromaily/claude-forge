@@ -5,9 +5,11 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,7 +67,7 @@ func writeState(workspace string, s *State) error {
 		return fmt.Errorf("writeState marshal: %w", err)
 	}
 	tmp := statePath(workspace) + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("writeState write tmp: %w", err)
 	}
 	if err := os.Rename(tmp, statePath(workspace)); err != nil {
@@ -76,12 +78,7 @@ func writeState(workspace string, s *State) error {
 
 // containsPhase returns true if phase is in ValidPhases.
 func containsPhase(phase string) bool {
-	for _, p := range ValidPhases {
-		if p == phase {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ValidPhases, phase)
 }
 
 // nextPhase returns the phase that follows current in ValidPhases.
@@ -120,19 +117,19 @@ var allowedGetFields = map[string]bool{
 	"currentPhaseStatus": true,
 	"completedPhases":    true,
 	// dot-notation sub-fields
-	"revisions":                     true,
-	"revisions.designRevisions":     true,
-	"revisions.taskRevisions":       true,
+	"revisions":                       true,
+	"revisions.designRevisions":       true,
+	"revisions.taskRevisions":         true,
 	"revisions.designInlineRevisions": true,
-	"revisions.taskInlineRevisions": true,
-	"checkpointRevisionPending":     true,
-	"tasks":                         true,
-	"phaseLog":                      true,
-	"timestamps":                    true,
-	"timestamps.created":            true,
-	"timestamps.lastUpdated":        true,
-	"timestamps.phaseStarted":       true,
-	"error":                         true,
+	"revisions.taskInlineRevisions":   true,
+	"checkpointRevisionPending":       true,
+	"tasks":                           true,
+	"phaseLog":                        true,
+	"timestamps":                      true,
+	"timestamps.created":              true,
+	"timestamps.lastUpdated":          true,
+	"timestamps.phaseStarted":         true,
+	"error":                           true,
 }
 
 // ---------- StateManager methods ----------
@@ -204,10 +201,12 @@ func (m *StateManager) Get(workspace, field string) (string, error) {
 
 // getField extracts a field from a State by name using a switch over all
 // allowed field names, including dot-notation sub-fields.
+//
+//nolint:gocyclo // complexity is inherent in the dispatch table (one case per field)
 func getField(s *State, field string) (string, error) {
 	switch field {
 	case "version":
-		return fmt.Sprintf("%d", s.Version), nil
+		return strconv.Itoa(s.Version), nil
 	case "specName":
 		return s.SpecName, nil
 	case "workspace":
@@ -233,13 +232,13 @@ func getField(s *State, field string) (string, error) {
 		}
 		return *s.FlowTemplate, nil
 	case "autoApprove":
-		return fmt.Sprintf("%v", s.AutoApprove), nil
+		return strconv.FormatBool(s.AutoApprove), nil
 	case "skipPr":
-		return fmt.Sprintf("%v", s.SkipPr), nil
+		return strconv.FormatBool(s.SkipPr), nil
 	case "useCurrentBranch":
-		return fmt.Sprintf("%v", s.UseCurrentBranch), nil
+		return strconv.FormatBool(s.UseCurrentBranch), nil
 	case "debug":
-		return fmt.Sprintf("%v", s.Debug), nil
+		return strconv.FormatBool(s.Debug), nil
 	case "skippedPhases":
 		return marshalJSON(s.SkippedPhases)
 	case "currentPhase":
@@ -251,13 +250,13 @@ func getField(s *State, field string) (string, error) {
 	case "revisions":
 		return marshalJSON(s.Revisions)
 	case "revisions.designRevisions":
-		return fmt.Sprintf("%d", s.Revisions.DesignRevisions), nil
+		return strconv.Itoa(s.Revisions.DesignRevisions), nil
 	case "revisions.taskRevisions":
-		return fmt.Sprintf("%d", s.Revisions.TaskRevisions), nil
+		return strconv.Itoa(s.Revisions.TaskRevisions), nil
 	case "revisions.designInlineRevisions":
-		return fmt.Sprintf("%d", s.Revisions.DesignInlineRevisions), nil
+		return strconv.Itoa(s.Revisions.DesignInlineRevisions), nil
 	case "revisions.taskInlineRevisions":
-		return fmt.Sprintf("%d", s.Revisions.TaskInlineRevisions), nil
+		return strconv.Itoa(s.Revisions.TaskInlineRevisions), nil
 	case "checkpointRevisionPending":
 		return marshalJSON(s.CheckpointRevisionPending)
 	case "tasks":
@@ -286,7 +285,7 @@ func getField(s *State, field string) (string, error) {
 }
 
 // marshalJSON encodes v to a compact JSON string.
-func marshalJSON(v interface{}) (string, error) {
+func marshalJSON(v any) (string, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return "", fmt.Errorf("marshalJSON: %w", err)
@@ -781,9 +780,9 @@ func (m *StateManager) PhaseLog(workspace, phase string, tokens, durationMs int,
 
 // PhaseStatsResult is the structured return value for PhaseStats.
 type PhaseStatsResult struct {
-	TotalTokens    int            `json:"totalTokens"`
-	TotalDurationMs int           `json:"totalDurationMs"`
-	Entries        []PhaseLogEntry `json:"entries"`
+	TotalTokens     int             `json:"totalTokens"`
+	TotalDurationMs int             `json:"totalDurationMs"`
+	Entries         []PhaseLogEntry `json:"entries"`
 }
 
 // PhaseStats aggregates phaseLog metrics, equivalent to cmd_phase_stats.
@@ -809,36 +808,36 @@ func (m *StateManager) PhaseStats(workspace string) (*PhaseStatsResult, error) {
 
 // ResumeInfoResult mirrors the JSON object produced by cmd_resume_info.
 type ResumeInfoResult struct {
-	CurrentPhase              string            `json:"currentPhase"`
-	CurrentPhaseStatus        string            `json:"currentPhaseStatus"`
-	CompletedPhases           []string          `json:"completedPhases"`
-	SkippedPhases             []string          `json:"skippedPhases"`
-	TaskType                  *string           `json:"taskType"`
-	Effort                    *string           `json:"effort"`
-	FlowTemplate              *string           `json:"flowTemplate"`
-	AutoApprove               bool              `json:"autoApprove"`
-	SkipPr                    bool              `json:"skipPr"`
-	UseCurrentBranch          bool              `json:"useCurrentBranch"`
-	Branch                    *string           `json:"branch"`
-	SpecName                  string            `json:"specName"`
-	Revisions                 Revisions         `json:"revisions"`
-	Error                     *PhaseError       `json:"error"`
-	PendingTasks              []string          `json:"pendingTasks"`
-	CompletedTasks            []string          `json:"completedTasks"`
-	TotalTasks                int               `json:"totalTasks"`
-	PhaseLogEntries           int               `json:"phaseLogEntries"`
-	TotalTokens               int               `json:"totalTokens"`
-	TotalDurationMs           int               `json:"totalDuration_ms"`
-	Debug                     bool              `json:"debug"`
-	TasksWithRetries          []TaskRetryInfo   `json:"tasksWithRetries"`
-	CheckpointRevisionPending map[string]bool   `json:"checkpointRevisionPending"`
+	CurrentPhase              string          `json:"currentPhase"`
+	CurrentPhaseStatus        string          `json:"currentPhaseStatus"`
+	CompletedPhases           []string        `json:"completedPhases"`
+	SkippedPhases             []string        `json:"skippedPhases"`
+	TaskType                  *string         `json:"taskType"`
+	Effort                    *string         `json:"effort"`
+	FlowTemplate              *string         `json:"flowTemplate"`
+	AutoApprove               bool            `json:"autoApprove"`
+	SkipPr                    bool            `json:"skipPr"`
+	UseCurrentBranch          bool            `json:"useCurrentBranch"`
+	Branch                    *string         `json:"branch"`
+	SpecName                  string          `json:"specName"`
+	Revisions                 Revisions       `json:"revisions"`
+	Error                     *PhaseError     `json:"error"`
+	PendingTasks              []string        `json:"pendingTasks"`
+	CompletedTasks            []string        `json:"completedTasks"`
+	TotalTasks                int             `json:"totalTasks"`
+	PhaseLogEntries           int             `json:"phaseLogEntries"`
+	TotalTokens               int             `json:"totalTokens"`
+	TotalDurationMs           int             `json:"totalDuration_ms"`
+	Debug                     bool            `json:"debug"`
+	TasksWithRetries          []TaskRetryInfo `json:"tasksWithRetries"`
+	CheckpointRevisionPending map[string]bool `json:"checkpointRevisionPending"`
 }
 
 // TaskRetryInfo is used within ResumeInfoResult.
 type TaskRetryInfo struct {
-	Task         string `json:"task"`
-	ImplRetries  int    `json:"implRetries"`
-	ReviewRetries int   `json:"reviewRetries"`
+	Task          string `json:"task"`
+	ImplRetries   int    `json:"implRetries"`
+	ReviewRetries int    `json:"reviewRetries"`
 }
 
 // ResumeInfo returns a summary of state for the orchestrator,
@@ -871,8 +870,8 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 		}
 		if t.ImplRetries > 0 || t.ReviewRetries > 0 {
 			tasksWithRetries = append(tasksWithRetries, TaskRetryInfo{
-				Task:         k,
-				ImplRetries:  t.ImplRetries,
+				Task:          k,
+				ImplRetries:   t.ImplRetries,
 				ReviewRetries: t.ReviewRetries,
 			})
 		}
@@ -922,47 +921,30 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 
 // RefreshIndex executes build-specs-index.sh for the workspace,
 // equivalent to cmd_refresh_index.  Implementation deferred to tools package.
-func (m *StateManager) RefreshIndex(workspace string) error {
+func (m *StateManager) RefreshIndex(workspace string) error { //nolint:revive // m is intentionally unused; this is a documented stub
 	// Delegated to tools.RefreshIndexHandler via os/exec.
 	// Not implemented here to keep the state package dependency-free of os/exec.
-	return fmt.Errorf("RefreshIndex: not implemented in state package; use tools.RefreshIndexHandler")
+	return errors.New("RefreshIndex: not implemented in state package; use tools.RefreshIndexHandler")
 }
 
 // ---------- enum helpers ----------
 
 func containsRevType(rt string) bool {
-	for _, v := range ValidRevTypes {
-		if v == rt {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ValidRevTypes, rt)
 }
 
 func containsEffort(e string) bool {
-	for _, v := range ValidEfforts {
-		if v == e {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ValidEfforts, e)
 }
 
 func containsTemplate(t string) bool {
-	for _, v := range ValidTemplates {
-		if v == t {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ValidTemplates, t)
 }
 
 // appendUnique appends s to slice only if it is not already present.
 func appendUnique(slice []string, s string) []string {
-	for _, existing := range slice {
-		if existing == s {
-			return slice
-		}
+	if slices.Contains(slice, s) {
+		return slice
 	}
 	return append(slice, s)
 }

@@ -153,6 +153,8 @@ func nodeNameForLang(node *sitter.Node, src []byte, lang Language) string {
 
 // extractSignature extracts a function/type/constant signature (without body) from src.
 // For declarations with bodies (blocks), it returns only up to the opening brace.
+//
+//nolint:gocyclo // complexity is inherent in the multi-language dispatch table (one case per node type)
 func extractSignature(src []byte, node *sitter.Node, lang Language) string {
 	nodeType := node.Type()
 	fullText := string(src[node.StartByte():node.EndByte()])

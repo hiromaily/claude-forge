@@ -8,16 +8,20 @@ import (
 )
 
 // convenience aliases so the test body stays readable
-type State = state.State
-type Revisions = state.Revisions
-type Task = state.Task
-type PhaseLogEntry = state.PhaseLogEntry
-type Timestamps = state.Timestamps
+type (
+	State         = state.State
+	Revisions     = state.Revisions
+	Task          = state.Task
+	PhaseLogEntry = state.PhaseLogEntry
+	Timestamps    = state.Timestamps
+)
 
-var ValidPhases = state.ValidPhases
-var ValidEfforts = state.ValidEfforts
-var ValidTemplates = state.ValidTemplates
-var ValidRevTypes = state.ValidRevTypes
+var (
+	ValidPhases    = state.ValidPhases
+	ValidEfforts   = state.ValidEfforts
+	ValidTemplates = state.ValidTemplates
+	ValidRevTypes  = state.ValidRevTypes
+)
 
 // TestStateJSONRoundTrip verifies that State serialises and deserialises
 // correctly using the exact JSON keys expected by state.json.
@@ -111,7 +115,7 @@ func TestStateJSONKeys(t *testing.T) {
 		t.Fatalf("json.Marshal: %v", err)
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal to map: %v", err)
 	}
@@ -143,7 +147,7 @@ func TestTaskJSONKeys(t *testing.T) {
 	}
 	data, _ := json.Marshal(task)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal: %v", err)
 	}
@@ -178,7 +182,7 @@ func TestPhaseLogEntryDurationMsKey(t *testing.T) {
 	}
 	data, _ := json.Marshal(entry)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal: %v", err)
 	}

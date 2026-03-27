@@ -1,0 +1,15 @@
+pre-commit:
+  parallel: true
+  commands:
+    go-fmt:
+      root: "mcp-server"
+      glob: "**/*.go"
+      run: make go-fmt
+      stage_fixed: true
+
+pre-push:
+  commands:
+    go-lint:
+      root: "mcp-server"
+      glob: "**/*.go"
+      run: make go-lint

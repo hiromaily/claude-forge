@@ -16,10 +16,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hiromaily/claude-forge/mcp-server/events"
-	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
 // defaultScriptPath resolves the path to build-specs-index.sh.
@@ -61,7 +62,10 @@ func okJSON(v any) (*mcp.CallToolResult, error) {
 // under the "warning" key in JSON content.
 func okWithWarning(msg, warning string) (*mcp.CallToolResult, error) {
 	payload := map[string]string{"result": msg, "warning": warning}
-	data, _ := json.Marshal(payload)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf(`{"result":%q,"warning":%q}`, msg, warning)), nil
+	}
 	return mcp.NewToolResultText(string(data)), nil
 }
 

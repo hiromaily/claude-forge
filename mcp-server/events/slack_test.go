@@ -186,7 +186,7 @@ func TestSlackNotifier_OnlyFiresForTargetEventTypes(t *testing.T) {
 
 	// Wait for all 3 expected calls
 	timeout := time.After(3 * time.Second)
-	for i := 0; i < len(targetEvents); i++ {
+	for i := range targetEvents {
 		select {
 		case <-allDone:
 		case <-timeout:

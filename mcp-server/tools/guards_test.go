@@ -34,7 +34,7 @@ func buildTestState() *state.State {
 func TestGuard3a_ArtifactExists_NoError(t *testing.T) {
 	dir := t.TempDir()
 	// Create the required artifact for phase-1
-	if err := os.WriteFile(filepath.Join(dir, "analysis.md"), []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "analysis.md"), []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	s := buildTestState()
@@ -76,7 +76,7 @@ func TestGuard3a_AllPhaseArtifacts(t *testing.T) {
 			}
 
 			// Present → nil
-			if err := os.WriteFile(filepath.Join(dir, tc.artifact), []byte("x"), 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, tc.artifact), []byte("x"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			if err := Guard3aArtifactExists(dir, tc.phase, s); err != nil {
@@ -105,7 +105,7 @@ func TestGuard3a_PhasesWithNoArtifact_ReturnsNil(t *testing.T) {
 
 func TestGuard3b_ReviewFileExists_NoError(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "review-1.md"), []byte("review"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "review-1.md"), []byte("review"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	s := buildTestState()

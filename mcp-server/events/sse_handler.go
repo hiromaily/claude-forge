@@ -64,7 +64,7 @@ func SSEHandler(bus *EventBus) http.HandlerFunc {
 					// Skip malformed events rather than crashing.
 					continue
 				}
-				fmt.Fprintf(w, "data: %s\n\n", payload)
+				_, _ = fmt.Fprintf(w, "data: %s\n\n", payload)
 				flusher.Flush()
 			}
 		}

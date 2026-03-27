@@ -1258,7 +1258,7 @@ func TestPhaseLog_Concurrent10Goroutines(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(idx int) {
 			defer wg.Done()
 			phase := state.ValidPhases[idx%len(state.ValidPhases)]

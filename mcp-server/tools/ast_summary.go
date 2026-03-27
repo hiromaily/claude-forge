@@ -9,9 +9,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hiromaily/claude-forge/mcp-server/ast"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/hiromaily/claude-forge/mcp-server/ast"
 )
 
 // AstSummaryHandler returns a ToolHandlerFunc that summarizes the AST of a

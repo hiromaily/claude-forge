@@ -3,10 +3,11 @@
 package tools
 
 import (
-	"github.com/hiromaily/claude-forge/mcp-server/events"
-	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
 // RegisterAll registers all 30 tool handlers with srv, delegating to sm.
@@ -262,14 +263,17 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 
 	srv.AddTool(
 		mcp.NewTool("subscribe_events",
-			mcp.WithDescription("Return the SSE endpoint URL for real-time phase transition events. Returns {\"endpoint\":\"http://localhost:<port>/events\"} when FORGE_EVENTS_PORT is set, or an informational message when SSE is not configured."),
+			mcp.WithDescription("Return the SSE endpoint URL for real-time phase transition events. "+
+				"Returns {\"endpoint\":\"http://localhost:<port>/events\"} when FORGE_EVENTS_PORT is set, "+
+				"or an informational message when SSE is not configured."),
 		),
 		SubscribeEventsHandler(eventsPort),
 	)
 
 	srv.AddTool(
 		mcp.NewTool("ast_summary",
-			mcp.WithDescription("Parse a source file with tree-sitter and return a compact markdown summary of exported function signatures, type definitions, and constants. Supports Go, TypeScript, Python, and Bash."),
+			mcp.WithDescription("Parse a source file with tree-sitter and return a compact markdown summary of exported function "+
+				"signatures, type definitions, and constants. Supports Go, TypeScript, Python, and Bash."),
 			mcp.WithString("file_path", mcp.Required(), mcp.Description("Absolute path to the source file to summarize")),
 			mcp.WithString("language", mcp.Description("Language override: go, typescript, python, bash. When omitted, language is auto-detected from the file extension.")),
 		),

@@ -5,9 +5,11 @@
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
@@ -16,14 +18,14 @@ import (
 // the workspace before phase-complete is accepted.  Phases absent from this map
 // have no required artifact (e.g. checkpoint-a, phase-5, pr-creation).
 var phaseArtifacts = map[string]string{
-	"phase-1":           "analysis.md",
-	"phase-2":           "investigation.md",
-	"phase-3":           "design.md",
-	"phase-3b":          "review-design.md",
-	"phase-4":           "tasks.md",
-	"phase-4b":          "review-tasks.md",
-	"phase-7":           "comprehensive-review.md",
-	"final-summary":     "summary.md",
+	"phase-1":       "analysis.md",
+	"phase-2":       "investigation.md",
+	"phase-3":       "design.md",
+	"phase-3b":      "review-design.md",
+	"phase-4":       "tasks.md",
+	"phase-4b":      "review-tasks.md",
+	"phase-7":       "comprehensive-review.md",
+	"final-summary": "summary.md",
 }
 
 // phaseLogRequired lists phases that are expected to emit a phase-log entry
@@ -80,7 +82,7 @@ func Guard3cTasksNonEmpty(phase string, s *state.State) error {
 		return nil
 	}
 	if len(s.Tasks) == 0 {
-		return fmt.Errorf("BLOCKED: no tasks initialized in state.json. Run task-init before starting phase-5")
+		return errors.New("BLOCKED: no tasks initialized in state.json. Run task-init before starting phase-5")
 	}
 	return nil
 }
@@ -105,19 +107,14 @@ func Guard3eCheckpointAwaitingHuman(phase string, s *state.State) error {
 // Guard3gCheckpointBDoneOrSkipped enforces Rule 3g: task-init requires checkpoint-b
 // to be present in completedPhases or skippedPhases.
 func Guard3gCheckpointBDoneOrSkipped(s *state.State) error {
-	for _, p := range s.CompletedPhases {
-		if p == "checkpoint-b" {
-			return nil
-		}
+	if slices.Contains(s.CompletedPhases, "checkpoint-b") {
+		return nil
 	}
-	for _, p := range s.SkippedPhases {
-		if p == "checkpoint-b" {
-			return nil
-		}
+	if slices.Contains(s.SkippedPhases, "checkpoint-b") {
+		return nil
 	}
-	return fmt.Errorf(
-		"BLOCKED: task-init requires checkpoint-b to be completed or skipped first. " +
-			"Complete Checkpoint B (human approval or auto-approve) before initializing tasks",
+	return errors.New("BLOCKED: task-init requires checkpoint-b to be completed or skipped first. " +
+		"Complete Checkpoint B (human approval or auto-approve) before initializing tasks",
 	)
 }
 
@@ -145,9 +142,8 @@ func Guard3jCheckpointRevisionPending(phase string, s *state.State) error {
 // Returns a non-nil error when validated is false or absent (false default).
 func GuardInitValidated(validated bool) error {
 	if !validated {
-		return fmt.Errorf(
-			"BLOCKED: init requires validated=true. " +
-				"Call bash scripts/validate-input.sh first and pass validated=true only when it succeeds",
+		return errors.New("BLOCKED: init requires validated=true. " +
+			"Call bash scripts/validate-input.sh first and pass validated=true only when it succeeds",
 		)
 	}
 	return nil

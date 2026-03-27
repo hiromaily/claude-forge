@@ -8,9 +8,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/mark3labs/mcp-go/server"
+
 	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
-	"github.com/mark3labs/mcp-go/server"
 )
 
 // TestRegisterAllNewSignatureCount verifies that the updated 5-arg RegisterAll

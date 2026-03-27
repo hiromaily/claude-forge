@@ -1,0 +1,159 @@
+version: "2"
+
+# Active 46 linters, 65s
+# go tool golangci-lint run -v
+
+run:
+  go: "1.26"
+  timeout: 5m
+  concurrency: 8
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+  # Build tags to include when linting.
+  # This ensures files with build tags (e.g., //go:build integration) are also linted.
+  build-tags:
+    - integration
+
+issues:
+  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  max-issues-per-linter: 0
+  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofumpt # Detects whether code was gofumpt-ed.
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/hiromaily
+  exclusions:
+    generated: strict
+
+linters:
+  # when `default: fast` set, `enable:` ignored
+  # default: fast
+  enable:
+    - asasalint # Detects "[]any" used as argument for variadic "func(...any)".
+    - bodyclose
+    - copyloopvar # Detects places where loop variables are copied.
+    - dogsled # Detects assignments with too many blank identifiers.
+    - dupword # Detects duplicate words.
+    - durationcheck # Detect cases where two time.Duration values are being multiplied in possibly erroneous ways.
+    - errcheck
+    - errchkjson # Detects unsupported types passed to json encoding functions and reports if checks for the returned error can be omitted.
+    - exhaustive # Detects missing options in enum switch statements.
+    - exptostd # Detects functions from golang.org/x/exp/ that can be replaced by std functions.
+    - fatcontext # Detects nested contexts in loops and function literals.
+    - forbidigo
+    - gocheckcompilerdirectives # Detects invalid go compiler directive comments (//go:).
+    - gocritic # Metalinter; detects bugs, performance, and styling issues.
+    - gocyclo
+    - gosec # Detects security problems.
+    - govet
+    - iface # Detects incorrect use of interfaces. Currently only used for "identical" interfaces in the same package.
+    - importas # Enforces consistent import aliases.
+    - ineffassign
+    - makezero # Finds slice declarations with non-zero initial length.
+    - mirror # Detects wrong mirror patterns of bytes/strings usage.
+    - misspell # Detects commonly misspelled English words in comments.
+    - modernize # Suggests simplifications using modern Go language and library features.
+    - nakedret # Detects uses of naked returns.
+    - nilnesserr # Detects returning nil errors. It combines the features of nilness and nilerr,
+    - nosprintfhostport # Detects misuse of Sprintf to construct a host with port in a URL.
+    - nolintlint # Detects ill-formed or insufficient nolint directives.
+    - perfsprint # Detects fmt.Sprintf uses that can be replaced with a faster alternative.
+    - prealloc # Detects slice declarations that could potentially be pre-allocated.
+    - predeclared # Detects code that shadows one of Go's predeclared identifiers
+    - reassign # Detects reassigning a top-level variable in another package.
+    - revive # Metalinter; drop-in replacement for golint.
+    - spancheck # Detects mistakes with OpenTelemetry/Census spans.
+    - staticcheck
+    - thelper # Detects test helpers without t.Helper().
+    - tparallel # Detects inappropriate usage of t.Parallel().
+    - unconvert # Detects unnecessary type conversions.
+    - unparam
+    - unused
+    - usestdlibvars # Detects the possibility to use variables/constants from the Go standard library.
+    - usetesting # Reports uses of functions with replacement inside the testing package.
+    - wastedassign # Detects wasted assignment statements.
+
+  settings:
+
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    gocyclo:
+      min-complexity: 16
+
+    gosec:
+      excludes:
+        - G112 # G112: Potential Slowloris Attack (ReadHeaderTimeout); MCP stdio server, not a public-facing HTTP server
+        - G204 # G204: Subprocess launched with variable; expected for MCP tools that run shell scripts
+        - G304 # G304: Potential file inclusion via variable; expected for tools that process user-supplied file paths
+
+    # govet:
+    #   enable:
+    #     - shadow
+    #   settings:
+    #     shadow:
+    #       strict: true
+
+    lll:
+      line-length: 200
+
+    importas:
+      # Do not allow unaliased imports of aliased packages.
+      no-unaliased: true
+
+      # set aliases for packages
+    nakedret:
+      # Disallow naked returns if func has more lines of code than this setting.
+      # Default: 30
+      max-func-lines: 0
+
+    staticcheck:
+      checks:
+        - all
+        - -QF1008 # Omit embedded fields from selector expression; https://staticcheck.dev/docs/checks/#QF1008
+
+    revive:
+      rules:
+        - name: empty-block # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#empty-block
+        - name: empty-lines # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#empty-lines
+        - name: line-length-limit # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#line-length-limit
+          arguments: [200]
+        - name: unused-receiver # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#unused-receiver
+        - name: use-any # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#use-any
+        - name: use-errors-new # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#use-errors-new
+          # - name: import-shadowing  # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#import-shadowing
+
+    usetesting:
+      os-chdir: false # FIXME(thaJeztah): Disable `os.Chdir()` detections; should be automatically disabled on Go < 1.24; see https://github.com/docker/cli/pull/5835#issuecomment-2665302478
+      context-background: false # FIXME(thaJeztah): Disable `context.Background()` detections; should be automatically disabled on Go < 1.24; see https://github.com/docker/cli/pull/5835#issuecomment-2665302478
+      context-todo: false # FIXME(thaJeztah): Disable `context.TODO()` detections; should be automatically disabled on Go < 1.24; see https://github.com/docker/cli/pull/5835#issuecomment-2665302478
+
+  exclusions:
+    generated: strict
+
+    rules:
+      # Exclude some linters from running on tests files.
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck    # defer resp.Body.Close(), srv.Shutdown(), ln.Close() are acceptable in tests
+          - errchkjson  # json.Marshal on known-safe types in test helpers
+          - bodyclose   # HTTP client calls in tests where t.Fatalf handles errors before the defer
+          - gocyclo     # complex test functions with many assertions are acceptable
+          - dogsled     # multiple blank identifiers acceptable in test helpers (e.g. runtime.Caller)
+
+    # Exclude files from all linters.
+    paths:
+      - ".*\\.pb\\.go"
+      - "mocks/.*"
+      #- ".*\\.test\\.go"
+
+    # Log a warning if an exclusion rule is unused.
+    # Default: false
+    warn-unused: true
