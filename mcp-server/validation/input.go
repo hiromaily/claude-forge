@@ -155,8 +155,10 @@ func validateURL(core string, flags map[string]string, bareFlags []string) Input
 		}
 	default:
 		return InputResult{
-			Valid:  false,
-			Errors: []string{"ERROR: Unrecognised URL format. Supported formats: GitHub Issue: https://github.com/{owner}/{repo}/issues/{number}, Jira Issue: https://{org}.atlassian.net/browse/{KEY}-{number}"},
+			Valid: false,
+			Errors: []string{"ERROR: Unrecognised URL format. Supported formats: " +
+				"GitHub Issue: https://github.com/{owner}/{repo}/issues/{number}, " +
+				"Jira Issue: https://{org}.atlassian.net/browse/{KEY}-{number}"},
 		}
 	}
 }
