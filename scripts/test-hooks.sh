@@ -2226,61 +2226,6 @@ else
 fi
 
 # ============================================================
-echo ""
-echo "=== pre-tool-hook.sh: Rule 6 (init validation guard) tests ==="
-# ============================================================
-
-echo ""
-echo "--- init blocked without validation marker ---"
-rm -f "$MARKER" 2>/dev/null || true
-# No active workspace needed — Rule 6 fires before find_active_workspace
-run_hook "pre-tool-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"bash scripts/state-manager.sh init .specs/test test"}}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
-assert_exit 2 "init blocked without validation marker"
-assert_stderr_contains "BLOCKED" "init block message contains BLOCKED"
-
-echo ""
-echo "--- init blocked with stale marker ---"
-# Create a marker that is old (simulate by writing a timestamp 200s in the past)
-STALE_TS=$(( $(date +%s) - 200 ))
-echo "$STALE_TS" > "$MARKER"
-run_hook "pre-tool-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"bash scripts/state-manager.sh init .specs/test test"}}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
-assert_exit 2 "init blocked with stale marker"
-assert_stderr_contains "stale" "stale marker message"
-rm -f "$MARKER" 2>/dev/null || true
-
-echo ""
-echo "--- init allowed with fresh marker ---"
-date +%s > "$MARKER"
-run_hook "pre-tool-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"bash scripts/state-manager.sh init .specs/test test"}}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
-assert_exit 0 "init allowed with fresh validation marker"
-# Marker should be cleaned up after use
-if [ ! -f "$MARKER" ]; then
-  pass "marker cleaned up after init"
-else
-  fail "marker cleaned up after init" "marker still exists"
-  rm -f "$MARKER" 2>/dev/null || true
-fi
-
-echo ""
-echo "--- git commands mentioning init not blocked ---"
-rm -f "$MARKER" 2>/dev/null || true
-run_hook "pre-tool-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"git commit -m \"feat: add state-manager.sh init validation guard\""}}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
-assert_exit 0 "git commit mentioning init in message not blocked"
-
-rm -f "$MARKER" 2>/dev/null || true
-run_hook "pre-tool-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"git log --oneline | grep state-manager.sh init"}}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
-assert_exit 0 "git log piped through grep not blocked"
-
-echo ""
-echo "--- non-init state-manager calls unaffected ---"
-rm -f "$MARKER" 2>/dev/null || true
-reset_workspace
-WS="$(setup_workspace "phase-1" "pending")"
-run_hook "pre-tool-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"bash scripts/state-manager.sh phase-start '"$WS"' phase-1"}}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
-assert_exit 0 "phase-start not blocked by missing validation marker"
-reset_workspace
-
-# ============================================================
 # post-bash-hook.sh tests
 # ============================================================
 

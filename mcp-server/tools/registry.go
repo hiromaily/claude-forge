@@ -1,4 +1,4 @@
-// Package tools registers all 32 MCP tool handlers with the MCP server.
+// Package tools registers all 34 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -10,7 +10,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// RegisterAll registers all 32 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 34 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
@@ -309,5 +309,22 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 			mcp.WithString("language", mcp.Required(), mcp.Description("Language: go, typescript, python, or bash")),
 		),
 		AstImpactScopeHandler(),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("validate_input",
+			mcp.WithDescription("Validate the pipeline input arguments string. Returns a JSON object with valid, errors, and parsed fields. Never returns an MCP error — invalid input is surfaced via valid:false."),
+			mcp.WithString("arguments", mcp.Required(), mcp.Description("Raw argument string passed to the forge skill, e.g. the user's task description")),
+		),
+		ValidateInputHandler(),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("validate_artifact",
+			mcp.WithDescription("Validate the artifact file(s) for a given pipeline phase. Always returns a JSON array. For phase-6 the array contains one element per impl-*.md file; for all other phases it contains exactly one element."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier, e.g. phase-3, phase-3b, phase-4, phase-4b, phase-6, phase-7")),
+		),
+		ValidateArtifactHandler(),
 	)
 }
