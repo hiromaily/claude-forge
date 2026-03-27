@@ -18,9 +18,13 @@ import (
 
 // StateManager owns the mutex and provides all methods that correspond to the
 // state-manager.sh commands.  All mutating methods acquire mu.Lock() for the
-// full read-modify-write cycle; read-only methods use mu.RLock().
+// full read-modify-write cycle. Read-only methods (Get, PhaseStats, ResumeInfo)
+// delegate to GetState(), which also acquires mu.Lock() to handle the lazy-load
+// write path; mu.RLock() is not used in this implementation.
 type StateManager struct {
-	mu sync.RWMutex
+	mu        sync.RWMutex
+	state     *State // in-memory cache; nil until LoadFromFile or Init
+	workspace string // bound workspace path; empty until first bind
 }
 
 // NewStateManager constructs a StateManager ready for use.
@@ -35,7 +39,7 @@ func statePath(workspace string) string {
 }
 
 func nowISO() string {
-	return time.Now().UTC().Format(time.RFC3339)
+	return time.Now().UTC().Format(time.RFC3339Nano)
 }
 
 // readState reads and unmarshals state.json from workspace.
@@ -46,6 +50,7 @@ func readState(workspace string) (*State, error) {
 
 // ReadState reads and unmarshals state.json from workspace.
 // Exported so that tools package can reuse it without duplicating read logic.
+// TODO: replace ReadState calls with sm.GetState() once tools reduction is complete.
 func ReadState(workspace string) (*State, error) {
 	path := statePath(workspace)
 	data, err := os.ReadFile(path)
@@ -136,13 +141,15 @@ var allowedGetFields = map[string]bool{
 
 // Init creates a new state.json in workspace following the exact schema
 // produced by cmd_init in state-manager.sh.
+// Calling Init a second time is intentional (fresh-start operation); it replaces
+// any prior binding of sm.workspace and sm.state.
 func (m *StateManager) Init(workspace, specName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	ts := nowISO()
 	s := &State{
-		Version:            1,
+		Version:            2,
 		SpecName:           specName,
 		Workspace:          workspace,
 		Branch:             nil,
@@ -176,7 +183,141 @@ func (m *StateManager) Init(workspace, specName string) error {
 		},
 		Error: nil,
 	}
-	return writeState(workspace, s)
+	if err := writeState(workspace, s); err != nil {
+		return err
+	}
+	// Store in-memory cache and bind workspace — both under the already-held lock.
+	m.workspace = workspace
+	m.state = s
+	return nil
+}
+
+// LoadFromFile reads workspace/state.json, runs Migrate, and stores the result
+// as the in-memory cache. Sets sm.workspace.
+// If already bound to a different workspace, returns a workspace-mismatch error.
+// If bound to the same workspace, re-reads from disk (refresh semantics).
+func (m *StateManager) LoadFromFile(workspace string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.workspace != "" && m.workspace != workspace {
+		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	}
+
+	s, err := readState(workspace)
+	if err != nil {
+		return err
+	}
+	Migrate(s)
+	m.workspace = workspace
+	m.state = s
+	return nil
+}
+
+// Update applies fn to the in-memory state under mu.Lock().
+// If sm.workspace is empty, returns "state not loaded" error.
+// If sm.state is nil but sm.workspace is set, lazy-loads from disk before calling fn.
+// The lazy-load disk read executes under the already-held mu.Lock(); no nested
+// lock acquisition occurs inside the lazy-load path.
+// Mutations are applied to a deep copy; sm.state is only replaced after a
+// successful write to disk, ensuring in-memory and on-disk state stay consistent.
+// fn must not call any StateManager method (would deadlock).
+func (m *StateManager) Update(fn func(*State) error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.workspace == "" {
+		return errors.New("state not loaded: call Init or LoadFromFile first")
+	}
+
+	// Lazy-load if cache is nil but workspace is bound.
+	if m.state == nil {
+		s, err := readState(m.workspace)
+		if err != nil {
+			return err
+		}
+		Migrate(s)
+		m.state = s
+	}
+
+	// Work on a deep copy so that a persist failure leaves sm.state untouched.
+	stateCopy := deepCopyState(m.state)
+
+	if err := fn(stateCopy); err != nil {
+		return err
+	}
+
+	stateCopy.Timestamps.LastUpdated = nowISO()
+
+	// Only promote the copy to the live cache after a successful disk write.
+	if err := writeState(m.workspace, stateCopy); err != nil {
+		return err
+	}
+	m.state = stateCopy
+	return nil
+}
+
+// GetState returns a deep copy of the current in-memory state.
+// It acquires mu.Lock() (not RLock) because the lazy-load path writes sm.state.
+// If sm.workspace is empty, returns "state not loaded" error.
+// If sm.state is nil but sm.workspace is set, lazy-loads from disk.
+// Takes no workspace argument — routing is by sm.workspace.
+func (m *StateManager) GetState() (*State, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.workspace == "" {
+		return nil, errors.New("state not loaded: call Init or LoadFromFile first")
+	}
+
+	// Lazy-load if cache is nil but workspace is bound.
+	if m.state == nil {
+		s, err := readState(m.workspace)
+		if err != nil {
+			return nil, err
+		}
+		Migrate(s)
+		m.state = s
+	}
+
+	return deepCopyState(m.state), nil
+}
+
+// deepCopyState returns a deep copy of s such that mutating the returned struct
+// does not affect s. Pointer fields, slices, and maps are all duplicated.
+func deepCopyState(s *State) *State {
+	if s == nil {
+		return nil
+	}
+	// Marshal and unmarshal is the simplest correct deep-copy for this struct.
+	data, err := json.Marshal(s)
+	if err != nil {
+		// Should never happen with our own State struct; panic to surface the bug immediately.
+		panic(fmt.Sprintf("deepCopyState: failed to marshal state: %v", err))
+	}
+	var cp State
+	if err := json.Unmarshal(data, &cp); err != nil {
+		// Should never happen with data we just marshaled from State.
+		panic(fmt.Sprintf("deepCopyState: failed to unmarshal state: %v", err))
+	}
+	return &cp
+}
+
+// bindWorkspace performs the workspace entry-point guard under mu.Lock so that
+// auto-bind (m.workspace == "") and mismatch checks are race-free.
+// It must be called before any lock-free read of m.workspace, and callers
+// must NOT hold mu when calling it.
+func (m *StateManager) bindWorkspace(workspace string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.workspace == "" {
+		m.workspace = workspace
+		return nil
+	}
+	if m.workspace != workspace {
+		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	}
+	return nil
 }
 
 // Get returns the string representation of field from state.json.
@@ -184,14 +325,16 @@ func (m *StateManager) Init(workspace, specName string) error {
 // Boolean and numeric values are rendered as their JSON string equivalents.
 // Null pointer fields are rendered as "null".
 func (m *StateManager) Get(workspace, field string) (string, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return "", err
+	}
 
 	if !allowedGetFields[field] {
 		return "", fmt.Errorf("Get: unknown field %q", field)
 	}
 
-	s, err := readState(workspace)
+	s, err := m.GetState()
 	if err != nil {
 		return "", err
 	}
@@ -295,487 +438,415 @@ func marshalJSON(v any) (string, error) {
 
 // PhaseStart marks phase as in_progress, equivalent to cmd_phase_start.
 func (m *StateManager) PhaseStart(workspace, phase string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
 	if !containsPhase(phase) {
 		return fmt.Errorf("PhaseStart: invalid phase %q", phase)
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
-
-	ts := nowISO()
-	s.CurrentPhase = phase
-	s.CurrentPhaseStatus = "in_progress"
-	s.Timestamps.PhaseStarted = &ts
-	s.Timestamps.LastUpdated = ts
-	s.Error = nil
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		ts := nowISO()
+		s.CurrentPhase = phase
+		s.CurrentPhaseStatus = "in_progress"
+		s.Timestamps.PhaseStarted = &ts
+		s.Error = nil
+		return nil
+	})
 }
 
 // PhaseComplete marks phase as completed and advances currentPhase to the
 // next phase in ValidPhases, equivalent to cmd_phase_complete.
 func (m *StateManager) PhaseComplete(workspace, phase string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
 	if !containsPhase(phase) {
 		return fmt.Errorf("PhaseComplete: invalid phase %q", phase)
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
+	return m.Update(func(s *State) error {
+		next := nextPhase(phase)
 
-	ts := nowISO()
-	next := nextPhase(phase)
-
-	// Add to completedPhases (deduplicated).
-	s.CompletedPhases = appendUnique(s.CompletedPhases, phase)
-	s.CurrentPhase = next
-	if next == "completed" {
-		s.CurrentPhaseStatus = "completed"
-	} else {
-		s.CurrentPhaseStatus = "pending"
-	}
-	s.Timestamps.LastUpdated = ts
-	s.Timestamps.PhaseStarted = nil
-
-	return writeState(workspace, s)
+		// Add to completedPhases (deduplicated).
+		s.CompletedPhases = appendUnique(s.CompletedPhases, phase)
+		s.CurrentPhase = next
+		if next == "completed" {
+			s.CurrentPhaseStatus = "completed"
+		} else {
+			s.CurrentPhaseStatus = "pending"
+		}
+		s.Timestamps.PhaseStarted = nil
+		return nil
+	})
 }
 
 // PhaseFail records a phase failure with message, equivalent to cmd_phase_fail.
 func (m *StateManager) PhaseFail(workspace, phase, message string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
 	if !containsPhase(phase) {
 		return fmt.Errorf("PhaseFail: invalid phase %q", phase)
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
-
-	ts := nowISO()
-	s.CurrentPhaseStatus = "failed"
-	s.Error = &PhaseError{
-		Phase:     phase,
-		Message:   message,
-		Timestamp: ts,
-	}
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		ts := nowISO()
+		s.CurrentPhaseStatus = "failed"
+		s.Error = &PhaseError{
+			Phase:     phase,
+			Message:   message,
+			Timestamp: ts,
+		}
+		return nil
+	})
 }
 
 // Checkpoint marks phase as awaiting_human, equivalent to _do_checkpoint.
 // Only checkpoint-a and checkpoint-b are valid values.
 func (m *StateManager) Checkpoint(workspace, phase string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
 	if phase != "checkpoint-a" && phase != "checkpoint-b" {
 		return fmt.Errorf("Checkpoint: invalid phase %q (expected checkpoint-a or checkpoint-b)", phase)
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
-
-	ts := nowISO()
-	s.CurrentPhase = phase
-	s.CurrentPhaseStatus = "awaiting_human"
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.CurrentPhase = phase
+		s.CurrentPhaseStatus = "awaiting_human"
+		return nil
+	})
 }
 
 // Abandon sets currentPhaseStatus to "abandoned", equivalent to _do_abandon.
 func (m *StateManager) Abandon(workspace string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	ts := nowISO()
-	s.CurrentPhaseStatus = "abandoned"
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.CurrentPhaseStatus = "abandoned"
+		return nil
+	})
 }
 
 // SkipPhase adds phase to skippedPhases and advances currentPhase,
 // equivalent to _do_skip_phase.
 func (m *StateManager) SkipPhase(workspace, phase string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
 	if !containsPhase(phase) {
 		return fmt.Errorf("SkipPhase: invalid phase %q", phase)
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
-
-	ts := nowISO()
-	next := nextPhase(phase)
-
-	s.SkippedPhases = appendUnique(s.SkippedPhases, phase)
-	s.CurrentPhase = next
-	s.CurrentPhaseStatus = "pending"
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		next := nextPhase(phase)
+		s.SkippedPhases = appendUnique(s.SkippedPhases, phase)
+		s.CurrentPhase = next
+		s.CurrentPhaseStatus = "pending"
+		return nil
+	})
 }
 
 // RevisionBump increments the design or task revision counter,
 // equivalent to _do_revision_bump.
 func (m *StateManager) RevisionBump(workspace, revType string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
 	if !containsRevType(revType) {
 		return fmt.Errorf("RevisionBump: unknown revision type %q (expected: %s)",
 			revType, strings.Join(ValidRevTypes, ", "))
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
-
-	ts := nowISO()
-	switch revType {
-	case "design":
-		s.Revisions.DesignRevisions++
-	case "tasks":
-		s.Revisions.TaskRevisions++
-	}
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		switch revType {
+		case "design":
+			s.Revisions.DesignRevisions++
+		case "tasks":
+			s.Revisions.TaskRevisions++
+		}
+		return nil
+	})
 }
 
 // InlineRevisionBump increments the design or task inline revision counter,
 // equivalent to _do_inline_revision_bump.
 func (m *StateManager) InlineRevisionBump(workspace, revType string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
 	if !containsRevType(revType) {
 		return fmt.Errorf("InlineRevisionBump: unknown revision type %q (expected: %s)",
 			revType, strings.Join(ValidRevTypes, ", "))
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
-
-	ts := nowISO()
-	switch revType {
-	case "design":
-		s.Revisions.DesignInlineRevisions++
-	case "tasks":
-		s.Revisions.TaskInlineRevisions++
-	}
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		switch revType {
+		case "design":
+			s.Revisions.DesignInlineRevisions++
+		case "tasks":
+			s.Revisions.TaskInlineRevisions++
+		}
+		return nil
+	})
 }
 
 // SetBranch sets the branch field, equivalent to _do_set_branch.
 func (m *StateManager) SetBranch(workspace, branch string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	ts := nowISO()
-	s.Branch = &branch
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.Branch = &branch
+		return nil
+	})
 }
 
 // SetTaskType sets the taskType field, equivalent to _do_set_task_type.
 func (m *StateManager) SetTaskType(workspace, taskType string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	ts := nowISO()
-	s.TaskType = &taskType
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.TaskType = &taskType
+		return nil
+	})
 }
 
 // SetEffort validates and sets the effort field, equivalent to _do_set_effort.
 // Returns error for values outside ValidEfforts.
 func (m *StateManager) SetEffort(workspace, effort string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
 	if !containsEffort(effort) {
 		return fmt.Errorf("SetEffort: invalid effort %q (expected: %s)",
 			effort, strings.Join(ValidEfforts, ", "))
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
-
-	ts := nowISO()
-	s.Effort = &effort
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.Effort = &effort
+		return nil
+	})
 }
 
 // SetFlowTemplate validates and sets the flowTemplate field,
 // equivalent to _do_set_flow_template.
 func (m *StateManager) SetFlowTemplate(workspace, flowTemplate string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
 	if !containsTemplate(flowTemplate) {
 		return fmt.Errorf("SetFlowTemplate: invalid flowTemplate %q (expected: %s)",
 			flowTemplate, strings.Join(ValidTemplates, ", "))
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
-
-	ts := nowISO()
-	s.FlowTemplate = &flowTemplate
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.FlowTemplate = &flowTemplate
+		return nil
+	})
 }
 
 // SetAutoApprove sets autoApprove = true, equivalent to _do_set_auto_approve.
 func (m *StateManager) SetAutoApprove(workspace string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	ts := nowISO()
-	s.AutoApprove = true
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.AutoApprove = true
+		return nil
+	})
 }
 
 // SetSkipPr sets skipPr = true, equivalent to _do_set_skip_pr.
 func (m *StateManager) SetSkipPr(workspace string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	ts := nowISO()
-	s.SkipPr = true
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.SkipPr = true
+		return nil
+	})
 }
 
 // SetDebug sets debug = true, equivalent to _do_set_debug.
 func (m *StateManager) SetDebug(workspace string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	ts := nowISO()
-	s.Debug = true
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.Debug = true
+		return nil
+	})
 }
 
 // SetUseCurrentBranch sets useCurrentBranch = true and branch = branch,
 // equivalent to _do_set_use_current_branch.
 func (m *StateManager) SetUseCurrentBranch(workspace, branch string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	ts := nowISO()
-	s.UseCurrentBranch = true
-	s.Branch = &branch
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.UseCurrentBranch = true
+		s.Branch = &branch
+		return nil
+	})
 }
 
 // SetRevisionPending sets checkpointRevisionPending[checkpoint] = true.
 // Only "checkpoint-a" and "checkpoint-b" are valid checkpoint values.
 func (m *StateManager) SetRevisionPending(workspace, checkpoint string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
-	return updateRevisionPending(workspace, checkpoint, true)
+	return m.Update(func(s *State) error {
+		return applyRevisionPending(s, checkpoint, true)
+	})
 }
 
 // ClearRevisionPending sets checkpointRevisionPending[checkpoint] = false.
 // Only "checkpoint-a" and "checkpoint-b" are valid checkpoint values.
 func (m *StateManager) ClearRevisionPending(workspace, checkpoint string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
 
-	return updateRevisionPending(workspace, checkpoint, false)
+	return m.Update(func(s *State) error {
+		return applyRevisionPending(s, checkpoint, false)
+	})
 }
 
-// updateRevisionPending is the shared body of SetRevisionPending and
-// ClearRevisionPending.  The caller must hold mu.Lock().
-func updateRevisionPending(workspace, checkpoint string, value bool) error {
+// applyRevisionPending is the shared body of SetRevisionPending and
+// ClearRevisionPending. It mutates s directly, relying on the caller's
+// Update closure to handle persistence. The body contains no calls to
+// readState or writeState.
+func applyRevisionPending(s *State, checkpoint string, value bool) error {
 	if checkpoint != "checkpoint-a" && checkpoint != "checkpoint-b" {
 		return fmt.Errorf("invalid checkpoint %q (expected: checkpoint-a, checkpoint-b)", checkpoint)
 	}
 
-	s, err := readState(workspace)
-	if err != nil {
-		return err
-	}
-
-	ts := nowISO()
 	if s.CheckpointRevisionPending == nil {
 		s.CheckpointRevisionPending = map[string]bool{}
 	}
 	s.CheckpointRevisionPending[checkpoint] = value
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return nil
 }
 
 // TaskInit stores all supplied tasks and writes state.json,
 // equivalent to _do_task_init.
 func (m *StateManager) TaskInit(workspace string, tasks map[string]Task) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	ts := nowISO()
-	s.Tasks = tasks
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		s.Tasks = tasks
+		return nil
+	})
 }
 
 // TaskUpdate modifies a single field within the named task entry,
 // equivalent to _do_task_update.
 func (m *StateManager) TaskUpdate(workspace, taskNum, field, value string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	task, ok := s.Tasks[taskNum]
-	if !ok {
-		return fmt.Errorf("TaskUpdate: task %q not found", taskNum)
-	}
-
-	ts := nowISO()
-	switch field {
-	case "implStatus":
-		task.ImplStatus = value
-	case "reviewStatus":
-		task.ReviewStatus = value
-	case "executionMode":
-		task.ExecutionMode = value
-	case "title":
-		task.Title = value
-	case "implRetries":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("TaskUpdate: implRetries value %q is not an integer: %w", value, err)
+	return m.Update(func(s *State) error {
+		task, ok := s.Tasks[taskNum]
+		if !ok {
+			return fmt.Errorf("TaskUpdate: task %q not found", taskNum)
 		}
-		task.ImplRetries = n
-	case "reviewRetries":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("TaskUpdate: reviewRetries value %q is not an integer: %w", value, err)
+
+		switch field {
+		case "implStatus":
+			task.ImplStatus = value
+		case "reviewStatus":
+			task.ReviewStatus = value
+		case "executionMode":
+			task.ExecutionMode = value
+		case "title":
+			task.Title = value
+		case "implRetries":
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("TaskUpdate: implRetries value %q is not an integer: %w", value, err)
+			}
+			task.ImplRetries = n
+		case "reviewRetries":
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("TaskUpdate: reviewRetries value %q is not an integer: %w", value, err)
+			}
+			task.ReviewRetries = n
+		default:
+			return fmt.Errorf("TaskUpdate: unknown field %q", field)
 		}
-		task.ReviewRetries = n
-	default:
-		return fmt.Errorf("TaskUpdate: unknown field %q", field)
-	}
 
-	s.Tasks[taskNum] = task
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+		s.Tasks[taskNum] = task
+		return nil
+	})
 }
 
 // PhaseLog appends a metrics entry to the phaseLog array,
 // equivalent to _do_phase_log.
 func (m *StateManager) PhaseLog(workspace, phase string, tokens, durationMs int, model string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	s, err := readState(workspace)
-	if err != nil {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	ts := nowISO()
-	entry := PhaseLogEntry{
-		Phase:      phase,
-		Tokens:     tokens,
-		DurationMs: durationMs,
-		Model:      model,
-		Timestamp:  ts,
-	}
-	s.PhaseLog = append(s.PhaseLog, entry)
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return m.Update(func(s *State) error {
+		ts := nowISO()
+		entry := PhaseLogEntry{
+			Phase:      phase,
+			Tokens:     tokens,
+			DurationMs: durationMs,
+			Model:      model,
+			Timestamp:  ts,
+		}
+		s.PhaseLog = append(s.PhaseLog, entry)
+		return nil
+	})
 }
 
 // PhaseStatsResult is the structured return value for PhaseStats.
@@ -788,10 +859,12 @@ type PhaseStatsResult struct {
 // PhaseStats aggregates phaseLog metrics, equivalent to cmd_phase_stats.
 // It is read-only.
 func (m *StateManager) PhaseStats(workspace string) (*PhaseStatsResult, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return nil, err
+	}
 
-	s, err := readState(workspace)
+	s, err := m.GetState()
 	if err != nil {
 		return nil, err
 	}
@@ -843,10 +916,12 @@ type TaskRetryInfo struct {
 // ResumeInfo returns a summary of state for the orchestrator,
 // equivalent to cmd_resume_info.  It is read-only.
 func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return nil, err
+	}
 
-	s, err := readState(workspace)
+	s, err := m.GetState()
 	if err != nil {
 		return nil, err
 	}
@@ -921,7 +996,12 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 
 // RefreshIndex executes build-specs-index.sh for the workspace,
 // equivalent to cmd_refresh_index.  Implementation deferred to tools package.
-func (m *StateManager) RefreshIndex(workspace string) error { //nolint:revive // m is intentionally unused; this is a documented stub
+func (m *StateManager) RefreshIndex(workspace string) error {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
+
 	// Delegated to tools.RefreshIndexHandler via os/exec.
 	// Not implemented here to keep the state package dependency-free of os/exec.
 	return errors.New("RefreshIndex: not implemented in state package; use tools.RefreshIndexHandler")
