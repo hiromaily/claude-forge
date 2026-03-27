@@ -1,0 +1,247 @@
+{
+  "version": 1,
+  "specName": "state-schema-manager",
+  "workspace": ".specs/20260327-state-schema-manager",
+  "branch": "feature/state-schema-manager",
+  "taskType": "feature",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "phase-final-summary",
+    "phase-final-verification",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 1,
+    "taskRevisions": 2,
+    "designInlineRevisions": 3,
+    "taskInlineRevisions": 1
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Create schema.go with type aliases",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Create migration.go and migration_test.go",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Refactor StateManager struct and add core cache methods",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Refactor all 21 mutating methods to use Update",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Update golden file and version assertions to v2",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "Add new manager_test.go test functions",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 57004,
+      "duration_ms": 129528,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T09:50:48Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 85510,
+      "duration_ms": 184179,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T09:55:24Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 38621,
+      "duration_ms": 118488,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T09:58:51Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 32180,
+      "duration_ms": 66381,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:00:26Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 37445,
+      "duration_ms": 88215,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:03:31Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 40640,
+      "duration_ms": 137260,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:07:51Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 37324,
+      "duration_ms": 57225,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:09:04Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 35986,
+      "duration_ms": 74479,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:11:14Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 40209,
+      "duration_ms": 78684,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:17:27Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 35704,
+      "duration_ms": 60968,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:25:30Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 47814,
+      "duration_ms": 117266,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:28:52Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 49747,
+      "duration_ms": 106920,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:35:52Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 32997,
+      "duration_ms": 70811,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:37:35Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 43758,
+      "duration_ms": 100203,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:39:27Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 35153,
+      "duration_ms": 84625,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:41:10Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:42:07Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 34801,
+      "duration_ms": 66832,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:43:29Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 36453,
+      "duration_ms": 83244,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:45:42Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 38205,
+      "duration_ms": 142114,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:49:53Z"
+    },
+    {
+      "phase": "task-2-impl",
+      "tokens": 32810,
+      "duration_ms": 77355,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:49:53Z"
+    },
+    {
+      "phase": "task-3-impl",
+      "tokens": 89571,
+      "duration_ms": 310028,
+      "model": "sonnet",
+      "timestamp": "2026-03-27T10:55:28Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-27T09:47:48Z",
+    "lastUpdated": "2026-03-27T11:27:11Z",
+    "phaseStarted": null
+  },
+  "error": null
+}
