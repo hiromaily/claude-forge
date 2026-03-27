@@ -245,20 +245,24 @@ func ExtractImports(ctx context.Context, src []byte, lang Language, filePath str
 				}
 				cmdName := string(src[nameNode.StartByte():nameNode.EndByte()])
 				if cmdName == "source" || cmdName == "." {
-					// First argument is the sourced file
+					// First argument is the sourced file.
 					argNode := node.ChildByFieldName("argument")
 					if argNode == nil {
-						// Try named children after name
+						// Fallback: try named children after the command name.
 						for i := 0; i < int(node.NamedChildCount()); i++ {
 							child := node.NamedChild(i)
 							if child != nameNode {
-								raw := string(src[child.StartByte():child.EndByte()])
-								imports = append(imports, raw)
+								argNode = child
 								break
 							}
 						}
-					} else {
+					}
+					if argNode != nil {
 						raw := string(src[argNode.StartByte():argNode.EndByte()])
+						// Strip surrounding quotes if present (supports 'path' and "path").
+						if len(raw) >= 2 && (raw[0] == '"' || raw[0] == '\'') && raw[0] == raw[len(raw)-1] {
+							raw = raw[1 : len(raw)-1]
+						}
 						imports = append(imports, raw)
 					}
 				}

@@ -7,19 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/hiromaily/claude-forge/mcp-server/ast"
 )
-
-// impactScopeResult is a partial unmarshal of the impact_scope JSON response,
-// used for assertion purposes in handler tests.
-type impactScopeResult struct {
-	TargetFile    string            `json:"target_file"`
-	Symbol        string            `json:"symbol"`
-	Root          string            `json:"root"`
-	Lang          string            `json:"lang"`
-	AffectedFiles []ast.ImpactEntry `json:"affected_files"`
-}
 
 // TestAstImpactScopeFromRoot_GoCallerConfirmed verifies that a Go caller which
 // imports the target package AND calls the target symbol appears in affected_files
@@ -59,9 +47,9 @@ func run() {
 	}
 
 	text := textContent(result)
-	var resp impactScopeResult
+	var resp impactScopeResponse
 	if err := json.Unmarshal([]byte(text), &resp); err != nil {
-		t.Fatalf("unmarshal impactScopeResult: %v (text: %s)", err, text)
+		t.Fatalf("unmarshal impactScopeResponse: %v (text: %s)", err, text)
 	}
 
 	if len(resp.AffectedFiles) == 0 {
@@ -123,9 +111,9 @@ func run() {
 	}
 
 	text := textContent(result)
-	var resp impactScopeResult
+	var resp impactScopeResponse
 	if err := json.Unmarshal([]byte(text), &resp); err != nil {
-		t.Fatalf("unmarshal impactScopeResult: %v (text: %s)", err, text)
+		t.Fatalf("unmarshal impactScopeResponse: %v (text: %s)", err, text)
 	}
 
 	for _, entry := range resp.AffectedFiles {
@@ -162,9 +150,9 @@ func TargetSymbol() {}
 	}
 
 	text := textContent(result)
-	var resp impactScopeResult
+	var resp impactScopeResponse
 	if err := json.Unmarshal([]byte(text), &resp); err != nil {
-		t.Fatalf("unmarshal impactScopeResult: %v (text: %s)", err, text)
+		t.Fatalf("unmarshal impactScopeResponse: %v (text: %s)", err, text)
 	}
 
 	if resp.AffectedFiles == nil {
@@ -233,9 +221,9 @@ TargetSymbol();
 	}
 
 	text := textContent(result)
-	var resp impactScopeResult
+	var resp impactScopeResponse
 	if err := json.Unmarshal([]byte(text), &resp); err != nil {
-		t.Fatalf("unmarshal impactScopeResult: %v (text: %s)", err, text)
+		t.Fatalf("unmarshal impactScopeResponse: %v (text: %s)", err, text)
 	}
 
 	if len(resp.AffectedFiles) == 0 {
