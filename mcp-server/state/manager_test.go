@@ -49,8 +49,8 @@ func TestInit_CreatesStateJSON(t *testing.T) {
 
 	s := loadState(t, dir)
 
-	if s.Version != 1 {
-		t.Errorf("version: got %d, want 1", s.Version)
+	if s.Version != 2 {
+		t.Errorf("version: got %d, want 2", s.Version)
 	}
 	if s.SpecName != "test-spec" {
 		t.Errorf("specName: got %q, want %q", s.SpecName, "test-spec")
@@ -138,7 +138,7 @@ func TestGet_TopLevelFields(t *testing.T) {
 		{"skipPr", "false"},
 		{"debug", "false"},
 		{"useCurrentBranch", "false"},
-		{"version", "1"},
+		{"version", "2"},
 	}
 	for _, tc := range cases {
 		got, err := m.Get(dir, tc.field)

@@ -20,7 +20,9 @@ import (
 // state-manager.sh commands.  All mutating methods acquire mu.Lock() for the
 // full read-modify-write cycle; read-only methods use mu.RLock().
 type StateManager struct {
-	mu sync.RWMutex
+	mu        sync.RWMutex
+	state     *State // in-memory cache; nil until LoadFromFile or Init
+	workspace string // bound workspace path; empty until first bind
 }
 
 // NewStateManager constructs a StateManager ready for use.
@@ -35,7 +37,7 @@ func statePath(workspace string) string {
 }
 
 func nowISO() string {
-	return time.Now().UTC().Format(time.RFC3339)
+	return time.Now().UTC().Format(time.RFC3339Nano)
 }
 
 // readState reads and unmarshals state.json from workspace.
@@ -46,6 +48,7 @@ func readState(workspace string) (*State, error) {
 
 // ReadState reads and unmarshals state.json from workspace.
 // Exported so that tools package can reuse it without duplicating read logic.
+// TODO: replace ReadState calls with sm.GetState() once tools reduction is complete.
 func ReadState(workspace string) (*State, error) {
 	path := statePath(workspace)
 	data, err := os.ReadFile(path)
@@ -136,13 +139,15 @@ var allowedGetFields = map[string]bool{
 
 // Init creates a new state.json in workspace following the exact schema
 // produced by cmd_init in state-manager.sh.
+// Calling Init a second time is intentional (fresh-start operation); it replaces
+// any prior binding of sm.workspace and sm.state.
 func (m *StateManager) Init(workspace, specName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	ts := nowISO()
 	s := &State{
-		Version:            1,
+		Version:            2,
 		SpecName:           specName,
 		Workspace:          workspace,
 		Branch:             nil,
@@ -176,7 +181,122 @@ func (m *StateManager) Init(workspace, specName string) error {
 		},
 		Error: nil,
 	}
-	return writeState(workspace, s)
+	if err := writeState(workspace, s); err != nil {
+		return err
+	}
+	// Store in-memory cache and bind workspace — both under the already-held lock.
+	m.workspace = workspace
+	m.state = s
+	return nil
+}
+
+// LoadFromFile reads workspace/state.json, runs Migrate, and stores the result
+// as the in-memory cache. Sets sm.workspace.
+// If already bound to a different workspace, returns a workspace-mismatch error.
+// If bound to the same workspace, re-reads from disk (refresh semantics).
+func (m *StateManager) LoadFromFile(workspace string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.workspace != "" && m.workspace != workspace {
+		return fmt.Errorf("workspace mismatch: got %q, bound to %q", workspace, m.workspace)
+	}
+
+	s, err := readState(workspace)
+	if err != nil {
+		return err
+	}
+	Migrate(s)
+	m.workspace = workspace
+	m.state = s
+	return nil
+}
+
+// Update applies fn to the in-memory state under mu.Lock().
+// If sm.workspace is empty, returns "state not loaded" error.
+// If sm.state is nil but sm.workspace is set, lazy-loads from disk before calling fn.
+// The lazy-load disk read executes under the already-held mu.Lock(); no nested
+// lock acquisition occurs inside the lazy-load path.
+// After fn returns nil, stamps Timestamps.LastUpdated using time.RFC3339Nano
+// precision, then calls persistToFile. If persistToFile fails, the error is returned
+// but sm.state is NOT rolled back (Timestamps.LastUpdated remains stamped in memory).
+// fn must not call any StateManager method (would deadlock).
+func (m *StateManager) Update(fn func(*State) error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.workspace == "" {
+		return errors.New("state not loaded: call Init or LoadFromFile first")
+	}
+
+	// Lazy-load if cache is nil but workspace is bound.
+	if m.state == nil {
+		s, err := readState(m.workspace)
+		if err != nil {
+			return err
+		}
+		Migrate(s)
+		m.state = s
+	}
+
+	if err := fn(m.state); err != nil {
+		return err
+	}
+
+	m.state.Timestamps.LastUpdated = nowISO()
+	return m.persistToFile()
+}
+
+// GetState returns a deep copy of the current in-memory state under RLock.
+// If sm.workspace is empty, returns "state not loaded" error.
+// If sm.state is nil but sm.workspace is set, lazy-loads from disk.
+// Takes no workspace argument — routing is by sm.workspace.
+func (m *StateManager) GetState() (*State, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.workspace == "" {
+		return nil, errors.New("state not loaded: call Init or LoadFromFile first")
+	}
+
+	// Lazy-load if cache is nil but workspace is bound.
+	if m.state == nil {
+		s, err := readState(m.workspace)
+		if err != nil {
+			return nil, err
+		}
+		Migrate(s)
+		m.state = s
+	}
+
+	return deepCopyState(m.state), nil
+}
+
+// persistToFile marshals sm.state and writes atomically to
+// sm.workspace/state.json. Caller must hold mu.Lock().
+func (m *StateManager) persistToFile() error {
+	return writeState(m.workspace, m.state)
+}
+
+// deepCopyState returns a deep copy of s such that mutating the returned struct
+// does not affect s. Pointer fields, slices, and maps are all duplicated.
+func deepCopyState(s *State) *State {
+	if s == nil {
+		return nil
+	}
+	// Marshal and unmarshal is the simplest correct deep-copy for this struct.
+	data, err := json.Marshal(s)
+	if err != nil {
+		// Marshal of our own struct should never fail; return a zero-value copy.
+		cp := *s
+		return &cp
+	}
+	var cp State
+	if err := json.Unmarshal(data, &cp); err != nil {
+		fallback := *s
+		return &fallback
+	}
+	return &cp
 }
 
 // Get returns the string representation of field from state.json.
@@ -653,7 +773,18 @@ func (m *StateManager) SetRevisionPending(workspace, checkpoint string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return updateRevisionPending(workspace, checkpoint, true)
+	s, err := readState(workspace)
+	if err != nil {
+		return err
+	}
+
+	ts := nowISO()
+	if err := applyRevisionPending(s, checkpoint, true); err != nil {
+		return err
+	}
+	s.Timestamps.LastUpdated = ts
+
+	return writeState(workspace, s)
 }
 
 // ClearRevisionPending sets checkpointRevisionPending[checkpoint] = false.
@@ -662,29 +793,34 @@ func (m *StateManager) ClearRevisionPending(workspace, checkpoint string) error 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return updateRevisionPending(workspace, checkpoint, false)
-}
-
-// updateRevisionPending is the shared body of SetRevisionPending and
-// ClearRevisionPending.  The caller must hold mu.Lock().
-func updateRevisionPending(workspace, checkpoint string, value bool) error {
-	if checkpoint != "checkpoint-a" && checkpoint != "checkpoint-b" {
-		return fmt.Errorf("invalid checkpoint %q (expected: checkpoint-a, checkpoint-b)", checkpoint)
-	}
-
 	s, err := readState(workspace)
 	if err != nil {
 		return err
 	}
 
 	ts := nowISO()
+	if err := applyRevisionPending(s, checkpoint, false); err != nil {
+		return err
+	}
+	s.Timestamps.LastUpdated = ts
+
+	return writeState(workspace, s)
+}
+
+// applyRevisionPending is the shared body of SetRevisionPending and
+// ClearRevisionPending. It mutates s directly, relying on the caller's
+// Update closure to handle persistence. The body contains no calls to
+// readState or writeState.
+func applyRevisionPending(s *State, checkpoint string, value bool) error {
+	if checkpoint != "checkpoint-a" && checkpoint != "checkpoint-b" {
+		return fmt.Errorf("invalid checkpoint %q (expected: checkpoint-a, checkpoint-b)", checkpoint)
+	}
+
 	if s.CheckpointRevisionPending == nil {
 		s.CheckpointRevisionPending = map[string]bool{}
 	}
 	s.CheckpointRevisionPending[checkpoint] = value
-	s.Timestamps.LastUpdated = ts
-
-	return writeState(workspace, s)
+	return nil
 }
 
 // TaskInit stores all supplied tasks and writes state.json,
