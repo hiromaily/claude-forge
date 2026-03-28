@@ -1,5 +1,5 @@
 // Package main is the entry point for the forge-state MCP server.
-// It wires together the StateManager, registers all 36 MCP tool handlers,
+// It wires together the StateManager, registers all 38 MCP tool handlers,
 // and starts the stdio transport.
 package main
 
@@ -10,14 +10,41 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/hiromaily/claude-forge/mcp-server/tools"
 )
+
+// resolveAgentDir resolves the agents/ directory path using a 3-stage strategy:
+//  1. FORGE_AGENTS_PATH environment variable (required in production)
+//  2. Path derived from runtime.Caller(0) — only used as a dev fallback; skipped
+//     if the derived path does not exist on disk
+//  3. The literal string "agents" as a last-resort relative fallback
+//
+// Production deployments must set FORGE_AGENTS_PATH to the absolute path of the
+// agents/ directory. The runtime.Caller(0) fallback embeds the compile-time source
+// path into the binary, which is unreliable in packaged or cross-compiled builds.
+func resolveAgentDir() string {
+	if dir := os.Getenv("FORGE_AGENTS_PATH"); dir != "" {
+		return dir
+	}
+	// Dev fallback: derive from the source file location at compile time.
+	_, filename, _, ok := runtime.Caller(0)
+	if ok {
+		derived := filepath.Join(filepath.Dir(filename), "..", "agents")
+		if _, err := os.Stat(derived); err == nil {
+			return derived
+		}
+	}
+	return "agents"
+}
 
 // startSSEServer attempts to bind an HTTP server for the SSE /events endpoint on
 // the given address. It returns the started *http.Server on success, or nil when
@@ -46,7 +73,10 @@ func main() {
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier(os.Getenv("FORGE_SLACK_WEBHOOK_URL"))
 	eventsPort := os.Getenv("FORGE_EVENTS_PORT")
-	tools.RegisterAll(srv, sm, bus, slack, eventsPort)
+	agentDir := resolveAgentDir()
+	specsDir := os.Getenv("FORGE_SPECS_DIR")
+	eng := orchestrator.NewEngine(agentDir, specsDir)
+	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir)
 
 	// Start the SSE HTTP server if FORGE_EVENTS_PORT is set.
 	// A failed bind is non-fatal: the error is logged and execution continues
