@@ -609,6 +609,69 @@ func (m *StateManager) InlineRevisionBump(workspace, revType string) error {
 	})
 }
 
+// PipelineConfig holds the initial pipeline configuration values applied after Init.
+// Using Configure instead of individual setters reduces disk I/O to a single write.
+type PipelineConfig struct {
+	TaskType         string
+	Effort           string
+	FlowTemplate     string
+	AutoApprove      bool
+	SkipPR           bool
+	Debug            bool
+	UseCurrentBranch bool
+	Branch           string // only used when UseCurrentBranch is true
+	SkippedPhases    []string
+}
+
+// Configure applies the initial pipeline configuration in a single write to state.json,
+// replacing separate SetTaskType/SetEffort/SetFlowTemplate/SkipPhase calls that would
+// each trigger their own read-modify-write disk cycle.
+func (m *StateManager) Configure(workspace string, cfg PipelineConfig) error {
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
+
+	// Validate before writing.
+	if !containsEffort(cfg.Effort) {
+		return fmt.Errorf("Configure: invalid effort %q (expected: %s)",
+			cfg.Effort, strings.Join(ValidEfforts, ", "))
+	}
+	if !containsTemplate(cfg.FlowTemplate) {
+		return fmt.Errorf("Configure: invalid flowTemplate %q (expected: %s)",
+			cfg.FlowTemplate, strings.Join(ValidTemplates, ", "))
+	}
+	for _, phase := range cfg.SkippedPhases {
+		if !containsPhase(phase) {
+			return fmt.Errorf("Configure: invalid phase %q", phase)
+		}
+	}
+
+	return m.Update(func(s *State) error {
+		s.TaskType = &cfg.TaskType
+		s.Effort = &cfg.Effort
+		s.FlowTemplate = &cfg.FlowTemplate
+		if cfg.AutoApprove {
+			s.AutoApprove = true
+		}
+		if cfg.SkipPR {
+			s.SkipPr = true
+		}
+		if cfg.Debug {
+			s.Debug = true
+		}
+		if cfg.UseCurrentBranch {
+			s.UseCurrentBranch = true
+			s.Branch = &cfg.Branch
+		}
+		for _, phase := range cfg.SkippedPhases {
+			s.SkippedPhases = appendUnique(s.SkippedPhases, phase)
+			s.CurrentPhase = nextPhase(phase)
+			s.CurrentPhaseStatus = "pending"
+		}
+		return nil
+	})
+}
+
 // SetBranch sets the branch field, equivalent to _do_set_branch.
 func (m *StateManager) SetBranch(workspace, branch string) error {
 	// Workspace entry-point guard.

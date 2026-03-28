@@ -231,10 +231,9 @@ func deriveFlowDecisions(taskType, effort string, autoFlag bool) (flowTemplate s
 }
 
 // initWorkspace executes the 8-step I/O sequence for the second call (steps 7a–7l).
-// It creates the workspace directory, initialises state, applies all setters, skips phases,
-// and writes request.md. Returns the request.md content on success.
-//
-//nolint:gocyclo // complexity is inherent in the 8-step I/O sequence with flag branches
+// It creates the workspace directory, initialises state, applies all configuration in
+// a single write via sm.Configure, and writes request.md.
+// Returns the request.md content on success.
 func initWorkspace(
 	sm *state.StateManager,
 	workspace, specName string,
@@ -260,54 +259,22 @@ func initWorkspace(
 		return "", fmt.Errorf("sm.Init: %w", err)
 	}
 
-	// Step 7d: SetTaskType.
-	if err := sm.SetTaskType(workspace, uc.TaskType); err != nil {
-		return "", fmt.Errorf("SetTaskType: %w", err)
+	// Steps 7d–7k: Apply all configuration in a single write to state.json.
+	cfg := state.PipelineConfig{
+		TaskType:      uc.TaskType,
+		Effort:        uc.Effort,
+		FlowTemplate:  flowTemplate,
+		AutoApprove:   flags.Auto,
+		SkipPR:        flags.SkipPR,
+		Debug:         flags.Debug,
+		SkippedPhases: skippedPhases,
 	}
-
-	// Step 7e: SetEffort.
-	if err := sm.SetEffort(workspace, uc.Effort); err != nil {
-		return "", fmt.Errorf("SetEffort: %w", err)
-	}
-
-	// Step 7f: SetFlowTemplate.
-	if err := sm.SetFlowTemplate(workspace, flowTemplate); err != nil {
-		return "", fmt.Errorf("SetFlowTemplate: %w", err)
-	}
-
-	// Step 7g: auto flag.
-	if flags.Auto {
-		if err := sm.SetAutoApprove(workspace); err != nil {
-			return "", fmt.Errorf("SetAutoApprove: %w", err)
-		}
-	}
-
-	// Step 7h: skip_pr flag.
-	if flags.SkipPR {
-		if err := sm.SetSkipPr(workspace); err != nil {
-			return "", fmt.Errorf("SetSkipPr: %w", err)
-		}
-	}
-
-	// Step 7i: debug flag.
-	if flags.Debug {
-		if err := sm.SetDebug(workspace); err != nil {
-			return "", fmt.Errorf("SetDebug: %w", err)
-		}
-	}
-
-	// Step 7j: current_branch.
 	if flags.CurrentBranch != "" && flags.CurrentBranch != "main" && flags.CurrentBranch != "master" {
-		if err := sm.SetUseCurrentBranch(workspace, flags.CurrentBranch); err != nil {
-			return "", fmt.Errorf("SetUseCurrentBranch: %w", err)
-		}
+		cfg.UseCurrentBranch = true
+		cfg.Branch = flags.CurrentBranch
 	}
-
-	// Step 7k: skip phases in order.
-	for _, phase := range skippedPhases {
-		if err := sm.SkipPhase(workspace, phase); err != nil {
-			return "", fmt.Errorf("SkipPhase %q: %w", phase, err)
-		}
+	if err := sm.Configure(workspace, cfg); err != nil {
+		return "", fmt.Errorf("Configure: %w", err)
 	}
 
 	// Step 7l: Write request.md.
