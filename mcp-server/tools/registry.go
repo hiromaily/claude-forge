@@ -1,4 +1,4 @@
-// Package tools registers all 34 MCP tool handlers with the MCP server.
+// Package tools registers all 36 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -10,7 +10,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// RegisterAll registers all 34 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 36 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
@@ -328,5 +328,32 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier, e.g. phase-3, phase-3b, phase-4, phase-4b, phase-6, phase-7")),
 		),
 		ValidateArtifactHandler(),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("pipeline_init",
+			mcp.WithDescription("Parse pipeline arguments and detect resume/new path, source type, flags, and workspace path. "+
+				"Pure detection — no state side effects. On resume: returns {resume:true, workspace, instruction}. "+
+				"On new pipeline: returns workspace, spec_name, source_type, flags (including current_branch), fetch_needed, errors."),
+			mcp.WithString("arguments", mcp.Required(), mcp.Description("Raw $ARGUMENTS string passed to the forge skill")),
+			mcp.WithString("current_branch", mcp.Description("Output of git branch --show-current")),
+		),
+		PipelineInitHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("pipeline_init_with_context",
+			mcp.WithDescription("Complete pipeline initialization using fetched external context. "+
+				"First call (user_confirmation absent): runs decisions 6-13 and returns needs_user_confirmation. "+
+				"Second call (user_confirmation present): finalizes workspace, writes state.json and request.md."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Workspace path from pipeline_init result")),
+			mcp.WithObject("external_context", mcp.Description("GitHub or Jira context fields")),
+			mcp.WithObject("flags", mcp.Description("Parsed flags from pipeline_init: auto, skip_pr, debug, type_override, effort_override, current_branch")),
+			// mcp.WithObject is the correct mechanism for complex nested parameters.
+			// It allows the orchestrator to pass structured JSON objects rather than
+			// encoding them as strings. See existing usage in task_init.go for reference.
+			mcp.WithObject("user_confirmation", mcp.Description("Confirmed task_type and effort. Absent on first call; present on second call.")),
+		),
+		PipelineInitWithContextHandler(sm),
 	)
 }
