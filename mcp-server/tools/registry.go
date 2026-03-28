@@ -1,4 +1,4 @@
-// Package tools registers all 38 MCP tool handlers with the MCP server.
+// Package tools registers all 39 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -7,18 +7,24 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// RegisterAll registers all 38 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 39 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
 // eng is the pipeline orchestration engine used by pipeline_next_action.
 // agentDir is the resolved path to the agents/ directory for prompt enrichment.
+// histIdx is the pre-built history index used by history_search.
 // This is the single entry point called from main.go.
-func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier, eventsPort string, eng *orchestrator.Engine, agentDir string) {
+func RegisterAll(
+	srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus,
+	slack *events.SlackNotifier, eventsPort string, eng *orchestrator.Engine,
+	agentDir string, histIdx *history.HistoryIndex,
+) {
 	srv.AddTool(
 		mcp.NewTool("init",
 			mcp.WithDescription("Initialise a new pipeline workspace (state.json). Requires validated=true after validate-input.sh succeeds."),
@@ -379,5 +385,16 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 			mcp.WithString("model", mcp.Description("Model identifier, e.g. sonnet")),
 		),
 		PipelineReportResultHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("history_search",
+			mcp.WithDescription("Search past pipeline runs in the history index using BM25 scoring. "+
+				"Returns ranked results with metadata and design excerpts."),
+			mcp.WithString("query", mcp.Required(), mcp.Description("Search query string")),
+			mcp.WithNumber("limit", mcp.Description("Maximum number of results to return (default 3)")),
+			mcp.WithString("task_type_filter", mcp.Description("Filter results by task type, e.g. feature, bugfix")),
+		),
+		HistorySearchHandler(histIdx),
 	)
 }
