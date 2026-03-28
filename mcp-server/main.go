@@ -1,5 +1,5 @@
 // Package main is the entry point for the forge-state MCP server.
-// It wires together the StateManager, registers all 34 MCP tool handlers,
+// It wires together the StateManager, registers all 36 MCP tool handlers,
 // and starts the stdio transport.
 package main
 

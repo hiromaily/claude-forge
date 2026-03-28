@@ -2121,6 +2121,149 @@ func TestUnboundManager_AutoBindsOnFirstCall(t *testing.T) {
 	}
 }
 
+// ---------- Configure ----------
+
+func TestConfigure_AppliesAllFieldsInOneWrite(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "cfg-test"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	cfg := state.PipelineConfig{
+		TaskType:         "bugfix",
+		Effort:           "S",
+		FlowTemplate:     "standard",
+		AutoApprove:      true,
+		SkipPR:           true,
+		Debug:            true,
+		UseCurrentBranch: true,
+		Branch:           "feature/my-fix",
+		SkippedPhases:    []string{"phase-3b"},
+	}
+	if err := m.Configure(dir, cfg); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.TaskType == nil || *s.TaskType != "bugfix" {
+		t.Errorf("TaskType = %v, want %q", s.TaskType, "bugfix")
+	}
+	if s.Effort == nil || *s.Effort != "S" {
+		t.Errorf("Effort = %v, want %q", s.Effort, "S")
+	}
+	if s.FlowTemplate == nil || *s.FlowTemplate != "standard" {
+		t.Errorf("FlowTemplate = %v, want %q", s.FlowTemplate, "standard")
+	}
+	if !s.AutoApprove {
+		t.Error("AutoApprove = false, want true")
+	}
+	if !s.SkipPr {
+		t.Error("SkipPr = false, want true")
+	}
+	if !s.Debug {
+		t.Error("Debug = false, want true")
+	}
+	if !s.UseCurrentBranch {
+		t.Error("UseCurrentBranch = false, want true")
+	}
+	if s.Branch == nil || *s.Branch != "feature/my-fix" {
+		t.Errorf("Branch = %v, want %q", s.Branch, "feature/my-fix")
+	}
+	found := false
+	for _, p := range s.SkippedPhases {
+		if p == "phase-3b" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("SkippedPhases = %v, want to contain %q", s.SkippedPhases, "phase-3b")
+	}
+}
+
+func TestConfigure_InvalidEffort_ReturnsError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	err := m.Configure(dir, state.PipelineConfig{
+		TaskType:     "feature",
+		Effort:       "INVALID",
+		FlowTemplate: "standard",
+	})
+	if err == nil {
+		t.Fatal("Configure: want error for invalid effort, got nil")
+	}
+	if !strings.Contains(err.Error(), "INVALID") {
+		t.Errorf("error %q does not mention invalid value", err.Error())
+	}
+}
+
+func TestConfigure_InvalidFlowTemplate_ReturnsError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	err := m.Configure(dir, state.PipelineConfig{
+		TaskType:     "feature",
+		Effort:       "M",
+		FlowTemplate: "bad-template",
+	})
+	if err == nil {
+		t.Fatal("Configure: want error for invalid flowTemplate, got nil")
+	}
+	if !strings.Contains(err.Error(), "bad-template") {
+		t.Errorf("error %q does not mention invalid value", err.Error())
+	}
+}
+
+func TestConfigure_InvalidPhase_ReturnsError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	err := m.Configure(dir, state.PipelineConfig{
+		TaskType:      "feature",
+		Effort:        "M",
+		FlowTemplate:  "standard",
+		SkippedPhases: []string{"not-a-phase"},
+	})
+	if err == nil {
+		t.Fatal("Configure: want error for invalid phase, got nil")
+	}
+	if !strings.Contains(err.Error(), "not-a-phase") {
+		t.Errorf("error %q does not mention invalid value", err.Error())
+	}
+}
+
+func TestConfigure_SkippedPhasesAdvancesCurrentPhase(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if err := m.Configure(dir, state.PipelineConfig{
+		TaskType:      "feature",
+		Effort:        "M",
+		FlowTemplate:  "standard",
+		SkippedPhases: []string{"phase-3b"},
+	}); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+	s := loadState(t, dir)
+	if s.CurrentPhase != "checkpoint-a" {
+		t.Errorf("CurrentPhase = %q, want %q after skipping phase-3b", s.CurrentPhase, "checkpoint-a")
+	}
+}
+
 // ---------- helper ----------
 
 // containsAny returns true if s contains any of the given substrings.
