@@ -103,7 +103,7 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		specName := deriveSpecName(workspace)
 
 		// Build fetch_needed block.
-		fetchNeeded := makeFetchNeeded(sourceType, sourceID)
+		fetchNeeded := makeFetchNeeded(sourceType)
 
 		// source_url is only meaningful for URL-based source types; omit for text/workspace.
 		var sourceURL string
@@ -244,7 +244,7 @@ func deriveSpecName(workspace string) string {
 
 // makeFetchNeeded constructs the FetchNeeded block for the given source type.
 // Returns nil for text and workspace source types.
-func makeFetchNeeded(sourceType, _ string) *FetchNeeded {
+func makeFetchNeeded(sourceType string) *FetchNeeded {
 	switch sourceType {
 	case "github_issue":
 		return &FetchNeeded{

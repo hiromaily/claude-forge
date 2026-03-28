@@ -89,10 +89,16 @@ func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFu
 		args := req.GetArguments()
 
 		// Parse external_context object.
-		extCtx := parseExternalContext(args)
+		extCtx, err := parseExternalContext(args)
+		if err != nil {
+			return errorf("parse external_context: %v", err)
+		}
 
 		// Parse flags object.
-		flags := parseFlags(args)
+		flags, err := parseFlags(args)
+		if err != nil {
+			return errorf("parse flags: %v", err)
+		}
 
 		// Check if user_confirmation is present.
 		ucRaw, hasConfirmation := args["user_confirmation"]
@@ -140,7 +146,6 @@ func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFla
 
 // ---------- second call ----------
 
-//nolint:gocyclo // complexity is inherent in the 8-step I/O sequence with flag branches
 func handleSecondCall(
 	sm *state.StateManager,
 	workspace string,
@@ -159,97 +164,20 @@ func handleSecondCall(
 	}
 
 	// Steps 3–5: Re-derive flow template and skip phases; apply decision 12.
-	flowTemplate := orchestrator.DeriveFlowTemplate(uc.TaskType, uc.Effort)
-	skippedPhases := orchestrator.SkipsForCell(uc.TaskType, uc.Effort)
-	var warning string
-	if flowTemplate == orchestrator.TemplateFull && flags.Auto {
-		warning = fmt.Sprintf(
-			"flow_template %q conflicts with auto=true; downgrading to %q",
-			orchestrator.TemplateFull, orchestrator.TemplateStandard,
-		)
-		flowTemplate = orchestrator.TemplateStandard
-		skippedPhases = orchestrator.SkipsForTemplate(orchestrator.TemplateStandard)
-	}
+	flowTemplate, skippedPhases, warning := deriveFlowDecisions(uc.TaskType, uc.Effort, flags.Auto)
 
 	// Step 6: Derive specName.
 	specName := deriveSpecName(workspace)
 
-	// Step 7a: Create workspace directory.
-	if err := os.MkdirAll(workspace, 0o750); err != nil {
-		return errorf("MkdirAll %q: %v", workspace, err)
-	}
-
-	// Step 7b: Check state.json doesn't already exist.
-	stateFile := filepath.Join(workspace, "state.json")
-	if _, err := os.Stat(stateFile); err == nil {
-		return errorf("workspace %q already initialised: state.json exists", workspace)
-	}
-
-	// Step 7c: sm.Init.
-	if err := sm.Init(workspace, specName); err != nil {
-		return errorf("sm.Init: %v", err)
-	}
-
-	// Step 7d: SetTaskType.
-	if err := sm.SetTaskType(workspace, uc.TaskType); err != nil {
-		return errorf("SetTaskType: %v", err)
-	}
-
-	// Step 7e: SetEffort.
-	if err := sm.SetEffort(workspace, uc.Effort); err != nil {
-		return errorf("SetEffort: %v", err)
-	}
-
-	// Step 7f: SetFlowTemplate.
-	if err := sm.SetFlowTemplate(workspace, flowTemplate); err != nil {
-		return errorf("SetFlowTemplate: %v", err)
-	}
-
-	// Step 7g: auto flag.
-	if flags.Auto {
-		if err := sm.SetAutoApprove(workspace); err != nil {
-			return errorf("SetAutoApprove: %v", err)
-		}
-	}
-
-	// Step 7h: skip_pr flag.
-	if flags.SkipPR {
-		if err := sm.SetSkipPr(workspace); err != nil {
-			return errorf("SetSkipPr: %v", err)
-		}
-	}
-
-	// Step 7i: debug flag.
-	if flags.Debug {
-		if err := sm.SetDebug(workspace); err != nil {
-			return errorf("SetDebug: %v", err)
-		}
-	}
-
-	// Step 7j: current_branch.
-	if flags.CurrentBranch != "" && flags.CurrentBranch != "main" && flags.CurrentBranch != "master" {
-		if err := sm.SetUseCurrentBranch(workspace, flags.CurrentBranch); err != nil {
-			return errorf("SetUseCurrentBranch: %v", err)
-		}
-	}
-
-	// Step 7k: skip phases in order.
-	for _, phase := range skippedPhases {
-		if err := sm.SkipPhase(workspace, phase); err != nil {
-			return errorf("SkipPhase %q: %v", phase, err)
-		}
-	}
-
-	// Step 7l: Write request.md.
-	requestMD := buildRequestMD(extCtx, uc.TaskType)
-	reqPath := filepath.Join(workspace, "request.md")
-	if err := os.WriteFile(reqPath, []byte(requestMD), 0o600); err != nil {
-		return errorf("write request.md: %v", err)
+	// Steps 7a–7l: Create directory, initialise state, write request.md.
+	requestMD, err := initWorkspace(sm, workspace, specName, flags, uc, flowTemplate, skippedPhases, extCtx)
+	if err != nil {
+		return errorf("%v", err)
 	}
 
 	synthesizeStubs := orchestrator.ShouldSynthesizeStubs(flowTemplate)
 
-	result := PipelineInitWithContextResult{
+	return okJSON(PipelineInitWithContextResult{
 		Ready:            true,
 		Workspace:        workspace,
 		TaskType:         uc.TaskType,
@@ -259,8 +187,7 @@ func handleSecondCall(
 		SynthesizeStubs:  synthesizeStubs,
 		RequestMDContent: requestMD,
 		Warning:          warning,
-	}
-	return okJSON(result)
+	})
 }
 
 // ---------- decisions 6–13 ----------
@@ -280,14 +207,19 @@ func runDecisions(extCtx externalContext, flags pipelineFlags) (taskType, effort
 	// Decision 9: detect effort.
 	effort = orchestrator.DetectEffort(flags.EffortOverride, extCtx.JiraStoryPoints, combinedText)
 
-	// Decision 10: flow template.
+	// Decisions 10–12: flow template, skip sequence, auto conflict.
+	flowTemplate, skippedPhases, warning = deriveFlowDecisions(taskType, effort, flags.Auto)
+
+	// Decision 13: stub synthesis (reflected in flowTemplate; result conveyed in response).
+	return taskType, effort, flowTemplate, skippedPhases, warning
+}
+
+// deriveFlowDecisions derives flowTemplate, skippedPhases, and warning for decisions 10–12.
+// Decision 12: if flowTemplate is "full" and autoFlag=true, downgrade to "standard".
+func deriveFlowDecisions(taskType, effort string, autoFlag bool) (flowTemplate string, skippedPhases []string, warning string) {
 	flowTemplate = orchestrator.DeriveFlowTemplate(taskType, effort)
-
-	// Decision 11: skip sequence.
 	skippedPhases = orchestrator.SkipsForCell(taskType, effort)
-
-	// Decision 12: full + auto conflict.
-	if flowTemplate == orchestrator.TemplateFull && flags.Auto {
+	if flowTemplate == orchestrator.TemplateFull && autoFlag {
 		warning = fmt.Sprintf(
 			"flow_template %q conflicts with auto=true; downgrading to %q",
 			orchestrator.TemplateFull, orchestrator.TemplateStandard,
@@ -295,30 +227,116 @@ func runDecisions(extCtx externalContext, flags pipelineFlags) (taskType, effort
 		flowTemplate = orchestrator.TemplateStandard
 		skippedPhases = orchestrator.SkipsForTemplate(orchestrator.TemplateStandard)
 	}
+	return flowTemplate, skippedPhases, warning
+}
 
-	// Decision 13: stub synthesis (reflected in flowTemplate; result conveyed in response).
-	return taskType, effort, flowTemplate, skippedPhases, warning
+// initWorkspace executes the 8-step I/O sequence for the second call (steps 7a–7l).
+// It creates the workspace directory, initialises state, applies all setters, skips phases,
+// and writes request.md. Returns the request.md content on success.
+func initWorkspace(
+	sm *state.StateManager,
+	workspace, specName string,
+	flags pipelineFlags,
+	uc userConfirmation,
+	flowTemplate string,
+	skippedPhases []string,
+	extCtx externalContext,
+) (string, error) {
+	// Step 7a: Create workspace directory.
+	if err := os.MkdirAll(workspace, 0o750); err != nil {
+		return "", fmt.Errorf("MkdirAll %q: %w", workspace, err)
+	}
+
+	// Step 7b: Check state.json doesn't already exist.
+	stateFile := filepath.Join(workspace, "state.json")
+	if _, err := os.Stat(stateFile); err == nil {
+		return "", fmt.Errorf("workspace %q already initialised: state.json exists", workspace)
+	}
+
+	// Step 7c: sm.Init.
+	if err := sm.Init(workspace, specName); err != nil {
+		return "", fmt.Errorf("sm.Init: %w", err)
+	}
+
+	// Step 7d: SetTaskType.
+	if err := sm.SetTaskType(workspace, uc.TaskType); err != nil {
+		return "", fmt.Errorf("SetTaskType: %w", err)
+	}
+
+	// Step 7e: SetEffort.
+	if err := sm.SetEffort(workspace, uc.Effort); err != nil {
+		return "", fmt.Errorf("SetEffort: %w", err)
+	}
+
+	// Step 7f: SetFlowTemplate.
+	if err := sm.SetFlowTemplate(workspace, flowTemplate); err != nil {
+		return "", fmt.Errorf("SetFlowTemplate: %w", err)
+	}
+
+	// Step 7g: auto flag.
+	if flags.Auto {
+		if err := sm.SetAutoApprove(workspace); err != nil {
+			return "", fmt.Errorf("SetAutoApprove: %w", err)
+		}
+	}
+
+	// Step 7h: skip_pr flag.
+	if flags.SkipPR {
+		if err := sm.SetSkipPr(workspace); err != nil {
+			return "", fmt.Errorf("SetSkipPr: %w", err)
+		}
+	}
+
+	// Step 7i: debug flag.
+	if flags.Debug {
+		if err := sm.SetDebug(workspace); err != nil {
+			return "", fmt.Errorf("SetDebug: %w", err)
+		}
+	}
+
+	// Step 7j: current_branch.
+	if flags.CurrentBranch != "" && flags.CurrentBranch != "main" && flags.CurrentBranch != "master" {
+		if err := sm.SetUseCurrentBranch(workspace, flags.CurrentBranch); err != nil {
+			return "", fmt.Errorf("SetUseCurrentBranch: %w", err)
+		}
+	}
+
+	// Step 7k: skip phases in order.
+	for _, phase := range skippedPhases {
+		if err := sm.SkipPhase(workspace, phase); err != nil {
+			return "", fmt.Errorf("SkipPhase %q: %w", phase, err)
+		}
+	}
+
+	// Step 7l: Write request.md.
+	requestMD := buildRequestMD(extCtx, uc.TaskType)
+	reqPath := filepath.Join(workspace, "request.md")
+	if err := os.WriteFile(reqPath, []byte(requestMD), 0o600); err != nil {
+		return "", fmt.Errorf("write request.md: %w", err)
+	}
+
+	return requestMD, nil
 }
 
 // ---------- helpers ----------
 
 // parseExternalContext extracts GitHub/Jira context fields from the args map.
-func parseExternalContext(args map[string]any) externalContext {
+func parseExternalContext(args map[string]any) (externalContext, error) {
 	var extCtx externalContext
 
 	raw, ok := args["external_context"]
 	if !ok || raw == nil {
-		return extCtx
+		return extCtx, nil
 	}
 
 	// Round-trip through JSON to normalize types.
 	data, err := json.Marshal(raw)
 	if err != nil {
-		return extCtx
+		return extCtx, fmt.Errorf("marshal external_context: %w", err)
 	}
 	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
-		return extCtx
+		return extCtx, fmt.Errorf("unmarshal external_context: %w", err)
 	}
 
 	extCtx.SourceURL = stringField(m, "source_url")
@@ -356,25 +374,25 @@ func parseExternalContext(args map[string]any) externalContext {
 		}
 	}
 
-	return extCtx
+	return extCtx, nil
 }
 
 // parseFlags extracts flag fields from the args map.
-func parseFlags(args map[string]any) pipelineFlags {
+func parseFlags(args map[string]any) (pipelineFlags, error) {
 	var flags pipelineFlags
 
 	raw, ok := args["flags"]
 	if !ok || raw == nil {
-		return flags
+		return flags, nil
 	}
 
 	data, err := json.Marshal(raw)
 	if err != nil {
-		return flags
+		return flags, fmt.Errorf("marshal flags: %w", err)
 	}
 	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
-		return flags
+		return flags, fmt.Errorf("unmarshal flags: %w", err)
 	}
 
 	flags.Auto = boolField(m, "auto")
@@ -384,7 +402,7 @@ func parseFlags(args map[string]any) pipelineFlags {
 	flags.EffortOverride = stringField(m, "effort_override")
 	flags.CurrentBranch = stringField(m, "current_branch")
 
-	return flags
+	return flags, nil
 }
 
 // parseUserConfirmation extracts task_type and effort from user_confirmation raw value.
