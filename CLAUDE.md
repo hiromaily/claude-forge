@@ -38,7 +38,7 @@ claude-forge/
 │   ├── post-agent-hook.sh ← agent output quality validation
 │   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md after phase-complete post-to-source
 │   ├── stop-hook.sh       ← pipeline completion guard
-│   └── test-hooks.sh      ← automated test suite (327 tests; run bash scripts/test-hooks.sh to verify)
+│   └── test-hooks.sh      ← automated test suite (246 tests; run bash scripts/test-hooks.sh to verify)
 └── skills/
     └── forge/
         └── SKILL.md       ← orchestrator instructions (the main skill)
@@ -144,7 +144,7 @@ SKILL.md (orchestrator)
 
 **pre-tool-hook.sh** — Rule 3 sub-checks (3a–3j) are each extracted into a named function (`check_phase1_warnings`, `check_task_init_guard`, etc.). The main dispatch block calls these functions in sequence. Do not inline new sub-checks into the dispatch block — add a named function and call it from there.
 
-**find_active_workspace** — this function is duplicated across `pre-tool-hook.sh`, `post-agent-hook.sh`, and `stop-hook.sh`. **The copies are intentionally different**: each script uses a slightly different filter predicate suited to its own enforcement context. Do not unify them into a shared library. Each copy carries a comment explaining the divergence — read it before modifying.
+**find_active_workspace** — `pre-tool-hook.sh` and `stop-hook.sh` share the same predicate and both source `scripts/common.sh`. `post-agent-hook.sh` uses a different filter (`status == "in_progress"` only) and does NOT source `common.sh`. Do not unify post-agent-hook.sh's copy into common.sh.
 
 **Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes all 26 `state-manager.sh` subcommands as typed tool calls, plus additional MCP-only tools (currently `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, and `pipeline_report_result`). The total MCP tool count is **38**. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
 
