@@ -1,4 +1,4 @@
-// Package tools registers all 36 MCP tool handlers with the MCP server.
+// Package tools registers all 38 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -7,15 +7,18 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// RegisterAll registers all 36 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 38 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
+// eng is the pipeline orchestration engine used by pipeline_next_action.
+// agentDir is the resolved path to the agents/ directory for prompt enrichment.
 // This is the single entry point called from main.go.
-func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier, eventsPort string) {
+func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier, eventsPort string, eng *orchestrator.Engine, agentDir string) {
 	srv.AddTool(
 		mcp.NewTool("init",
 			mcp.WithDescription("Initialise a new pipeline workspace (state.json). Requires validated=true after validate-input.sh succeeds."),
@@ -355,5 +358,29 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 			mcp.WithObject("user_confirmation", mcp.Description("Confirmed task_type and effort. Absent on first call; present on second call.")),
 		),
 		PipelineInitWithContextHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("pipeline_next_action",
+			mcp.WithDescription("Get the next pipeline action to execute (delegates to Engine.NextAction with prompt enrichment)."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("user_response", mcp.Description("User response to a checkpoint prompt")),
+		),
+		PipelineNextActionHandler(sm, eng, agentDir),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("pipeline_report_result",
+			mcp.WithDescription("Record phase result, validate artifact, parse verdict, and advance pipeline state."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
+			mcp.WithString("phase", mcp.Required(), mcp.Description("Phase identifier, e.g. phase-1, phase-3b, phase-6")),
+			mcp.WithNumber("tokens_used", mcp.Description("Token count for this phase")),
+			mcp.WithNumber("duration_ms", mcp.Description("Wall-clock duration in milliseconds")),
+			mcp.WithString("model", mcp.Description("Model identifier, e.g. sonnet")),
+			mcp.WithString("file", mcp.Description("The artifact filename")),
+			mcp.WithString("error", mcp.Description("Error message if the phase failed")),
+			mcp.WithString("verdict", mcp.Description("Verdict string from the review artifact")),
+		),
+		PipelineReportResultHandler(sm),
 	)
 }
