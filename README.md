@@ -392,7 +392,8 @@ claude-forge/
     state-manager.sh        State management CLI (26 subcommands; MCP server exposes 38 tools)
     build-specs-index.sh    Scans .specs/ and builds index.json with implPatterns
     query-specs-index.sh    Keyword-score matching against index.json; outputs markdown
-    pre-tool-hook.sh          Read-only, commit blocking, checkpoint & artifact guards
+    common.sh                 Shared find_active_workspace helper (sourced by pre-tool-hook and stop-hook)
+    pre-tool-hook.sh          Read-only, commit blocking, main/master checkout block
     post-agent-hook.sh        Agent output quality validation
     stop-hook.sh              Pipeline completion guard
     test-hooks.sh             Automated test suite (run to see current count)
@@ -425,4 +426,4 @@ cd claude-forge
 bash scripts/test-hooks.sh
 ```
 
-This runs automated tests covering `state-manager.sh` (including `set-effort`, `set-flow-template`, `set-debug`), all three hook scripts, checkpoint guards, artifact guards, effort-null guard (Rule 3f), and edge cases like abandoned pipelines and special characters in spec names.
+This runs automated tests covering `state-manager.sh` (including `set-effort`, `set-flow-template`, `set-debug`), all three hook scripts, pre-tool-hook rules (read-only, commit blocking, main/master checkout block), and edge cases like abandoned pipelines and special characters in spec names.
