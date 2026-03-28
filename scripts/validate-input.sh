@@ -94,8 +94,4 @@ if [ "$IS_URL" = true ]; then
   fi
 fi
 
-# All deterministic checks passed — write validation marker for pre-tool-hook guard
-MARKER="${TMPDIR:-/tmp}/dev-pipeline-input-validated"
-date +%s > "$MARKER" 2>/dev/null || true
-
 exit 0

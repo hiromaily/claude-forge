@@ -36,6 +36,8 @@ INPUT="$(cat)"
 [ "$TOOL_NAME" = "Bash" ] || exit 0
 [ -n "$COMMAND" ]         || exit 0
 
+# NOTE: post-bash-hook auto-commit fires only for legacy Bash 'phase-complete ... post-to-source'
+# calls. MCP-driven flows use pipeline_report_result directly and do not trigger this hook.
 PC_MATCH="$(echo "$COMMAND" | grep -oE 'phase-complete[[:space:]]+[^[:space:]]+[[:space:]]+post-to-source' | head -1 || true)"
 [ -n "$PC_MATCH" ] || exit 0
 
