@@ -274,7 +274,7 @@ func initWorkspace(
 		cfg.Branch = flags.CurrentBranch
 	}
 	if err := sm.Configure(workspace, cfg); err != nil {
-		return "", fmt.Errorf("Configure: %w", err)
+		return "", fmt.Errorf("configure: %w", err)
 	}
 
 	// Step 7l: Write request.md.
