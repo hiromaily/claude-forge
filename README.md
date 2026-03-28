@@ -278,7 +278,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 - **Human checkpoints** — Pause for human approval at design and task decomposition stages; skippable with `--auto` (except `full` template)
 - **Improvement report** — Always-on retrospective appended to `summary.md` identifying documentation gaps, code readability friction, and AI agent support issues encountered during the run
 - **Past implementation pattern injection** — Before each implementer invocation, `mcp__forge-state__search_patterns` (BM25 scorer) or the shell fallback `query-specs-index.sh` scans the specs index for similar past pipelines and injects their file-modification patterns into the prompt, surfacing real implementation examples rather than generic guidance
-- **Disk-based state machine** — All progress tracked in `state.json` via a 26-subcommand CLI (38 MCP tools including `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, and `pipeline_report_result`); pipelines survive context compaction and session restarts
+- **Disk-based state machine** — All progress tracked in `state.json` via a 26-subcommand CLI (39 MCP tools including `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`, and `history_search`); pipelines survive context compaction and session restarts
 - **Resume and abandon** — Resume an interrupted pipeline from any phase; abandon cleanly when needed
 - **Input validation** — Two-layer guard: deterministic `mcp__forge-state__validate_input` MCP tool (empty, too-short, malformed URL) + LLM semantic check blocks nonsensical or non-development requests before any tokens are spent on workspace setup
 - **Phase metrics** — Every agent invocation logged with token count, duration, and model; included in the Final Summary
@@ -389,7 +389,7 @@ claude-forge/
   agents/             11 specialist agents (.md files with YAML frontmatter)
   hooks/              Hook definitions (hooks.json)
   scripts/
-    state-manager.sh        State management CLI (26 subcommands; MCP server exposes 38 tools)
+    state-manager.sh        State management CLI (26 subcommands; MCP server exposes 39 tools)
     build-specs-index.sh    Scans .specs/ and builds index.json with implPatterns
     query-specs-index.sh    Keyword-score matching against index.json; outputs markdown
     common.sh                 Shared find_active_workspace helper (sourced by pre-tool-hook and stop-hook)
