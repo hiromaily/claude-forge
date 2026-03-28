@@ -233,6 +233,8 @@ func deriveFlowDecisions(taskType, effort string, autoFlag bool) (flowTemplate s
 // initWorkspace executes the 8-step I/O sequence for the second call (steps 7a–7l).
 // It creates the workspace directory, initialises state, applies all setters, skips phases,
 // and writes request.md. Returns the request.md content on success.
+//
+//nolint:gocyclo // complexity is inherent in the 8-step I/O sequence with flag branches
 func initWorkspace(
 	sm *state.StateManager,
 	workspace, specName string,
