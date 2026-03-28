@@ -1,0 +1,256 @@
+{
+  "version": 1,
+  "specName": "history-index-search-tool",
+  "workspace": ".specs/20260328-history-index-search-tool",
+  "branch": "feature/history-index-search-tool",
+  "taskType": "feature",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "pr-creation",
+  "currentPhaseStatus": "in_progress",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "final-verification",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 1,
+    "taskInlineRevisions": 1
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Create history package — index types and Build",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Create history package — Search function",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Write unit tests for history/index.go",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Write unit tests for history/search.go",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Create tools/history_search.go handler",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "Write unit tests for tools/history_search.go",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "7": {
+      "title": "Wire HistoryIndex into main.go and tools/registry.go",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "8": {
+      "title": "Update existing test files for new RegisterAll signature and tool count",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "9": {
+      "title": "Update documentation counts",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 63886,
+      "duration_ms": 125488,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:05:58Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 97944,
+      "duration_ms": 412177,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:13:23Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 47474,
+      "duration_ms": 125143,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:16:55Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 41376,
+      "duration_ms": 64574,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:18:31Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 43531,
+      "duration_ms": 69610,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:20:43Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 46031,
+      "duration_ms": 70194,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:34:38Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 38344,
+      "duration_ms": 73812,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:36:21Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 37068,
+      "duration_ms": 61700,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:38:14Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 95785,
+      "duration_ms": 507946,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:57:27Z"
+    },
+    {
+      "phase": "task-2-impl",
+      "tokens": 80255,
+      "duration_ms": 322097,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:57:27Z"
+    },
+    {
+      "phase": "task-3-impl",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:57:46Z"
+    },
+    {
+      "phase": "task-4-impl",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T13:57:46Z"
+    },
+    {
+      "phase": "task-5-impl",
+      "tokens": 73340,
+      "duration_ms": 230724,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T14:02:40Z"
+    },
+    {
+      "phase": "task-6-impl",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T14:02:40Z"
+    },
+    {
+      "phase": "task-7-impl",
+      "tokens": 55231,
+      "duration_ms": 151557,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T14:05:56Z"
+    },
+    {
+      "phase": "task-8-impl",
+      "tokens": 54993,
+      "duration_ms": 150767,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T14:08:51Z"
+    },
+    {
+      "phase": "task-9-impl",
+      "tokens": 36281,
+      "duration_ms": 140282,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T14:11:29Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 62051,
+      "duration_ms": 154709,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T14:14:45Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 19235,
+      "duration_ms": 43848,
+      "model": "sonnet",
+      "timestamp": "2026-03-28T14:15:51Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-28T13:01:24Z",
+    "lastUpdated": "2026-03-28T14:15:56Z",
+    "phaseStarted": "2026-03-28T14:15:56Z"
+  },
+  "error": null
+}
