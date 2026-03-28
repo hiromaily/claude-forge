@@ -83,7 +83,7 @@ func handleReportResult(sm *state.StateManager, in reportResultInput) (*mcp.Call
 	var warnings []string
 
 	// Step 2: Load state for duplicate-log check (before PhaseLog).
-	s, err := state.ReadState(in.workspace)
+	s, err := loadState(in.workspace)
 	if err != nil {
 		return errorf("read state: %v", err)
 	}
