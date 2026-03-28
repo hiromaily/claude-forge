@@ -60,11 +60,10 @@ func PipelineNextActionHandler(
 		resp := nextActionResponse{Action: action}
 
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
-			if enrichErr := enrichPrompt(&action, agentDir, workspace); enrichErr != nil {
+			if enrichErr := enrichPrompt(&resp.Action, agentDir, workspace); enrichErr != nil {
 				// Fail-open: return the action with a warning, not an error.
 				resp.Warning = fmt.Sprintf("enrichPrompt: %v", enrichErr)
 			}
-			resp.Action = action
 		}
 
 		return okJSON(resp)

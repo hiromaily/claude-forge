@@ -209,7 +209,7 @@ func handlePhase6Transition(
 	results []validation.ArtifactResult,
 	artifactWritten string,
 ) (reportResultResponse, error) {
-	var allFindings []orchestrator.Finding
+	allFindings := []orchestrator.Finding{}
 	var verdictParsed string
 	anyFail := false
 
@@ -237,10 +237,6 @@ func handlePhase6Transition(
 		if verdict == orchestrator.VerdictFail {
 			anyFail = true
 		}
-	}
-
-	if allFindings == nil {
-		allFindings = []orchestrator.Finding{}
 	}
 
 	if anyFail {
