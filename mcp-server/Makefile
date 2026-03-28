@@ -1,5 +1,5 @@
 ###############################################################################
-# Golang Linting
+# Setup for development
 ###############################################################################
 .PHONY: install
 install:
@@ -46,3 +46,10 @@ go-lint-verify-config:
 .PHONY: go-clean-lint-cache
 go-clean-lint-cache:
 	go tool golangci-lint cache clean
+
+###############################################################################
+# Golang Test
+###############################################################################
+.PHONY: go-test
+go-test:
+	go test ./...

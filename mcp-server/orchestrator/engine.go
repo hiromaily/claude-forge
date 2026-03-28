@@ -120,7 +120,7 @@ func (e *Engine) handlePhaseOne(st *state.State) (Action, error) {
 	// Decision 16 — docs M/L stub synthesis (after Phase 1 completes)
 	if st.TaskType != nil && *st.TaskType == TaskTypeDocs &&
 		slices.Contains(st.CompletedPhases, PhaseOne) {
-		return e.handleDocsStubSynthesis(st)
+		return e.handleDocsStubSynthesis(st, PhaseOne)
 	}
 
 	// Decision 15 — lite → analyst agent
@@ -148,7 +148,8 @@ func (e *Engine) handlePhaseOne(st *state.State) (Action, error) {
 
 // handleDocsStubSynthesis implements Decision 16 — docs M/L stub synthesis.
 // Returns stub write actions one at a time based on file existence.
-func (*Engine) handleDocsStubSynthesis(st *state.State) (Action, error) {
+// phase is the pipeline phase under which these actions are issued (always PhaseOne from caller).
+func (*Engine) handleDocsStubSynthesis(st *state.State, phase string) (Action, error) {
 	workspace := st.Workspace
 
 	// Step 1: design.md absent → write stub
@@ -159,7 +160,7 @@ func (*Engine) handleDocsStubSynthesis(st *state.State) (Action, error) {
 		}
 		content := "# Design\n\n_Auto-generated stub for docs task type. " +
 			"Fill in the design details or leave as-is._\n"
-		return NewWriteFileAction(designPath, content), nil
+		return NewWriteFileAction(phase, designPath, content), nil
 	}
 
 	// Step 2: tasks.md absent → write stub
@@ -171,12 +172,12 @@ func (*Engine) handleDocsStubSynthesis(st *state.State) (Action, error) {
 		content := "## Task 1: Implement documentation [sequential]\n\n" +
 			"**Depends on:** None\n**Files:** TBD\n\n" +
 			"**Acceptance criteria:**\n- [ ] **AC-1:** Documentation is complete.\n"
-		return NewWriteFileAction(tasksPath, content), nil
+		return NewWriteFileAction(phase, tasksPath, content), nil
 	}
 
 	// Step 3: both present but tasks map empty → run task_init
 	if len(st.Tasks) == 0 {
-		return NewExecAction([]string{"task_init", workspace}), nil
+		return NewExecAction(phase, []string{"task_init", workspace}), nil
 	}
 
 	// Step 4: all done → advance to Phase 3b
@@ -207,7 +208,7 @@ func (e *Engine) handlePhaseThree(st *state.State) (Action, error) {
 	// Decision 17 — bugfix stub synthesis (after Phase 3 completes)
 	if st.TaskType != nil && *st.TaskType == TaskTypeBugfix &&
 		slices.Contains(st.CompletedPhases, PhaseThree) {
-		return e.handleBugfixStubSynthesis(st)
+		return e.handleBugfixStubSynthesis(st, PhaseThree)
 	}
 
 	return NewSpawnAgentAction(
@@ -221,7 +222,8 @@ func (e *Engine) handlePhaseThree(st *state.State) (Action, error) {
 }
 
 // handleBugfixStubSynthesis implements Decision 17 — bugfix stub synthesis.
-func (*Engine) handleBugfixStubSynthesis(st *state.State) (Action, error) {
+// phase is the pipeline phase under which these actions are issued (always PhaseThree from caller).
+func (*Engine) handleBugfixStubSynthesis(st *state.State, phase string) (Action, error) {
 	workspace := st.Workspace
 
 	// Step 1: design.md absent → write stub
@@ -232,7 +234,7 @@ func (*Engine) handleBugfixStubSynthesis(st *state.State) (Action, error) {
 		}
 		content := "# Design\n\n_Auto-generated stub for bugfix task type. " +
 			"Fill in the fix description or leave as-is._\n"
-		return NewWriteFileAction(designPath, content), nil
+		return NewWriteFileAction(phase, designPath, content), nil
 	}
 
 	// Step 2: tasks.md absent → write stub
@@ -244,12 +246,12 @@ func (*Engine) handleBugfixStubSynthesis(st *state.State) (Action, error) {
 		content := "## Task 1: Apply bugfix [sequential]\n\n" +
 			"**Depends on:** None\n**Files:** TBD\n\n" +
 			"**Acceptance criteria:**\n- [ ] **AC-1:** Bug is fixed.\n"
-		return NewWriteFileAction(tasksPath, content), nil
+		return NewWriteFileAction(phase, tasksPath, content), nil
 	}
 
 	// Step 3: both present but tasks map empty → run task_init
 	if len(st.Tasks) == 0 {
-		return NewExecAction([]string{"task_init", workspace}), nil
+		return NewExecAction(phase, []string{"task_init", workspace}), nil
 	}
 
 	// Step 4: all done → advance to Phase 4b (task reviewer)
@@ -595,7 +597,7 @@ func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 		return NewDoneAction(SkipSummaryPrefix+"pr-creation", ""), nil
 	}
 
-	return NewExecAction([]string{
+	return NewExecAction(PhasePRCreation, []string{
 		"gh", "pr", "create",
 		"--title", "Pipeline output",
 		"--body", "Auto-generated PR from forge pipeline.",
@@ -656,7 +658,7 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 
 	switch sourceType {
 	case "github_issue":
-		return NewExecAction([]string{
+		return NewExecAction(PhasePostToSource, []string{
 			"gh", "issue", "comment",
 			"--body-file", filepath.Join(st.Workspace, "final-summary.md"),
 		}), nil

@@ -18,7 +18,7 @@ install: build
 # test: Run the Go test suite for mcp-server/
 .PHONY: test
 test:
-	cd $(MCP_DIR) && go test ./...
+	$(MAKE) -C mcp-server go-test
 
 # clean: Remove the built binary
 .PHONY: clean
