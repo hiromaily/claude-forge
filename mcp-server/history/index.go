@@ -238,7 +238,7 @@ type timestamps struct {
 //
 // The indexedAt parameter is the watermark from the existing index; if zero,
 // all terminal specs are parsed.
-func parseSpec(specDir string, indexedAt time.Time) (IndexEntry, error) { //nolint:cyclop // complexity is inherent in multi-field parsing
+func parseSpec(specDir string, indexedAt time.Time) (IndexEntry, error) { //nolint:cyclop,gocyclo // complexity is inherent in multi-field parsing
 	stateData, err := os.ReadFile(filepath.Join(specDir, "state.json"))
 	if err != nil {
 		return IndexEntry{}, errSkip
@@ -366,7 +366,7 @@ func stripFrontmatter(content string) string {
 // extractOneLiner returns the first non-empty line from content after stripping
 // Markdown heading markers.
 func extractOneLiner(content string) string {
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
