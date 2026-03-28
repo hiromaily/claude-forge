@@ -1,6 +1,6 @@
 // Package tools — integration tests for handler registration and compilation.
 // Full guard-enforcement tests live in Task 7; here we verify that:
-//   - RegisterAll compiles and adds exactly 38 tools
+//   - RegisterAll compiles and adds exactly 39 tools
 //   - Each handler calls the StateManager without panicking on valid input
 package tools
 
@@ -15,6 +15,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
@@ -47,7 +48,7 @@ func callTool(t *testing.T, handler server.ToolHandlerFunc, args map[string]any)
 func TestRegisterAllCount(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
-	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "", orchestrator.NewEngine("", ""), "")
+	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "", orchestrator.NewEngine("", ""), "", history.New(""))
 
 	// Extract tools via ListTools to count them.
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
@@ -60,8 +61,8 @@ func TestRegisterAllCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 38 {
-		t.Errorf("RegisterAll: expected 38 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 39 {
+		t.Errorf("RegisterAll: expected 39 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
 		}
@@ -73,7 +74,7 @@ func TestRegisterAllCount(t *testing.T) {
 func TestToolNamesUseUnderscores(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
-	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "", orchestrator.NewEngine("", ""), "")
+	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "", orchestrator.NewEngine("", ""), "", history.New(""))
 
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	var resp struct {
