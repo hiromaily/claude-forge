@@ -377,9 +377,6 @@ func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.Even
 			mcp.WithNumber("tokens_used", mcp.Description("Token count for this phase")),
 			mcp.WithNumber("duration_ms", mcp.Description("Wall-clock duration in milliseconds")),
 			mcp.WithString("model", mcp.Description("Model identifier, e.g. sonnet")),
-			mcp.WithString("file", mcp.Description("The artifact filename")),
-			mcp.WithString("error", mcp.Description("Error message if the phase failed")),
-			mcp.WithString("verdict", mcp.Description("Verdict string from the review artifact")),
 		),
 		PipelineReportResultHandler(sm),
 	)
