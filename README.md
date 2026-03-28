@@ -271,7 +271,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 
 - **Effort-aware scaling** — `(task_type, effort)` matrix determines one of 5 flow templates, from a 2-agent direct fix to a 10+ agent full pipeline with mandatory checkpoints
 - **Task-type adaptation** — 5 task types (feature, bugfix, investigation, docs, refactor) with tailored phase skip tables
-- **Deterministic hook guardrails** — PreToolUse hooks block source edits during analysis, block git commits during parallel execution, and enforce checkpoint/artifact completion
+- **Deterministic hook guardrails** — PreToolUse hooks block source edits during analysis, block git commits during parallel execution, and block checkout to main/master during an active pipeline
 - **AI review loops** — Design and task plans go through APPROVE/REVISE cycles with dedicated reviewer agents before implementation begins
 - **Multi-phase pipeline** — 11 specialist agents across up to 12 phases (analysis → investigation → design → review → tasks → review → implementation → code review → comprehensive review → verification → PR → summary)
 - **Parallel implementation** — Tasks marked `[parallel]` run concurrently with mkdir-based atomic locking for state updates
@@ -392,7 +392,8 @@ claude-forge/
     state-manager.sh        State management CLI (26 subcommands; MCP server exposes 38 tools)
     build-specs-index.sh    Scans .specs/ and builds index.json with implPatterns
     query-specs-index.sh    Keyword-score matching against index.json; outputs markdown
-    pre-tool-hook.sh          Read-only, commit blocking, checkpoint & artifact guards
+    common.sh                 Shared find_active_workspace helper (sourced by pre-tool-hook and stop-hook)
+    pre-tool-hook.sh          Read-only, commit blocking, main/master checkout block
     post-agent-hook.sh        Agent output quality validation
     stop-hook.sh              Pipeline completion guard
     test-hooks.sh             Automated test suite (run to see current count)
@@ -425,4 +426,4 @@ cd claude-forge
 bash scripts/test-hooks.sh
 ```
 
-This runs automated tests covering `state-manager.sh` (including `set-effort`, `set-flow-template`, `set-debug`), all three hook scripts, checkpoint guards, artifact guards, effort-null guard (Rule 3f), and edge cases like abandoned pipelines and special characters in spec names.
+This runs automated tests covering `state-manager.sh` (including `set-effort`, `set-flow-template`, `set-debug`), all three hook scripts, pre-tool-hook rules (read-only, commit blocking, main/master checkout block), and edge cases like abandoned pipelines and special characters in spec names.

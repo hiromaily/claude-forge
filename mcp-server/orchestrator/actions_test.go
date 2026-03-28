@@ -149,20 +149,22 @@ func TestNewActions(t *testing.T) {
 		{
 			name: "Exec",
 			build: func() Action {
-				return NewExecAction([]string{"go build ./...", "go test ./..."})
+				return NewExecAction("phase-5", []string{"go build ./...", "go test ./..."})
 			},
 			want: Action{
 				Type:     ActionExec,
+				Phase:    "phase-5",
 				Commands: []string{"go build ./...", "go test ./..."},
 			},
 		},
 		{
 			name: "WriteFile",
 			build: func() Action {
-				return NewWriteFileAction("/workspace/output.md", "# Output\nHello world")
+				return NewWriteFileAction("phase-1", "/workspace/output.md", "# Output\nHello world")
 			},
 			want: Action{
 				Type:    ActionWriteFile,
+				Phase:   "phase-1",
 				Path:    "/workspace/output.md",
 				Content: "# Output\nHello world",
 			},

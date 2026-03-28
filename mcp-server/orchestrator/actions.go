@@ -85,17 +85,21 @@ func NewCheckpointAction(name, presentToUser string, options []string) Action {
 }
 
 // NewExecAction constructs an Action of type ActionExec.
-func NewExecAction(commands []string) Action {
+// phase must be the pipeline phase ID under which this exec is issued (e.g., "pr-creation").
+func NewExecAction(phase string, commands []string) Action {
 	return Action{
 		Type:     ActionExec,
+		Phase:    phase,
 		Commands: commands,
 	}
 }
 
 // NewWriteFileAction constructs an Action of type ActionWriteFile.
-func NewWriteFileAction(path, content string) Action {
+// phase must be the pipeline phase ID under which this write is issued (e.g., "phase-1").
+func NewWriteFileAction(phase, path, content string) Action {
 	return Action{
 		Type:    ActionWriteFile,
+		Phase:   phase,
 		Path:    path,
 		Content: content,
 	}

@@ -34,11 +34,12 @@ claude-forge/
 │   ├── build-specs-index.sh ← scans .specs/ directories and builds .specs/index.json
 │   ├── query-specs-index.sh ← keyword-score matching against .specs/index.json, stdout markdown or empty
 │   ├── validate-input.sh  ← deterministic input validation (empty, too short, URL format)
-│   ├── pre-tool-hook.sh   ← read-only, commit blocking, checkpoint, artifact & input validation guards
+│   ├── common.sh          ← shared find_active_workspace helper (sourced by pre-tool-hook.sh and stop-hook.sh)
+│   ├── pre-tool-hook.sh   ← read-only guard, commit blocking, checkout blocking
 │   ├── post-agent-hook.sh ← agent output quality validation
 │   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md after phase-complete post-to-source
 │   ├── stop-hook.sh       ← pipeline completion guard
-│   └── test-hooks.sh      ← automated test suite (327 tests; run bash scripts/test-hooks.sh to verify)
+│   └── test-hooks.sh      ← automated test suite (246 tests; run bash scripts/test-hooks.sh to verify)
 └── skills/
     └── forge/
         └── SKILL.md       ← orchestrator instructions (the main skill)
@@ -53,8 +54,8 @@ SKILL.md (orchestrator)
   ├── calls scripts/state-manager.sh for state transitions
   └── hooks/ enforce constraints automatically
        ├── pre-tool-hook.sh reads state.json → blocks writes in Phase 1-2,
-       │     blocks git commit in parallel Phase 5, checkpoint guard,
-       │     artifact guard
+       │     blocks git commit in parallel Phase 5,
+       │     blocks checkout/switch to main/master
        ├── post-agent-hook.sh reads state.json → warns on bad output
        ├── post-bash-hook.sh reads state.json → auto-commits state.json+summary.md after post-to-source
        └── stop-hook.sh reads state.json → blocks premature stop
@@ -142,9 +143,9 @@ SKILL.md (orchestrator)
 
 **state-manager.sh** — dispatch calls `locked_update` directly. There is no intermediate `cmd_*` wrapper layer. Write commands must always go through `locked_update` to be safe under parallel Phase 5 execution. Read-only commands that only call `read_state` + `jq` do not need locking.
 
-**pre-tool-hook.sh** — Rule 3 sub-checks (3a–3j) are each extracted into a named function (`check_phase1_warnings`, `check_task_init_guard`, etc.). The main dispatch block calls these functions in sequence. Do not inline new sub-checks into the dispatch block — add a named function and call it from there.
+**pre-tool-hook.sh** — Enforces three rules: Rule 1 (read-only guard in phase-1/2 with workspace carve-out for artifact writes), Rule 2 (parallel phase-5 git commit block), Rule 5 (main/master checkout block). Sources `scripts/common.sh` for `find_active_workspace`.
 
-**find_active_workspace** — this function is duplicated across `pre-tool-hook.sh`, `post-agent-hook.sh`, and `stop-hook.sh`. **The copies are intentionally different**: each script uses a slightly different filter predicate suited to its own enforcement context. Do not unify them into a shared library. Each copy carries a comment explaining the divergence — read it before modifying.
+**find_active_workspace** — `pre-tool-hook.sh` and `stop-hook.sh` share the same predicate and both source `scripts/common.sh`. `post-agent-hook.sh` uses a different filter (`status == "in_progress"` only) and does NOT source `common.sh`. Do not unify post-agent-hook.sh's copy into common.sh.
 
 **Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes all 26 `state-manager.sh` subcommands as typed tool calls, plus additional MCP-only tools (currently `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, and `pipeline_report_result`). The total MCP tool count is **38**. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
 
