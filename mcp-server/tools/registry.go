@@ -20,7 +20,11 @@ import (
 // agentDir is the resolved path to the agents/ directory for prompt enrichment.
 // histIdx is the pre-built history index used by history_search.
 // This is the single entry point called from main.go.
-func RegisterAll(srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier, eventsPort string, eng *orchestrator.Engine, agentDir string, histIdx *history.HistoryIndex) {
+func RegisterAll(
+	srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus,
+	slack *events.SlackNotifier, eventsPort string, eng *orchestrator.Engine,
+	agentDir string, histIdx *history.HistoryIndex,
+) {
 	srv.AddTool(
 		mcp.NewTool("init",
 			mcp.WithDescription("Initialise a new pipeline workspace (state.json). Requires validated=true after validate-input.sh succeeds."),
