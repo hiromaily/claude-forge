@@ -1,5 +1,5 @@
 // Package main is the entry point for the forge-state MCP server.
-// It wires together the StateManager, registers all 38 MCP tool handlers,
+// It wires together the StateManager, registers all 39 MCP tool handlers,
 // and starts the stdio transport.
 package main
 
@@ -17,6 +17,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/hiromaily/claude-forge/mcp-server/tools"
@@ -76,7 +77,11 @@ func main() {
 	agentDir := resolveAgentDir()
 	specsDir := os.Getenv("FORGE_SPECS_DIR")
 	eng := orchestrator.NewEngine(agentDir, specsDir)
-	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir)
+	histIdx := history.New(specsDir)
+	if err := histIdx.Build(); err != nil {
+		fmt.Fprintf(os.Stderr, "forge-state: history index build warning: %v\n", err)
+	}
+	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir, histIdx)
 
 	// Start the SSE HTTP server if FORGE_EVENTS_PORT is set.
 	// A failed bind is non-fatal: the error is logged and execution continues
