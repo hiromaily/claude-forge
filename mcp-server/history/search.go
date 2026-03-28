@@ -28,6 +28,13 @@ type SearchResult struct {
 // by descending Similarity. When taskTypeFilter is non-empty, only entries with
 // matching TaskType are included before scoring. Results are capped to limit.
 func Search(idx *HistoryIndex, query string, limit int, taskTypeFilter string) ([]SearchResult, error) {
+	return SearchWithSpecsDir(idx, query, limit, taskTypeFilter, idx.specsDir)
+}
+
+// SearchWithSpecsDir is like Search but uses an explicit specsDir for design excerpt
+// resolution instead of the idx.specsDir field. This allows tests to inject a
+// temporary directory without needing to modify the index's internal state.
+func SearchWithSpecsDir(idx *HistoryIndex, query string, limit int, taskTypeFilter string, specsDir string) ([]SearchResult, error) {
 	entries := idx.Entries()
 	if len(entries) == 0 {
 		return []SearchResult{}, nil
@@ -90,7 +97,7 @@ func Search(idx *HistoryIndex, query string, limit int, taskTypeFilter string) (
 			Effort:          orig.Effort,
 			FlowTemplate:    orig.FlowTemplate,
 			OneLiner:        orig.OneLiner,
-			DesignExcerpt:   readDesignExcerpt(idx.specsDir, orig.SpecName),
+			DesignExcerpt:   readDesignExcerpt(specsDir, orig.SpecName),
 			Outcome:         orig.Outcome,
 			TokensTotal:     orig.TokensTotal,
 			DurationTotalMs: orig.DurationMs,
