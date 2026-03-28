@@ -45,6 +45,9 @@ type UserConfirmationPrompt struct {
 
 // externalContext holds parsed GitHub/Jira context fields.
 type externalContext struct {
+	// Source identifiers from pipeline_init result — used in request.md front matter.
+	SourceURL string
+	SourceID  string
 	// GitHub fields
 	GitHubLabels []string
 	GitHubTitle  string
@@ -172,7 +175,7 @@ func handleSecondCall(
 	specName := deriveSpecName(workspace)
 
 	// Step 7a: Create workspace directory.
-	if err := os.MkdirAll(workspace, 0o755); err != nil {
+	if err := os.MkdirAll(workspace, 0o750); err != nil {
 		return errorf("MkdirAll %q: %v", workspace, err)
 	}
 
@@ -240,7 +243,7 @@ func handleSecondCall(
 	// Step 7l: Write request.md.
 	requestMD := buildRequestMD(extCtx, uc.TaskType)
 	reqPath := filepath.Join(workspace, "request.md")
-	if err := os.WriteFile(reqPath, []byte(requestMD), 0o644); err != nil {
+	if err := os.WriteFile(reqPath, []byte(requestMD), 0o600); err != nil {
 		return errorf("write request.md: %v", err)
 	}
 
@@ -318,6 +321,8 @@ func parseExternalContext(args map[string]any) externalContext {
 		return extCtx
 	}
 
+	extCtx.SourceURL = stringField(m, "source_url")
+	extCtx.SourceID = stringField(m, "source_id")
 	extCtx.GitHubTitle = stringField(m, "github_title")
 	extCtx.GitHubBody = stringField(m, "github_body")
 	extCtx.JiraIssueType = stringField(m, "jira_issue_type")
@@ -420,6 +425,16 @@ func buildRequestMD(extCtx externalContext, taskType string) string {
 	sb.WriteString("source_type: ")
 	sb.WriteString(sourceType)
 	sb.WriteString("\n")
+	if extCtx.SourceURL != "" {
+		sb.WriteString("source_url: ")
+		sb.WriteString(extCtx.SourceURL)
+		sb.WriteString("\n")
+	}
+	if extCtx.SourceID != "" {
+		sb.WriteString("source_id: ")
+		sb.WriteString(extCtx.SourceID)
+		sb.WriteString("\n")
+	}
 	sb.WriteString("task_type: ")
 	sb.WriteString(taskType)
 	sb.WriteString("\n")

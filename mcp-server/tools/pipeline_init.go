@@ -63,7 +63,7 @@ type FetchNeeded struct {
 // Returns: PipelineInitResult serialised as JSON via okJSON.
 // sm is accepted for uniform registration but is NOT used by this handler.
 //
-//nolint:revive // sm intentionally unused; pure detection handler
+
 func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		arguments := req.GetString("arguments", "")
@@ -105,11 +105,17 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		// Build fetch_needed block.
 		fetchNeeded := makeFetchNeeded(sourceType, sourceID)
 
+		// source_url is only meaningful for URL-based source types; omit for text/workspace.
+		var sourceURL string
+		if sourceType == "github_issue" || sourceType == "jira_issue" {
+			sourceURL = coreText
+		}
+
 		return okJSON(PipelineInitResult{
 			Workspace:   workspace,
 			SpecName:    specName,
 			SourceType:  sourceType,
-			SourceURL:   coreText,
+			SourceURL:   sourceURL,
 			SourceID:    sourceID,
 			Flags:       flags,
 			FetchNeeded: fetchNeeded,
@@ -205,11 +211,9 @@ func slugify(text string) string {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			b.WriteRune(r)
 			inSep = false
-		} else {
-			if !inSep {
-				b.WriteRune('-')
-				inSep = true
-			}
+		} else if !inSep {
+			b.WriteRune('-')
+			inSep = true
 		}
 	}
 	result := b.String()
@@ -231,11 +235,11 @@ func slugify(text string) string {
 // If no hyphen is found, it returns the full base name.
 func deriveSpecName(workspace string) string {
 	base := filepath.Base(workspace)
-	idx := strings.Index(base, "-")
-	if idx == -1 {
+	_, after, ok := strings.Cut(base, "-")
+	if !ok {
 		return base
 	}
-	return base[idx+1:]
+	return after
 }
 
 // makeFetchNeeded constructs the FetchNeeded block for the given source type.
