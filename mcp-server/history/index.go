@@ -294,7 +294,11 @@ func parseSpec(specDir string, indexedAt time.Time) (IndexEntry, error) { //noli
 	var createdAt time.Time
 
 	if st.Timestamps.Created != "" {
-		createdAt, _ = time.Parse(time.RFC3339, st.Timestamps.Created)
+		parsedTime, parseErr := time.Parse(time.RFC3339, st.Timestamps.Created)
+		if parseErr != nil {
+			return IndexEntry{}, errSkip
+		}
+		createdAt = parsedTime
 	}
 
 	// Use specName from state.json or fall back to directory name.
@@ -362,7 +366,7 @@ func stripFrontmatter(content string) string {
 // extractOneLiner returns the first non-empty line from content after stripping
 // Markdown heading markers.
 func extractOneLiner(content string) string {
-	for line := range strings.SplitSeq(content, "\n") {
+	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue

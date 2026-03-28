@@ -55,10 +55,12 @@ func SearchWithSpecsDir(idx *HistoryIndex, query string, limit int, taskTypeFilt
 		return []SearchResult{}, nil
 	}
 
-	// Project IndexEntry slice to search.IndexEntry slice.
+	// Project IndexEntry slice to search.IndexEntry slice and build a lookup map.
 	searchEntries := make([]bm25.IndexEntry, len(filtered))
+	entryMap := make(map[string]IndexEntry, len(filtered))
 	for i, e := range filtered {
 		searchEntries[i] = toSearchEntry(e)
+		entryMap[e.SpecName] = e
 	}
 
 	// Run BM25 scoring.
@@ -70,25 +72,15 @@ func SearchWithSpecsDir(idx *HistoryIndex, query string, limit int, taskTypeFilt
 	})
 
 	// Build result slice, capped to limit.
-	if limit <= 0 {
-		limit = len(scored)
-	}
-	if limit > len(scored) {
+	if limit <= 0 || limit > len(scored) {
 		limit = len(scored)
 	}
 
 	results := make([]SearchResult, 0, limit)
 
-	for i := range limit {
+	for i := 0; i < limit; i++ {
 		se := scored[i]
-		// Find the original IndexEntry for this scored entry.
-		var orig IndexEntry
-		for _, e := range filtered {
-			if e.SpecName == se.Entry.SpecName {
-				orig = e
-				break
-			}
-		}
+		orig := entryMap[se.Entry.SpecName]
 
 		results = append(results, SearchResult{
 			SpecName:        orig.SpecName,
