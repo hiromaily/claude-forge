@@ -216,6 +216,7 @@ type nextActionTestCase struct {
 	wantType          string
 	wantAgent         string
 	wantSummary       string
+	wantPhase         string   // non-empty: assert action.Phase equals this value
 	wantParallelIDs   []string // nil means "do not check"; empty slice means "assert len==0"
 	wantInputContains string   // non-empty: assert InputFiles contains this value
 }
@@ -290,7 +291,8 @@ func TestNextAction(t *testing.T) {
 					return nil
 				})
 			},
-			wantType: ActionWriteFile,
+			wantType:  ActionWriteFile,
+			wantPhase: PhaseOne,
 		},
 
 		// ── Decision 17: bugfix stub synthesis (uses TempDir for disk I/O) ───
@@ -305,7 +307,64 @@ func TestNextAction(t *testing.T) {
 					return nil
 				})
 			},
-			wantType: ActionWriteFile,
+			wantType:  ActionWriteFile,
+			wantPhase: PhaseThree,
+		},
+
+		// ── Decision 16: docs stub synthesis exec step (both stubs present, tasks empty) ──
+		{
+			name: "docs_stub_synthesis_exec",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				docs := TaskTypeDocs
+				sm := newTestStateManager(t, "phase-1", func(s *state.State) error {
+					s.TaskType = &docs
+					s.CompletedPhases = []string{"setup", PhaseOne}
+					return nil
+				})
+				st, err := sm.GetState()
+				if err != nil {
+					t.Fatalf("GetState: %v", err)
+				}
+				// Write both stub files so synthesis advances to exec step
+				if err := writeFileForTest(st.Workspace+"/design.md", "# Design\n"); err != nil {
+					t.Fatalf("writeFileForTest design.md: %v", err)
+				}
+				if err := writeFileForTest(st.Workspace+"/tasks.md", "## Task 1\n"); err != nil {
+					t.Fatalf("writeFileForTest tasks.md: %v", err)
+				}
+				return sm
+			},
+			wantType:  ActionExec,
+			wantPhase: PhaseOne,
+		},
+
+		// ── Decision 17: bugfix stub synthesis exec step (both stubs present, tasks empty) ──
+		{
+			name: "bugfix_stub_synthesis_exec",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				bugfix := TaskTypeBugfix
+				sm := newTestStateManager(t, "phase-3", func(s *state.State) error {
+					s.TaskType = &bugfix
+					s.CompletedPhases = []string{"setup", PhaseOne, PhaseTwo, PhaseThree}
+					return nil
+				})
+				st, err := sm.GetState()
+				if err != nil {
+					t.Fatalf("GetState: %v", err)
+				}
+				// Write both stub files so synthesis advances to exec step
+				if err := writeFileForTest(st.Workspace+"/design.md", "# Design\n"); err != nil {
+					t.Fatalf("writeFileForTest design.md: %v", err)
+				}
+				if err := writeFileForTest(st.Workspace+"/tasks.md", "## Task 1\n"); err != nil {
+					t.Fatalf("writeFileForTest tasks.md: %v", err)
+				}
+				return sm
+			},
+			wantType:  ActionExec,
+			wantPhase: PhaseThree,
 		},
 
 		// ── Phase 2: investigator ─────────────────────────────────────────────
@@ -719,6 +778,17 @@ func TestNextAction(t *testing.T) {
 			wantAgent: agentVerifier,
 		},
 
+		// ── Decision 24: pr-creation exec (SkipPr == false) ─────────────────
+		{
+			name: "pr_creation_exec",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "pr-creation", nil)
+			},
+			wantType:  ActionExec,
+			wantPhase: PhasePRCreation,
+		},
+
 		// ── Decision 24: SkipPr flag skips pr-creation ────────────────────────
 		{
 			name: "skip_pr",
@@ -778,7 +848,8 @@ func TestNextAction(t *testing.T) {
 					sourceTypeReader: stubSourceTypeReader("github_issue"),
 				}
 			},
-			wantType: ActionExec,
+			wantType:  ActionExec,
+			wantPhase: PhasePostToSource,
 		},
 
 		// ── Decision 26: post-to-source text → done ───────────────────────────
@@ -856,6 +927,10 @@ func TestNextAction(t *testing.T) {
 
 			if tc.wantSummary != "" && action.Summary != tc.wantSummary {
 				t.Errorf("action.Summary = %q, want %q", action.Summary, tc.wantSummary)
+			}
+
+			if tc.wantPhase != "" && action.Phase != tc.wantPhase {
+				t.Errorf("action.Phase = %q, want %q", action.Phase, tc.wantPhase)
 			}
 
 			// wantParallelIDs: nil means skip check; empty slice means assert len==0
