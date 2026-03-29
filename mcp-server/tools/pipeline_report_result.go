@@ -6,10 +6,12 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/hiromaily/claude-forge/mcp-server/validation"
@@ -29,6 +31,14 @@ var phaseRevType = map[string]string{
 var reviewArtifactFile = map[string]string{
 	"phase-3b": "review-design.md",
 	"phase-4b": "review-tasks.md",
+}
+
+// phaseAgentName maps review phases to the agent name used for pattern accumulation.
+//
+//nolint:gochecknoglobals // package-level lookup table for phase agent names
+var phaseAgentName = map[string]string{
+	"phase-3b": "design-reviewer",
+	"phase-4b": "task-reviewer",
 }
 
 // reportResultResponse is the structured response returned by PipelineReportResultHandler.
@@ -53,7 +63,7 @@ type reportResultInput struct {
 // PipelineReportResultHandler handles the "pipeline_report_result" MCP tool.
 // It records a phase-log entry, validates the artifact, parses any verdict,
 // and advances pipeline state accordingly.
-func PipelineReportResultHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func PipelineReportResultHandler(sm *state.StateManager, kb *history.KnowledgeBase) server.ToolHandlerFunc {
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Step 1: Parse required parameters.
 		workspace, err := req.RequireString("workspace")
@@ -73,13 +83,13 @@ func PipelineReportResultHandler(sm *state.StateManager) server.ToolHandlerFunc 
 			model:      req.GetString("model", ""),
 		}
 
-		return handleReportResult(sm, in)
+		return handleReportResult(sm, kb, in)
 	}
 }
 
 // handleReportResult performs the core logic of PipelineReportResultHandler.
 // Extracted to a named function for testability.
-func handleReportResult(sm *state.StateManager, in reportResultInput) (*mcp.CallToolResult, error) {
+func handleReportResult(sm *state.StateManager, kb *history.KnowledgeBase, in reportResultInput) (*mcp.CallToolResult, error) {
 	var warnings []string
 
 	// Step 2: Load state for duplicate-log check (before PhaseLog).
@@ -119,7 +129,7 @@ func handleReportResult(sm *state.StateManager, in reportResultInput) (*mcp.Call
 	}
 
 	// Steps 7–9: Determine state transition based on phase.
-	resp, err := determineTransition(sm, in, results, artifactWritten)
+	resp, err := determineTransition(sm, kb, in, results, artifactWritten, &warnings)
 	if err != nil {
 		return errorf("%v", err)
 	}
@@ -131,9 +141,11 @@ func handleReportResult(sm *state.StateManager, in reportResultInput) (*mcp.Call
 // determineTransition decides the correct state transition and returns a partial response.
 func determineTransition(
 	sm *state.StateManager,
+	kb *history.KnowledgeBase,
 	in reportResultInput,
 	results []validation.ArtifactResult,
 	artifactWritten string,
+	warnings *[]string,
 ) (reportResultResponse, error) {
 	// Step 7: Review phases (phase-3b, phase-4b) — parse verdict and decide.
 	if revType, ok := phaseRevType[in.phase]; ok {
@@ -157,6 +169,12 @@ func determineTransition(
 
 		if findings == nil {
 			findings = []orchestrator.Finding{}
+		}
+
+		// Accumulate review findings into the pattern knowledge base (fail-open).
+		agentName := phaseAgentName[in.phase]
+		if accumErr := kb.Patterns.Accumulate(findings, agentName, time.Now().UTC()); accumErr != nil {
+			*warnings = append(*warnings, "pattern accumulation warning: "+accumErr.Error())
 		}
 
 		switch verdict {

@@ -1,5 +1,5 @@
 // Package main is the entry point for the forge-state MCP server.
-// It wires together the StateManager, registers all 39 MCP tool handlers,
+// It wires together the StateManager, registers all 41 MCP tool handlers,
 // and starts the stdio transport.
 package main
 
@@ -22,6 +22,28 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/hiromaily/claude-forge/mcp-server/tools"
 )
+
+// resolveSpecsDir resolves the .specs/ directory path using a 3-stage strategy:
+//  1. FORGE_SPECS_DIR environment variable (required in production)
+//  2. Path derived from runtime.Caller(0) — only used as a dev fallback; skipped
+//     if the derived path does not exist on disk
+//  3. The literal string ".specs" as a last-resort relative fallback
+//
+// Production deployments must set FORGE_SPECS_DIR to the absolute path of the
+// .specs/ directory at the repo root.
+func resolveSpecsDir() string {
+	if dir := os.Getenv("FORGE_SPECS_DIR"); dir != "" {
+		return dir
+	}
+	_, filename, _, ok := runtime.Caller(0)
+	if ok {
+		derived := filepath.Join(filepath.Dir(filename), "..", ".specs")
+		if _, err := os.Stat(derived); err == nil {
+			return derived
+		}
+	}
+	return ".specs"
+}
 
 // resolveAgentDir resolves the agents/ directory path using a 3-stage strategy:
 //  1. FORGE_AGENTS_PATH environment variable (required in production)
@@ -75,13 +97,17 @@ func main() {
 	slack := events.NewSlackNotifier(os.Getenv("FORGE_SLACK_WEBHOOK_URL"))
 	eventsPort := os.Getenv("FORGE_EVENTS_PORT")
 	agentDir := resolveAgentDir()
-	specsDir := os.Getenv("FORGE_SPECS_DIR")
+	specsDir := resolveSpecsDir()
 	eng := orchestrator.NewEngine(agentDir, specsDir)
 	histIdx := history.New(specsDir)
 	if err := histIdx.Build(); err != nil {
 		fmt.Fprintf(os.Stderr, "forge-state: history index build warning: %v\n", err)
 	}
-	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir, histIdx)
+	kb := history.NewKnowledgeBase(specsDir)
+	if err := kb.Load(); err != nil {
+		fmt.Fprintf(os.Stderr, "forge-state: knowledge base load warning: %v\n", err)
+	}
+	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir, histIdx, kb)
 
 	// Start the SSE HTTP server if FORGE_EVENTS_PORT is set.
 	// A failed bind is non-fatal: the error is logged and execution continues
