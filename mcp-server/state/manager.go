@@ -1057,16 +1057,17 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 	}, nil
 }
 
-// RefreshIndex executes build-specs-index.sh for the workspace,
-// equivalent to cmd_refresh_index.  Implementation deferred to tools package.
+// RefreshIndex rebuilds the specs index for the workspace,
+// equivalent to cmd_refresh_index.  Implementation deferred to tools package,
+// which calls indexer.BuildSpecsIndex to produce .specs/index.json.
 func (m *StateManager) RefreshIndex(workspace string) error {
 	// Workspace entry-point guard.
 	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	// Delegated to tools.RefreshIndexHandler via os/exec.
-	// Not implemented here to keep the state package dependency-free of os/exec.
+	// Delegated to tools.RefreshIndexHandler, which calls indexer.BuildSpecsIndex.
+	// Not implemented here to keep the state package dependency-free of the indexer package.
 	return errors.New("RefreshIndex: not implemented in state package; use tools.RefreshIndexHandler")
 }
 

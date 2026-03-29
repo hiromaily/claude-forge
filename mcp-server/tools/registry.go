@@ -262,7 +262,7 @@ func RegisterAll(
 
 	srv.AddTool(
 		mcp.NewTool("refresh_index",
-			mcp.WithDescription("Execute build-specs-index.sh via os/exec to rebuild .specs/index.json. Returns an error if the script exits non-zero."),
+			mcp.WithDescription("Rebuild .specs/index.json using the pure-Go indexer.BuildSpecsIndex implementation. Returns an error if the specsDir does not exist or the index cannot be written."),
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 		),
 		RefreshIndexHandler(sm),

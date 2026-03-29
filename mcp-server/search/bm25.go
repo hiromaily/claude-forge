@@ -24,7 +24,7 @@ type IndexEntry struct {
 // ImplOutcome mirrors the implOutcomes array in index.json.
 // It is not used for BM25 scoring or output formatting (corpus is requestSummary only).
 // Included for schema completeness so IndexEntry fully mirrors the canonical index schema
-// produced by build-specs-index.sh. Fields match build-specs-index.sh output exactly:
+// produced by indexer.BuildSpecsIndex. Fields match the schema produced by indexer.BuildSpecsIndex:
 // {reviewFile, verdict} — NOT {taskTitle, verdict} (taskTitle belongs to ImplPattern).
 type ImplOutcome struct {
 	ReviewFile string `json:"reviewFile"`
