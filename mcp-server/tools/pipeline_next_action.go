@@ -13,7 +13,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/prompt"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
@@ -38,6 +40,8 @@ func PipelineNextActionHandler(
 	_ *state.StateManager,
 	eng *orchestrator.Engine,
 	agentDir string,
+	histIdx *history.HistoryIndex,
+	kb *history.KnowledgeBase,
 ) server.ToolHandlerFunc {
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
@@ -60,7 +64,7 @@ func PipelineNextActionHandler(
 		resp := nextActionResponse{Action: action}
 
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
-			if enrichErr := enrichPrompt(&resp.Action, agentDir, workspace); enrichErr != nil {
+			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb); enrichErr != nil {
 				// Fail-open: return the action with a warning, not an error.
 				resp.Warning = fmt.Sprintf("enrichPrompt: %v", enrichErr)
 			}
@@ -70,48 +74,84 @@ func PipelineNextActionHandler(
 	}
 }
 
-// enrichPrompt builds the agent prompt by concatenating the agent .md file contents
-// with the workspace input artifact contents.
+// enrichPrompt builds the 4-layer agent prompt by assembling:
+//   - Layer 1: agent .md file contents
+//   - Layer 2: workspace input artifact contents
+//   - Layer 3: repository profile (currently always empty until C1 task)
+//   - Layer 4: data flywheel history context (when histIdx is non-nil)
 //
-// The resulting prompt format is:
-//
-//	[agent .md file contents]
-//
-//	## Input Artifacts
-//
-//	### {filename}
-//	[file contents]
-//	...
+// The history query uses state.SpecName (falling back to filepath.Base(workspace)
+// when SpecName is empty). On any error from history.Search, resp.Warning is set
+// and the empty HistoryContext is used (fail-open pattern).
 //
 // Returns an error if the agent .md file is missing (caller should treat as warning).
 // Missing input artifact files are noted inline; they do not cause an error.
-func enrichPrompt(action *orchestrator.Action, agentDir, workspace string) error {
+func enrichPrompt(
+	resp *nextActionResponse,
+	agentDir, workspace string,
+	sm *state.StateManager,
+	histIdx *history.HistoryIndex,
+	kb *history.KnowledgeBase,
+) error {
+	action := &resp.Action
+
 	agentFile := filepath.Join(agentDir, action.Agent+".md")
 	agentData, err := os.ReadFile(agentFile)
 	if err != nil {
 		return fmt.Errorf("read agent file %q: %w", agentFile, err)
 	}
 
-	var sb strings.Builder
-	sb.Write(agentData)
-	sb.WriteString("\n\n## Input Artifacts\n")
+	agentInstructions := string(agentData)
+
+	// Build Layer 2 artifacts section.
+	var artifactSB strings.Builder
+	artifactSB.WriteString("## Input Artifacts\n")
 
 	for _, inputFile := range action.InputFiles {
 		absPath := filepath.Join(workspace, inputFile)
 		fileData, readErr := os.ReadFile(absPath)
-		sb.WriteString("\n### ")
-		sb.WriteString(filepath.Base(inputFile))
-		sb.WriteString("\n")
+		artifactSB.WriteString("\n### ")
+		artifactSB.WriteString(filepath.Base(inputFile))
+		artifactSB.WriteString("\n")
 		if readErr != nil {
-			sb.WriteString("(file not found: ")
-			sb.WriteString(inputFile)
-			sb.WriteString(")\n")
+			artifactSB.WriteString("(file not found: ")
+			artifactSB.WriteString(inputFile)
+			artifactSB.WriteString(")\n")
 		} else {
-			sb.Write(fileData)
-			sb.WriteString("\n")
+			artifactSB.Write(fileData)
+			artifactSB.WriteString("\n")
 		}
 	}
 
-	action.Prompt = sb.String()
+	artifactsSection := artifactSB.String()
+
+	// Determine history search query from state.SpecName, falling back to workspace base.
+	var histCtx prompt.HistoryContext
+
+	if histIdx != nil {
+		oneLiner := ""
+		if st, stErr := sm.GetState(); stErr == nil {
+			oneLiner = st.SpecName
+		}
+
+		if oneLiner == "" {
+			oneLiner = filepath.Base(workspace)
+		}
+
+		results, searchErr := history.Search(histIdx, oneLiner, 3, "")
+		if searchErr != nil {
+			// Fail-open: record warning and proceed with empty history context.
+			if resp.Warning != "" {
+				resp.Warning += "; "
+			}
+
+			resp.Warning += fmt.Sprintf("history.Search: %v", searchErr)
+		} else {
+			histCtx = prompt.BuildContextFromResults(results, kb)
+		}
+	}
+
+	action.Prompt = prompt.BuildPrompt(action.Agent, agentInstructions, artifactsSection, "", histCtx)
+
 	return nil
 }
