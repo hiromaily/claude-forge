@@ -19,6 +19,24 @@ The orchestrator tells you:
 3. **Run full test suite**: the project's test command (e.g. `make test-local`, `pnpm test`)
 4. **Report results**: list all failures found on the feature branch
 
+## Final Summary Statistics
+
+Before producing the output report, call the analytics MCP tool to retrieve pipeline statistics for the current run:
+
+```
+mcp__forge-state__analytics_pipeline_summary(workspace: "{workspace}")
+```
+
+Include the following fields from the response in the summary document under a `## Pipeline Statistics` section:
+
+- `total_tokens` — total tokens consumed across all phases
+- `total_duration_ms` — total wall-clock duration in milliseconds
+- `estimated_cost_usd` — estimated cost in USD
+- `phases_executed` — number of phases that were executed
+- `phases_skipped` — number of phases that were skipped
+- `retries` — total implementation and review retries
+- `review_findings` — critical and minor finding counts from review phases
+
 ## Output Format
 
 ```
@@ -34,6 +52,15 @@ The orchestrator tells you:
 
 ### Overall: PASS | FAIL
 (FAIL if any failures are found)
+
+## Pipeline Statistics
+- Total tokens: {total_tokens}
+- Total duration: {total_duration_ms} ms
+- Estimated cost: ${estimated_cost_usd}
+- Phases executed: {phases_executed}
+- Phases skipped: {phases_skipped}
+- Retries: {retries}
+- Review findings: {review_findings.critical} critical, {review_findings.minor} minor
 ```
 
 ## If Failures Are Found
