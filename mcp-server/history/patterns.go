@@ -35,6 +35,7 @@ type PatternAccumulator struct {
 	mu                   sync.RWMutex
 	specsDir             string
 	patterns             []PatternEntry
+	patternIdx           map[string][]int // "category|severity" → indices into patterns
 	totalReviewsAnalyzed int
 }
 
@@ -113,8 +114,9 @@ var patternStopwords = map[string]struct{}{
 // It does not call Load automatically.
 func NewPatternAccumulator(specsDir string) *PatternAccumulator {
 	return &PatternAccumulator{
-		specsDir: specsDir,
-		patterns: []PatternEntry{},
+		specsDir:   specsDir,
+		patterns:   []PatternEntry{},
+		patternIdx: make(map[string][]int),
 	}
 }
 
@@ -195,20 +197,15 @@ func (a *PatternAccumulator) Accumulate(findings []orchestrator.Finding, agent s
 
 		cat := classifyPattern(norm)
 		sev := string(f.Severity)
+		bucketKey := cat + "|" + sev
 
-		// Search for an existing pattern in the same category that is near-identical.
+		// Search for an existing pattern in the same category+severity bucket
+		// that is near-identical. Using the index map limits comparisons to
+		// candidates in the same bucket instead of scanning all patterns.
 		merged := false
 
-		for i := range a.patterns {
-			existing := &a.patterns[i]
-
-			if existing.Category != cat {
-				continue
-			}
-
-			if existing.Severity != sev {
-				continue
-			}
+		for _, idx := range a.patternIdx[bucketKey] {
+			existing := &a.patterns[idx]
 
 			if levenshteinRatio(norm, existing.Pattern) < 0.3 {
 				existing.Frequency++
@@ -228,6 +225,7 @@ func (a *PatternAccumulator) Accumulate(findings []orchestrator.Finding, agent s
 		}
 
 		if !merged {
+			newIdx := len(a.patterns)
 			a.patterns = append(a.patterns, PatternEntry{
 				Pattern:   norm,
 				Severity:  sev,
@@ -237,6 +235,7 @@ func (a *PatternAccumulator) Accumulate(findings []orchestrator.Finding, agent s
 				LastSeen:  ts,
 				Category:  cat,
 			})
+			a.patternIdx[bucketKey] = append(a.patternIdx[bucketKey], newIdx)
 		}
 	}
 
@@ -300,6 +299,13 @@ func (a *PatternAccumulator) Load() error {
 	}
 
 	a.totalReviewsAnalyzed = pf.TotalReviewsAnalyzed
+
+	// Rebuild the bucket index from the loaded patterns.
+	a.patternIdx = make(map[string][]int, len(a.patterns))
+	for i, p := range a.patterns {
+		key := p.Category + "|" + p.Severity
+		a.patternIdx[key] = append(a.patternIdx[key], i)
+	}
 
 	return nil
 }

@@ -222,46 +222,46 @@ func extractFrictionPoints(text string, pointMap map[string]*FrictionPoint) { //
 	scanner := bufio.NewScanner(strings.NewReader(text))
 
 	var (
-		currentSection string // tracks the current markdown section heading
-		mitigation     string // pending mitigation line
+		mitigation         string // pending mitigation text for next friction point
+		nextLineMitigation bool   // true when the next scanned line is a mitigation continuation
 	)
 
-	var lines []string
-
 	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	for i, line := range lines {
+		line := scanner.Text()
 		lower := strings.ToLower(strings.TrimSpace(line))
 
-		// Track section headings to detect "mitigation" sections.
-		if strings.HasPrefix(lower, "#") {
-			currentSection = strings.TrimLeft(lower, "# ")
-			mitigation = ""
-			_ = currentSection
+		// Consume a deferred mitigation continuation line.
+		if nextLineMitigation {
+			mitigation = strings.TrimSpace(line)
+			nextLineMitigation = false
 
 			continue
 		}
 
-		// Detect mitigation hints on the current line or nearby lines.
+		// Reset mitigation on new section headings.
+		if strings.HasPrefix(lower, "#") {
+			mitigation = ""
+
+			continue
+		}
+
+		// Detect mitigation hints on the current line or deferred to next line.
 		if strings.Contains(lower, "mitigation:") || strings.HasPrefix(lower, "- mitigation") {
-			// Look ahead for the mitigation text on the same line or next line.
 			after := strings.TrimPrefix(lower, "- mitigation:")
 			after = strings.TrimPrefix(after, "mitigation:")
 			after = strings.TrimSpace(after)
 
 			if after != "" {
 				mitigation = after
-			} else if i+1 < len(lines) {
-				mitigation = strings.TrimSpace(lines[i+1])
+			} else {
+				nextLineMitigation = true
 			}
 
 			continue
 		}
 
-		// Skip empty lines and pure headings.
-		if lower == "" || strings.HasPrefix(lower, "#") {
+		// Skip empty lines.
+		if lower == "" {
 			continue
 		}
 

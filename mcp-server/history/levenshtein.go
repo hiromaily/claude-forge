@@ -3,9 +3,13 @@ package history
 // levenshteinRatio returns the normalised edit distance in [0.0, 1.0].
 // Returns 0.0 when both strings are empty.
 // Returns 1.0 when one is empty and the other is not.
-// The normalised distance is editDistance(a, b) / max(len(a), len(b)).
+// The normalised distance is editDistance(a, b) / max(runeLen(a), runeLen(b)).
+// Strings are decoded to rune slices so that multi-byte UTF-8 characters
+// are treated as single units rather than multiple bytes.
 func levenshteinRatio(a, b string) float64 {
-	la, lb := len(a), len(b)
+	aRunes, bRunes := []rune(a), []rune(b)
+	la, lb := len(aRunes), len(bRunes)
+
 	if la == 0 && lb == 0 {
 		return 0.0
 	}
@@ -25,7 +29,7 @@ func levenshteinRatio(a, b string) float64 {
 		curr[0] = i + 1
 		for j := range lb {
 			cost := 1
-			if a[i] == b[j] {
+			if aRunes[i] == bRunes[j] {
 				cost = 0
 			}
 			del := prev[j+1] + 1
