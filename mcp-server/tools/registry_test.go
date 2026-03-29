@@ -1,8 +1,9 @@
 // Package tools — tests for updated RegisterAll signature and tool count.
-// These tests verify that RegisterAll accepts 10 parameters and registers 42 tools
+// These tests verify that RegisterAll accepts 13 parameters and registers 45 tools
 // including the subscribe_events, ast_summary, ast_find_definition, dependency_graph, impact_scope,
 // pipeline_init, pipeline_init_with_context, pipeline_next_action, pipeline_report_result,
-// history_search, history_get_patterns, history_get_friction_map, and profile_get tools.
+// history_search, history_get_patterns, history_get_friction_map, profile_get,
+// analytics_pipeline_summary, analytics_repo_dashboard, and analytics_estimate tools.
 package tools
 
 import (
@@ -12,6 +13,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/hiromaily/claude-forge/mcp-server/analytics"
 	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
@@ -19,17 +21,18 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// TestRegisterAllNewSignatureCount verifies that the updated 10-arg RegisterAll
-// registers exactly 42 tools, including subscribe_events, ast_summary, ast_find_definition,
+// TestRegisterAllNewSignatureCount verifies that the updated 13-arg RegisterAll
+// registers exactly 45 tools, including subscribe_events, ast_summary, ast_find_definition,
 // dependency_graph, impact_scope, pipeline_init, pipeline_init_with_context,
 // pipeline_next_action, pipeline_report_result, history_search, history_get_patterns,
-// history_get_friction_map, and profile_get.
+// history_get_friction_map, profile_get, analytics_pipeline_summary,
+// analytics_repo_dashboard, and analytics_estimate.
 func TestRegisterAllNewSignatureCount(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
-	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""))
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
 
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	var resp struct {
@@ -41,8 +44,8 @@ func TestRegisterAllNewSignatureCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 42 {
-		t.Errorf("RegisterAll: expected 42 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 45 {
+		t.Errorf("RegisterAll: expected 45 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
 		}
@@ -50,13 +53,13 @@ func TestRegisterAllNewSignatureCount(t *testing.T) {
 }
 
 // TestRegisterAllSubscribeEventsRegistered verifies that subscribe_events is one
-// of the registered tools when RegisterAll is called with the 9-arg signature.
+// of the registered tools when RegisterAll is called with the 13-arg signature.
 func TestRegisterAllSubscribeEventsRegistered(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
-	RegisterAll(srv, sm, bus, slack, "9090", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""))
+	RegisterAll(srv, sm, bus, slack, "9090", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
 
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	var resp struct {
@@ -93,7 +96,7 @@ func TestRegisterAllBusPassedToHandlers(t *testing.T) {
 	// Subscribe before RegisterAll so we use the same bus.
 	_, ch := bus.Subscribe()
 
-	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""))
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
 
 	// Trigger abandon via the server using the AbandonHandler registered in RegisterAll.
 	dir := t.TempDir()

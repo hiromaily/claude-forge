@@ -1,4 +1,4 @@
-// Package tools registers all 42 MCP tool handlers with the MCP server.
+// Package tools registers all 45 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -6,6 +6,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/hiromaily/claude-forge/mcp-server/analytics"
 	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
@@ -13,7 +14,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// RegisterAll registers all 42 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 45 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
@@ -22,12 +23,16 @@ import (
 // histIdx is the pre-built history index used by history_search.
 // kb is the KnowledgeBase used by history_get_patterns and history_get_friction_map.
 // profiler is the RepoProfiler used by profile_get and prompt Layer 3 enrichment.
+// col is the analytics Collector used by analytics_pipeline_summary.
+// est is the analytics Estimator used by analytics_estimate.
+// rep is the analytics Reporter used by analytics_repo_dashboard.
 // This is the single entry point called from main.go.
 func RegisterAll(
 	srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus,
 	slack *events.SlackNotifier, eventsPort string, eng *orchestrator.Engine,
 	agentDir string, histIdx *history.HistoryIndex, kb *history.KnowledgeBase,
 	profiler *profile.RepoProfiler,
+	col *analytics.Collector, est *analytics.Estimator, rep *analytics.Reporter,
 ) {
 	srv.AddTool(
 		mcp.NewTool("init",
@@ -430,5 +435,29 @@ func RegisterAll(
 				"Returns all stored friction points with category, description, frequency, and mitigation."),
 		),
 		HistoryGetFrictionMapHandler(kb),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("analytics_pipeline_summary",
+			mcp.WithDescription("Return token, duration, cost, and review-finding statistics for a single pipeline run."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the pipeline workspace directory")),
+		),
+		AnalyticsPipelineSummaryHandler(col),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("analytics_repo_dashboard",
+			mcp.WithDescription("Return aggregate statistics across all pipeline runs in .specs/ (counts, averages, cost, review pass rate, common findings)."),
+		),
+		AnalyticsRepoDashboardHandler(rep),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("analytics_estimate",
+			mcp.WithDescription("Return P50/P90 predictions for tokens, duration, and cost for a given (task_type, effort) combination."),
+			mcp.WithString("task_type", mcp.Required(), mcp.Description("Task type, e.g. feature, bugfix, refactor")),
+			mcp.WithString("effort", mcp.Required(), mcp.Description("Effort estimate: XS, S, M, or L")),
+		),
+		AnalyticsEstimateHandler(est),
 	)
 }
