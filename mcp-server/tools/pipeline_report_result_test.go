@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
@@ -302,7 +303,7 @@ func TestPipelineReportResult(t *testing.T) {
 				tc.setup(t, sm, dir)
 			}
 
-			h := PipelineReportResultHandler(sm)
+			h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
 			res := callTool(t, h, map[string]any{
 				"workspace":   dir,
 				"phase":       tc.phase,
