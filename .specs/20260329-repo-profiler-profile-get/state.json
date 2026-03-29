@@ -1,0 +1,230 @@
+{
+  "version": 1,
+  "specName": "repo-profiler-profile-get",
+  "workspace": ".specs/20260329-repo-profiler-profile-get",
+  "branch": "feature/repo-profiler-profile-get",
+  "taskType": "feature",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "final-summary",
+    "final-verification",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "post-to-source",
+    "pr-creation",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 1,
+    "taskRevisions": 0,
+    "designInlineRevisions": 2,
+    "taskInlineRevisions": 1
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Create profile package",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Write profile package tests",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Create profile_get MCP handler",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Write ProfileGetHandler tests",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Update PipelineNextActionHandler and enrichPrompt",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "Update RegisterAll and main.go wiring",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "7": {
+      "title": "Update all existing test call sites",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    },
+    "8": {
+      "title": "Update documentation files",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "pending",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 59620,
+      "duration_ms": 106690,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:29:42Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 89155,
+      "duration_ms": 154196,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:32:26Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 46319,
+      "duration_ms": 123143,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:35:35Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 44131,
+      "duration_ms": 675801,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:47:09Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 40234,
+      "duration_ms": 62827,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:49:11Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 47174,
+      "duration_ms": 105386,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:51:10Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 45238,
+      "duration_ms": 65512,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:53:37Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 34096,
+      "duration_ms": 71434,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:55:33Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 36519,
+      "duration_ms": 63733,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:59:14Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 30499,
+      "duration_ms": 33615,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T07:00:13Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 30639,
+      "duration_ms": 33064,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T07:01:14Z"
+    },
+    {
+      "phase": "task-5-impl",
+      "tokens": 53889,
+      "duration_ms": 168204,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T07:23:54Z"
+    },
+    {
+      "phase": "task-6-impl",
+      "tokens": 75507,
+      "duration_ms": 198063,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T07:27:48Z"
+    },
+    {
+      "phase": "task-7-impl",
+      "tokens": 1000,
+      "duration_ms": 1000,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T07:28:26Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 74716,
+      "duration_ms": 196009,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T07:32:21Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 19298,
+      "duration_ms": 39443,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T07:33:12Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-29T06:27:18Z",
+    "lastUpdated": "2026-03-29T07:34:48Z",
+    "phaseStarted": null
+  },
+  "error": null
+}
