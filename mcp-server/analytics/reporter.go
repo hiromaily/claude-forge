@@ -95,11 +95,6 @@ func (r *Reporter) Dashboard() (*RepoDashboard, error) {
 			continue
 		}
 
-		stateFile := filepath.Join(r.specsDir, entry.Name(), "state.json")
-		if _, err := os.Stat(stateFile); os.IsNotExist(err) {
-			continue
-		}
-
 		s, err := state.ReadState(filepath.Join(r.specsDir, entry.Name()))
 		if err != nil {
 			// Skip pipelines with unreadable state.

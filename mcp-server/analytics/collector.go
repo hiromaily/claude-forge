@@ -3,8 +3,6 @@
 package analytics
 
 import (
-	"errors"
-	"os"
 	"path/filepath"
 
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
@@ -93,24 +91,21 @@ func (c *Collector) Collect(workspace string) (*PipelineSummary, error) {
 	return summary, nil
 }
 
-// parseReviewFindings reads review-design.md and review-tasks.md from workspace
-// and counts CRITICAL and MINOR findings. Files that do not exist are silently
+// parseReviewFindings reads all review-*.md files from workspace (including
+// review-design.md, review-tasks.md, and per-task review-N.md files) and
+// counts CRITICAL and MINOR findings. Files that do not exist are silently
 // treated as zero findings.
 func (*Collector) parseReviewFindings(workspace string) (FindingCounts, error) {
 	var counts FindingCounts
 
-	reviewFiles := []string{
-		filepath.Join(workspace, "review-design.md"),
-		filepath.Join(workspace, "review-tasks.md"),
+	reviewFiles, err := filepath.Glob(filepath.Join(workspace, "review-*.md"))
+	if err != nil {
+		return FindingCounts{}, err
 	}
 
 	for _, filePath := range reviewFiles {
 		_, findings, err := orchestrator.ParseVerdict(filePath)
 		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-
 			return FindingCounts{}, err
 		}
 
