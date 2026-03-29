@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "specName": "prompt-builder-history",
+  "workspace": ".specs/20260329-prompt-builder-history",
+  "branch": "feature/prompt-builder-history",
+  "taskType": "feature",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "checkpoint-a",
+    "checkpoint-b",
+    "final-summary",
+    "final-verification",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "phase-4",
+    "phase-4b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "post-to-source",
+    "pr-creation",
+    "setup"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 1,
+    "taskInlineRevisions": 1
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {
+    "1": {
+      "title": "Create prompt/templates.go",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Create prompt/context.go",
+      "executionMode": "parallel",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Create prompt/builder.go",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Create prompt/builder_test.go",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Extend PipelineNextActionHandler",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "Update registry.go",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    },
+    "7": {
+      "title": "Update test call sites",
+      "executionMode": "sequential",
+      "implStatus": "completed",
+      "implRetries": 0,
+      "reviewStatus": "completed_pass",
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 72439,
+      "duration_ms": 103809,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:09:40Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 88031,
+      "duration_ms": 192942,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:13:07Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 32157,
+      "duration_ms": 95582,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:15:47Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 35389,
+      "duration_ms": 59045,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:17:15Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 37675,
+      "duration_ms": 64024,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:19:10Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 34734,
+      "duration_ms": 56721,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:21:41Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 33399,
+      "duration_ms": 47863,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:22:50Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 29575,
+      "duration_ms": 32433,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:24:28Z"
+    },
+    {
+      "phase": "task-1-impl",
+      "tokens": 28934,
+      "duration_ms": 62102,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:36:53Z"
+    },
+    {
+      "phase": "task-2-impl",
+      "tokens": 58209,
+      "duration_ms": 156256,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:36:53Z"
+    },
+    {
+      "phase": "task-3-impl",
+      "tokens": 52986,
+      "duration_ms": 146539,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:41:03Z"
+    },
+    {
+      "phase": "task-4-impl",
+      "tokens": 57468,
+      "duration_ms": 142236,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:44:02Z"
+    },
+    {
+      "phase": "task-5-impl",
+      "tokens": 51554,
+      "duration_ms": 150991,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:47:28Z"
+    },
+    {
+      "phase": "task-6-impl",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:47:40Z"
+    },
+    {
+      "phase": "task-7-impl",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:47:41Z"
+    },
+    {
+      "phase": "task-1-review",
+      "tokens": 45860,
+      "duration_ms": 121691,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T03:50:06Z"
+    },
+    {
+      "phase": "task-5-review",
+      "tokens": 36336,
+      "duration_ms": 82120,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:05:44Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 49947,
+      "duration_ms": 99334,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:07:43Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 24961,
+      "duration_ms": 33338,
+      "model": "sonnet",
+      "timestamp": "2026-03-29T06:08:26Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-03-29T03:06:03Z",
+    "lastUpdated": "2026-03-29T06:10:00Z",
+    "phaseStarted": null
+  },
+  "error": null
+}

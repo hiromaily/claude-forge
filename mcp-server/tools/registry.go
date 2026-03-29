@@ -373,7 +373,7 @@ func RegisterAll(
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("user_response", mcp.Description("User response to a checkpoint prompt")),
 		),
-		PipelineNextActionHandler(sm, eng, agentDir),
+		PipelineNextActionHandler(sm, eng, agentDir, histIdx, kb),
 	)
 
 	srv.AddTool(

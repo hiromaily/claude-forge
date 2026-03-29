@@ -27,7 +27,7 @@ func TestPipelineRoundTrip_Phase1ToPhase2(t *testing.T) {
 
 	workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 	eng := orchestrator.NewEngine("", "")
-	nextActionH := PipelineNextActionHandler(sm, eng, "")
+	nextActionH := PipelineNextActionHandler(sm, eng, "", nil, nil)
 	reportResultH := PipelineReportResultHandler(state.NewStateManager(), history.NewKnowledgeBase(""))
 
 	// Step 1: call pipeline_next_action at phase-1.
@@ -93,7 +93,7 @@ func TestPipelineRoundTrip_SkipSignal(t *testing.T) {
 		return nil
 	})
 	eng := orchestrator.NewEngine("", "")
-	nextActionH := PipelineNextActionHandler(sm, eng, "")
+	nextActionH := PipelineNextActionHandler(sm, eng, "", nil, nil)
 
 	// Step 1: call pipeline_next_action at phase-2 which is skipped.
 	result, err := callNextAction(t, nextActionH, workspace)
@@ -131,7 +131,7 @@ func TestPipelineRoundTrip_SkipSignal(t *testing.T) {
 	if err := smNext.LoadFromFile(workspace); err != nil {
 		t.Fatalf("LoadFromFile after phase_complete: %v", err)
 	}
-	nextActionH2 := PipelineNextActionHandler(smNext, eng, "")
+	nextActionH2 := PipelineNextActionHandler(smNext, eng, "", nil, nil)
 	result2, err := callNextAction(t, nextActionH2, workspace)
 	if err != nil {
 		t.Fatalf("PipelineNextActionHandler (after skip) returned Go error: %v", err)
@@ -164,7 +164,7 @@ func TestPipelineRoundTrip_ExecPhase(t *testing.T) {
 	// Set up workspace at pr-creation phase.
 	workspace, sm := initWorkspaceForNextAction(t, "pr-creation", nil)
 	eng := orchestrator.NewEngine("", "")
-	nextActionH := PipelineNextActionHandler(sm, eng, "")
+	nextActionH := PipelineNextActionHandler(sm, eng, "", nil, nil)
 	reportResultH := PipelineReportResultHandler(state.NewStateManager(), history.NewKnowledgeBase(""))
 
 	// Step 1: call pipeline_next_action at pr-creation.
