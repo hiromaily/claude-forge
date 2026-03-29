@@ -15,6 +15,7 @@ import (
 
 	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/profile"
 	"github.com/hiromaily/claude-forge/mcp-server/prompt"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
@@ -44,6 +45,7 @@ func PipelineNextActionHandler(
 	agentDir string,
 	histIdx *history.HistoryIndex,
 	kb *history.KnowledgeBase,
+	profiler *profile.RepoProfiler,
 ) server.ToolHandlerFunc {
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
@@ -66,7 +68,7 @@ func PipelineNextActionHandler(
 		resp := nextActionResponse{Action: action}
 
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
-			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb); enrichErr != nil {
+			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb, profiler); enrichErr != nil {
 				// Fail-open: return the action with a warning, not an error.
 				resp.Warning = fmt.Sprintf("enrichPrompt: %v", enrichErr)
 			}
@@ -79,7 +81,7 @@ func PipelineNextActionHandler(
 // enrichPrompt builds the 4-layer agent prompt by assembling:
 //   - Layer 1: agent .md file contents
 //   - Layer 2: workspace input artifact contents
-//   - Layer 3: repository profile (currently always empty until C1 task)
+//   - Layer 3: repository profile (from profiler.FormatForPrompt(); empty when profiler is nil)
 //   - Layer 4: data flywheel history context (when histIdx is non-nil)
 //
 // The history query uses state.SpecName (falling back to filepath.Base(workspace)
@@ -94,6 +96,7 @@ func enrichPrompt(
 	sm *state.StateManager,
 	histIdx *history.HistoryIndex,
 	kb *history.KnowledgeBase,
+	profiler *profile.RepoProfiler,
 ) error {
 	action := &resp.Action
 
@@ -153,7 +156,12 @@ func enrichPrompt(
 		}
 	}
 
-	action.Prompt = prompt.BuildPrompt(action.Agent, agentInstructions, artifactsSection, "", histCtx)
+	var profileStr string
+	if profiler != nil {
+		profileStr = profiler.FormatForPrompt()
+	}
+
+	action.Prompt = prompt.BuildPrompt(action.Agent, agentInstructions, artifactsSection, profileStr, histCtx)
 
 	return nil
 }

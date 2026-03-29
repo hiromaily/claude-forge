@@ -56,7 +56,7 @@ func TestPipelineNextAction(t *testing.T) {
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil)
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -82,7 +82,7 @@ func TestPipelineNextAction(t *testing.T) {
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-2", nil)
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil)
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -111,7 +111,7 @@ func TestPipelineNextAction(t *testing.T) {
 			return nil
 		})
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil)
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -137,7 +137,7 @@ func TestPipelineNextAction(t *testing.T) {
 			return nil
 		})
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil)
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -177,7 +177,7 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, agentDir, nil, nil)
+		handler := PipelineNextActionHandler(sm, eng, agentDir, nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -214,7 +214,7 @@ func TestPipelineNextAction(t *testing.T) {
 		agentDir := t.TempDir()
 
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, agentDir, nil, nil)
+		handler := PipelineNextActionHandler(sm, eng, agentDir, nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -244,7 +244,7 @@ func TestPipelineNextAction(t *testing.T) {
 		t.Parallel()
 		sm := state.NewStateManager()
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil)
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, "/nonexistent/workspace/path")
 		if err != nil {
