@@ -2,7 +2,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -23,7 +22,7 @@ func TestProfileGetHandler_nil_profiler(t *testing.T) {
 	handler := ProfileGetHandler(nil)
 	req := mcp.CallToolRequest{}
 
-	result, err := handler(context.Background(), req)
+	result, err := handler(t.Context(), req)
 	if err != nil {
 		t.Fatalf("unexpected handler error: %v", err)
 	}
@@ -31,12 +30,13 @@ func TestProfileGetHandler_nil_profiler(t *testing.T) {
 		t.Fatal("expected IsError == true for nil profiler, got false")
 	}
 	// Verify error text contains the expected message.
-	var errText string
+	var sb strings.Builder
 	for _, c := range result.Content {
 		if tc, ok := c.(mcp.TextContent); ok {
-			errText += tc.Text
+			sb.WriteString(tc.Text)
 		}
 	}
+	errText := sb.String()
 	if !strings.Contains(errText, "profiler not available") {
 		t.Errorf("expected error text to contain \"profiler not available\", got: %q", errText)
 	}
@@ -101,27 +101,28 @@ func TestProfileGetHandler_with_cache(t *testing.T) {
 	handler := ProfileGetHandler(profiler)
 	req := mcp.CallToolRequest{}
 
-	result, err := handler(context.Background(), req)
+	result, err := handler(t.Context(), req)
 	if err != nil {
 		t.Fatalf("unexpected handler error: %v", err)
 	}
 	if result.IsError {
-		var errText string
+		var eb strings.Builder
 		for _, c := range result.Content {
 			if tc, ok := c.(mcp.TextContent); ok {
-				errText += tc.Text
+				eb.WriteString(tc.Text)
 			}
 		}
-		t.Fatalf("unexpected MCP error: %s", errText)
+		t.Fatalf("unexpected MCP error: %s", eb.String())
 	}
 
 	// Extract text content.
-	var responseText string
+	var rb strings.Builder
 	for _, c := range result.Content {
 		if tc, ok := c.(mcp.TextContent); ok {
-			responseText += tc.Text
+			rb.WriteString(tc.Text)
 		}
 	}
+	responseText := rb.String()
 
 	// Verify the response is valid JSON with expected fields.
 	var parsed map[string]any
