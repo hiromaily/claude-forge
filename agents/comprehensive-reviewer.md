@@ -58,6 +58,24 @@ After reviewing the diff, for each changed file where the diff alone does not pr
 - **Commit your fixes** with a message like: `refactor: comprehensive review fixes — [brief description]`
 - Keep fixes minimal and focused. Do not refactor working code for style preferences.
 
+## Final Summary Statistics
+
+Before producing the output report, call the analytics MCP tool to retrieve pipeline statistics for the current run:
+
+```
+mcp__forge-state__analytics_pipeline_summary(workspace: "{workspace}")
+```
+
+Include the following fields from the response in the summary document under a `## Pipeline Statistics` section:
+
+- `total_tokens` — total tokens consumed across all phases
+- `total_duration_ms` — total wall-clock duration in milliseconds
+- `estimated_cost_usd` — estimated cost in USD
+- `phases_executed` — number of phases that were executed
+- `phases_skipped` — number of phases that were skipped
+- `retries` — total implementation and review retries
+- `review_findings` — critical and minor finding counts from review phases
+
 ## Output
 
 Return a markdown report with this structure:
@@ -77,6 +95,15 @@ Return a markdown report with this structure:
 
 ## Changes Made
 - [list of files modified with brief description of each change]
+
+## Pipeline Statistics
+- Total tokens: {total_tokens}
+- Total duration: {total_duration_ms} ms
+- Estimated cost: ${estimated_cost_usd}
+- Phases executed: {phases_executed}
+- Phases skipped: {phases_skipped}
+- Retries: {retries}
+- Review findings: {review_findings.critical} critical, {review_findings.minor} minor
 ```
 
 - **CLEAN**: No issues found, code is coherent as-is.
