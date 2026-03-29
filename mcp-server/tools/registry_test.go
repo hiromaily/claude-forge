@@ -32,7 +32,9 @@ func TestRegisterAllNewSignatureCount(t *testing.T) {
 	sm := state.NewStateManager()
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
-	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
+		history.New(""), history.NewKnowledgeBase(""), profile.New("", ""),
+		(*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
 
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	var resp struct {
@@ -59,7 +61,9 @@ func TestRegisterAllSubscribeEventsRegistered(t *testing.T) {
 	sm := state.NewStateManager()
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
-	RegisterAll(srv, sm, bus, slack, "9090", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+	RegisterAll(srv, sm, bus, slack, "9090", orchestrator.NewEngine("", ""), "",
+		history.New(""), history.NewKnowledgeBase(""), profile.New("", ""),
+		(*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
 
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	var resp struct {
@@ -96,7 +100,9 @@ func TestRegisterAllBusPassedToHandlers(t *testing.T) {
 	// Subscribe before RegisterAll so we use the same bus.
 	_, ch := bus.Subscribe()
 
-	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
+		history.New(""), history.NewKnowledgeBase(""), profile.New("", ""),
+		(*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
 
 	// Trigger abandon via the server using the AbandonHandler registered in RegisterAll.
 	dir := t.TempDir()

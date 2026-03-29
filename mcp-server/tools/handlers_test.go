@@ -50,7 +50,9 @@ func callTool(t *testing.T, handler server.ToolHandlerFunc, args map[string]any)
 func TestRegisterAllCount(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
-	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "",
+		orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""),
+		profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
 
 	// Extract tools via ListTools to count them.
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
@@ -76,7 +78,9 @@ func TestRegisterAllCount(t *testing.T) {
 func TestToolNamesUseUnderscores(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
-	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "",
+		orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""),
+		profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
 
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	var resp struct {
