@@ -184,7 +184,7 @@ func TestEstimateTenPipelinesHighConfidence(t *testing.T) {
 	for i := range 10 {
 		tokens := (i + 1) * 1000
 		dur := (i + 1) * 60000
-		writeFixtureState(t, dir, filepath.Join("run"+string(rune('0'+i))), "completed", "bugfix", "S", tokens, dur)
+		writeFixtureState(t, dir, "run"+string(rune('0'+i)), "completed", "bugfix", "S", tokens, dur)
 	}
 
 	est := analytics.NewEstimator(dir)

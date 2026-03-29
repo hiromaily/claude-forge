@@ -111,14 +111,12 @@ func (r *Reporter) Dashboard() (*RepoDashboard, error) {
 		isCompleted := s.CurrentPhase == "completed"
 		isAbandoned := s.CurrentPhase == "abandoned"
 
-		if isCompleted {
+		switch {
+		case isCompleted:
 			dash.Completed++
 			completedCount++
-		} else if isAbandoned {
+		case isAbandoned:
 			dash.Abandoned++
-		} else {
-			// in-progress or other status: count as total but not completed/abandoned
-			// (still counts toward TotalPipelines for visibility)
 		}
 
 		// Sum tokens from PhaseLog for all pipelines (not just completed).
@@ -211,7 +209,7 @@ func (r *Reporter) Dashboard() (*RepoDashboard, error) {
 }
 
 // emptyDashboard returns a zero-value RepoDashboard with non-nil slices/maps.
-func (r *Reporter) emptyDashboard() *RepoDashboard {
+func (*Reporter) emptyDashboard() *RepoDashboard {
 	return &RepoDashboard{
 		ByTaskType:         make(map[string]TaskTypeStats),
 		ByFlowTemplate:     make(map[string]FlowStats),

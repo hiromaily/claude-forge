@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"slices"
 
 	"github.com/hiromaily/claude-forge/mcp-server/state"
@@ -57,7 +58,7 @@ func (e *Estimator) Estimate(taskType, effort string) (*EstimateResult, error) {
 			continue
 		}
 
-		workspace := fmt.Sprintf("%s/%s", e.specsDir, entry.Name())
+		workspace := filepath.Join(e.specsDir, entry.Name())
 
 		s, err := state.ReadState(workspace)
 		if err != nil {
@@ -157,11 +158,7 @@ func percentile(sorted []float64, p int) float64 {
 	}
 
 	// P90: ceil(n * 0.9) - 1, clamped to [0, n-1]
-	idx := int(math.Ceil(float64(n)*float64(p)/100.0)) - 1
-	if idx < 0 {
-		idx = 0
-	}
-
+	idx := max(int(math.Ceil(float64(n)*float64(p)/100.0))-1, 0)
 	if idx >= n {
 		idx = n - 1
 	}

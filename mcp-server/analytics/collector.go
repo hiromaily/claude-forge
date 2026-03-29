@@ -96,7 +96,7 @@ func (c *Collector) Collect(workspace string) (*PipelineSummary, error) {
 // parseReviewFindings reads review-design.md and review-tasks.md from workspace
 // and counts CRITICAL and MINOR findings. Files that do not exist are silently
 // treated as zero findings.
-func (c *Collector) parseReviewFindings(workspace string) (FindingCounts, error) {
+func (*Collector) parseReviewFindings(workspace string) (FindingCounts, error) {
 	var counts FindingCounts
 
 	reviewFiles := []string{
