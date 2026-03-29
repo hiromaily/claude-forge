@@ -201,4 +201,23 @@ func TestHistoryGetPatternsHandler_limitDefault(t *testing.T) {
 	if len(resp.Patterns) > 10 {
 		t.Errorf("expected at most 10 patterns (default limit), got %d", len(resp.Patterns))
 	}
+
+	// Verify that an explicit limit of 3 is honoured.
+	reqLimited := makeHistoryGetPatternsReq("", "", 3)
+	resultLimited, err := historyGetPatternsWithKB(t.Context(), reqLimited, kb)
+	if err != nil {
+		t.Fatalf("unexpected error (limit=3): %v", err)
+	}
+	if resultLimited.IsError {
+		t.Fatalf("unexpected MCP error (limit=3): %v", textContent(resultLimited))
+	}
+	var respLimited struct {
+		Patterns []json.RawMessage `json:"patterns"`
+	}
+	if err := json.Unmarshal([]byte(textContent(resultLimited)), &respLimited); err != nil {
+		t.Fatalf("unmarshal response (limit=3): %v", err)
+	}
+	if len(respLimited.Patterns) > 3 {
+		t.Errorf("explicit limit=3: expected at most 3 patterns, got %d", len(respLimited.Patterns))
+	}
 }
