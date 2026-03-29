@@ -50,7 +50,6 @@ Ordered by priority. Higher rows should be tackled first.
 | [#30](https://github.com/hiromaily/claude-forge/issues/30) | Agent Teams mode (Phase 5 inter-agent comms) | Collaborative mode with `comms.json` for real-time coordination. High complexity — defer until pain confirmed by phase-stats data. Source: barkain. |
 | [#31](https://github.com/hiromaily/claude-forge/issues/31) | Linear integration | Add `linear_issue` source type alongside GitHub Issues and Jira. Source: levnikolaevich. |
 | [#32](https://github.com/hiromaily/claude-forge/issues/32) | Native plan mode integration at checkpoints | Use EnterPlanMode at Checkpoint A/B for structured task/PR review. Source: barkain. |
-| — | Split `state-manager.sh` into domain files | 700+ line single-file script makes it time-consuming for analyst agents to map all 26 commands. Candidate split: `state-manager-phases.sh`, `state-manager-tasks.sh`, `state-manager-config.sh`, `state-manager-metrics.sh`, with a thin dispatcher as the entry point. Blocked by the fact that `locked_update` must be shared — would need a `lib/state-manager-lib.sh` pattern. |
 
 ---
 
@@ -58,19 +57,19 @@ Ordered by priority. Higher rows should be tackled first.
 
 When making changes to this plugin, verify:
 
-- [ ] `state-manager.sh`: all commands work (init, phase-start, phase-complete, phase-fail, checkpoint, task-init, task-update, revision-bump, set-branch, set-task-type, skip-phase, set-auto-approve, set-skip-pr, phase-log, phase-stats, abandon, resume-info, get, set-effort, set-flow-template)
-- [ ] `state-manager.sh`: PHASES array includes phase-7, pr-creation, post-to-source
-- [ ] `state-manager.sh`: numeric fields (implRetries, reviewRetries) stay as numbers after task-update
-- [ ] `state-manager.sh`: special characters in spec-name don't break JSON
-- [ ] `state-manager.sh`: `set-auto-approve` sets `autoApprove: true` and updates `lastUpdated`
-- [ ] `state-manager.sh`: `resume-info` projects `autoApprove` with `// false` default
-- [ ] `state-manager.sh`: `set-skip-pr` sets `skipPr: true` and updates `lastUpdated`
-- [ ] `state-manager.sh`: `resume-info` projects `skipPr` with `// false` default
-- [ ] `state-manager.sh`: `set-effort <workspace> <value>` — XS/S/M/L accepted; invalid value rejected (exit 1)
-- [ ] `state-manager.sh`: `set-flow-template <workspace> <value>` — all five templates accepted (direct/lite/light/standard/full); invalid value rejected (exit 1)
-- [ ] `state-manager.sh`: `resume-info` — `effort` and `flowTemplate` fields present and null-safe (missing fields return null, not error)
-- [ ] `state-manager.sh`: `phase-log` appends to `phaseLog` array with correct fields
-- [ ] `state-manager.sh`: `phase-stats` outputs formatted table
+- [ ] Go state manager: all commands work — run `cd mcp-server && go test ./state/...` to verify init, phase-start, phase-complete, phase-fail, checkpoint, task-init, task-update, revision-bump, set-branch, set-task-type, skip-phase, set-auto-approve, set-skip-pr, phase-log, phase-stats, abandon, resume-info, get, set-effort, set-flow-template
+- [ ] Go state manager: PHASES array includes phase-7, pr-creation, post-to-source — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: numeric fields (implRetries, reviewRetries) stay as numbers after task-update — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: special characters in spec-name don't break JSON — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `set_auto_approve` sets `autoApprove: true` and updates `lastUpdated` — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `resume_info` projects `autoApprove` with false default — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `set_skip_pr` sets `skipPr: true` and updates `lastUpdated` — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `resume_info` projects `skipPr` with false default — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `set_effort` — XS/S/M/L accepted; invalid value rejected — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `set_flow_template` — all five templates accepted (direct/lite/light/standard/full); invalid value rejected — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `resume_info` — `effort` and `flowTemplate` fields present and null-safe — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `phase_log` appends to `phaseLog` array with correct fields — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `phase_stats` outputs formatted table — `cd mcp-server && go test ./state/...`
 - [ ] `pre-tool-hook.sh`: Edit/Write blocked during Phase 1-2 (exit 2)
 - [ ] `pre-tool-hook.sh`: Edit/Write allowed for workspace files during Phase 1-2 (exit 0)
 - [ ] `pre-tool-hook.sh`: git commit blocked during parallel Phase 5 (exit 2)
@@ -89,7 +88,7 @@ When making changes to this plugin, verify:
 - [ ] `stop-hook.sh`: allows stop when pipeline completed (exit 0)
 - [ ] `stop-hook.sh`: allows stop when pipeline abandoned (exit 0)
 - [ ] SKILL.md Agent Roster matches each agent's actual Input section (10 agents)
-- [ ] All phase IDs in SKILL.md exist in state-manager.sh PHASES array
+- [ ] All phase IDs in SKILL.md exist in the Go MCP server's PHASES list (`cd mcp-server && go test ./state/...`)
 - [ ] `comprehensive-reviewer.md` agent frontmatter has correct name, description, model
 - [ ] SKILL.md: source_type detection logic covers github_issue, jira_issue, text
 - [ ] SKILL.md: PR creation step includes gh pr create + PR number capture

@@ -18,7 +18,7 @@ Every phase writes its output to a markdown file in the workspace directory. Sub
 | Responsibility | Owner |
 |---------------|-------|
 | Phase sequencing & control flow | SKILL.md (orchestrator) |
-| State transitions | state-manager.sh (called by orchestrator) |
+| State transitions | Go MCP server (`mcp__forge-state__*` tools, called by orchestrator) |
 | Constraint enforcement | Hook scripts (automatic) |
 | Domain expertise (analysis, design, code) | Agent .md files |
 | Runtime parameters | Orchestrator → Agent prompt |
@@ -54,7 +54,7 @@ All hooks are **fail-open**: if jq is missing or state.json can't be read, the a
 sequenceDiagram
     actor User
     participant Orch as Orchestrator<br>(SKILL.md)
-    participant SM as state-manager.sh
+    participant SM as Go MCP server<br>(forge-state)
     participant Hook as Hooks<br>(pre/post/stop)
     participant FS as Workspace<br>(.specs/)
     participant SA as situation-analyst
@@ -70,7 +70,7 @@ sequenceDiagram
 
     %% ── Input Validation ──
     User->>Orch: /forge <args>
-    Orch->>Orch: bash validate-input.sh (deterministic checks)
+    Orch->>Orch: mcp__forge-state__validate_input (deterministic checks)
     Orch->>Orch: LLM coherence check (semantic)
     Note over Orch: Invalid → stop with error
 
@@ -303,7 +303,7 @@ $ARGUMENTS
     │
     ▼
 ┌──────────────────┐
-│ Input Validation  │ validate-input.sh (deterministic)
+│ Input Validation  │ mcp__forge-state__validate_input (deterministic)
 │                   │ + LLM coherence check (semantic)
 └──────┬───────────┘
        │ invalid → stop with error
@@ -387,7 +387,7 @@ The information flow is strictly forward — no agent reads output from a later 
 | task-decomposer | request.md, design.md, investigation.md (+review-tasks.md on revision) |
 | task-reviewer | request.md, design.md, investigation.md, tasks.md |
 | Checkpoint B (orchestrator) | tasks.md, review-tasks.md (to present summary to human) |
-| implementer | request.md, design.md (may be an orchestrator-written stub for `docs` task type), tasks.md (may be a single-task stub for `bugfix` task type), review-{dep}.md (+review-{N}.md on retry) — plus `## Similar Past Implementations` block injected by orchestrator via `mcp__forge-state__search_patterns` (BM25) or shell fallback `query-specs-index.sh impl` |
+| implementer | request.md, design.md (may be an orchestrator-written stub for `docs` task type), tasks.md (may be a single-task stub for `bugfix` task type), review-{dep}.md (+review-{N}.md on retry) — plus `## Similar Past Implementations` block injected by orchestrator via `mcp__forge-state__search_patterns` (BM25) |
 | impl-reviewer | request.md, tasks.md, design.md, impl-{N}.md, git diff (file-scoped, main...HEAD) |
 | comprehensive-reviewer | request.md, design.md, tasks.md, all impl-{N}.md, all review-{N}.md, git diff + selective structural reads |
 | verifier | (reads code on feature branch directly) |
@@ -411,31 +411,27 @@ The specs index provides cross-pipeline learning — surfacing patterns from pas
 
 | Component | Role |
 |--------|------|
-| `build-specs-index.sh` | Scans all workspace subdirectories within `.specs/` and writes `.specs/index.json`. Extracts `requestSummary`, `taskType`, `reviewFeedback` (from `review-*.md` REVISE verdicts), `implOutcomes`, `implPatterns` (from `impl-*.md` file-modification sections), and `outcome`. Run via `state-manager.sh refresh-index` after each completed pipeline. |
-| `mcp__forge-state__search_patterns` | **Primary scoring path.** BM25 scorer exposed as an MCP tool. Reads `.specs/index.json` and `{workspace}/request.md`, scores past entries using BM25 (IDF-weighted term frequency with length normalisation; `k1=1.5`, `b=0.75`), applies a multiplicative `taskType` boost, and emits formatted markdown. Supports two modes: **review-feedback** (default) emits a `## Past Review Feedback` block; **impl** mode emits a `## Similar Past Implementations` block. MCP-only — has no `state-manager.sh` shell equivalent. |
-| `query-specs-index.sh` | **Shell fallback.** Used in environments without the MCP server. Scores past entries by keyword overlap (+1 per word match in `requestSummary`) and task type match (+2). Emits empty stdout when no entries score ≥ 2. Retained unchanged; the BM25 MCP tool supersedes it for environments where the server is running. |
+| `indexer.BuildSpecsIndex` | Go function in `mcp-server/indexer/specs_index.go`. Scans all workspace subdirectories within `.specs/` and writes `.specs/index.json`. Extracts `requestSummary`, `taskType`, `reviewFeedback` (from `review-*.md` REVISE verdicts), `implOutcomes`, `implPatterns` (from `impl-*.md` file-modification sections), and `outcome`. Invoked by `mcp__forge-state__refresh_index` after each completed pipeline. |
+| `mcp__forge-state__search_patterns` | **Primary scoring path.** BM25 scorer exposed as an MCP tool. Reads `.specs/index.json` and `{workspace}/request.md`, scores past entries using BM25 (IDF-weighted term frequency with length normalisation; `k1=1.5`, `b=0.75`), applies a multiplicative `taskType` boost, and emits formatted markdown. Supports two modes: **review-feedback** (default) emits a `## Past Review Feedback` block; **impl** mode emits a `## Similar Past Implementations` block. MCP-only — no shell fallback exists. |
 
 **Data flow:**
 
 ```
 Completed pipeline
-  └─► state-manager.sh refresh-index
-        └─► build-specs-index.sh → .specs/index.json
+  └─► mcp__forge-state__refresh_index
+        └─► indexer.BuildSpecsIndex → .specs/index.json
 
 Next pipeline, Phase 3:
   orchestrator → mcp__forge-state__search_patterns(workspace, task_type, top_k=3, mode="review-feedback")
     → injects "## Past Review Feedback" into architect prompt
-  # FALLBACK: orchestrator → query-specs-index.sh {ws} {type}
 
 Next pipeline, Phase 4:
   orchestrator → mcp__forge-state__search_patterns(workspace, task_type, top_k=3, mode="review-feedback")
     → injects "## Past Review Feedback" into task-decomposer prompt
-  # FALLBACK: orchestrator → query-specs-index.sh {ws} {type}
 
 Next pipeline, Phase 5 (before each task):
   orchestrator → mcp__forge-state__search_patterns(workspace, task_type, top_k=2, mode="impl")
     → injects "## Similar Past Implementations" into implementer prompt
-  # FALLBACK: orchestrator → query-specs-index.sh {ws} {type} impl
 ```
 
 This system is append-only and read-only from the agents' perspective. Agents never write to the index; they only consume it via the orchestrator.
@@ -474,10 +470,10 @@ This system is append-only and read-only from the agents' perspective. Agents ne
            └─────────┘
 ```
 
-State transitions are managed by `state-manager.sh` commands:
-- `phase-start` → sets `in_progress`
-- `phase-complete` → sets `completed`, advances to next phase
-- `phase-fail` → sets `failed`, records error
+State transitions are managed by Go MCP server commands (`mcp__forge-state__*`):
+- `phase_start` → sets `in_progress`
+- `phase_complete` → sets `completed`, advances to next phase
+- `phase_fail` → sets `failed`, records error
 - `checkpoint` → sets `awaiting_human`
 
 ## Task-type-aware Flow
@@ -524,9 +520,9 @@ Several top-level fields have been added to `state.json` beyond the initial v1 s
 }
 ```
 
-- `taskType` is `null` until set during Workspace Setup. Set via `scripts/state-manager.sh set-task-type <workspace> <taskType>`.
-- `effort` is `null` until set during Workspace Setup. Set via `scripts/state-manager.sh set-effort <workspace> <effort>`. Valid values: `XS`, `S`, `M`, `L`.
-- `flowTemplate` is `null` until set during Workspace Setup. Set via `scripts/state-manager.sh set-flow-template <workspace> <flowTemplate>`. Valid values: `direct`, `lite`, `light`, `standard`, `full`. Stored in state (not re-derived) to guarantee resume consistency.
+- `taskType` is `null` until set during Workspace Setup. Set via `mcp__forge-state__set_task_type`.
+- `effort` is `null` until set during Workspace Setup. Set via `mcp__forge-state__set_effort`. Valid values: `XS`, `S`, `M`, `L`.
+- `flowTemplate` is `null` until set during Workspace Setup. Set via `mcp__forge-state__set_flow_template`. Valid values: `direct`, `lite`, `light`, `standard`, `full`. Stored in state (not re-derived) to guarantee resume consistency.
 - `skippedPhases` is `[]` until populated. Each call to `skip-phase` appends one phase ID to this array.
 - `autoApprove` defaults to `false`. Set via `set-auto-approve` when `--auto` flag is present.
 - `phaseLog` records per-phase metrics (tokens, duration, model) via `phase-log`. Used by `phase-stats` and the Final Summary Execution Stats table.
@@ -553,8 +549,8 @@ Because `skip-phase` uses the same `next_phase()` ordering logic as `phase-compl
 All `skip-phase` calls happen **upfront during Workspace Setup**, in canonical PHASES-array order, before the first real phase begins. This means:
 
 1. The orchestrator determines `{task_type}` during Workspace Setup.
-2. It calls `scripts/state-manager.sh set-task-type {workspace} {task_type}`.
-3. For each phase in the skip table (in canonical order), it calls `scripts/state-manager.sh skip-phase {workspace} <phase>`.
+2. It calls `mcp__forge-state__set_task_type` with `{workspace}` and `{task_type}`.
+3. For each phase in the skip table (in canonical order), it calls `mcp__forge-state__skip_phase` with `{workspace}` and `<phase>`.
 4. By the time the orchestrator reaches the first phase block, `currentPhase` already points past all skipped phases.
 
 The orchestrator still checks a skip gate at each phase block — if `{task_type}` maps to skipping that phase, it proceeds directly to the next block without calling `phase-start` or spawning an agent.
@@ -710,7 +706,7 @@ When tasks are marked `[parallel]`:
 1. Orchestrator launches multiple `implementer` agents simultaneously
 2. Hook blocks `git commit` for any Bash call when parallel tasks are `in_progress`
 3. After all parallel agents complete, orchestrator does one batch `git commit`
-4. `state-manager.sh` uses mkdir-based file locking for concurrent state.json updates
+4. The Go MCP server uses mutex-based locking for concurrent state.json updates
 
 Sequential tasks self-commit and run one at a time.
 
@@ -749,7 +745,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 1 | `validate-input.sh` exits non-zero (empty, too short, malformed URL) | Error message from the script; pipeline stops | Yes — pipeline aborts |
+| 1 | `mcp__forge-state__validate_input` returns an error (empty, too short, malformed URL) | Error message; pipeline stops | Yes — pipeline aborts |
 | 2 | LLM judges input as gibberish or unrelated to software development | Rejection message with specific reason and valid-input examples; pipeline stops | Yes — pipeline aborts |
 | 3 | Jira URL provided but `mcp__atlassian__getJiraIssue` tool unavailable | Error with plugin install instructions; pipeline stops | Yes — pipeline aborts |
 
