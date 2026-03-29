@@ -1,4 +1,4 @@
-// Package tools registers all 41 MCP tool handlers with the MCP server.
+// Package tools registers all 42 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -9,10 +9,11 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/profile"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// RegisterAll registers all 41 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 42 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
@@ -20,11 +21,13 @@ import (
 // agentDir is the resolved path to the agents/ directory for prompt enrichment.
 // histIdx is the pre-built history index used by history_search.
 // kb is the KnowledgeBase used by history_get_patterns and history_get_friction_map.
+// profiler is the RepoProfiler used by profile_get and prompt Layer 3 enrichment.
 // This is the single entry point called from main.go.
 func RegisterAll(
 	srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus,
 	slack *events.SlackNotifier, eventsPort string, eng *orchestrator.Engine,
 	agentDir string, histIdx *history.HistoryIndex, kb *history.KnowledgeBase,
+	profiler *profile.RepoProfiler,
 ) {
 	srv.AddTool(
 		mcp.NewTool("init",
@@ -373,7 +376,18 @@ func RegisterAll(
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("user_response", mcp.Description("User response to a checkpoint prompt")),
 		),
-		PipelineNextActionHandler(sm, eng, agentDir, histIdx, kb),
+		PipelineNextActionHandler(sm, eng, agentDir, histIdx, kb, profiler),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("profile_get",
+			mcp.WithDescription("Return the repository profile (languages, CI, linter configs, build/test commands). "+
+				"The workspace parameter is accepted for API consistency with all other tools but is not used to derive the repo root. "+
+				"The handler always returns the profile for the server's configured repo root set at startup."),
+			mcp.WithString("workspace", mcp.Required(), mcp.Description("The workspace path is accepted for API consistency with all other tools "+
+				"but is not used to derive the repo root. The handler always returns the profile for the server's configured repo root set at startup.")),
+		),
+		ProfileGetHandler(profiler),
 	)
 
 	srv.AddTool(
