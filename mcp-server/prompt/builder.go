@@ -65,7 +65,8 @@ func BuildPrompt(agentName, agentInstructions, artifactsSection, profile string,
 		}
 
 		// Layer 4: Patterns (CRITICAL only or all).
-		if rule.Patterns == patternCriticalOnly {
+		switch rule.Patterns {
+		case patternCriticalOnly:
 			for _, p := range ctx.CriticalPatterns {
 				patItems = append(patItems, patternItem{
 					Severity:  p.Severity,
@@ -74,7 +75,7 @@ func BuildPrompt(agentName, agentInstructions, artifactsSection, profile string,
 					Agent:     p.Agent,
 				})
 			}
-		} else if rule.Patterns == patternAll {
+		case patternAll:
 			for _, p := range ctx.AllPatterns {
 				patItems = append(patItems, patternItem{
 					Severity:  p.Severity,
@@ -83,6 +84,8 @@ func BuildPrompt(agentName, agentInstructions, artifactsSection, profile string,
 					Agent:     p.Agent,
 				})
 			}
+		case patternNone:
+			// no patterns included for this agent
 		}
 
 		// Layer 4: Friction points.
@@ -189,7 +192,7 @@ func buildLayer4(patItems []patternItem, frictionItems []frictionItem, pipelines
 		sb.WriteString("## Past Similar Pipelines\n\n")
 
 		for _, r := range pipelines {
-			sb.WriteString(fmt.Sprintf("- %s: %s (similarity: %.2f)\n", r.SpecName, r.OneLiner, r.Similarity))
+			fmt.Fprintf(&sb, "- %s: %s (similarity: %.2f)\n", r.SpecName, r.OneLiner, r.Similarity)
 		}
 	}
 
@@ -201,8 +204,8 @@ func buildLayer4(patItems []patternItem, frictionItems []frictionItem, pipelines
 		sb.WriteString("## Common Review Findings\n\n")
 
 		for _, p := range patItems {
-			sb.WriteString(fmt.Sprintf("- %s: %q (seen %d times, %s)\n",
-				p.Severity, p.Pattern, p.Frequency, p.Agent))
+			fmt.Fprintf(&sb, "- %s: %q (seen %d times, %s)\n",
+				p.Severity, p.Pattern, p.Frequency, p.Agent)
 		}
 	}
 
@@ -214,8 +217,8 @@ func buildLayer4(patItems []patternItem, frictionItems []frictionItem, pipelines
 		sb.WriteString("## Known AI Friction Points\n\n")
 
 		for _, f := range frictionItems {
-			sb.WriteString(fmt.Sprintf("- %s: %s\n  Mitigation: %s\n",
-				f.Category, f.Description, f.Mitigation))
+			fmt.Fprintf(&sb, "- %s: %s\n  Mitigation: %s\n",
+				f.Category, f.Description, f.Mitigation)
 		}
 	}
 
