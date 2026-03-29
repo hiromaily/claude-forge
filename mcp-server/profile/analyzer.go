@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -203,13 +204,9 @@ func sortedLanguages(counts map[string]int, total int) []Language {
 	}
 
 	// Sort descending.
-	for i := range pairs {
-		for j := i + 1; j < len(pairs); j++ {
-			if pairs[j].count > pairs[i].count {
-				pairs[i], pairs[j] = pairs[j], pairs[i]
-			}
-		}
-	}
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].count > pairs[j].count
+	})
 
 	// Take top 5.
 	if len(pairs) > 5 {
