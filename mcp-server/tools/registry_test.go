@@ -1,8 +1,8 @@
 // Package tools — tests for updated RegisterAll signature and tool count.
-// These tests verify that RegisterAll accepts 9 parameters and registers 41 tools
+// These tests verify that RegisterAll accepts 10 parameters and registers 42 tools
 // including the subscribe_events, ast_summary, ast_find_definition, dependency_graph, impact_scope,
 // pipeline_init, pipeline_init_with_context, pipeline_next_action, pipeline_report_result,
-// history_search, history_get_patterns, and history_get_friction_map tools.
+// history_search, history_get_patterns, history_get_friction_map, and profile_get tools.
 package tools
 
 import (
@@ -15,20 +15,21 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/profile"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// TestRegisterAllNewSignatureCount verifies that the updated 9-arg RegisterAll
-// registers exactly 41 tools, including subscribe_events, ast_summary, ast_find_definition,
+// TestRegisterAllNewSignatureCount verifies that the updated 10-arg RegisterAll
+// registers exactly 42 tools, including subscribe_events, ast_summary, ast_find_definition,
 // dependency_graph, impact_scope, pipeline_init, pipeline_init_with_context,
 // pipeline_next_action, pipeline_report_result, history_search, history_get_patterns,
-// and history_get_friction_map.
+// history_get_friction_map, and profile_get.
 func TestRegisterAllNewSignatureCount(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
-	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""))
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""))
 
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	var resp struct {
@@ -40,8 +41,8 @@ func TestRegisterAllNewSignatureCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 41 {
-		t.Errorf("RegisterAll: expected 41 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 42 {
+		t.Errorf("RegisterAll: expected 42 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
 		}
@@ -55,7 +56,7 @@ func TestRegisterAllSubscribeEventsRegistered(t *testing.T) {
 	sm := state.NewStateManager()
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
-	RegisterAll(srv, sm, bus, slack, "9090", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""))
+	RegisterAll(srv, sm, bus, slack, "9090", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""))
 
 	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	var resp struct {
@@ -92,7 +93,7 @@ func TestRegisterAllBusPassedToHandlers(t *testing.T) {
 	// Subscribe before RegisterAll so we use the same bus.
 	_, ch := bus.Subscribe()
 
-	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""))
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""), profile.New("", ""))
 
 	// Trigger abandon via the server using the AbandonHandler registered in RegisterAll.
 	dir := t.TempDir()

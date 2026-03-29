@@ -1,5 +1,5 @@
 // Package main is the entry point for the forge-state MCP server.
-// It wires together the StateManager, registers all 41 MCP tool handlers,
+// It wires together the StateManager, registers all 42 MCP tool handlers,
 // and starts the stdio transport.
 package main
 
@@ -19,6 +19,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/events"
 	"github.com/hiromaily/claude-forge/mcp-server/history"
 	"github.com/hiromaily/claude-forge/mcp-server/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/profile"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 	"github.com/hiromaily/claude-forge/mcp-server/tools"
 )
@@ -107,7 +108,11 @@ func main() {
 	if err := kb.Load(); err != nil {
 		fmt.Fprintf(os.Stderr, "forge-state: knowledge base load warning: %v\n", err)
 	}
-	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir, histIdx, kb)
+	profiler := profile.New(filepath.Join(specsDir, "repo-profile.json"), filepath.Dir(specsDir))
+	if _, err := profiler.AnalyzeOrUpdate(); err != nil {
+		fmt.Fprintf(os.Stderr, "forge-state: repo profiler warning: %v\n", err)
+	}
+	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir, histIdx, kb, profiler)
 
 	// Start the SSE HTTP server if FORGE_EVENTS_PORT is set.
 	// A failed bind is non-fatal: the error is logged and execution continues
