@@ -1,5 +1,5 @@
 // Package main is the entry point for the forge-state MCP server.
-// It wires together the StateManager, registers all 39 MCP tool handlers,
+// It wires together the StateManager, registers all 41 MCP tool handlers,
 // and starts the stdio transport.
 package main
 
@@ -81,7 +81,11 @@ func main() {
 	if err := histIdx.Build(); err != nil {
 		fmt.Fprintf(os.Stderr, "forge-state: history index build warning: %v\n", err)
 	}
-	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir, histIdx)
+	kb := history.NewKnowledgeBase(specsDir)
+	if err := kb.Load(); err != nil {
+		fmt.Fprintf(os.Stderr, "forge-state: knowledge base load warning: %v\n", err)
+	}
+	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir, histIdx, kb)
 
 	// Start the SSE HTTP server if FORGE_EVENTS_PORT is set.
 	// A failed bind is non-fatal: the error is logged and execution continues

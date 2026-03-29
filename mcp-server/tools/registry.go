@@ -1,4 +1,4 @@
-// Package tools registers all 39 MCP tool handlers with the MCP server.
+// Package tools registers all 41 MCP tool handlers with the MCP server.
 // Tool names use underscores (hyphens from state-manager.sh commands are converted).
 package tools
 
@@ -12,18 +12,19 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// RegisterAll registers all 39 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 41 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
 // eng is the pipeline orchestration engine used by pipeline_next_action.
 // agentDir is the resolved path to the agents/ directory for prompt enrichment.
 // histIdx is the pre-built history index used by history_search.
+// kb is the KnowledgeBase used by history_get_patterns and history_get_friction_map.
 // This is the single entry point called from main.go.
 func RegisterAll(
 	srv *server.MCPServer, sm *state.StateManager, bus *events.EventBus,
 	slack *events.SlackNotifier, eventsPort string, eng *orchestrator.Engine,
-	agentDir string, histIdx *history.HistoryIndex,
+	agentDir string, histIdx *history.HistoryIndex, kb *history.KnowledgeBase,
 ) {
 	srv.AddTool(
 		mcp.NewTool("init",
@@ -384,7 +385,7 @@ func RegisterAll(
 			mcp.WithNumber("duration_ms", mcp.Description("Wall-clock duration in milliseconds")),
 			mcp.WithString("model", mcp.Description("Model identifier, e.g. sonnet")),
 		),
-		PipelineReportResultHandler(sm),
+		PipelineReportResultHandler(sm, kb),
 	)
 
 	srv.AddTool(
@@ -396,5 +397,24 @@ func RegisterAll(
 			mcp.WithString("task_type_filter", mcp.Description("Filter results by task type, e.g. feature, bugfix")),
 		),
 		HistorySearchHandler(histIdx),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("history_get_patterns",
+			mcp.WithDescription("Return accumulated review finding patterns filtered by agent and/or severity. "+
+				"Valid agent values: \"design-reviewer\", \"task-reviewer\"."),
+			mcp.WithString("agent_filter", mcp.Description("Filter by reviewer agent name, e.g. design-reviewer, task-reviewer")),
+			mcp.WithString("severity_filter", mcp.Description("Filter by severity: CRITICAL or MINOR")),
+			mcp.WithNumber("limit", mcp.Description("Maximum number of patterns to return (default 10)")),
+		),
+		HistoryGetPatternsHandler(kb),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("history_get_friction_map",
+			mcp.WithDescription("Return accumulated friction points extracted from improvement reports. "+
+				"Returns all stored friction points with category, description, frequency, and mitigation."),
+		),
+		HistoryGetFrictionMapHandler(kb),
 	)
 }
