@@ -7,6 +7,8 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/history"
 )
 
+const defaultPatternQueryLimit = 20
+
 // HistoryContext holds the pre-fetched data flywheel context for Layer 4.
 // All fields are nil/empty when no history data is available.
 type HistoryContext struct {
@@ -28,8 +30,8 @@ func BuildContextFromResults(results []history.SearchResult, kb *history.Knowled
 
 	return HistoryContext{
 		SimilarPipelines: results,
-		CriticalPatterns: kb.Patterns.Query("", "CRITICAL", 20),
-		AllPatterns:      kb.Patterns.Query("", "", 20),
+		CriticalPatterns: kb.Patterns.Query("", "CRITICAL", defaultPatternQueryLimit),
+		AllPatterns:      kb.Patterns.Query("", "", defaultPatternQueryLimit),
 		FrictionPoints:   kb.Friction.Points(),
 	}
 }

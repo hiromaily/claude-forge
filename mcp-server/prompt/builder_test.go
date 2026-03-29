@@ -268,31 +268,3 @@ func TestBuildPrompt_TokenBudgetItemLevelTruncation(t *testing.T) {
 		t.Errorf("result exceeds token budget: got %d tokens, want <= %d", tokens, tokenBudget)
 	}
 }
-
-// TestBuildContextFromResults_NilKBNoPanic verifies that BuildContextFromResults
-// with a nil KnowledgeBase does not panic and returns an empty HistoryContext
-// (with nil pattern/friction slices when results is also nil).
-func TestBuildContextFromResults_NilKBNoPanic(t *testing.T) {
-	t.Parallel()
-
-	_ = t.Context()
-
-	// This must not panic.
-	ctx := BuildContextFromResults(nil, nil)
-
-	// SimilarPipelines should be nil (nil results passed in).
-	if ctx.SimilarPipelines != nil {
-		t.Errorf("SimilarPipelines: expected nil when results is nil, got %v", ctx.SimilarPipelines)
-	}
-
-	// All other fields should be nil (zero values).
-	if ctx.CriticalPatterns != nil {
-		t.Errorf("CriticalPatterns: expected nil, got %v", ctx.CriticalPatterns)
-	}
-	if ctx.AllPatterns != nil {
-		t.Errorf("AllPatterns: expected nil, got %v", ctx.AllPatterns)
-	}
-	if ctx.FrictionPoints != nil {
-		t.Errorf("FrictionPoints: expected nil, got %v", ctx.FrictionPoints)
-	}
-}

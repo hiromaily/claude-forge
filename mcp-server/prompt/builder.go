@@ -3,6 +3,8 @@ package prompt
 import (
 	"fmt"
 	"strings"
+
+	"github.com/hiromaily/claude-forge/mcp-server/history"
 )
 
 const tokenBudget = 8_000
@@ -11,28 +13,6 @@ const tokenBudget = 8_000
 // Approximation: 1 token ≈ 4 characters.
 func estimateTokens(s string) int {
 	return (len(s) + 3) / 4
-}
-
-// patternItem is an internal representation of a pattern entry for formatting.
-type patternItem struct {
-	Severity  string
-	Pattern   string
-	Frequency int
-	Agent     string
-}
-
-// frictionItem is an internal representation of a friction point for formatting.
-type frictionItem struct {
-	Category    string
-	Description string
-	Mitigation  string
-}
-
-// similarPipeline is an internal representation of a similar pipeline for formatting.
-type similarPipeline struct {
-	SpecName   string
-	OneLiner   string
-	Similarity float64
 }
 
 // BuildPrompt assembles a 4-layer prompt for the given agent.
@@ -44,59 +24,36 @@ type similarPipeline struct {
 //
 // Token budget guard: truncates Layer 4 first (friction items from the end, then
 // similar-pipeline items from the end, then pattern items from the end), then removes
-// Layer 4 sub-section headers, then Layer 3 entirely.
-// Layer 1 and Layer 2 are never truncated.
+// Layer 3 entirely. Layer 1 and Layer 2 are never truncated.
 //
 //nolint:gocyclo // complexity is inherent in the multi-layer assembly and budget guard
 func BuildPrompt(agentName, agentInstructions, artifactsSection, profile string, ctx HistoryContext) string {
 	rule, hasRule := agentRules[agentName]
 
 	// Collect Layer 4 items based on agent rules.
-	var frictionItems []frictionItem
-	var patItems []patternItem
-	var pipelines []similarPipeline
+	var frictionItems []history.FrictionPoint
+	var patItems []history.PatternEntry
+	var pipelines []history.SearchResult
 
 	if hasRule {
 		// Layer 4: Similar pipelines.
 		if rule.Similar {
-			for _, r := range ctx.SimilarPipelines {
-				pipelines = append(pipelines, similarPipeline{r.SpecName, r.OneLiner, r.Similarity})
-			}
+			pipelines = ctx.SimilarPipelines
 		}
 
 		// Layer 4: Patterns (CRITICAL only or all).
 		switch rule.Patterns {
 		case patternCriticalOnly:
-			for _, p := range ctx.CriticalPatterns {
-				patItems = append(patItems, patternItem{
-					Severity:  p.Severity,
-					Pattern:   p.Pattern,
-					Frequency: p.Frequency,
-					Agent:     p.Agent,
-				})
-			}
+			patItems = ctx.CriticalPatterns
 		case patternAll:
-			for _, p := range ctx.AllPatterns {
-				patItems = append(patItems, patternItem{
-					Severity:  p.Severity,
-					Pattern:   p.Pattern,
-					Frequency: p.Frequency,
-					Agent:     p.Agent,
-				})
-			}
+			patItems = ctx.AllPatterns
 		case patternNone:
 			// no patterns included for this agent
 		}
 
 		// Layer 4: Friction points.
 		if rule.Friction {
-			for _, f := range ctx.FrictionPoints {
-				frictionItems = append(frictionItems, frictionItem{
-					Category:    f.Category,
-					Description: f.Description,
-					Mitigation:  f.Mitigation,
-				})
-			}
+			frictionItems = ctx.FrictionPoints
 		}
 	}
 
@@ -157,10 +114,8 @@ func BuildPrompt(agentName, agentInstructions, artifactsSection, profile string,
 		}
 
 		// Nothing more to remove — return the base only.
-		break
+		return base
 	}
-
-	return assembleLayers(base, layer3, buildLayer4(patItems, frictionItems, pipelines))
 }
 
 // assembleLayers joins the base with optional Layer 3 and Layer 4 strings.
@@ -185,7 +140,7 @@ func assembleLayers(base, layer3, layer4 string) string {
 // buildLayer4 assembles the Layer 4 string from the current item slices.
 // Returns "" if all slices are empty. Section headers are only emitted when the
 // corresponding slice is non-empty.
-func buildLayer4(patItems []patternItem, frictionItems []frictionItem, pipelines []similarPipeline) string {
+func buildLayer4(patItems []history.PatternEntry, frictionItems []history.FrictionPoint, pipelines []history.SearchResult) string {
 	var sb strings.Builder
 
 	if len(pipelines) > 0 {

@@ -19,6 +19,8 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
+const similarPipelinesSearchLimit = 3
+
 // nextActionResponse wraps orchestrator.Action to add an optional Warning field.
 // The warning is set fail-open when enrichPrompt cannot find the agent .md file.
 type nextActionResponse struct {
@@ -138,7 +140,7 @@ func enrichPrompt(
 			oneLiner = filepath.Base(workspace)
 		}
 
-		results, searchErr := history.Search(histIdx, oneLiner, 3, "")
+		results, searchErr := history.Search(histIdx, oneLiner, similarPipelinesSearchLimit, "")
 		if searchErr != nil {
 			// Fail-open: record warning and proceed with empty history context.
 			if resp.Warning != "" {
