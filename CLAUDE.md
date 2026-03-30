@@ -31,9 +31,11 @@ claude-forge/
 │   └── hooks.json         ← hook definitions (PreToolUse, PostToolUse, Stop)
 ├── scripts/
 │   ├── common.sh          ← shared find_active_workspace helper (sourced by pre-tool-hook.sh and stop-hook.sh)
+│   ├── launch-mcp.sh      ← self-healing MCP launcher: runs setup.sh if binary missing, then exec's it
 │   ├── pre-tool-hook.sh   ← read-only guard, commit blocking, checkout blocking
 │   ├── post-agent-hook.sh ← agent output quality validation
 │   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md after phase-complete post-to-source
+│   ├── setup.sh           ← downloads forge-state-mcp binary from GitHub Releases (called by Setup hook and launch-mcp.sh)
 │   ├── stop-hook.sh       ← pipeline completion guard
 │   └── test-hooks.sh      ← automated test suite (58 tests; run bash scripts/test-hooks.sh to verify)
 └── skills/

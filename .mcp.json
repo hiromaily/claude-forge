@@ -2,7 +2,7 @@
   "mcpServers": {
     "forge-state": {
       "type": "stdio",
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/forge-state-mcp",
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/launch-mcp.sh",
       "env": {
         "FORGE_AGENTS_PATH": "${CLAUDE_PLUGIN_ROOT}/agents"
       }
