@@ -1,3 +1,5 @@
+//go:build cgo
+
 // Package ast provides unit tests for the graph domain functions.
 package ast
 
