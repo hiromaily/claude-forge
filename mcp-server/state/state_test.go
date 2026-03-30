@@ -106,7 +106,7 @@ func TestStateJSONRoundTrip(t *testing.T) {
 	}
 }
 
-// TestStateJSONKeys verifies that JSON keys match state-manager.sh output exactly.
+// TestStateJSONKeys verifies that JSON keys match the canonical state.json schema exactly.
 func TestStateJSONKeys(t *testing.T) {
 	branch := "main"
 	s := State{Branch: &branch}
