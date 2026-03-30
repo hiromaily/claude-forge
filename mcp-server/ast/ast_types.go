@@ -1,7 +1,8 @@
-// Package ast provides tree-sitter-based AST parsing and code summarization.
+// Package ast provides AST parsing and code summarization.
+// When built with CGO enabled, tree-sitter is used for full language support.
+// When built with CGO disabled (e.g. static release builds), all functions
+// return errCGORequired.
 package ast
-
-import "unicode"
 
 // Language represents a supported source language for AST parsing.
 type Language string
@@ -35,34 +36,4 @@ func LangFromExtension(ext string) (Language, bool) {
 	default:
 		return "", false
 	}
-}
-
-type unsupportedLangError struct {
-	lang string
-}
-
-func (e *unsupportedLangError) Error() string {
-	return "unsupported language: " + e.lang + "; supported: go, typescript, python, bash"
-}
-
-// isExported reports whether a symbol name is exported (public) in the given language.
-// For Go, exported means starting with an uppercase letter.
-// For other languages, all top-level declarations are considered exported.
-func isExported(name string, lang Language) bool {
-	if name == "" {
-		return false
-	}
-	if lang == Go {
-		return unicode.IsUpper(rune(name[0]))
-	}
-	return true
-}
-
-// makeSet creates a string-set from a slice.
-func makeSet(items []string) map[string]bool {
-	s := make(map[string]bool, len(items))
-	for _, item := range items {
-		s[item] = true
-	}
-	return s
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"strings"
+	"unicode"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/bash"
@@ -13,6 +14,36 @@ import (
 	"github.com/smacker/go-tree-sitter/python"
 	"github.com/smacker/go-tree-sitter/typescript/typescript"
 )
+
+type unsupportedLangError struct {
+	lang string
+}
+
+func (e *unsupportedLangError) Error() string {
+	return "unsupported language: " + e.lang + "; supported: go, typescript, python, bash"
+}
+
+// isExported reports whether a symbol name is exported (public) in the given language.
+// For Go, exported means starting with an uppercase letter.
+// For other languages, all top-level declarations are considered exported.
+func isExported(name string, lang Language) bool {
+	if name == "" {
+		return false
+	}
+	if lang == Go {
+		return unicode.IsUpper(rune(name[0]))
+	}
+	return true
+}
+
+// makeSet creates a string-set from a slice.
+func makeSet(items []string) map[string]bool {
+	s := make(map[string]bool, len(items))
+	for _, item := range items {
+		s[item] = true
+	}
+	return s
+}
 
 // languageGrammar returns the tree-sitter grammar for the given Language.
 func languageGrammar(lang Language) (*sitter.Language, error) {

@@ -12,7 +12,52 @@ import (
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
+	"golang.org/x/mod/modfile"
 )
+
+// langExtension returns the canonical file extension (with dot) for a Language.
+func langExtension(lang Language) string {
+	switch lang {
+	case Go:
+		return ".go"
+	case TypeScript:
+		return ".ts"
+	case Python:
+		return ".py"
+	case Bash:
+		return ".sh"
+	default:
+		return ""
+	}
+}
+
+// readGoModuleName reads the module name from a go.mod file in rootPath.
+// Returns an empty string if go.mod is absent or unreadable.
+func readGoModuleName(rootPath string) string {
+	data, err := os.ReadFile(filepath.Join(rootPath, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	f, err := modfile.ParseLax("go.mod", data, nil)
+	if err != nil || f.Module == nil {
+		return ""
+	}
+	return f.Module.Mod.Path
+}
+
+// deduplicateEdges removes duplicate Edge entries (same From+To).
+func deduplicateEdges(edges []Edge) []Edge {
+	seen := make(map[string]bool, len(edges))
+	result := make([]Edge, 0, len(edges))
+	for _, e := range edges {
+		key := e.From + "\x00" + e.To
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, e)
+		}
+	}
+	return result
+}
 
 // ExtractCallSites parses src using tree-sitter and returns all call sites found
 // in the source for the given language. filePath is stored in each CallSite and
