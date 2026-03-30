@@ -8,8 +8,6 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-func boolPtr(b bool) *bool { return &b }
-
 // newTestStateManager creates a StateManager loaded from a temporary directory
 // with an initialised state.json.
 func newTestStateManager(t *testing.T, phase string, modify func(*state.State) error) *state.StateManager {
@@ -215,7 +213,7 @@ type nextActionTestCase struct {
 	// eng overrides; if nil, a default stub engine (approve + text) is used.
 	engFn func() *Engine
 	// assertions on the returned action
-	wantErr           bool     // true: expect non-nil error from NextAction
+	wantErr           bool // true: expect non-nil error from NextAction
 	wantType          string
 	wantAgent         string
 	wantSummary       string
@@ -341,7 +339,7 @@ func TestNextAction(t *testing.T) {
 			},
 			wantType:      ActionExec,
 			wantPhase:     PhaseOne,
-			wantSetupOnly: boolPtr(false),
+			wantSetupOnly: new(false),
 		},
 
 		// ── Decision 17: bugfix stub synthesis exec step (both stubs present, tasks empty) ──
@@ -370,7 +368,7 @@ func TestNextAction(t *testing.T) {
 			},
 			wantType:      ActionExec,
 			wantPhase:     PhaseThree,
-			wantSetupOnly: boolPtr(false),
+			wantSetupOnly: new(false),
 		},
 
 		// ── Phase 2: investigator ─────────────────────────────────────────────
@@ -632,7 +630,7 @@ func TestNextAction(t *testing.T) {
 				return newTestStateManager(t, "phase-5", nil) // no tasks set
 			},
 			wantType:      ActionExec,
-			wantSetupOnly: boolPtr(true),
+			wantSetupOnly: new(true),
 		},
 
 		// ── Decision 28: phase-5 branch creation setup — no branch emits setup exec ──
@@ -649,7 +647,7 @@ func TestNextAction(t *testing.T) {
 				})
 			},
 			wantType:      ActionExec,
-			wantSetupOnly: boolPtr(true),
+			wantSetupOnly: new(true),
 		},
 
 		// ── Decision 28 bypass: UseCurrentBranch=true skips branch setup ──
@@ -666,7 +664,7 @@ func TestNextAction(t *testing.T) {
 				})
 			},
 			wantType:      ActionSpawnAgent,
-			wantSetupOnly: boolPtr(false),
+			wantSetupOnly: new(false),
 		},
 
 		// ── Decision 22: phase-5 sequential task — ParallelTaskIDs empty ─────
