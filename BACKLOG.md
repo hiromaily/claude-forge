@@ -11,6 +11,7 @@ Ordered by priority. Higher rows should be tackled first.
 
 | # | ID | Issue | Title | Type | Effort | Why now |
 |---|-----|-------|-------|------|--------|---------|
+| 0 | **B1** | — | Engine skips phase-5 when `task_init` not called; no branch creation between checkpoint-b and phase-5 | Bug | S | **Blocking bug.** `pipeline_next_action` returns `skip:phase-5` when `state.Tasks` is empty because `task_init` was never invoked. Branch creation step is also missing from the engine dispatch. Results in pipeline advancing to phase-6 on `main` with no implementation. Two fixes needed: (1) engine must emit `task_init` + branch creation actions after checkpoint-b, (2) Guard 3c should block `phase_complete` for phase-5 when tasks are empty (currently only guards `phase_start`). |
 | 1 | **F10** | [#12](https://github.com/hiromaily/claude-forge/issues/12) | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
 | 2 | **F9** | [#13](https://github.com/hiromaily/claude-forge/issues/13) | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
 | 3 | **F12** | [#14](https://github.com/hiromaily/claude-forge/issues/14) | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
@@ -50,6 +51,7 @@ Ordered by priority. Higher rows should be tackled first.
 | [#30](https://github.com/hiromaily/claude-forge/issues/30) | Agent Teams mode (Phase 5 inter-agent comms) | Collaborative mode with `comms.json` for real-time coordination. High complexity — defer until pain confirmed by phase-stats data. Source: barkain. |
 | [#31](https://github.com/hiromaily/claude-forge/issues/31) | Linear integration | Add `linear_issue` source type alongside GitHub Issues and Jira. Source: levnikolaevich. |
 | [#32](https://github.com/hiromaily/claude-forge/issues/32) | Native plan mode integration at checkpoints | Use EnterPlanMode at Checkpoint A/B for structured task/PR review. Source: barkain. |
+| — | Workspace directory naming from external URLs | `pipeline_init` slugifies the raw URL, producing meaningless names like `20260330-https-legalforce-atlassian-net-browse-so`. For Jira/GitHub URLs, extract the issue key and summary instead (e.g., `20260330-soa-2883-skip-minutes-job-without-integration`). Requires `pipeline_init_with_context` to rename the workspace after fetching external context. |
 
 ---
 

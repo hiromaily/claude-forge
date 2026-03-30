@@ -10,11 +10,59 @@ permissions:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: mcp-server/go.mod
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          cd mcp-server
+          go build -trimpath -ldflags="-s -w" -o ../forge-state-mcp .
+          cd ..
+          gzip -c forge-state-mcp > forge-state-mcp-${{ matrix.goos }}-${{ matrix.goarch }}.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-state-mcp-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: forge-state-mcp-${{ matrix.goos }}-${{ matrix.goarch }}.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          files: artifacts/*.gz

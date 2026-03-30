@@ -58,6 +58,7 @@ type reportResultInput struct {
 	tokensUsed int
 	durationMs int
 	model      string
+	setupOnly  bool // when true, record phase-log but skip PhaseComplete
 }
 
 // PipelineReportResultHandler handles the "pipeline_report_result" MCP tool.
@@ -81,6 +82,7 @@ func PipelineReportResultHandler(sm *state.StateManager, kb *history.KnowledgeBa
 			tokensUsed: req.GetInt("tokens_used", 0),
 			durationMs: req.GetInt("duration_ms", 0),
 			model:      req.GetString("model", ""),
+			setupOnly:  req.GetBool("setup_only", false),
 		}
 
 		return handleReportResult(sm, kb, in)
@@ -209,7 +211,15 @@ func determineTransition(
 		return handlePhase6Transition(sm, in, results, artifactWritten)
 	}
 
-	// Step 9: All other phases — simply advance.
+	// Step 9: All other phases — advance unless setup_only.
+	if in.setupOnly {
+		return reportResultResponse{
+			StateUpdated:    true,
+			ArtifactWritten: artifactWritten,
+			NextActionHint:  "setup_continue",
+		}, nil
+	}
+
 	if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
 		return reportResultResponse{}, err
 	}

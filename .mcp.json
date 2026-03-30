@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "forge-state": {
+      "type": "stdio",
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/forge-state-mcp",
+      "env": {
+        "FORGE_AGENTS_PATH": "${CLAUDE_PLUGIN_ROOT}/agents"
+      }
+    }
+  }
+}

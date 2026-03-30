@@ -407,10 +407,30 @@ func TestTaskInitHandlerGuard3gSkipped(t *testing.T) {
 	h := TaskInitHandler(sm)
 	res := callTool(t, h, map[string]any{
 		"workspace": dir,
-		"tasks":     map[string]any{},
+		"tasks": map[string]any{
+			"1": map[string]any{"title": "Task 1", "executionMode": "sequential", "implStatus": "pending"},
+		},
 	})
 	if res.IsError {
 		t.Errorf("TaskInitHandler should succeed when checkpoint-b is skipped: %v", textContent(res))
+	}
+}
+
+func TestTaskInitHandlerZeroTasksError(t *testing.T) {
+	dir := setupWorkspace(t, "test-spec")
+	sm := state.NewStateManager()
+
+	if err := sm.SkipPhase(dir, "checkpoint-b"); err != nil {
+		t.Fatalf("SkipPhase: %v", err)
+	}
+
+	h := TaskInitHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"tasks":     map[string]any{},
+	})
+	if !res.IsError {
+		t.Errorf("TaskInitHandler should fail with empty tasks map, got success")
 	}
 }
 

@@ -26,8 +26,15 @@ Repeat until done:
      Present `action.present_to_user` to the user. Wait for response.
      Call `mcp__forge-state__phase_complete(workspace, phase=action.name)`.
      Do NOT call pipeline_report_result for checkpoints.
-   - `exec`: Run `action.commands` via Bash. Then call `pipeline_report_result`
-     with `phase=action.phase`. (action.phase is always populated for exec actions.)
+   - `exec`: Execute `action.commands` based on the first element:
+     - If `action.commands[0]` is `task_init`: call `mcp__forge-state__task_init`
+       (parse tasks from `tasks.md` in the workspace and pass as the `tasks` parameter).
+     - If `action.commands[0]` is `create_branch`: run `git checkout -b <action.commands[1]>`
+       via Bash, then call `mcp__forge-state__set_branch(workspace, branch=action.commands[1])`.
+     - Otherwise: run `action.commands` via Bash.
+     Then call `pipeline_report_result` with `phase=action.phase`.
+     If `action.setup_only` is true, pass `setup_only=true` to `pipeline_report_result`.
+     (action.phase is always populated for exec actions.)
    - `write_file`: Write `action.content` to `action.path`. Then call
      `pipeline_report_result` with `phase=action.phase`. (action.phase always populated.)
    - `done`:
@@ -38,8 +45,12 @@ Repeat until done:
      - Otherwise: pipeline complete. Stop.
 3. For `spawn_agent`, `exec`, and `write_file`: call
    `mcp__forge-state__pipeline_report_result(workspace, phase=action.phase,
-   tokens_used=<tokens>, duration_ms=<ms>, model=<model>)`.
-   Check `result.next_action_hint`: if `"revision_required"`, present findings to user.
+   tokens_used=<tokens>, duration_ms=<ms>, model=<model>,
+   setup_only=action.setup_only)`.  (Omit `setup_only` when false/absent.)
+   Check `result.next_action_hint`:
+   - `"revision_required"`: present findings to user.
+   - `"setup_continue"`: immediately call `pipeline_next_action` again
+     (the engine will return the next setup step or the real dispatch).
 
 ## Rules
 
