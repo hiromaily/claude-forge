@@ -281,19 +281,16 @@ func TaskInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if len(tasks) == 0 {
 			return errorf("task_init: no tasks parsed from input — tasks.md may be empty or malformed")
 		}
-		if warnings := validateTaskDependencies(tasks); len(warnings) > 0 {
-			// Validation warnings are non-blocking — log them in the response
-			// so the orchestrator can surface them to the user.
-			if err := sm.TaskInit(workspace, tasks); err != nil {
-				return errorf("task_init: %v", err)
-			}
+		// Validate dependency integrity before storing.
+		warnings := validateTaskDependencies(tasks)
+		if err := sm.TaskInit(workspace, tasks); err != nil {
+			return errorf("task_init: %v", err)
+		}
+		if len(warnings) > 0 {
 			return okJSON(map[string]any{
 				"status":   "ok",
 				"warnings": warnings,
 			})
-		}
-		if err := sm.TaskInit(workspace, tasks); err != nil {
-			return errorf("task_init: %v", err)
 		}
 		return okText("ok")
 	}

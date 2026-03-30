@@ -317,7 +317,7 @@ func TestValidateArtifacts_Phase7(t *testing.T) {
 		t.Parallel()
 
 		workspace := t.TempDir()
-		writeFile(t, workspace, "verification.md", "Some content here.\n")
+		writeFile(t, workspace, "comprehensive-review.md", "Some content here.\n")
 
 		results := validation.ValidateArtifacts(workspace, "phase-7")
 
@@ -342,6 +342,52 @@ func TestValidateArtifacts_Phase7(t *testing.T) {
 
 		if results[0].Valid {
 			t.Error("expected valid=false for missing file")
+		}
+	})
+}
+
+func TestValidateArtifacts_FinalSummary(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non-empty file", func(t *testing.T) {
+		t.Parallel()
+		workspace := t.TempDir()
+		writeFile(t, workspace, "final-summary.md", "Summary content.\n")
+		results := validation.ValidateArtifacts(workspace, "final-summary")
+		if len(results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(results))
+		}
+		if !results[0].Valid {
+			t.Errorf("expected valid=true, error: %s", results[0].Error)
+		}
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		t.Parallel()
+		workspace := t.TempDir()
+		results := validation.ValidateArtifacts(workspace, "final-summary")
+		if len(results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(results))
+		}
+		if results[0].Valid {
+			t.Error("expected valid=false for missing file")
+		}
+	})
+}
+
+func TestValidateArtifacts_FinalVerification(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non-empty file", func(t *testing.T) {
+		t.Parallel()
+		workspace := t.TempDir()
+		writeFile(t, workspace, "final-verification.md", "Verification content.\n")
+		results := validation.ValidateArtifacts(workspace, "final-verification")
+		if len(results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(results))
+		}
+		if !results[0].Valid {
+			t.Errorf("expected valid=true, error: %s", results[0].Error)
 		}
 	})
 }

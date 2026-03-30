@@ -592,7 +592,7 @@ func (*Engine) handlePhaseSeven(_ *state.State) (Action, error) {
 		"sonnet",
 		PhaseSeven,
 		[]string{"design.md", "tasks.md"},
-		"verification.md",
+		"comprehensive-review.md",
 	), nil
 }
 
@@ -617,17 +617,7 @@ func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 	}
 
 	title := derivePRTitle(st)
-
-	// Determine the summary file to use as PR body.
-	// feature/refactor produce comprehensive-review.md; others produce final-summary.md.
-	bodyFileName := "comprehensive-review.md"
-	if st.TaskType != nil {
-		switch *st.TaskType {
-		case TaskTypeBugfix, TaskTypeDocs, TaskTypeInvestigation:
-			bodyFileName = "final-summary.md"
-		}
-	}
-	bodyFile := filepath.Join(st.Workspace, bodyFileName)
+	bodyFile := filepath.Join(st.Workspace, "final-summary.md")
 
 	return NewExecAction(PhasePRCreation, []string{
 		"gh", "pr", "create",
@@ -702,8 +692,8 @@ func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
 			"Generate final summary with pipeline statistics.",
 			"sonnet",
 			PhaseFinalSummary,
-			[]string{"verification.md", "design.md", "tasks.md"},
-			"comprehensive-review.md",
+			[]string{"comprehensive-review.md", "design.md", "tasks.md"},
+			"final-summary.md",
 		), nil
 	}
 }

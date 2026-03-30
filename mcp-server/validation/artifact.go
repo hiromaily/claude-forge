@@ -44,8 +44,8 @@ var artifactRules = map[string]artifactRule{
 	"phase-3b":           {filename: "review-design.md", verdictSet: []string{"APPROVE_WITH_NOTES", "APPROVE", "REVISE"}},
 	"phase-4":            {filename: "tasks.md", requiredHeading: "## Task"},
 	"phase-4b":           {filename: "review-tasks.md", verdictSet: []string{"APPROVE_WITH_NOTES", "APPROVE", "REVISE"}},
-	"phase-7":            {filename: "verification.md", requireNonEmpty: true},
-	"final-summary":      {filename: "comprehensive-review.md", requireNonEmpty: true},
+	"phase-7":            {filename: "comprehensive-review.md", requireNonEmpty: true},
+	"final-summary":      {filename: "final-summary.md", requireNonEmpty: true},
 	"final-verification": {filename: "final-verification.md", requireNonEmpty: true},
 }
 
