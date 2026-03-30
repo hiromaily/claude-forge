@@ -50,6 +50,7 @@ Ordered by priority. Higher rows should be tackled first.
 | [#30](https://github.com/hiromaily/claude-forge/issues/30) | Agent Teams mode (Phase 5 inter-agent comms) | Collaborative mode with `comms.json` for real-time coordination. High complexity — defer until pain confirmed by phase-stats data. Source: barkain. |
 | [#31](https://github.com/hiromaily/claude-forge/issues/31) | Linear integration | Add `linear_issue` source type alongside GitHub Issues and Jira. Source: levnikolaevich. |
 | [#32](https://github.com/hiromaily/claude-forge/issues/32) | Native plan mode integration at checkpoints | Use EnterPlanMode at Checkpoint A/B for structured task/PR review. Source: barkain. |
+| — | Workspace directory naming from external URLs | `pipeline_init` slugifies the raw URL, producing meaningless names like `20260330-https-legalforce-atlassian-net-browse-so`. For Jira/GitHub URLs, extract the issue key and summary instead (e.g., `20260330-soa-2883-skip-minutes-job-without-integration`). Requires `pipeline_init_with_context` to rename the workspace after fetching external context. |
 
 ---
 
