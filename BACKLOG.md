@@ -11,6 +11,7 @@ Ordered by priority. Higher rows should be tackled first.
 
 | # | ID | Issue | Title | Type | Effort | Why now |
 |---|-----|-------|-------|------|--------|---------|
+| 0 | **B1** | — | Engine skips phase-5 when `task_init` not called; no branch creation between checkpoint-b and phase-5 | Bug | S | **Blocking bug.** `pipeline_next_action` returns `skip:phase-5` when `state.Tasks` is empty because `task_init` was never invoked. Branch creation step is also missing from the engine dispatch. Results in pipeline advancing to phase-6 on `main` with no implementation. Two fixes needed: (1) engine must emit `task_init` + branch creation actions after checkpoint-b, (2) Guard 3c should block `phase_complete` for phase-5 when tasks are empty (currently only guards `phase_start`). |
 | 1 | **F10** | [#12](https://github.com/hiromaily/claude-forge/issues/12) | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
 | 2 | **F9** | [#13](https://github.com/hiromaily/claude-forge/issues/13) | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
 | 3 | **F12** | [#14](https://github.com/hiromaily/claude-forge/issues/14) | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
