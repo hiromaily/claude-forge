@@ -47,6 +47,7 @@ func TestPipelineReportResult(t *testing.T) {
 		tokensUsed      int
 		durationMs      int
 		model           string
+		setupOnly       bool // pass setup_only=true to pipeline_report_result
 		wantIsError     bool
 		wantStateUpdate bool
 		wantHint        string
@@ -271,6 +272,30 @@ func TestPipelineReportResult(t *testing.T) {
 			wantVerdict:     "FAIL",
 		},
 		{
+			name:  "setup_only_skips_phase_complete",
+			phase: "phase-5",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+			},
+			setupOnly:       true,
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "setup_continue",
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				// Phase must NOT have advanced — phase-5 should NOT be in CompletedPhases.
+				for _, p := range s.CompletedPhases {
+					if p == "phase-5" {
+						t.Errorf("phase-5 must NOT be in CompletedPhases when setup_only=true")
+					}
+				}
+			},
+		},
+		{
 			name:  "duplicate_phase_log_warning",
 			phase: "phase-3",
 			setup: func(t *testing.T, sm *state.StateManager, dir string) {
@@ -304,13 +329,17 @@ func TestPipelineReportResult(t *testing.T) {
 			}
 
 			h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
-			res := callTool(t, h, map[string]any{
+			params := map[string]any{
 				"workspace":   dir,
 				"phase":       tc.phase,
 				"tokens_used": tc.tokensUsed,
 				"duration_ms": tc.durationMs,
 				"model":       tc.model,
-			})
+			}
+			if tc.setupOnly {
+				params["setup_only"] = true
+			}
+			res := callTool(t, h, params)
 
 			if tc.wantIsError {
 				if !res.IsError {

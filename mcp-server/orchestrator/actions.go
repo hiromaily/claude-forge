@@ -41,6 +41,9 @@ type Action struct {
 	Path    string `json:"path,omitempty"`
 	Content string `json:"content,omitempty"`
 
+	// setup flag — when true, pipeline_report_result records phase-log but skips PhaseComplete
+	SetupOnly bool `json:"setup_only,omitempty"`
+
 	// done fields
 	Summary     string `json:"summary,omitempty"`
 	SummaryPath string `json:"summary_path,omitempty"`
@@ -102,6 +105,17 @@ func NewWriteFileAction(phase, path, content string) Action {
 		Phase:   phase,
 		Path:    path,
 		Content: content,
+	}
+}
+
+// NewSetupExecAction constructs a setup exec action that should NOT advance the phase.
+// The orchestrator must pass setup_only=true when calling pipeline_report_result.
+func NewSetupExecAction(phase string, commands []string) Action {
+	return Action{
+		Type:      ActionExec,
+		Phase:     phase,
+		Commands:  commands,
+		SetupOnly: true,
 	}
 }
 

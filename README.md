@@ -292,20 +292,34 @@ The pipeline pauses and returns control to the user at the following points. Poi
 
 ## Installation
 
-```
+For the complete step-by-step guide, see [SETUP.md](SETUP.md).
+
+### Quick start (3 commands)
+
+```bash
+# 1. Install the plugin
 /plugin marketplace add hiromaily/claude-forge
 /plugin install claude-forge
+
+# 2. Build, install, and register the MCP server (from the claude-forge directory)
+make setup
+
+# 3. Restart Claude Code session, then verify
+/mcp   # forge-state should show as Connected
 ```
 
 ### Prerequisites
 
+- **Go** — required to build the MCP server binary
 - **jq** — required for state management and hook scripts. Install via `brew install jq` (macOS) or your package manager.
 
 ### Environment variables
 
+Environment variables are configured automatically when using `make setup`. For manual setup, pass them via `claude mcp add --env`:
+
 | Variable | Required | Description |
 | --- | --- | --- |
-| `FORGE_AGENTS_PATH` | Yes (production) | Absolute path to the `agents/` directory. Required for `pipeline_next_action` to resolve agent `.md` files at runtime. Example: `export FORGE_AGENTS_PATH=/path/to/claude-forge/agents` |
+| `FORGE_AGENTS_PATH` | Yes | Absolute path to the `agents/` directory. Required for `pipeline_next_action` to resolve agent `.md` files at runtime. Set automatically by `make setup`. |
 | `FORGE_SPECS_DIR` | No | Override the default `.specs/` directory used by the engine. |
 | `FORGE_EVENTS_PORT` | No | Port for the SSE events endpoint (used by `subscribe_events`). |
 

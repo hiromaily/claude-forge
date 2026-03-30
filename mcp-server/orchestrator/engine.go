@@ -439,12 +439,29 @@ func (*Engine) handleCheckpointB(_ *state.State) (Action, error) {
 	), nil
 }
 
-// handlePhaseFive handles Phase 5 (implementation) — Decision 22.
+// handlePhaseFive handles Phase 5 (implementation) — Decisions 22, 27, 28.
+// Pre-conditions are checked via setup exec actions (SetupOnly=true):
+//   - Decision 27: if st.Tasks is empty, emit task_init setup action.
+//   - Decision 28: if st.Branch is nil and not using current branch, emit create_branch setup action.
+//
+// Setup exec actions are reported with setup_only=true so pipeline_report_result
+// records phase-log but does NOT call PhaseComplete. The engine re-enters on
+// the next pipeline_next_action call to check the next pre-condition.
 func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
+	// Decision 27 — task_init setup
+	if len(st.Tasks) == 0 {
+		return NewSetupExecAction(PhaseFive, []string{"task_init", st.Workspace}), nil
+	}
+
+	// Decision 28 — Branch creation setup
+	if st.Branch == nil && !st.UseCurrentBranch {
+		return NewSetupExecAction(PhaseFive, []string{"create_branch", deriveBranchName(st)}), nil
+	}
+
 	// Decision 22 — Phase 5 parallel/sequential ordering
 	taskKeys := sortedTaskKeys(st.Tasks)
 	if len(taskKeys) == 0 {
-		// No tasks to implement; advance
+		// All tasks removed after init (edge case); advance
 		return NewDoneAction(SkipSummaryPrefix+PhaseFive, ""), nil
 	}
 
@@ -707,6 +724,12 @@ func readSourceType(workspace string) string {
 	}
 
 	return "text"
+}
+
+// deriveBranchName generates a deterministic branch name from the spec name.
+func deriveBranchName(st *state.State) string {
+	name := strings.ToLower(strings.ReplaceAll(st.SpecName, " ", "-"))
+	return "forge/" + name
 }
 
 // sortedTaskKeys returns task keys from tasks sorted numerically ascending.

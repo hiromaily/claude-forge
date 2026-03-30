@@ -8,6 +8,8 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
+func boolPtr(b bool) *bool { return &b }
+
 // newTestStateManager creates a StateManager loaded from a temporary directory
 // with an initialised state.json.
 func newTestStateManager(t *testing.T, phase string, modify func(*state.State) error) *state.StateManager {
@@ -213,12 +215,14 @@ type nextActionTestCase struct {
 	// eng overrides; if nil, a default stub engine (approve + text) is used.
 	engFn func() *Engine
 	// assertions on the returned action
+	wantErr           bool     // true: expect non-nil error from NextAction
 	wantType          string
 	wantAgent         string
 	wantSummary       string
 	wantPhase         string   // non-empty: assert action.Phase equals this value
 	wantParallelIDs   []string // nil means "do not check"; empty slice means "assert len==0"
 	wantInputContains string   // non-empty: assert InputFiles contains this value
+	wantSetupOnly     *bool    // non-nil: assert action.SetupOnly equals *wantSetupOnly
 }
 
 // defaultEng returns an Engine with stubbed readers (approve + text).
@@ -335,8 +339,9 @@ func TestNextAction(t *testing.T) {
 				}
 				return sm
 			},
-			wantType:  ActionExec,
-			wantPhase: PhaseOne,
+			wantType:      ActionExec,
+			wantPhase:     PhaseOne,
+			wantSetupOnly: boolPtr(false),
 		},
 
 		// ── Decision 17: bugfix stub synthesis exec step (both stubs present, tasks empty) ──
@@ -363,8 +368,9 @@ func TestNextAction(t *testing.T) {
 				}
 				return sm
 			},
-			wantType:  ActionExec,
-			wantPhase: PhaseThree,
+			wantType:      ActionExec,
+			wantPhase:     PhaseThree,
+			wantSetupOnly: boolPtr(false),
 		},
 
 		// ── Phase 2: investigator ─────────────────────────────────────────────
@@ -618,12 +624,58 @@ func TestNextAction(t *testing.T) {
 			wantType: ActionCheckpoint,
 		},
 
+		// ── Decision 27: phase-5 task_init setup — empty tasks emits setup exec ──
+		{
+			name: "phase5_task_init_setup",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-5", nil) // no tasks set
+			},
+			wantType:      ActionExec,
+			wantSetupOnly: boolPtr(true),
+		},
+
+		// ── Decision 28: phase-5 branch creation setup — no branch emits setup exec ──
+		{
+			name: "phase5_branch_setup",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "sequential", ImplStatus: "pending"},
+					}
+					// Branch is nil and UseCurrentBranch is false (default)
+					return nil
+				})
+			},
+			wantType:      ActionExec,
+			wantSetupOnly: boolPtr(true),
+		},
+
+		// ── Decision 28 bypass: UseCurrentBranch=true skips branch setup ──
+		{
+			name: "phase5_use_current_branch",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.UseCurrentBranch = true
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "sequential", ImplStatus: "pending"},
+					}
+					return nil
+				})
+			},
+			wantType:      ActionSpawnAgent,
+			wantSetupOnly: boolPtr(false),
+		},
+
 		// ── Decision 22: phase-5 sequential task — ParallelTaskIDs empty ─────
 		{
 			name: "phase5_sequential",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.UseCurrentBranch = true
 					s.Tasks = map[string]state.Task{
 						"1": {Title: "Task 1", ExecutionMode: "sequential", ImplStatus: "pending"},
 						"2": {Title: "Task 2", ExecutionMode: "sequential", ImplStatus: "pending"},
@@ -641,6 +693,7 @@ func TestNextAction(t *testing.T) {
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.UseCurrentBranch = true
 					s.Tasks = map[string]state.Task{
 						"1": {Title: "Task 1", ExecutionMode: "parallel", ImplStatus: "pending"},
 						"2": {Title: "Task 2", ExecutionMode: "parallel", ImplStatus: "pending"},
@@ -658,6 +711,7 @@ func TestNextAction(t *testing.T) {
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.UseCurrentBranch = true
 					s.Tasks = map[string]state.Task{
 						"1": {Title: "Task 1", ExecutionMode: "parallel", ImplStatus: "pending"},
 						"2": {Title: "Task 2", ExecutionMode: "sequential", ImplStatus: "pending"},
@@ -675,6 +729,7 @@ func TestNextAction(t *testing.T) {
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.UseCurrentBranch = true
 					s.Tasks = map[string]state.Task{
 						"1": {Title: "Task 1", ExecutionMode: "parallel", ImplStatus: "pending"},
 						"2": {Title: "Task 2", ExecutionMode: "parallel", ImplStatus: "pending"},
@@ -913,6 +968,12 @@ func TestNextAction(t *testing.T) {
 			}
 
 			action, err := eng.NextAction(sm, "")
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("NextAction: expected error, got nil")
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("NextAction: %v", err)
 			}
@@ -949,6 +1010,12 @@ func TestNextAction(t *testing.T) {
 			if tc.wantInputContains != "" {
 				if !slices.Contains(action.InputFiles, tc.wantInputContains) {
 					t.Errorf("InputFiles = %v; expected to contain %q", action.InputFiles, tc.wantInputContains)
+				}
+			}
+
+			if tc.wantSetupOnly != nil {
+				if action.SetupOnly != *tc.wantSetupOnly {
+					t.Errorf("action.SetupOnly = %v, want %v", action.SetupOnly, *tc.wantSetupOnly)
 				}
 			}
 		})

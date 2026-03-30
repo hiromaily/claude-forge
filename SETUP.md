@@ -1,26 +1,185 @@
 # claude-forge setup
 
-Start a new Claude Code session in the terminal and enter the following commands:
+## Prerequisites
 
-```
-# register for marketplaces
+- **Go** — required only for local development builds (not needed for plugin install)
+- **jq** — required for hook scripts (`brew install jq` on macOS)
+
+## Quick Start (Plugin Install — Recommended)
+
+Install the plugin and everything is configured automatically:
+
+```bash
+# Register the marketplace (one-time)
 /plugin marketplace add hiromaily/claude-forge
 
-# install
+# Install the plugin
 /plugin install claude-forge
- or
-clone https://github.com/hiromaily/claude-forge.git
-claude plugins install ~/<path>/hiromaily/claude-forge
+```
 
-# install with onetime session only
-claude --plugin-dir ~/<path>/hiromaily/claude-forge
+Alternative installation methods:
 
-# update
+```bash
+# Install from a local clone
+claude plugins install ~/path/to/claude-forge
+
+# One-time session only (no persistent install)
+claude --plugin-dir ~/path/to/claude-forge
+```
+
+### What happens automatically
+
+When the plugin is installed, Claude Code:
+
+1. **Registers the MCP server** — `.mcp.json` declares the `forge-state` MCP server, and the `mcpServers` field in `plugin.json` tells Claude Code to auto-register it
+2. **Runs the Setup hook** — `hooks/hooks.json` defines a `Setup` event that runs `scripts/setup.sh`
+3. **Downloads the binary** — `setup.sh` detects the platform (OS/arch), downloads the pre-built `forge-state-mcp` binary from the matching GitHub Release, and places it at `$CLAUDE_PLUGIN_ROOT/bin/forge-state-mcp`
+4. **Falls back to source build** — if the release binary is not available (e.g., unreleased version), `setup.sh` builds from source using `go build` (requires Go)
+
+After installation, restart Claude Code and verify with `/mcp` — `forge-state` should show as `Connected`.
+
+### How auto-registration works
+
+```
+plugin.json                     ← declares "mcpServers": "./.mcp.json"
+  └─> .mcp.json                 ← defines forge-state server (stdio transport)
+        └─> bin/forge-state-mcp ← binary downloaded by Setup hook
+
+hooks/hooks.json
+  └─> Setup event               ← triggers scripts/setup.sh on install
+        └─> scripts/setup.sh    ← downloads binary from GitHub Releases
+```
+
+Key files:
+
+| File | Role |
+|------|------|
+| `.claude-plugin/plugin.json` | Plugin metadata + `mcpServers` pointer |
+| `.mcp.json` | MCP server definition (type, command, env) |
+| `hooks/hooks.json` | Setup hook that triggers binary download |
+| `scripts/setup.sh` | Binary downloader with source-build fallback |
+
+### Version-aware caching
+
+`setup.sh` writes a `.installed-version` marker alongside the binary. On subsequent plugin updates, it compares the marker against `plugin.json` version and re-downloads only when the version changes.
+
+## Local Development Setup
+
+For contributors working on claude-forge itself, build and register manually:
+
+```bash
+# Build and install binary to $GOBIN or ~/.local/bin
+make install
+
+# Register MCP server with Claude Code (manual)
+make setup-manual
+```
+
+Or register manually with custom options:
+
+```bash
+# Build and install the binary
+make install
+
+# Register with Claude Code
+claude mcp add forge-state \
+  --transport stdio \
+  --scope user \
+  --env FORGE_AGENTS_PATH=/absolute/path/to/claude-forge/agents \
+  -- forge-state-mcp
+```
+
+> Replace `/absolute/path/to/claude-forge/agents` with the actual absolute path to the `agents/` directory in your clone.
+>
+> Use `--scope user` to make the server available across all projects, or `--scope local` for the current project only.
+
+After registration, restart Claude Code and verify with `/mcp`.
+
+## Releasing a new version
+
+When cutting a new release:
+
+1. Update the version in `plugin.json`:
+   ```bash
+   make update-tag new=1.5.0 old=1.4.0
+   ```
+
+2. Commit and push:
+   ```bash
+   git add -A && git commit -m "chore: bump version to 1.5.0"
+   git push origin main
+   ```
+
+3. Create and push the tag:
+   ```bash
+   make update-git-tag new=1.5.0
+   ```
+
+4. GitHub Actions (`release.yml`) automatically:
+   - Cross-compiles `forge-state-mcp` for darwin/arm64, darwin/amd64, linux/amd64, linux/arm64
+   - Creates a GitHub Release with the gzipped binaries attached
+   - Generates release notes from commits
+
+When users update the plugin, the Setup hook re-runs and downloads the new binary.
+
+## Troubleshooting
+
+### forge-state shows as "Failed to connect"
+
+1. Check if the binary exists:
+   ```bash
+   # For plugin install:
+   ls -la $(claude plugins path)/claude-forge/bin/forge-state-mcp
+
+   # For local dev:
+   which forge-state-mcp
+   ```
+
+2. Check `FORGE_AGENTS_PATH` points to a valid directory:
+   ```bash
+   claude mcp get forge-state
+   ```
+
+3. Test the binary directly:
+   ```bash
+   echo '{}' | forge-state-mcp
+   ```
+   If it crashes, rebuild: `cd mcp-server && go build -o ../bin/forge-state-mcp .`
+
+4. Re-run setup:
+   ```bash
+   # Plugin users: reinstall the plugin
+   # Local dev: make setup-manual
+   ```
+
+### Setup hook didn't run
+
+The Setup hook runs only on first install or plugin update. To force re-run:
+```bash
+# Remove the version marker to trigger re-download
+rm -f $(claude plugins path)/claude-forge/bin/.installed-version
+```
+
+Then restart Claude Code.
+
+## Updating
+
+```bash
+# Update the plugin
 claude plugin update claude-forge@claude-forge
 
-# reload
+# Reload plugins without restarting (does not reload MCP servers)
 /reload-plugins
 
-# uninstall
+# Restart Claude Code to reload MCP servers
+```
+
+## Uninstalling
+
+```bash
+# Remove the plugin (also removes auto-registered MCP server)
 claude plugins uninstall claude-forge@claude-forge
+
+# If manually registered, also remove:
+claude mcp remove forge-state -s user
 ```

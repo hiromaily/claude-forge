@@ -1,6 +1,17 @@
 {
   "description": "Claude-forge hooks: state management, read-only enforcement, and completion guard",
   "hooks": {
+    "Setup": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh\"",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|Bash",

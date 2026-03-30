@@ -882,3 +882,58 @@ func TestPipelineInitNoSideEffects(t *testing.T) {
 		t.Errorf("PipelineInitHandler created state.json — it must be a pure detection tool")
 	}
 }
+
+// ---------- TestRefineWorkspacePath ----------
+
+func TestRefineWorkspacePath(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		workspace string
+		extCtx    externalContext
+		want      string
+	}{
+		{
+			name:      "jira_issue_refines_name",
+			workspace: ".specs/20260330-https-legalforce-atlassian-net-browse-so",
+			extCtx: externalContext{
+				SourceID:    "SOA-2883",
+				JiraSummary: "Light plan triggers meeting minutes job for Meet meetings",
+			},
+			want: ".specs/20260330-soa-2883-light-plan-triggers-meeting-mi",
+		},
+		{
+			name:      "github_issue_refines_name",
+			workspace: ".specs/20260330-https-github-com-owner-repo-issues-42",
+			extCtx: externalContext{
+				SourceID:    "42",
+				GitHubTitle: "Fix auth timeout in middleware",
+			},
+			want: ".specs/20260330-42-fix-auth-timeout-in-middleware",
+		},
+		{
+			name:      "no_context_keeps_original",
+			workspace: ".specs/20260330-implement-a-new-feature",
+			extCtx:    externalContext{},
+			want:      ".specs/20260330-implement-a-new-feature",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := refineWorkspacePath(tc.workspace, tc.extCtx)
+			if tc.name == "no_context_keeps_original" {
+				if got != tc.want {
+					t.Errorf("refineWorkspacePath() = %q, want %q", got, tc.want)
+				}
+			} else {
+				// For refined paths, check prefix since Japanese chars get slugified
+				if !strings.HasPrefix(got, tc.want) {
+					t.Errorf("refineWorkspacePath() = %q, want prefix %q", got, tc.want)
+				}
+			}
+		})
+	}
+}

@@ -277,6 +277,9 @@ func TaskInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if err := json.Unmarshal(tasksData, &tasks); err != nil {
 			return errorf("unmarshal tasks: %v", err)
 		}
+		if len(tasks) == 0 {
+			return errorf("task_init: no tasks parsed from input — tasks.md may be empty or malformed")
+		}
 		if err := sm.TaskInit(workspace, tasks); err != nil {
 			return errorf("task_init: %v", err)
 		}
