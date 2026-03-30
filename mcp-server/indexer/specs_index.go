@@ -13,6 +13,16 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/search"
 )
 
+// Package-level compiled regexes — compiled once at startup.
+var (
+	spaceRe         = regexp.MustCompile(`\s{2,}`)
+	findingRe       = regexp.MustCompile(`\*\*\d+\. \[(?:CRITICAL|MINOR)\][^*]+\*\*`)
+	reviewVerdictRe = regexp.MustCompile(`APPROVE(?:_WITH_NOTES)?|REVISE`)
+	implVerdictRe   = regexp.MustCompile(`PASS_WITH_NOTES|PASS|FAIL`)
+	backtickRe      = regexp.MustCompile("`([^`]+)`")
+	sectionRe       = regexp.MustCompile(`(?i)^## [Ff]iles ([Mm]odified|[Cc]reated( or [Mm]odified)?)`)
+)
+
 // BuildSpecsIndex scans specsDir for workspace subdirectories, extracts fields
 // from each workspace's state.json and artifact .md files, and writes
 // specsDir/index.json. Returns the number of entries written and any error.
@@ -109,32 +119,24 @@ func extractRequestSummary(workspaceDir string) string {
 	content := string(data)
 	lines := strings.Split(content, "\n")
 
-	// State machine: skip YAML frontmatter delimited by --- lines.
-	// state=0: before first "---"; state=1: inside frontmatter; state=2: after frontmatter.
-	// Lines in state=0 and state=2 are included in the body.
-	state := 0
-	var bodyLines []string
-
-	for _, line := range lines {
-		trimmed := strings.TrimRight(line, " \t\r")
-		if trimmed == "---" {
-			if state == 0 {
-				state = 1
-				continue
-			}
-
-			if state == 1 {
-				state = 2
-				continue
+	// Strip YAML frontmatter only when the file starts with "---".
+	// A "---" appearing later in the document is a markdown horizontal rule, not frontmatter.
+	bodyStartIndex := 0
+	if len(lines) > 0 && strings.TrimRight(lines[0], " \t\r") == "---" {
+		endFound := false
+		for i := 1; i < len(lines); i++ {
+			if strings.TrimRight(lines[i], " \t\r") == "---" {
+				bodyStartIndex = i + 1
+				endFound = true
+				break
 			}
 		}
-
-		if state != 1 {
-			bodyLines = append(bodyLines, line)
+		if !endFound {
+			bodyStartIndex = len(lines) // no body if closing delimiter is absent
 		}
 	}
 
-	body := strings.Join(bodyLines, " ")
+	body := strings.Join(lines[bodyStartIndex:], " ")
 	// Normalize multiple whitespace runs (including those from newline→space conversion).
 	body = normalizeWhitespace(body)
 
@@ -149,9 +151,6 @@ func extractRequestSummary(workspaceDir string) string {
 // runs of whitespace to a single space, mirroring the shell sed/tr pipeline.
 func normalizeWhitespace(s string) string {
 	s = strings.TrimSpace(s)
-	// Collapse runs of whitespace (space, tab, etc.) to a single space.
-	spaceRe := regexp.MustCompile(`\s{2,}`)
-
 	return spaceRe.ReplaceAllString(s, " ")
 }
 
@@ -171,7 +170,7 @@ func extractReviewFeedback(workspaceDir string) []search.ReviewFeedback {
 		content := string(data)
 
 		// Detect verdict: APPROVE(_WITH_NOTES)? or REVISE.
-		verdict := extractVerdict(content, `APPROVE(?:_WITH_NOTES)?|REVISE`)
+		verdict := extractVerdict(content, reviewVerdictRe)
 		if verdict != "REVISE" {
 			continue
 		}
@@ -190,16 +189,12 @@ func extractReviewFeedback(workspaceDir string) []search.ReviewFeedback {
 }
 
 // extractVerdict finds the first occurrence of a verdict pattern in content.
-func extractVerdict(content, pattern string) string {
-	re := regexp.MustCompile(pattern)
-	match := re.FindString(content)
-
-	return match
+func extractVerdict(content string, re *regexp.Regexp) string {
+	return re.FindString(content)
 }
 
 // extractFindings extracts finding titles matching the pattern **N. [CRITICAL|MINOR] Title**.
 func extractFindings(content string) []string {
-	findingRe := regexp.MustCompile(`\*\*\d+\. \[(?:CRITICAL|MINOR)\][^*]+\*\*`)
 	matches := findingRe.FindAllString(content, -1)
 
 	result := make([]string, 0, len(matches))
@@ -235,7 +230,7 @@ func extractImplOutcomes(workspaceDir string) []search.ImplOutcome {
 		content := string(data)
 
 		// PASS_WITH_NOTES must come before PASS — leftmost match wins in ERE.
-		verdict := extractVerdict(content, `PASS_WITH_NOTES|PASS|FAIL`)
+		verdict := extractVerdict(content, implVerdictRe)
 		if verdict == "" {
 			continue
 		}
@@ -298,11 +293,6 @@ func extractFilesModified(content string) []string {
 
 	lines := strings.Split(content, "\n")
 	inSection := false
-
-	// Regex for backtick-enclosed paths.
-	backtickRe := regexp.MustCompile("`([^`]+)`")
-	// Regex for section headers: ## Files Modified/Created/Created or Modified.
-	sectionRe := regexp.MustCompile(`(?i)^## [Ff]iles ([Mm]odified|[Cc]reated( or [Mm]odified)?)`)
 
 	for _, line := range lines {
 		if sectionRe.MatchString(line) {
