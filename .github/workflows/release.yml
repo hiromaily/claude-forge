@@ -15,13 +15,14 @@ jobs:
         include:
           - goos: darwin
             goarch: arm64
-          - goos: darwin
-            goarch: amd64
+            runs-on: macos-latest
           - goos: linux
             goarch: amd64
+            runs-on: ubuntu-latest
           - goos: linux
             goarch: arm64
-    runs-on: ubuntu-latest
+            runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -35,7 +36,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "0"
+          CGO_ENABLED: "1"
         run: |
           cd mcp-server
           go build -trimpath -ldflags="-s -w" -o ../forge-state-mcp .
