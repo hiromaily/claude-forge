@@ -25,13 +25,15 @@ setup: install
 	@echo "For local dev:    run 'make setup-manual' to register via claude mcp add."
 
 # setup-manual: Register the MCP server manually with Claude Code (for local dev without plugin)
+# Uses --scope local so this project-level override takes precedence over .mcp.json,
+# avoiding a duplicate "forge-state" entry when working inside the claude-forge dev repo.
 .PHONY: setup-manual
 setup-manual: install
 	@echo "Registering forge-state MCP server with Claude Code..."
-	@claude mcp remove forge-state -s user 2>/dev/null || true
+	@claude mcp remove forge-state -s local 2>/dev/null || true
 	claude mcp add forge-state \
 		--transport stdio \
-		--scope user \
+		--scope local \
 		--env FORGE_AGENTS_PATH=$(CURDIR)/agents \
 		-- $(INSTALL_DIR)/$(MCP_BINARY)
 	@echo ""

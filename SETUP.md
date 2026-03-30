@@ -41,13 +41,14 @@ After installation, restart Claude Code and verify with `/mcp` — `forge-state`
 ### How auto-registration works
 
 ```
-plugin.json                     ← declares "mcpServers": "./.mcp.json"
-  └─> .mcp.json                 ← defines forge-state server (stdio transport)
-        └─> bin/forge-state-mcp ← binary downloaded by Setup hook
+plugin.json                        ← declares "mcpServers": "./.mcp.json"
+  └─> .mcp.json                    ← defines forge-state server (stdio transport)
+        └─> scripts/launch-mcp.sh  ← self-healing launcher (runs setup.sh if binary missing)
+              └─> bin/forge-state-mcp ← binary downloaded by Setup hook or launch-mcp.sh
 
 hooks/hooks.json
-  └─> Setup event               ← triggers scripts/setup.sh on install
-        └─> scripts/setup.sh    ← downloads binary from GitHub Releases
+  └─> Setup event                  ← triggers scripts/setup.sh on install
+        └─> scripts/setup.sh       ← downloads binary from GitHub Releases
 ```
 
 Key files:
@@ -58,6 +59,7 @@ Key files:
 | `.mcp.json` | MCP server definition (type, command, env) |
 | `hooks/hooks.json` | Setup hook that triggers binary download |
 | `scripts/setup.sh` | Binary downloader with source-build fallback |
+| `scripts/launch-mcp.sh` | Self-healing launcher: runs `setup.sh` if binary is missing, then execs it |
 
 ### Version-aware caching
 
@@ -68,30 +70,13 @@ Key files:
 For contributors working on claude-forge itself, build and register manually:
 
 ```bash
-# Build and install binary to $GOBIN or ~/.local/bin
-make install
-
-# Register MCP server with Claude Code (manual)
+# Build and install binary to $GOBIN or ~/.local/bin, then register with Claude Code
 make setup-manual
 ```
 
-Or register manually with custom options:
+This registers the MCP server with `--scope local` (written to `.claude/settings.local.json`, which is gitignored). The local scope takes precedence over the project `.mcp.json`, so you won't get a duplicate failing `forge-state` entry when working inside this repo.
 
-```bash
-# Build and install the binary
-make install
-
-# Register with Claude Code
-claude mcp add forge-state \
-  --transport stdio \
-  --scope user \
-  --env FORGE_AGENTS_PATH=/absolute/path/to/claude-forge/agents \
-  -- forge-state-mcp
-```
-
-> Replace `/absolute/path/to/claude-forge/agents` with the actual absolute path to the `agents/` directory in your clone.
->
-> Use `--scope user` to make the server available across all projects, or `--scope local` for the current project only.
+> **Note:** If you also have the claude-forge plugin installed, you'll still see `plugin:claude-forge:forge-state` (Connected) alongside the local dev entry. The local dev entry (`forge-state`) will use your locally built binary.
 
 After registration, restart Claude Code and verify with `/mcp`.
 
@@ -123,6 +108,15 @@ When cutting a new release:
 When users update the plugin, the Setup hook re-runs and downloads the new binary.
 
 ## Troubleshooting
+
+### Two forge-state entries, one failing
+
+When working **inside the claude-forge dev repo** with the plugin also installed, you may see two entries in `/mcp`:
+
+- `plugin:claude-forge:forge-state` — Connected (plugin-managed, correct)
+- `forge-state: ${CLAUDE_PLUGIN_ROOT}/...` — Failed (project `.mcp.json`, `CLAUDE_PLUGIN_ROOT` not set in dev context)
+
+Fix: run `make setup-manual`. This registers a local-scope override that supersedes the project `.mcp.json` entry and resolves to your locally built binary.
 
 ### forge-state shows as "Failed to connect"
 

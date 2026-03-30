@@ -294,17 +294,31 @@ The pipeline pauses and returns control to the user at the following points. Poi
 
 For the complete step-by-step guide, see [SETUP.md](SETUP.md).
 
-### Quick start (3 commands)
+### Quick start — Plugin users (recommended)
 
 ```bash
-# 1. Install the plugin
+# Step 1: Register the marketplace (one-time)
 /plugin marketplace add hiromaily/claude-forge
-/plugin install claude-forge
 
-# 2. Build, install, and register the MCP server (from the claude-forge directory)
+# Step 2: Install the plugin (binary downloaded automatically)
+/plugin install claude-forge
+/reload-plugins
+
+# Step 3: Restart Claude Code and verify
+/mcp   # forge-state should show as Connected
+```
+
+> **Note:** `/plugin marketplace add` only registers the source — you must also run `/plugin install` to activate the plugin and trigger the binary download.
+
+### Quick start — Local development
+
+For contributors building from source:
+
+```bash
+# From the claude-forge directory
 make setup
 
-# 3. Restart Claude Code session, then verify
+# Restart Claude Code and verify
 /mcp   # forge-state should show as Connected
 ```
 
