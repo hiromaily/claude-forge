@@ -158,37 +158,24 @@ SKILL.md (orchestrator)
 
 ## MCP Server Registration
 
-The `forge-state` MCP server is the sole state-management interface — `scripts/state-manager.sh` has been removed. All 26 state-management commands are now typed MCP tool calls. To use the server:
+The `forge-state` MCP server is the sole state-management interface. All 26 state-management commands are typed MCP tool calls. See [SETUP.md](SETUP.md) for the complete setup guide.
 
-### 1. Build and install the binary
+### Quick reference
 
 ```bash
-make install
+# One-command setup (build + install + register): run from the claude-forge directory
+make setup
+
+# Then restart Claude Code session to activate
 ```
 
-This compiles `mcp-server/` and copies the binary (`forge-state-mcp`) to `$(GOBIN)` or `~/.local/bin`.
+> **Note:** Do NOT add `mcpServers` to `.claude/settings.json` — this field is not part of the Claude Code settings schema. Always use `claude mcp add` (or `make setup`) to register MCP servers. See [SETUP.md](SETUP.md) for manual registration options.
 
-### 2. Register the server in `.claude/settings.json`
+After restarting, the `mcp__forge-state__*` tool calls in `SKILL.md` will route to the running server process. Verify with `/mcp` (should show `forge-state` as `Connected`).
 
-Add the following `mcpServers` entry to your `.claude/settings.json`:
+### No shell fallback
 
-```json
-{
-  "mcpServers": {
-    "forge-state": {
-      "command": "forge-state-mcp",
-      "args": [],
-      "env": {}
-    }
-  }
-}
-```
-
-After saving, restart Claude Code. The `mcp__forge-state__*` tool calls in `SKILL.md` will route to the running server process.
-
-### Fallback
-
-`scripts/state-manager.sh` has been removed. All 26 state-management commands are now implemented exclusively in the Go MCP server (`mcp-server/`). There is no shell fallback for `search_patterns`, `validate_input`, or other MCP-only tools — use the MCP tools directly.
+All 26 state-management commands are implemented exclusively in the Go MCP server (`mcp-server/`). There is no shell fallback for `search_patterns`, `validate_input`, or other MCP-only tools — use the MCP tools directly.
 
 ### MCP library usage (`github.com/mark3labs/mcp-go`)
 

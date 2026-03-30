@@ -15,6 +15,24 @@ install: build
 	mkdir -p $(INSTALL_DIR)
 	cp bin/$(MCP_BINARY) $(INSTALL_DIR)/$(MCP_BINARY)
 
+# setup: Build, install, and register the MCP server with Claude Code (idempotent)
+.PHONY: setup
+setup: install
+	@echo "Registering forge-state MCP server with Claude Code..."
+	@claude mcp remove forge-state -s user 2>/dev/null || true
+	claude mcp add forge-state \
+		--transport stdio \
+		--scope user \
+		--env FORGE_AGENTS_PATH=$(CURDIR)/agents \
+		-- $(INSTALL_DIR)/$(MCP_BINARY)
+	@echo ""
+	@echo "✓ Setup complete."
+	@echo "  Binary:     $(INSTALL_DIR)/$(MCP_BINARY)"
+	@echo "  Agents:     $(CURDIR)/agents"
+	@echo ""
+	@echo "⚠ Restart your Claude Code session to activate the MCP server."
+	@echo "  After restart, run /mcp to verify forge-state shows as Connected."
+
 # test: Run the Go test suite for mcp-server/
 .PHONY: test
 test:
