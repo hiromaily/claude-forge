@@ -242,6 +242,36 @@ func deriveSpecName(workspace string) string {
 	return after
 }
 
+// refineWorkspacePath replaces a URL-derived workspace path with a meaningful one
+// when external context provides a source ID and summary (Jira or GitHub).
+// For Jira: ".specs/20260330-soa-2883-skip-minutes-job-without-integration"
+// For GitHub: ".specs/20260330-42-fix-auth-timeout"
+// Returns the original workspace path if no refinement is possible.
+func refineWorkspacePath(workspace string, extCtx externalContext) string {
+	var id, summary string
+
+	switch {
+	case extCtx.SourceID != "" && extCtx.JiraSummary != "":
+		id = extCtx.SourceID
+		summary = extCtx.JiraSummary
+	case extCtx.SourceID != "" && extCtx.GitHubTitle != "":
+		id = extCtx.SourceID
+		summary = extCtx.GitHubTitle
+	default:
+		return workspace
+	}
+
+	// Extract date prefix from existing workspace path (e.g., "20260330" from ".specs/20260330-...")
+	base := filepath.Base(workspace)
+	datePrefix := base
+	if idx := strings.IndexByte(base, '-'); idx > 0 {
+		datePrefix = base[:idx]
+	}
+
+	slug := slugify(id + " " + summary)
+	return filepath.Dir(workspace) + "/" + datePrefix + "-" + slug
+}
+
 // makeFetchNeeded constructs the FetchNeeded block for the given source type.
 // Returns nil for text and workspace source types.
 func makeFetchNeeded(sourceType string) *FetchNeeded {

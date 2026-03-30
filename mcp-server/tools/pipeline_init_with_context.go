@@ -166,7 +166,10 @@ func handleSecondCall(
 	// Steps 3–5: Re-derive flow template and skip phases; apply decision 12.
 	flowTemplate, skippedPhases, warning := deriveFlowDecisions(uc.TaskType, uc.Effort, flags.Auto)
 
-	// Step 6: Derive specName.
+	// Step 6: Derive specName and optionally rename workspace for better readability.
+	// When external context provides a summary (Jira/GitHub), build a meaningful
+	// workspace name from the source ID + summary instead of the raw URL slug.
+	workspace = refineWorkspacePath(workspace, extCtx)
 	specName := deriveSpecName(workspace)
 
 	// Steps 7a–7l: Create directory, initialise state, write request.md.
