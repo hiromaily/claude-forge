@@ -63,7 +63,7 @@ echo "setup.sh: downloading ${BINARY_NAME} v${VERSION} (${OS}/${ARCH})..." >&2
 
 mkdir -p "$BIN_DIR"
 
-HTTP_CODE="$(curl -fsSL -w '%{http_code}' -o "${BINARY_PATH}.gz" "$URL" 2>/dev/null || true)"
+HTTP_CODE="$(curl -fsSL -w '%{http_code}' -o "${BINARY_PATH}.gz" "$URL" || true)"
 if [ "$HTTP_CODE" != "200" ] || [ ! -f "${BINARY_PATH}.gz" ]; then
   rm -f "${BINARY_PATH}.gz"
   # Fallback: build from source if Go is available

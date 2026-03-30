@@ -181,5 +181,5 @@ claude plugin update claude-forge@claude-forge
 claude plugins uninstall claude-forge@claude-forge
 
 # If manually registered, also remove:
-claude mcp remove forge-state
+claude mcp remove forge-state -s user
 ```
