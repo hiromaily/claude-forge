@@ -160,16 +160,23 @@ SKILL.md (orchestrator)
 
 The `forge-state` MCP server is the sole state-management interface. All 26 state-management commands are typed MCP tool calls. See [SETUP.md](SETUP.md) for the complete setup guide.
 
-### Quick reference
+### Auto-registration (plugin install)
+
+When installed as a plugin, the MCP server is registered automatically:
+
+1. `plugin.json` declares `"mcpServers": "./.mcp.json"`
+2. `.mcp.json` defines the `forge-state` server (stdio transport, `${CLAUDE_PLUGIN_ROOT}/bin/forge-state-mcp`)
+3. The `Setup` hook in `hooks/hooks.json` runs `scripts/setup.sh` to download the pre-built binary from GitHub Releases
+
+No manual `claude mcp add` is needed. See [SETUP.md](SETUP.md) for details.
+
+### Local development
+
+For contributors working on the MCP server source:
 
 ```bash
-# One-command setup (build + install + register): run from the claude-forge directory
-make setup
-
-# Then restart Claude Code session to activate
+make setup-manual   # build + install + register via claude mcp add
 ```
-
-> **Note:** Do NOT add `mcpServers` to `.claude/settings.json` — this field is not part of the Claude Code settings schema. Always use `claude mcp add` (or `make setup`) to register MCP servers. See [SETUP.md](SETUP.md) for manual registration options.
 
 After restarting, the `mcp__forge-state__*` tool calls in `SKILL.md` will route to the running server process. Verify with `/mcp` (should show `forge-state` as `Connected`).
 

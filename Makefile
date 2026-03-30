@@ -15,9 +15,18 @@ install: build
 	mkdir -p $(INSTALL_DIR)
 	cp bin/$(MCP_BINARY) $(INSTALL_DIR)/$(MCP_BINARY)
 
-# setup: Build, install, and register the MCP server with Claude Code (idempotent)
+# setup: Build and install the binary locally (for development without plugin install)
 .PHONY: setup
 setup: install
+	@echo ""
+	@echo "✓ Binary installed at $(INSTALL_DIR)/$(MCP_BINARY)"
+	@echo ""
+	@echo "For plugin users: the MCP server is auto-registered via .mcp.json."
+	@echo "For local dev:    run 'make setup-manual' to register via claude mcp add."
+
+# setup-manual: Register the MCP server manually with Claude Code (for local dev without plugin)
+.PHONY: setup-manual
+setup-manual: install
 	@echo "Registering forge-state MCP server with Claude Code..."
 	@claude mcp remove forge-state -s user 2>/dev/null || true
 	claude mcp add forge-state \
