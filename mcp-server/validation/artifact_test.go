@@ -317,7 +317,7 @@ func TestValidateArtifacts_Phase7(t *testing.T) {
 		t.Parallel()
 
 		workspace := t.TempDir()
-		writeFile(t, workspace, "comprehensive-review.md", "Some content here.\n")
+		writeFile(t, workspace, "verification.md", "Some content here.\n")
 
 		results := validation.ValidateArtifacts(workspace, "phase-7")
 

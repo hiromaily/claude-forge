@@ -315,9 +315,9 @@ func parseExternalContext(args map[string]any) (externalContext, error) {
 	extCtx.SourceID = stringField(m, "source_id")
 	extCtx.GitHubTitle = stringField(m, "github_title")
 	extCtx.GitHubBody = stringField(m, "github_body")
-	extCtx.JiraIssueType = stringField(m, "jira_issue_type")
-	extCtx.JiraSummary = stringField(m, "jira_summary")
-	extCtx.JiraDescription = stringField(m, "jira_description")
+	extCtx.JiraIssueType = stringFieldAlt(m, "jira_issue_type", "issue_type")
+	extCtx.JiraSummary = stringFieldAlt(m, "jira_summary", "summary")
+	extCtx.JiraDescription = stringFieldAlt(m, "jira_description", "description")
 
 	// Parse github_labels (array of strings).
 	if labelsRaw, ok := m["github_labels"]; ok {
@@ -333,7 +333,12 @@ func parseExternalContext(args map[string]any) (externalContext, error) {
 		}
 	}
 
-	// Parse jira_story_points (number).
+	// Parse jira_story_points (number), with "story_points" as fallback alias.
+	if _, ok := m["jira_story_points"]; !ok {
+		if sp, ok2 := m["story_points"]; ok2 {
+			m["jira_story_points"] = sp
+		}
+	}
 	if spRaw, ok := m["jira_story_points"]; ok {
 		switch v := spRaw.(type) {
 		case float64:
@@ -448,6 +453,15 @@ func stringField(m map[string]any, key string) string {
 	}
 	s, _ := v.(string)
 	return s
+}
+
+// stringFieldAlt tries the primary key first, then falls back to the alt key.
+// This allows callers to pass either "jira_summary" or "summary" as the field name.
+func stringFieldAlt(m map[string]any, primary, alt string) string {
+	if s := stringField(m, primary); s != "" {
+		return s
+	}
+	return stringField(m, alt)
 }
 
 func boolField(m map[string]any, key string) bool {

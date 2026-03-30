@@ -811,15 +811,15 @@ func TestNextAction(t *testing.T) {
 			wantType: ActionCheckpoint,
 		},
 
-		// ── Phase 7: verifier ─────────────────────────────────────────────────
+		// ── Phase 7: comprehensive reviewer ──────────────────────────────────
 		{
-			name: "phase7_verifier",
+			name: "phase7_comprehensive_reviewer",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				return newTestStateManager(t, "phase-7", nil)
 			},
 			wantType:  ActionSpawnAgent,
-			wantAgent: agentVerifier,
+			wantAgent: agentComprehensiveReview,
 		},
 
 		// ── Final verification ────────────────────────────────────────────────
@@ -873,7 +873,7 @@ func TestNextAction(t *testing.T) {
 			wantInputContains: "investigation.md",
 		},
 
-		// ── Decision 25: final-summary for feature uses comprehensive-reviewer
+		// ── Decision 25: final-summary for feature uses verifier (comprehensive review already done in phase-7)
 		{
 			name: "final_summary_feature",
 			setupSM: func(t *testing.T) *state.StateManager {
@@ -885,7 +885,7 @@ func TestNextAction(t *testing.T) {
 				})
 			},
 			wantType:  ActionSpawnAgent,
-			wantAgent: agentComprehensiveReview,
+			wantAgent: agentVerifier,
 		},
 
 		// ── Decision 26: post-to-source github_issue → exec ───────────────────

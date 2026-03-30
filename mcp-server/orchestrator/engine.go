@@ -582,14 +582,16 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 	), nil
 }
 
-// handlePhaseSeven handles Phase 7 (verifier).
+// handlePhaseSeven handles Phase 7 (comprehensive reviewer).
+// Phase 7 performs holistic cross-task review (naming consistency, duplication,
+// interface coherence). The final-verification phase handles build/test verification.
 func (*Engine) handlePhaseSeven(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
-		agentVerifier,
-		"Run full build and test verification.",
+		agentComprehensiveReview,
+		"Run comprehensive cross-task review.",
 		"sonnet",
 		PhaseSeven,
-		[]string{"tasks.md"},
+		[]string{"design.md", "tasks.md"},
 		"verification.md",
 	), nil
 }
@@ -614,11 +616,48 @@ func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 		return NewDoneAction(SkipSummaryPrefix+"pr-creation", ""), nil
 	}
 
+	title := derivePRTitle(st)
+
+	// Determine the summary file to use as PR body.
+	// feature/refactor produce comprehensive-review.md; others produce final-summary.md.
+	bodyFileName := "comprehensive-review.md"
+	if st.TaskType != nil {
+		switch *st.TaskType {
+		case TaskTypeBugfix, TaskTypeDocs, TaskTypeInvestigation:
+			bodyFileName = "final-summary.md"
+		}
+	}
+	bodyFile := filepath.Join(st.Workspace, bodyFileName)
+
 	return NewExecAction(PhasePRCreation, []string{
 		"gh", "pr", "create",
-		"--title", "Pipeline output",
-		"--body", "Auto-generated PR from forge pipeline.",
+		"--title", title,
+		"--body-file", bodyFile,
 	}), nil
+}
+
+// derivePRTitle generates a meaningful PR title from state context.
+// It uses the task type prefix and spec name as a basis.
+func derivePRTitle(st *state.State) string {
+	prefix := "feat"
+	if st.TaskType != nil {
+		switch *st.TaskType {
+		case TaskTypeBugfix:
+			prefix = "fix"
+		case TaskTypeDocs:
+			prefix = "docs"
+		case TaskTypeRefactor:
+			prefix = "refactor"
+		case TaskTypeInvestigation:
+			prefix = "chore"
+		}
+	}
+
+	name := stripDatePrefix(st.SpecName)
+	// Replace hyphens with spaces for readability in PR titles.
+	name = strings.ReplaceAll(name, "-", " ")
+
+	return prefix + ": " + name
 }
 
 // handleFinalSummary handles the final-summary phase — Decision 25.
@@ -656,13 +695,14 @@ func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
 			"final-summary.md",
 		), nil
 	default:
-		// feature, refactor, default: reads comprehensive-review.md; spawns comprehensive-reviewer
+		// feature, refactor, default: phase-7 already ran comprehensive review,
+		// so final-summary just generates a summary document from its output.
 		return NewSpawnAgentAction(
-			agentComprehensiveReview,
-			"Generate comprehensive review and final summary.",
+			agentVerifier,
+			"Generate final summary with pipeline statistics.",
 			"sonnet",
 			PhaseFinalSummary,
-			[]string{"design.md", "tasks.md"},
+			[]string{"verification.md", "design.md", "tasks.md"},
 			"comprehensive-review.md",
 		), nil
 	}
@@ -727,9 +767,40 @@ func readSourceType(workspace string) string {
 }
 
 // deriveBranchName generates a deterministic branch name from the spec name.
+// It strips the date prefix (e.g., "20260330-") and truncates to 60 characters
+// to produce readable branch names like "forge/soa-2899-task-status-options".
 func deriveBranchName(st *state.State) string {
-	name := strings.ToLower(strings.ReplaceAll(st.SpecName, " ", "-"))
+	name := stripDatePrefix(st.SpecName)
+	name = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+
+	// Truncate to 60 characters at a word boundary for readability.
+	const maxLen = 60
+	if len(name) > maxLen {
+		name = name[:maxLen]
+		if idx := strings.LastIndex(name, "-"); idx > 0 {
+			name = name[:idx]
+		}
+	}
+
 	return "forge/" + name
+}
+
+// stripDatePrefix removes a leading "YYYYMMDD-" date prefix from a spec name.
+// Returns the input unchanged if no date prefix is found.
+func stripDatePrefix(name string) string {
+	if len(name) > 9 && name[8] == '-' {
+		allDigits := true
+		for _, c := range name[:8] {
+			if c < '0' || c > '9' {
+				allDigits = false
+				break
+			}
+		}
+		if allDigits {
+			return name[9:]
+		}
+	}
+	return name
 }
 
 // sortedTaskKeys returns task keys from tasks sorted numerically ascending.
