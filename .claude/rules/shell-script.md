@@ -8,7 +8,7 @@ paths: ["**/*.sh", "**/Makefile"]
 
 - Use `#!/usr/bin/env bash` — never `/bin/sh` (this project uses bash-specific features).
 - Hook scripts use `set -uo pipefail` (not `-e`) so they can continue after non-fatal errors.
-- State-manager and other CLI scripts use `set -euo pipefail` to fail fast on any error.
+- Non-hook CLI scripts use `set -euo pipefail` to fail fast on any error.
 - Match the existing script's `set` line when editing — mixing `-e` and non-`-e` within one script causes unpredictable behaviour.
 
 ## Fail-open pattern (hook scripts)
@@ -50,13 +50,13 @@ VALUE="$(jq -r '.field // empty' <<< "$INPUT" 2>/dev/null || true)"
 
 ## File locking (concurrent writes)
 
-Use the `locked_update` helper already in `state-manager.sh` for any concurrent write to `state.json`. Do not reimplement locking inline.
+State management is now handled by the Go MCP server (`mcp-server/state/manager.go`), which uses mutex-based locking for concurrent `state.json` updates. Do not implement shell-level file locking for state transitions — call the appropriate `mcp__forge-state__*` MCP tool instead.
 
-The authoritative implementation (from `state-manager.sh`):
-- Tries `flock` first (available on Linux and macOS with Homebrew coreutils).
-- Falls back to `mkdir`-based atomic locking on macOS without `flock`.
-- Retries up to 50 times (5 seconds) before force-breaking a stale lock.
-- Uses `trap 'rm -rf "${lock_file}"' EXIT` to guarantee cleanup even on unexpected exit.
+If you need shell-level atomic locking for other purposes (not state.json), use `mkdir`-based locking as a portable fallback on macOS (which does not ship `flock` by default):
+- Try `flock` first (available on Linux and macOS with Homebrew coreutils).
+- Fall back to `mkdir`-based atomic locking.
+- Retry up to 50 times before force-breaking a stale lock.
+- Use `trap 'rm -rf "${lock_file}"' EXIT` to guarantee cleanup even on unexpected exit.
 
 Do not add a bare `flock` call without the mkdir fallback — it will break on stock macOS.
 
@@ -94,14 +94,10 @@ Do not add a bare `flock` call without the mkdir fallback — it will break on s
 
 ## Testing
 
-- Run `bash scripts/test-hooks.sh` after every change to any script. All existing tests must continue to pass.
-- Test new state-manager commands manually with a temp directory:
+- Run `bash scripts/test-hooks.sh` after every change to any hook script. All existing tests must continue to pass.
+- State management is now handled by the Go MCP server. To test state commands, use the Go test suite:
   ```bash
-  local temp_dir
-  temp_dir=$(mktemp -d)
-  bash scripts/state-manager.sh init "$temp_dir" test-spec
-  # ... test commands ...
-  rm -rf "$temp_dir"
+  cd mcp-server && go test ./state/...
   ```
 - Pipe sample JSON to hook scripts directly to test them in isolation:
   ```bash

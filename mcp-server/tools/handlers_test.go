@@ -323,19 +323,32 @@ func TestResumeInfoHandler(t *testing.T) {
 	}
 }
 
-// ---------- refresh_index handler ----------
+// ---------- refresh_index handler (Go implementation) ----------
 
-func TestRefreshIndexHandlerScriptMissing(t *testing.T) {
-	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+func TestRefreshIndexHandlerGoImpl_Success(t *testing.T) {
+	t.Parallel()
 
-	// Call with a non-existent script path — the handler must use os/exec.
-	h := RefreshIndexHandlerWithScript(sm, "/nonexistent/path/build-specs-index.sh")
-	res := callTool(t, h, map[string]any{
-		"workspace": dir,
-	})
-	if !res.IsError {
-		t.Errorf("RefreshIndexHandler should return error when script is missing")
+	specsDir := t.TempDir()
+	h := refreshIndexWithSpecsDir(specsDir)
+	res := callTool(t, h, map[string]any{})
+	if res.IsError {
+		t.Errorf("refreshIndexWithSpecsDir on empty dir should succeed, got error: %v", textContent(res))
+	}
+}
+
+func TestRefreshIndexHandlerGoImpl_EmptyDir(t *testing.T) {
+	t.Parallel()
+
+	specsDir := t.TempDir()
+	h := refreshIndexWithSpecsDir(specsDir)
+	res := callTool(t, h, map[string]any{})
+	if res.IsError {
+		t.Errorf("refreshIndexWithSpecsDir on empty specsDir returned error: %v", textContent(res))
+	}
+	// Verify index.json was written.
+	idxPath := filepath.Join(specsDir, "index.json")
+	if _, err := os.Stat(idxPath); err != nil {
+		t.Errorf("index.json not created: %v", err)
 	}
 }
 

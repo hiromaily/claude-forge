@@ -10,9 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -20,27 +18,9 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/events"
+	"github.com/hiromaily/claude-forge/mcp-server/indexer"
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
-
-// defaultScriptPath resolves the path to build-specs-index.sh.
-// FORGE_SCRIPTS_PATH env var takes precedence; otherwise the path is derived
-// from this file's location at compile time; fallback is a relative path.
-func defaultScriptPath() string {
-	if p := os.Getenv("FORGE_SCRIPTS_PATH"); p != "" {
-		return filepath.Join(p, "build-specs-index.sh")
-	}
-	_, file, _, ok := runtime.Caller(0)
-	if ok {
-		// file is .../mcp-server/tools/handlers.go
-		repoRoot := filepath.Join(filepath.Dir(file), "..", "..")
-		candidate := filepath.Join(repoRoot, "scripts", "build-specs-index.sh")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	return "scripts/build-specs-index.sh"
-}
 
 // ---------- response helpers ----------
 
@@ -717,27 +697,31 @@ func ResumeInfoHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 // ---------- refresh_index ----------
 
-// RefreshIndexHandler handles the "refresh_index" MCP tool using the default
-// script path resolved at init time.
-func RefreshIndexHandler(sm *state.StateManager) server.ToolHandlerFunc {
-	return RefreshIndexHandlerWithScript(sm, defaultScriptPath())
-}
-
-// RefreshIndexHandlerWithScript is the testable variant that accepts an explicit
-// script path.  It executes the script via os/exec and returns an error response
-// if the script exits non-zero.  It never re-implements the script logic in Go.
-func RefreshIndexHandlerWithScript(sm *state.StateManager, scriptPath string) server.ToolHandlerFunc {
+// RefreshIndexHandler handles the "refresh_index" MCP tool. It derives
+// specsDir from the workspace parameter and delegates to refreshIndexWithSpecsDir.
+func RefreshIndexHandler(_ *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
 			return errorf("%v", err)
 		}
-		cmd := exec.CommandContext(ctx, "bash", scriptPath, workspace)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return errorf("refresh_index: script failed: %v\n%s", err, string(out))
+		specsDir := filepath.Dir(workspace)
+		return refreshIndexWithSpecsDir(specsDir)(ctx, req)
+	}
+}
+
+// refreshIndexWithSpecsDir returns a ToolHandlerFunc that calls indexer.BuildSpecsIndex
+// on the given specsDir. If specsDir does not exist, an MCP error is returned immediately.
+func refreshIndexWithSpecsDir(specsDir string) server.ToolHandlerFunc {
+	return func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if _, err := os.Stat(specsDir); err != nil {
+			return mcp.NewToolResultError("specsDir does not exist: " + specsDir), nil
 		}
-		return okText("ok")
+		n, err := indexer.BuildSpecsIndex(specsDir)
+		if err != nil {
+			return errorf("refresh_index: %v", err)
+		}
+		return okText(fmt.Sprintf("ok: wrote %d entries to %s/index.json", n, specsDir))
 	}
 }
 

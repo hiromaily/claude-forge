@@ -1,6 +1,6 @@
 // Package state implements the StateManager that provides all state mutation
-// and query operations for the forge-state MCP server. It is the Go equivalent
-// of scripts/state-manager.sh, with a sync.RWMutex replacing file-based locking.
+// and query operations for the forge-state MCP server. All 26 state-management
+// commands are implemented here, using a sync.RWMutex for concurrent access.
 package state
 
 import (
@@ -17,7 +17,7 @@ import (
 )
 
 // StateManager owns the mutex and provides all methods that correspond to the
-// state-manager.sh commands.  All mutating methods acquire mu.Lock() for the
+// 26 MCP state-management commands.  All mutating methods acquire mu.Lock() for the
 // full read-modify-write cycle. Read-only methods (Get, PhaseStats, ResumeInfo)
 // delegate to GetState(), which also acquires mu.Lock() to handle the lazy-load
 // write path; mu.RLock() is not used in this implementation.
@@ -139,8 +139,8 @@ var allowedGetFields = map[string]bool{
 
 // ---------- StateManager methods ----------
 
-// Init creates a new state.json in workspace following the exact schema
-// produced by cmd_init in state-manager.sh.
+// Init creates a new state.json in workspace following the canonical schema
+// defined by the State struct in state.go.
 // Calling Init a second time is intentional (fresh-start operation); it replaces
 // any prior binding of sm.workspace and sm.state.
 func (m *StateManager) Init(workspace, specName string) error {
@@ -1057,16 +1057,17 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 	}, nil
 }
 
-// RefreshIndex executes build-specs-index.sh for the workspace,
-// equivalent to cmd_refresh_index.  Implementation deferred to tools package.
+// RefreshIndex rebuilds the specs index for the workspace,
+// equivalent to cmd_refresh_index.  Implementation deferred to tools package,
+// which calls indexer.BuildSpecsIndex to produce .specs/index.json.
 func (m *StateManager) RefreshIndex(workspace string) error {
 	// Workspace entry-point guard.
 	if err := m.bindWorkspace(workspace); err != nil {
 		return err
 	}
 
-	// Delegated to tools.RefreshIndexHandler via os/exec.
-	// Not implemented here to keep the state package dependency-free of os/exec.
+	// Delegated to tools.RefreshIndexHandler, which calls indexer.BuildSpecsIndex.
+	// Not implemented here to keep the state package dependency-free of the indexer package.
 	return errors.New("RefreshIndex: not implemented in state package; use tools.RefreshIndexHandler")
 }
 

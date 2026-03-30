@@ -1744,9 +1744,9 @@ func TestResumeInfo_MissingStateFile_ReturnsError(t *testing.T) {
 // ---------- RefreshIndex ----------
 
 // TestRefreshIndex_ErrorWhenScriptNotFound verifies that RefreshIndex returns
-// a non-nil error gracefully when the build-specs-index.sh script is not found.
-// The current implementation delegates to the tools package and returns an
-// "not implemented" error, which satisfies the contract of failing gracefully.
+// a non-nil error gracefully when indexer.BuildSpecsIndex is not wired in this package.
+// The current implementation delegates to the tools package (which calls indexer.BuildSpecsIndex)
+// and returns a "not implemented" error, which satisfies the contract of failing gracefully.
 func TestRefreshIndex_ErrorWhenScriptNotFound(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager()
@@ -1755,7 +1755,7 @@ func TestRefreshIndex_ErrorWhenScriptNotFound(t *testing.T) {
 	}
 
 	// RefreshIndex is intentionally not implemented in the state package
-	// (delegated to tools.RefreshIndexHandler via os/exec). It must return
+	// (delegated to tools.RefreshIndexHandler, which calls indexer.BuildSpecsIndex). It must return
 	// a non-nil error rather than panic or silently succeed.
 	err := m.RefreshIndex(dir)
 	if err == nil {

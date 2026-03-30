@@ -1,8 +1,7 @@
 // Package tools — search_patterns MCP handler.
 // SearchPatternsHandler exposes BM25 scoring of .specs/index.json as an MCP tool.
 // It reads the workspace's request.md as the query, strips YAML frontmatter,
-// calls search.Score, and formats results in exact markdown parity with
-// query-specs-index.sh output.
+// calls search.Score, and formats results as structured markdown.
 package tools
 
 import (
@@ -20,7 +19,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/state"
 )
 
-// Output format constants — must match query-specs-index.sh printf strings exactly.
+// Output format constants for the two search_patterns output modes.
 const (
 	reviewFeedbackHeader = "## Past Review Feedback (from similar pipelines)\n\n"
 	reviewFeedbackBullet = "- **[%s]** %s _(from: %s)_\n"

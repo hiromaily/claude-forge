@@ -277,8 +277,8 @@ The pipeline pauses and returns control to the user at the following points. Poi
 - **Parallel implementation** — Tasks marked `[parallel]` run concurrently with mkdir-based atomic locking for state updates
 - **Human checkpoints** — Pause for human approval at design and task decomposition stages; skippable with `--auto` (except `full` template)
 - **Improvement report** — Always-on retrospective appended to `summary.md` identifying documentation gaps, code readability friction, and AI agent support issues encountered during the run
-- **Past implementation pattern injection** — Before each implementer invocation, `mcp__forge-state__search_patterns` (BM25 scorer) or the shell fallback `query-specs-index.sh` scans the specs index for similar past pipelines and injects their file-modification patterns into the prompt, surfacing real implementation examples rather than generic guidance
-- **Disk-based state machine** — All progress tracked in `state.json` via a 26-subcommand CLI (45 MCP tools including `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`, `profile_get`, `history_search`, `history_get_patterns`, `history_get_friction_map`, `analytics_pipeline_summary`, `analytics_repo_dashboard`, and `analytics_estimate`); pipelines survive context compaction and session restarts
+- **Past implementation pattern injection** — Before each implementer invocation, `mcp__forge-state__search_patterns` (BM25 scorer) scans the specs index for similar past pipelines and injects their file-modification patterns into the prompt, surfacing real implementation examples rather than generic guidance
+- **Disk-based state machine** — All progress tracked in `state.json` via the Go MCP server (45 MCP tools including `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`, `profile_get`, `history_search`, `history_get_patterns`, `history_get_friction_map`, `analytics_pipeline_summary`, `analytics_repo_dashboard`, and `analytics_estimate`); pipelines survive context compaction and session restarts
 - **Resume and abandon** — Resume an interrupted pipeline from any phase; abandon cleanly when needed
 - **Input validation** — Two-layer guard: deterministic `mcp__forge-state__validate_input` MCP tool (empty, too-short, malformed URL) + LLM semantic check blocks nonsensical or non-development requests before any tokens are spent on workspace setup
 - **Phase metrics** — Every agent invocation logged with token count, duration, and model; included in the Final Summary
@@ -347,8 +347,16 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as
 
 ### Abandon a pipeline
 
+Use the MCP tool from Claude Code:
+
+```text
+mcp__forge-state__abandon with workspace: .specs/20260320-fix-auth-timeout
+```
+
+Or delete the state file manually:
+
 ```bash
-bash claude-forge/scripts/state-manager.sh abandon .specs/20260320-fix-auth-timeout
+rm .specs/20260320-fix-auth-timeout/state.json
 ```
 
 ---
@@ -389,14 +397,11 @@ claude-forge/
   agents/             11 specialist agents (.md files with YAML frontmatter)
   hooks/              Hook definitions (hooks.json)
   scripts/
-    state-manager.sh        State management CLI (26 subcommands; MCP server exposes 45 tools)
-    build-specs-index.sh    Scans .specs/ and builds index.json with implPatterns
-    query-specs-index.sh    Keyword-score matching against index.json; outputs markdown
     common.sh                 Shared find_active_workspace helper (sourced by pre-tool-hook and stop-hook)
     pre-tool-hook.sh          Read-only, commit blocking, main/master checkout block
     post-agent-hook.sh        Agent output quality validation
     stop-hook.sh              Pipeline completion guard
-    test-hooks.sh             Automated test suite (run to see current count)
+    test-hooks.sh             Automated hook test suite (58 tests; run to verify)
   skills/
     forge/
       SKILL.md        Orchestrator instructions (the main skill)
@@ -422,8 +427,13 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for full rationale on these and other dec
 ## Running tests
 
 ```bash
+# Hook script tests (58 tests)
 cd claude-forge
 bash scripts/test-hooks.sh
+
+# Go MCP server tests
+cd claude-forge/mcp-server
+go test -race ./...
 ```
 
-This runs automated tests covering `state-manager.sh` (including `set-effort`, `set-flow-template`, `set-debug`), all three hook scripts, pre-tool-hook rules (read-only, commit blocking, main/master checkout block), and edge cases like abandoned pipelines and special characters in spec names.
+The hook test suite covers all hook scripts (`pre-tool-hook.sh`, `post-agent-hook.sh`, `stop-hook.sh`, `post-bash-hook.sh`, `common.sh`), pre-tool-hook rules (read-only, commit blocking, main/master checkout block), and edge cases like abandoned pipelines and special characters in spec names. The Go test suite covers all 26 state-management commands and MCP-only tools.

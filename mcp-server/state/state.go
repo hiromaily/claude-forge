@@ -1,6 +1,6 @@
 // Package state defines the State data model for the forge-state MCP server.
 // The Go struct field json tags must remain in 1:1 correspondence with the
-// state.json schema produced by scripts/state-manager.sh.
+// state.json schema managed by the Go MCP server state package.
 package state
 
 // ValidPhases enumerates all legal phase identifiers.
@@ -20,7 +20,7 @@ var ValidTemplates = []string{"direct", "lite", "light", "standard", "full"}
 // ValidRevTypes enumerates legal revision type identifiers.
 var ValidRevTypes = []string{"design", "tasks"}
 
-// State mirrors the top-level state.json object written by state-manager.sh.
+// State mirrors the top-level state.json object written by the Go MCP server state package.
 type State struct {
 	Version                   int             `json:"version"`
 	SpecName                  string          `json:"specName"`

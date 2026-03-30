@@ -17,5 +17,5 @@ CURRENT_STATUS="$(jq -r '.currentPhaseStatus' "$STATE_FILE" 2>/dev/null || true)
 case "$CURRENT_STATUS" in
   completed|abandoned|awaiting_human) exit 0 ;;
 esac
-echo "Claude-forge is still active at ${CURRENT_PHASE} (${CURRENT_STATUS}). Workspace: ${WORKSPACE}. Continue the pipeline or run: bash scripts/state-manager.sh abandon ${WORKSPACE}" >&2
+echo "Claude-forge is still active at ${CURRENT_PHASE} (${CURRENT_STATUS}). Workspace: ${WORKSPACE}. Use Claude Code to call mcp__forge-state__abandon with workspace: ${WORKSPACE}, or delete ${WORKSPACE}/state.json manually to reset." >&2
 exit 2

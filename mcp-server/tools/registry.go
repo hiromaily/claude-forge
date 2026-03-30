@@ -1,5 +1,5 @@
 // Package tools registers all 45 MCP tool handlers with the MCP server.
-// Tool names use underscores (hyphens from state-manager.sh commands are converted).
+// Tool names use underscores (MCP protocol requirement; hyphens are not permitted).
 package tools
 
 import (
@@ -36,10 +36,10 @@ func RegisterAll(
 ) {
 	srv.AddTool(
 		mcp.NewTool("init",
-			mcp.WithDescription("Initialise a new pipeline workspace (state.json). Requires validated=true after validate-input.sh succeeds."),
+			mcp.WithDescription("Initialise a new pipeline workspace (state.json). Requires validated=true after validate_input succeeds."),
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("spec_name", mcp.Required(), mcp.Description("Spec/project identifier")),
-			mcp.WithBoolean("validated", mcp.Required(), mcp.Description("Must be true — pass only after validate-input.sh exits 0")),
+			mcp.WithBoolean("validated", mcp.Required(), mcp.Description("Must be true — pass only after mcp__forge-state__validate_input returns valid")),
 		),
 		InitHandler(sm),
 	)
@@ -262,7 +262,7 @@ func RegisterAll(
 
 	srv.AddTool(
 		mcp.NewTool("refresh_index",
-			mcp.WithDescription("Execute build-specs-index.sh via os/exec to rebuild .specs/index.json. Returns an error if the script exits non-zero."),
+			mcp.WithDescription("Rebuild .specs/index.json using the pure-Go indexer.BuildSpecsIndex implementation. Returns an error if the specsDir does not exist or the index cannot be written."),
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 		),
 		RefreshIndexHandler(sm),

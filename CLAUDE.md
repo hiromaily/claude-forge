@@ -30,16 +30,12 @@ claude-forge/
 ├── hooks/
 │   └── hooks.json         ← hook definitions (PreToolUse, PostToolUse, Stop)
 ├── scripts/
-│   ├── state-manager.sh   ← core state management CLI (26 commands, jq-based)
-│   ├── build-specs-index.sh ← scans .specs/ directories and builds .specs/index.json
-│   ├── query-specs-index.sh ← keyword-score matching against .specs/index.json, stdout markdown or empty
-│   ├── validate-input.sh  ← deterministic input validation (empty, too short, URL format)
 │   ├── common.sh          ← shared find_active_workspace helper (sourced by pre-tool-hook.sh and stop-hook.sh)
 │   ├── pre-tool-hook.sh   ← read-only guard, commit blocking, checkout blocking
 │   ├── post-agent-hook.sh ← agent output quality validation
 │   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md after phase-complete post-to-source
 │   ├── stop-hook.sh       ← pipeline completion guard
-│   └── test-hooks.sh      ← automated test suite (246 tests; run bash scripts/test-hooks.sh to verify)
+│   └── test-hooks.sh      ← automated test suite (58 tests; run bash scripts/test-hooks.sh to verify)
 └── skills/
     └── forge/
         └── SKILL.md       ← orchestrator instructions (the main skill)
@@ -51,7 +47,7 @@ claude-forge/
 SKILL.md (orchestrator)
   ├── calls mcp__forge-state__validate_input before workspace setup
   ├── invokes agents/ by name via Agent tool
-  ├── calls scripts/state-manager.sh for state transitions
+  ├── calls mcp__forge-state__* MCP tools for state transitions
   └── hooks/ enforce constraints automatically
        ├── pre-tool-hook.sh reads state.json → blocks writes in Phase 1-2,
        │     blocks git commit in parallel Phase 5,
@@ -65,71 +61,24 @@ SKILL.md (orchestrator)
 
 ### Consistency requirements
 - When adding/changing an agent's input files → update BOTH the agent .md file AND the Agent Roster table in SKILL.md
-- When adding a new phase → add its ID to the PHASES array in state-manager.sh
+- When adding a new phase → add its ID to the Go MCP server state package and ensure `pipeline_next_action` recognises it
 - When changing hook behavior → verify the hook's exit code semantics (exit 0 = allow, exit 2 = block)
-- When changing state.json schema → ensure state-manager.sh, all hook scripts, and SKILL.md are aligned
+- When changing state.json schema → ensure the Go MCP server (`mcp-server/state/`), all hook scripts, and SKILL.md are aligned
 
 ### Testing
-- state-manager.sh: test all commands manually with a temp directory
-  ```bash
-  mkdir -p /tmp/test-sm
-  bash scripts/state-manager.sh init /tmp/test-sm test
-  bash scripts/state-manager.sh phase-start /tmp/test-sm phase-1
-  bash scripts/state-manager.sh resume-info /tmp/test-sm
-  bash scripts/state-manager.sh abandon /tmp/test-sm
-  rm -rf /tmp/test-sm
-  ```
-- Task-type state commands:
-  ```bash
-  bash scripts/state-manager.sh set-task-type /tmp/test-sm bugfix
-  bash scripts/state-manager.sh get /tmp/test-sm taskType        # → "bugfix"
-  bash scripts/state-manager.sh skip-phase /tmp/test-sm phase-3b
-  bash scripts/state-manager.sh get /tmp/test-sm skippedPhases   # → ["phase-3b"]
-  bash scripts/state-manager.sh resume-info /tmp/test-sm | jq '{taskType, skippedPhases}'
-  bash scripts/state-manager.sh set-auto-approve /tmp/test-sm
-  bash scripts/state-manager.sh get /tmp/test-sm autoApprove       # → true
-  bash scripts/state-manager.sh resume-info /tmp/test-sm | jq '{autoApprove}'
-  bash scripts/state-manager.sh set-skip-pr /tmp/test-sm
-  bash scripts/state-manager.sh get /tmp/test-sm skipPr            # → true
-  bash scripts/state-manager.sh resume-info /tmp/test-sm | jq '{skipPr}'
-  ```
-- Effort and flow template commands:
-  ```bash
-  bash scripts/state-manager.sh set-effort /tmp/test-sm S
-  bash scripts/state-manager.sh get /tmp/test-sm effort              # → "S"
-  bash scripts/state-manager.sh set-effort /tmp/test-sm INVALID      # → exit 1
-  bash scripts/state-manager.sh set-flow-template /tmp/test-sm lite
-  bash scripts/state-manager.sh get /tmp/test-sm flowTemplate        # → "lite"
-  bash scripts/state-manager.sh set-flow-template /tmp/test-sm bad   # → exit 1
-  bash scripts/state-manager.sh resume-info /tmp/test-sm | jq '{effort, flowTemplate}'
-  ```
-- Debug flag command:
-  ```bash
-  bash scripts/state-manager.sh set-debug /tmp/test-sm
-  bash scripts/state-manager.sh get /tmp/test-sm debug              # → true
-  bash scripts/state-manager.sh resume-info /tmp/test-sm | jq '{debug, tasksWithRetries}'
-  ```
-- Use-current-branch commands:
-  ```bash
-  bash scripts/state-manager.sh set-use-current-branch /tmp/test-sm feature/existing
-  bash scripts/state-manager.sh get /tmp/test-sm useCurrentBranch   # → true
-  bash scripts/state-manager.sh get /tmp/test-sm branch              # → "feature/existing"
-  bash scripts/state-manager.sh resume-info /tmp/test-sm | jq '{useCurrentBranch, branch}'
-  ```
-- Phase metrics commands:
-  ```bash
-  bash scripts/state-manager.sh phase-log /tmp/test-sm phase-1 5000 30000 sonnet
-  bash scripts/state-manager.sh phase-stats /tmp/test-sm
-  bash scripts/state-manager.sh resume-info /tmp/test-sm | jq '{phaseLogEntries, totalTokens, totalDuration_ms}'
-  ```
+- MCP state commands: use `cd mcp-server && go test ./state/...` to run the Go unit tests for all 26 state-management commands.
 - Hook scripts: pipe sample JSON to stdin and check exit code
   ```bash
   echo '{"tool_name":"Edit","tool_input":{"file_path":"/src/foo.go"}}' | bash scripts/pre-tool-hook.sh
   echo $?  # should be 0 (no active pipeline) or 2 (blocked)
   ```
-- **Full test suite** (run after any change):
+- **Full hook test suite** (run after any change):
   ```bash
-  bash scripts/test-hooks.sh   # run to see current test count
+  bash scripts/test-hooks.sh   # run to see current test count (58 tests)
+  ```
+- **Go MCP server tests** (run after any change to mcp-server/):
+  ```bash
+  cd mcp-server && go test -race ./...
   ```
 
 ### Key design decisions (see ARCHITECTURE.md for details)
@@ -141,15 +90,13 @@ SKILL.md (orchestrator)
 
 ### Script structure conventions
 
-**state-manager.sh** — dispatch calls `locked_update` directly. There is no intermediate `cmd_*` wrapper layer. Write commands must always go through `locked_update` to be safe under parallel Phase 5 execution. Read-only commands that only call `read_state` + `jq` do not need locking.
-
 **pre-tool-hook.sh** — Enforces three rules: Rule 1 (read-only guard in phase-1/2 with workspace carve-out for artifact writes), Rule 2 (parallel phase-5 git commit block), Rule 5 (main/master checkout block). Sources `scripts/common.sh` for `find_active_workspace`.
 
 **find_active_workspace** — `pre-tool-hook.sh` and `stop-hook.sh` share the same predicate and both source `scripts/common.sh`. `post-agent-hook.sh` uses a different filter (`status == "in_progress"` only) and does NOT source `common.sh`. Do not unify post-agent-hook.sh's copy into common.sh.
 
-**Subcommand count** — `state-manager.sh` currently has **26** dispatch entries, and the `forge-state` MCP server exposes all 26 `state-manager.sh` subcommands as typed tool calls, plus additional MCP-only tools (currently `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`, `profile_get`, `history_search`, `history_get_patterns`, `history_get_friction_map`, `analytics_pipeline_summary`, `analytics_repo_dashboard`, and `analytics_estimate`). The total MCP tool count is **45**. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
+**MCP tool count** — `scripts/state-manager.sh` no longer exists; all 26 state-management commands are implemented in the Go MCP server (`mcp-server/`). The `forge-state` MCP server exposes all 26 commands as typed tool calls, plus additional MCP-only tools (currently `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`, `profile_get`, `history_search`, `history_get_patterns`, `history_get_friction_map`, `analytics_pipeline_summary`, `analytics_repo_dashboard`, and `analytics_estimate`). The total MCP tool count is **45**. When adding or removing a command, update the count in `CLAUDE.md` (here), `scripts/README.md`, and `README.md`. The count drifted to "22" in documentation before and was caught only in a comprehensive review pass — keep it accurate.
 
-**MCP-only tools** — `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`, `profile_get`, `history_search`, `history_get_patterns`, `history_get_friction_map`, `analytics_pipeline_summary`, `analytics_repo_dashboard`, and `analytics_estimate` are exposed as MCP tools but have no `state-manager.sh` shell equivalents. `search_patterns` performs BM25 scoring over `.specs/index.json` (see design rationale in `ARCHITECTURE.md`); the shell fallback is `query-specs-index.sh`. `subscribe_events` is a discovery tool that returns the SSE endpoint URL when `FORGE_EVENTS_PORT` is set; there is no shell equivalent. `ast_summary` parses a source file with tree-sitter and returns a compact markdown summary of exported signatures only. `ast_find_definition` locates and returns the definition of a named symbol in a source file. `dependency_graph` walks a source tree and returns a file-level import graph as JSON (nodes = files, edges = imports). `impact_scope` identifies files that call a given symbol via a two-pass import+call-site scan; returns a ranked list (`distance: -1` for TypeScript/Python). `validate_input` validates the raw pipeline input string (empty, too-short, URL format); the shell fallback is `validate-input.sh`. `validate_artifact` checks that the expected artifact file exists for a given phase and meets content constraints; always returns a JSON array. `pipeline_next_action` reads current pipeline state and returns the next action for the orchestrator to execute (spawn_agent, checkpoint, exec, write_file, or done); it reads agent `.md` files from the path set by the `FORGE_AGENTS_PATH` environment variable — this **must** be set in production to the absolute path of the `agents/` directory. `pipeline_report_result` records a phase-log entry, validates artifacts, parses review verdicts, and advances pipeline state. `profile_get` returns the cached repository profile (languages, CI system, linter configs, build/test commands) computed by `RepoProfiler`; triggers `AnalyzeOrUpdate()` on first call and returns a fresh or cached result. `history_search` queries the history index built from past `.specs/` pipeline runs using BM25 scoring and returns ranked similar past pipelines; accepts `query`, `limit`, and optional `task_type_filter`. `history_get_patterns` returns accumulated review-finding patterns (normalized, Levenshtein-merged) from past pipeline review phases; accepts `agent_filter`, `severity_filter`, and `limit`. `history_get_friction_map` returns accumulated AI friction points extracted from `improvement.md` files in past spec directories; accepts no parameters. `analytics_pipeline_summary` returns token, duration, cost, and review-finding statistics for a single pipeline run; accepts `workspace`. `analytics_repo_dashboard` returns aggregate statistics across all pipeline runs in `.specs/` (counts, averages, cost, review pass rate, common findings); accepts no parameters. `analytics_estimate` returns P50/P90 predictions for tokens, duration, and cost for a given `(task_type, effort)` combination based on historical pipeline runs; accepts `task_type` and `effort`.
+**MCP-only tools** — `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`, `profile_get`, `history_search`, `history_get_patterns`, `history_get_friction_map`, `analytics_pipeline_summary`, `analytics_repo_dashboard`, and `analytics_estimate` are exposed as MCP tools but have no shell equivalents. `search_patterns` performs BM25 scoring over `.specs/index.json` (see design rationale in `ARCHITECTURE.md`); no shell fallback exists. `subscribe_events` is a discovery tool that returns the SSE endpoint URL when `FORGE_EVENTS_PORT` is set; there is no shell equivalent. `ast_summary` parses a source file with tree-sitter and returns a compact markdown summary of exported signatures only. `ast_find_definition` locates and returns the definition of a named symbol in a source file. `dependency_graph` walks a source tree and returns a file-level import graph as JSON (nodes = files, edges = imports). `impact_scope` identifies files that call a given symbol via a two-pass import+call-site scan; returns a ranked list (`distance: -1` for TypeScript/Python). `validate_input` validates the raw pipeline input string (empty, too-short, URL format); no shell fallback exists. `validate_artifact` checks that the expected artifact file exists for a given phase and meets content constraints; always returns a JSON array. `pipeline_next_action` reads current pipeline state and returns the next action for the orchestrator to execute (spawn_agent, checkpoint, exec, write_file, or done); it reads agent `.md` files from the path set by the `FORGE_AGENTS_PATH` environment variable — this **must** be set in production to the absolute path of the `agents/` directory. `pipeline_report_result` records a phase-log entry, validates artifacts, parses review verdicts, and advances pipeline state. `profile_get` returns the cached repository profile (languages, CI system, linter configs, build/test commands) computed by `RepoProfiler`; triggers `AnalyzeOrUpdate()` on first call and returns a fresh or cached result. `history_search` queries the history index built from past `.specs/` pipeline runs using BM25 scoring and returns ranked similar past pipelines; accepts `query`, `limit`, and optional `task_type_filter`. `history_get_patterns` returns accumulated review-finding patterns (normalized, Levenshtein-merged) from past pipeline review phases; accepts `agent_filter`, `severity_filter`, and `limit`. `history_get_friction_map` returns accumulated AI friction points extracted from `improvement.md` files in past spec directories; accepts no parameters. `analytics_pipeline_summary` returns token, duration, cost, and review-finding statistics for a single pipeline run; accepts `workspace`. `analytics_repo_dashboard` returns aggregate statistics across all pipeline runs in `.specs/` (counts, averages, cost, review pass rate, common findings); accepts no parameters. `analytics_estimate` returns P50/P90 predictions for tokens, duration, and cost for a given `(task_type, effort)` combination based on historical pipeline runs; accepts `task_type` and `effort`.
 
 **Canonical command list** (shell name → MCP tool name):
 
@@ -206,12 +153,12 @@ SKILL.md (orchestrator)
 ### What NOT to do
 - Do NOT add `isolation: "worktree"` to any Agent tool call — breaks inter-task visibility
 - Do NOT duplicate agent instructions in SKILL.md prompts — agents have their own system prompts
-- Do NOT store state in memory/conversation — use state.json via state-manager.sh
-- Do NOT use bare `flock` without a mkdir fallback — macOS lacks `flock` by default. The existing `locked_update` helper in state-manager.sh already handles both cases; use it instead of reimplementing locking
+- Do NOT store state in memory/conversation — use state.json via the `mcp__forge-state__*` MCP tools
+- Do NOT use bare `flock` without a mkdir fallback — macOS lacks `flock` by default. Hook scripts use mkdir-based atomic locking; follow the same pattern if adding new shell scripts that need locking.
 
 ## MCP Server Registration
 
-The `forge-state` MCP server replaces direct `bash scripts/state-manager.sh` calls with typed MCP tool calls. To use it:
+The `forge-state` MCP server is the sole state-management interface — `scripts/state-manager.sh` has been removed. All 26 state-management commands are now typed MCP tool calls. To use the server:
 
 ### 1. Build and install the binary
 
@@ -241,7 +188,7 @@ After saving, restart Claude Code. The `mcp__forge-state__*` tool calls in `SKIL
 
 ### Fallback
 
-`scripts/state-manager.sh` remains fully functional as a fallback. All 26 subcommands still execute correctly. For the MCP-only `search_patterns` tool, the shell fallback is `query-specs-index.sh`. The script includes a deprecation notice at the top pointing to this section.
+`scripts/state-manager.sh` has been removed. All 26 state-management commands are now implemented exclusively in the Go MCP server (`mcp-server/`). There is no shell fallback for `search_patterns`, `validate_input`, or other MCP-only tools — use the MCP tools directly.
 
 ### MCP library usage (`github.com/mark3labs/mcp-go`)
 
@@ -284,6 +231,6 @@ The MCP server lives in `mcp-server/` as a **separate Go module** (`go.mod` with
 1. Read `BACKLOG.md` for known issues and improvement candidates
 2. Read `ARCHITECTURE.md` for design rationale if making structural changes
 3. Check `agents/README.md` for the current agent roster
-4. Run `bash scripts/state-manager.sh` with no args to see available commands
+4. See the Canonical command list above for available MCP tools (all 26 state commands are in the Go MCP server)
 5. Read `.claude/rules/git.md` for Git branch and commit conventions
 6. Read `.claude/rules/shell-script.md` for Bash scripting conventions before editing any `.sh` file
