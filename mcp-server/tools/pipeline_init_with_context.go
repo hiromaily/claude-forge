@@ -69,10 +69,11 @@ type pipelineFlags struct {
 	CurrentBranch  string
 }
 
-// userConfirmation holds confirmed task_type and effort from the second call.
+// userConfirmation holds confirmed task_type, effort, and optional workspace slug from the second call.
 type userConfirmation struct {
-	TaskType string
-	Effort   string
+	TaskType      string
+	Effort        string
+	WorkspaceSlug string // optional LLM-generated ASCII slug; overrides the auto-derived slug
 }
 
 // PipelineInitWithContextHandler handles the "pipeline_init_with_context" MCP tool.
@@ -167,9 +168,11 @@ func handleSecondCall(
 	flowTemplate, skippedPhases, warning := deriveFlowDecisions(uc.TaskType, uc.Effort, flags.Auto)
 
 	// Step 6: Derive specName and optionally rename workspace for better readability.
-	// When external context provides a summary (Jira/GitHub), build a meaningful
-	// workspace name from the source ID + summary instead of the raw URL slug.
+	// Priority order: external context (Jira/GitHub) > LLM-provided slug > auto-derived slug.
 	workspace = refineWorkspacePath(workspace, extCtx)
+	if uc.WorkspaceSlug != "" {
+		workspace = applyWorkspaceSlug(workspace, uc.WorkspaceSlug)
+	}
 	specName := deriveSpecName(workspace)
 
 	// Steps 7a–7l: Create directory, initialise state, write request.md.
@@ -246,7 +249,13 @@ func initWorkspace(
 	skippedPhases []string,
 	extCtx externalContext,
 ) (string, error) {
-	// Step 7a: Create workspace directory.
+	// Step 7a: Validate workspace path — reject non-ASCII characters so that
+	// multibyte input (e.g. Japanese) never produces an unreadable directory name.
+	if hasNonASCII(workspace) {
+		return "", fmt.Errorf("workspace path %q contains non-ASCII characters; use only ASCII in directory names", workspace)
+	}
+
+	// Create workspace directory.
 	if err := os.MkdirAll(workspace, 0o750); err != nil {
 		return "", fmt.Errorf("MkdirAll %q: %w", workspace, err)
 	}
@@ -397,6 +406,7 @@ func parseUserConfirmation(raw any) (userConfirmation, error) {
 
 	uc.TaskType = stringField(m, "task_type")
 	uc.Effort = stringField(m, "effort")
+	uc.WorkspaceSlug = stringField(m, "workspace_slug")
 	return uc, nil
 }
 
@@ -471,4 +481,25 @@ func boolField(m map[string]any, key string) bool {
 	}
 	b, _ := v.(bool)
 	return b
+}
+
+// applyWorkspaceSlug replaces the slug portion of a workspace path with the
+// LLM-generated slug. If slugify produces an empty result (e.g. pure Japanese input),
+// the original workspace path is returned unchanged.
+func applyWorkspaceSlug(workspace, rawSlug string) string {
+	cleaned := slugify(rawSlug)
+	if cleaned == "" {
+		return workspace
+	}
+	return replaceWorkspaceSlug(workspace, cleaned)
+}
+
+// hasNonASCII guards workspace paths against unreadable multibyte characters (e.g. Japanese).
+func hasNonASCII(s string) bool {
+	for _, r := range s {
+		if r > 0x7F {
+			return true
+		}
+	}
+	return false
 }

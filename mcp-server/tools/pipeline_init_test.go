@@ -486,10 +486,10 @@ func TestPipelineInitWorkspacePath(t *testing.T) {
 		}
 	})
 
-	t.Run("slug_truncation_at_40", func(t *testing.T) {
+	t.Run("slug_truncation_at_60", func(t *testing.T) {
 		t.Parallel()
 		// Use a very long input to test truncation.
-		longInput := "this is a very long description that should be truncated to forty characters maximum"
+		longInput := "this is a very long description that should be truncated to sixty characters maximum length"
 		res := callTool(t, h, map[string]any{
 			"arguments": longInput,
 		})
@@ -504,8 +504,8 @@ func TestPipelineInitWorkspacePath(t *testing.T) {
 			t.Fatalf("workspace base %q has no hyphen separator", base)
 		}
 		slug := parts[1]
-		if len(slug) > 40 {
-			t.Errorf("slug %q is longer than 40 chars (len=%d)", slug, len(slug))
+		if len(slug) > 60 {
+			t.Errorf("slug %q is longer than 60 chars (len=%d)", slug, len(slug))
 		}
 		// Should not end with hyphen.
 		if strings.HasSuffix(slug, "-") {
@@ -611,20 +611,17 @@ func TestSlugify(t *testing.T) {
 			want:  "hello-world",
 		},
 		{
-			name: "truncation_at_40",
-			// Input: "this-is-a-very-long-slug-that-should-be-truncated-now" (53 chars)
-			// After slugify (already lowercase, hyphens become single hyphens):
-			// "this-is-a-very-long-slug-that-should-be-truncated-now"
-			// Truncate to 40: "this-is-a-very-long-slug-that-should-be-" (40 chars)
-			// Strip trailing hyphen: "this-is-a-very-long-slug-that-should-be" (39 chars)
-			input: "this-is-a-very-long-slug-that-should-be-truncated-now",
-			want:  "this-is-a-very-long-slug-that-should-be",
+			name: "truncation_at_60",
+			// Input is 80 chars after slugification; truncated to 60, no trailing hyphen.
+			input: "this-is-a-very-long-slug-that-should-definitely-be-truncated-at-sixty-characters",
+			want:  "this-is-a-very-long-slug-that-should-definitely-be-truncated",
 		},
 		{
 			name: "no_trailing_hyphen_after_truncation",
-			// 40 alphanumeric chars + trailing special to ensure no trailing hyphen.
-			input: "abcdefghijklmnopqrstuvwxyz0123456789abcde-",
-			want:  "abcdefghijklmnopqrstuvwxyz0123456789abcd",
+			// 59 alphanumeric chars followed by '-more': hyphen lands at position 60,
+			// TrimRight removes it, leaving 59 chars.
+			input: "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvw-more",
+			want:  "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvw",
 		},
 		{
 			name:  "numbers_preserved",

@@ -198,11 +198,15 @@ func makeWorkspacePath(date time.Time, text string) string {
 	return ".specs/" + dateStr + "-" + slug
 }
 
+// maxSlugLen is the maximum length of a slug produced by slugify.
+// Kept in sync with the branch-name limit in orchestrator.deriveBranchName.
+const maxSlugLen = 60
+
 // slugify converts text to a lowercase, hyphen-separated slug:
 //  1. Lowercase the full string
 //  2. Replace all runs of non-alphanumeric characters with a single hyphen
 //  3. Strip leading and trailing hyphens
-//  4. Truncate to 40 characters, then strip any trailing hyphen
+//  4. Truncate to maxSlugLen characters, then strip any trailing hyphen
 func slugify(text string) string {
 	// Step 1: Lowercase.
 	s := strings.ToLower(text)
@@ -224,9 +228,9 @@ func slugify(text string) string {
 	// Step 3: Strip leading and trailing hyphens.
 	result = strings.Trim(result, "-")
 
-	// Step 4: Truncate to 40 characters, then strip any trailing hyphen.
-	if len(result) > 40 {
-		result = result[:40]
+	// Step 4: Truncate to maxSlugLen characters, then strip any trailing hyphen.
+	if len(result) > maxSlugLen {
+		result = result[:maxSlugLen]
 		result = strings.TrimRight(result, "-")
 	}
 
@@ -264,18 +268,22 @@ func refineWorkspacePath(workspace string, extCtx externalContext) string {
 		return workspace
 	}
 
-	// Extract date prefix from existing workspace path (e.g., "20260330" from ".specs/20260330-...")
-	base := filepath.Base(workspace)
-	datePrefix := base
-	if idx := strings.IndexByte(base, '-'); idx > 0 {
-		datePrefix = base[:idx]
-	}
-
 	slug := slugify(id + " " + summary)
 	if slug == "" {
 		slug = "task"
 	}
-	return filepath.Dir(workspace) + "/" + datePrefix + "-" + slug
+	return replaceWorkspaceSlug(workspace, slug)
+}
+
+// replaceWorkspaceSlug replaces the slug portion of a workspace path with newSlug,
+// preserving the YYYYMMDD date prefix when present.
+// Example: replaceWorkspaceSlug(".specs/20260330-old", "new-slug") → ".specs/20260330-new-slug"
+func replaceWorkspaceSlug(workspace, newSlug string) string {
+	base := filepath.Base(workspace)
+	if idx := strings.IndexByte(base, '-'); idx > 0 {
+		return filepath.Join(filepath.Dir(workspace), base[:idx]+"-"+newSlug)
+	}
+	return filepath.Join(filepath.Dir(workspace), newSlug)
 }
 
 // makeFetchNeeded constructs the FetchNeeded block for the given source type.

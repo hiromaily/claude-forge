@@ -441,6 +441,62 @@ func TestPipelineInitWithContextSkipPhaseOrder(t *testing.T) {
 	}
 }
 
+// ---------- TestHasNonASCII ----------
+
+func TestHasNonASCII(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		s    string
+		want bool
+	}{
+		{name: "empty", s: "", want: false},
+		{name: "ascii_path", s: ".specs/20260331-my-feature", want: false},
+		{name: "ascii_only", s: "abcdefghijklmnopqrstuvwxyz0123456789-", want: false},
+		{name: "japanese", s: ".specs/20260331-日本語のタスク", want: true},
+		{name: "japanese_only", s: "日本語", want: true},
+		{name: "latin_extended", s: "caf\u00e9", want: true},
+		{name: "emoji", s: "task-\U0001F600", want: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := hasNonASCII(tc.s)
+			if got != tc.want {
+				t.Errorf("hasNonASCII(%q) = %v, want %v", tc.s, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- TestInitWorkspaceRejectsNonASCIIPath ----------
+
+func TestInitWorkspaceRejectsNonASCIIPath(t *testing.T) {
+	t.Parallel()
+
+	sm := newPIWCSM()
+	h := PipelineInitWithContextHandler(sm)
+
+	// Pass a workspace path containing Japanese characters directly.
+	res := callTool(t, h, map[string]any{
+		"workspace": ".specs/20260331-日本語のタスク",
+		"flags":     map[string]any{},
+		"user_confirmation": map[string]any{
+			"task_type": "feature",
+			"effort":    "M",
+		},
+	})
+
+	// Expect an MCP-level error (IsError=true) rejecting the non-ASCII path.
+	if !res.IsError {
+		t.Fatalf("expected MCP error for non-ASCII workspace, got success: %v", textContent(res))
+	}
+	if !strings.Contains(textContent(res), "non-ASCII") {
+		t.Errorf("error message should mention non-ASCII, got: %v", textContent(res))
+	}
+}
+
 // ---------- TestPipelineInitWithContextRequestMDContent ----------
 
 func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
@@ -548,6 +604,102 @@ func TestPipelineInitWithContextTextSource(t *testing.T) {
 	if result.NeedsUserConfirmation.DetectedTaskType != orchestrator.TaskTypeFeature {
 		t.Errorf("empty context: detected_task_type = %q, want feature",
 			result.NeedsUserConfirmation.DetectedTaskType)
+	}
+}
+
+// ---------- TestApplyWorkspaceSlug ----------
+
+func TestApplyWorkspaceSlug(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		workspace string
+		rawSlug   string
+		want      string
+	}{
+		{
+			name:      "replaces_slug",
+			workspace: ".specs/20260331-task",
+			rawSlug:   "add user auth endpoint",
+			want:      ".specs/20260331-add-user-auth-endpoint",
+		},
+		{
+			name:      "truncates_long_slug",
+			workspace: ".specs/20260331-task",
+			rawSlug:   "this is a very long description that exceeds forty characters and should be truncated",
+			// slugify truncates at 60 bytes then strips a trailing hyphen only
+			want: ".specs/20260331-this-is-a-very-long-description-that-exceeds-forty-character",
+		},
+		{
+			name:      "japanese_slug_falls_back",
+			workspace: ".specs/20260331-task",
+			rawSlug:   "日本語のタスク",
+			want:      ".specs/20260331-task", // unchanged: slugify returns ""
+		},
+		{
+			name:      "no_date_prefix",
+			workspace: ".specs/mytask",
+			rawSlug:   "fix export timeout",
+			want:      ".specs/fix-export-timeout",
+		},
+		{
+			name:      "cleans_slug_chars",
+			workspace: ".specs/20260331-task",
+			rawSlug:   "Fix: Report Export (timeout)",
+			want:      ".specs/20260331-fix-report-export-timeout",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := applyWorkspaceSlug(tc.workspace, tc.rawSlug)
+			if got != tc.want {
+				t.Errorf("applyWorkspaceSlug(%q, %q) = %q, want %q", tc.workspace, tc.rawSlug, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- TestInitWorkspaceUsesWorkspaceSlug ----------
+
+func TestInitWorkspaceUsesWorkspaceSlug(t *testing.T) {
+	t.Parallel()
+
+	// workspace_slug in user_confirmation should rename the workspace directory
+	// and set SpecName accordingly.
+	parentDir := t.TempDir()
+	wsDir := filepath.Join(parentDir, "20260331-task")
+
+	sm := newPIWCSM()
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace":        wsDir,
+		"external_context": map[string]any{},
+		"flags":            map[string]any{},
+		"user_confirmation": map[string]any{
+			"task_type":      "feature",
+			"effort":         "M",
+			"workspace_slug": "add user authentication",
+		},
+	})
+
+	if res.IsError {
+		t.Fatalf("unexpected MCP error: %v", textContent(res))
+	}
+
+	result := parsePIWCResult(t, textContent(res))
+	wantWorkspace := filepath.Join(parentDir, "20260331-add-user-authentication")
+	if result.Workspace != wantWorkspace {
+		t.Errorf("Workspace = %q, want %q", result.Workspace, wantWorkspace)
+	}
+
+	s, err := state.ReadState(result.Workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if s.SpecName != "add-user-authentication" {
+		t.Errorf("SpecName = %q, want %q", s.SpecName, "add-user-authentication")
 	}
 }
 
