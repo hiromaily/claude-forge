@@ -2243,25 +2243,74 @@ func TestConfigure_InvalidPhase_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestConfigure_SkippedPhasesAdvancesCurrentPhase(t *testing.T) {
+func TestConfigure_SkippedPhasesDoNotAdvanceCurrentPhaseUnlessLanding(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	m := newManager()
-	if err := m.Init(dir, "s"); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-	if err := m.Configure(dir, state.PipelineConfig{
-		TaskType:      "feature",
-		Effort:        "M",
-		FlowTemplate:  "standard",
-		SkippedPhases: []string{"phase-3b"},
-	}); err != nil {
-		t.Fatalf("Configure: %v", err)
-	}
-	s := loadState(t, dir)
-	if s.CurrentPhase != "checkpoint-a" {
-		t.Errorf("CurrentPhase = %q, want %q after skipping phase-3b", s.CurrentPhase, "checkpoint-a")
-	}
+
+	t.Run("skip non-current phase keeps currentPhase at phase-1", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		m := newManager()
+		if err := m.Init(dir, "s"); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+		if err := m.Configure(dir, state.PipelineConfig{
+			TaskType:      "feature",
+			Effort:        "M",
+			FlowTemplate:  "standard",
+			SkippedPhases: []string{"phase-3b"},
+		}); err != nil {
+			t.Fatalf("Configure: %v", err)
+		}
+		s := loadState(t, dir)
+		if s.CurrentPhase != "phase-1" {
+			t.Errorf("CurrentPhase = %q, want %q (phase-3b is not the current phase)", s.CurrentPhase, "phase-1")
+		}
+	})
+
+	t.Run("skip current phase advances to next non-skipped", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		m := newManager()
+		if err := m.Init(dir, "s"); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+		if err := m.Configure(dir, state.PipelineConfig{
+			TaskType:      "feature",
+			Effort:        "M",
+			FlowTemplate:  "standard",
+			SkippedPhases: []string{"phase-1", "phase-2"},
+		}); err != nil {
+			t.Fatalf("Configure: %v", err)
+		}
+		s := loadState(t, dir)
+		if s.CurrentPhase != "phase-3" {
+			t.Errorf("CurrentPhase = %q, want %q (phase-1 and phase-2 skipped)", s.CurrentPhase, "phase-3")
+		}
+	})
+
+	t.Run("multiple non-contiguous skips keep currentPhase at phase-1", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		m := newManager()
+		if err := m.Init(dir, "s"); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+		// Reproducer for the original bug: lite flow bugfix/S skips
+		// [phase-4, phase-4b, checkpoint-b, phase-6, phase-7].
+		// None of these are the initial phase-1, so currentPhase must stay at phase-1.
+		if err := m.Configure(dir, state.PipelineConfig{
+			TaskType:      "bugfix",
+			Effort:        "S",
+			FlowTemplate:  "lite",
+			SkippedPhases: []string{"phase-4", "phase-4b", "checkpoint-b", "phase-6", "phase-7"},
+		}); err != nil {
+			t.Fatalf("Configure: %v", err)
+		}
+		s := loadState(t, dir)
+		if s.CurrentPhase != "phase-1" {
+			t.Errorf("CurrentPhase = %q, want %q (none of the skipped phases are the initial phase)", s.CurrentPhase, "phase-1")
+		}
+	})
 }
 
 // ---------- helper ----------
