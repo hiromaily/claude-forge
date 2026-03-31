@@ -631,6 +631,21 @@ func TestSlugify(t *testing.T) {
 			input: "fix issue 42",
 			want:  "fix-issue-42",
 		},
+		{
+			name:  "japanese_chars_stripped",
+			input: "SOA-2896 アラート分析ジョブにて作成されるタスクレコード",
+			want:  "soa-2896",
+		},
+		{
+			name:  "mixed_japanese_english",
+			input: "fix タスクの title 変更",
+			want:  "fix-title",
+		},
+		{
+			name:  "all_japanese",
+			input: "タスクタイトル変更",
+			want:  "",
+		},
 	}
 
 	for _, tc := range tests {
@@ -650,11 +665,33 @@ func TestMakeWorkspacePath(t *testing.T) {
 	t.Parallel()
 
 	fixedDate := time.Date(2026, 3, 28, 0, 0, 0, 0, time.UTC)
-	got := makeWorkspacePath(fixedDate, "implement user login feature")
-	want := ".specs/20260328-implement-user-login-feature"
-	if got != want {
-		t.Errorf("makeWorkspacePath = %q, want %q", got, want)
-	}
+
+	t.Run("english_input", func(t *testing.T) {
+		t.Parallel()
+		got := makeWorkspacePath(fixedDate, "implement user login feature")
+		want := ".specs/20260328-implement-user-login-feature"
+		if got != want {
+			t.Errorf("makeWorkspacePath = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("all_japanese_falls_back_to_task", func(t *testing.T) {
+		t.Parallel()
+		got := makeWorkspacePath(fixedDate, "タスクタイトル変更")
+		want := ".specs/20260328-task"
+		if got != want {
+			t.Errorf("makeWorkspacePath = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("japanese_with_ascii_extracts_ascii", func(t *testing.T) {
+		t.Parallel()
+		got := makeWorkspacePath(fixedDate, "SOA-2896 アラート分析ジョブ")
+		want := ".specs/20260328-soa-2896"
+		if got != want {
+			t.Errorf("makeWorkspacePath = %q, want %q", got, want)
+		}
+	})
 }
 
 // ---------- TestPipelineInitSpecName ----------

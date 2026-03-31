@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -189,9 +188,13 @@ func extractSourceID(sourceType, coreText string) string {
 }
 
 // makeWorkspacePath generates the workspace path in the format .specs/YYYYMMDD-<slug>.
+// Falls back to "task" when slugify produces an empty result (e.g., all-Japanese input).
 func makeWorkspacePath(date time.Time, text string) string {
 	dateStr := date.Format("20060102")
 	slug := slugify(text)
+	if slug == "" {
+		slug = "task"
+	}
 	return ".specs/" + dateStr + "-" + slug
 }
 
@@ -208,7 +211,7 @@ func slugify(text string) string {
 	var b strings.Builder
 	inSep := false
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 			b.WriteRune(r)
 			inSep = false
 		} else if !inSep {
@@ -269,6 +272,9 @@ func refineWorkspacePath(workspace string, extCtx externalContext) string {
 	}
 
 	slug := slugify(id + " " + summary)
+	if slug == "" {
+		slug = "task"
+	}
 	return filepath.Dir(workspace) + "/" + datePrefix + "-" + slug
 }
 

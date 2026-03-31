@@ -715,8 +715,8 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 			"Post the final summary to the Jira issue. Review final-summary.md and post manually.",
 			[]string{"done"},
 		), nil
-	default: // "text" and anything else
-		return NewDoneAction("no external posting needed (source_type="+sourceType+")", ""), nil
+	default: // "text" and anything else — skip this phase
+		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
 	}
 }
 

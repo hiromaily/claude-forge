@@ -752,6 +752,8 @@ func loadState(workspace string) (*state.State, error) {
 //  1. depends_on references exist as valid task keys
 //  2. No circular dependencies
 //  3. Parallel tasks do not write to the same files
+//
+//nolint:gocyclo // complexity is inherent in the dependency validation logic
 func validateTaskDependencies(tasks map[string]state.Task) []string {
 	var warnings []string
 
