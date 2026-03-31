@@ -665,8 +665,15 @@ func (m *StateManager) Configure(workspace string, cfg PipelineConfig) error {
 		}
 		for _, phase := range cfg.SkippedPhases {
 			s.SkippedPhases = appendUnique(s.SkippedPhases, phase)
-			s.CurrentPhase = nextPhase(phase)
-			s.CurrentPhaseStatus = "pending"
+		}
+		// Advance currentPhase only if it lands on a skipped phase.
+		for s.CurrentPhase != "completed" && slices.Contains(s.SkippedPhases, s.CurrentPhase) {
+			s.CurrentPhase = nextPhase(s.CurrentPhase)
+			if s.CurrentPhase == "completed" {
+				s.CurrentPhaseStatus = "completed"
+			} else {
+				s.CurrentPhaseStatus = "pending"
+			}
 		}
 		return nil
 	})
