@@ -4,6 +4,7 @@ package tools
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -225,6 +226,27 @@ func determineTransition(
 	// Re-enter handlePhaseFive by returning "setup_continue" instead of advancing.
 	if in.phase == "phase-5" {
 		s, err := loadState(in.workspace)
+		if err != nil {
+			return reportResultResponse{}, err
+		}
+
+		// Auto-mark tasks as completed when their impl-N.md artifact exists.
+		// The implementer agent writes impl-N.md but may not call task_update
+		// explicitly, so we reconcile task status from artifact presence.
+		for k, t := range s.Tasks {
+			if t.ImplStatus == "completed" {
+				continue
+			}
+			implFile := filepath.Join(in.workspace, "impl-"+k+".md")
+			if _, statErr := os.Stat(implFile); statErr == nil {
+				if updErr := sm.TaskUpdate(in.workspace, k, "implStatus", "completed"); updErr != nil {
+					*warnings = append(*warnings, "auto-complete task "+k+": "+updErr.Error())
+				}
+			}
+		}
+
+		// Re-read state after potential updates.
+		s, err = loadState(in.workspace)
 		if err != nil {
 			return reportResultResponse{}, err
 		}

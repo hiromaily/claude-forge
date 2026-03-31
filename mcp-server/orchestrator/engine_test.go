@@ -907,7 +907,7 @@ func TestNextAction(t *testing.T) {
 			wantPhase: PhasePostToSource,
 		},
 
-		// ── Decision 26: post-to-source text → done ───────────────────────────
+		// ── Decision 26: post-to-source text → skip (done with skip prefix) ──
 		{
 			name: "post_to_source_text",
 			setupSM: func(t *testing.T) *state.StateManager {
@@ -922,7 +922,8 @@ func TestNextAction(t *testing.T) {
 					sourceTypeReader: stubSourceTypeReader("text"),
 				}
 			},
-			wantType: ActionDone,
+			wantType:    ActionDone,
+			wantSummary: SkipSummaryPrefix + "post-to-source",
 		},
 
 		// ── Decision 26: post-to-source jira_issue → checkpoint ───────────────
