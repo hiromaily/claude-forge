@@ -198,11 +198,15 @@ func makeWorkspacePath(date time.Time, text string) string {
 	return ".specs/" + dateStr + "-" + slug
 }
 
+// maxSlugLen is the maximum length of a slug produced by slugify.
+// Kept in sync with the branch-name limit in orchestrator.deriveBranchName.
+const maxSlugLen = 60
+
 // slugify converts text to a lowercase, hyphen-separated slug:
 //  1. Lowercase the full string
 //  2. Replace all runs of non-alphanumeric characters with a single hyphen
 //  3. Strip leading and trailing hyphens
-//  4. Truncate to 60 characters, then strip any trailing hyphen
+//  4. Truncate to maxSlugLen characters, then strip any trailing hyphen
 func slugify(text string) string {
 	// Step 1: Lowercase.
 	s := strings.ToLower(text)
@@ -224,9 +228,9 @@ func slugify(text string) string {
 	// Step 3: Strip leading and trailing hyphens.
 	result = strings.Trim(result, "-")
 
-	// Step 4: Truncate to 60 characters, then strip any trailing hyphen.
-	if len(result) > 60 {
-		result = result[:60]
+	// Step 4: Truncate to maxSlugLen characters, then strip any trailing hyphen.
+	if len(result) > maxSlugLen {
+		result = result[:maxSlugLen]
 		result = strings.TrimRight(result, "-")
 	}
 
