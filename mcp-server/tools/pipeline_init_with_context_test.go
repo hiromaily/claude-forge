@@ -628,8 +628,8 @@ func TestApplyWorkspaceSlug(t *testing.T) {
 			name:      "truncates_long_slug",
 			workspace: ".specs/20260331-task",
 			rawSlug:   "this is a very long description that exceeds forty characters and should be truncated",
-			// slugify truncates at 40 bytes then strips a trailing hyphen only
-			want: ".specs/20260331-this-is-a-very-long-description-that-exc",
+			// slugify truncates at 60 bytes then strips a trailing hyphen only
+			want: ".specs/20260331-this-is-a-very-long-description-that-exceeds-forty-character",
 		},
 		{
 			name:      "japanese_slug_falls_back",

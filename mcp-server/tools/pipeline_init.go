@@ -202,7 +202,7 @@ func makeWorkspacePath(date time.Time, text string) string {
 //  1. Lowercase the full string
 //  2. Replace all runs of non-alphanumeric characters with a single hyphen
 //  3. Strip leading and trailing hyphens
-//  4. Truncate to 40 characters, then strip any trailing hyphen
+//  4. Truncate to 60 characters, then strip any trailing hyphen
 func slugify(text string) string {
 	// Step 1: Lowercase.
 	s := strings.ToLower(text)
@@ -224,9 +224,9 @@ func slugify(text string) string {
 	// Step 3: Strip leading and trailing hyphens.
 	result = strings.Trim(result, "-")
 
-	// Step 4: Truncate to 40 characters, then strip any trailing hyphen.
-	if len(result) > 40 {
-		result = result[:40]
+	// Step 4: Truncate to 60 characters, then strip any trailing hyphen.
+	if len(result) > 60 {
+		result = result[:60]
 		result = strings.TrimRight(result, "-")
 	}
 
