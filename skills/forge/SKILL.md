@@ -18,11 +18,15 @@ description: Orchestrate a full development pipeline using MCP-driven subagents.
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags)`.
    In both cases, the response will contain `needs_user_confirmation`. Present the detected
    `task_type`, `effort`, and `flow_template` to the user and wait for confirmation.
+   While waiting, generate a concise English slug (3–6 words, lowercase, hyphen-separated,
+   ASCII only) that summarises the task — e.g. `"add-user-auth-endpoint"` or
+   `"fix-report-export-timeout"`. If the input is in a non-English language, translate
+   the core intent into English for the slug.
    Then call `mcp__forge-state__pipeline_init_with_context` again with the same parameters plus
-   `user_confirmation={task_type: <confirmed>, effort: <confirmed>}`.
+   `user_confirmation={task_type: <confirmed>, effort: <confirmed>, workspace_slug: <slug>}`.
    Use the `workspace` from the confirmed response for all subsequent calls.
-   **Important**: Never modify or replace the workspace path returned by `pipeline_init`.
-   Always pass it unchanged to `pipeline_init_with_context` and all subsequent MCP calls.
+   **Important**: Always pass the workspace path from `pipeline_init` unchanged to the first
+   `pipeline_init_with_context` call. Never construct workspace paths manually.
 
 ## Step 2: Main Loop
 
