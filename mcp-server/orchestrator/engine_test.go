@@ -811,15 +811,15 @@ func TestNextAction(t *testing.T) {
 			wantType: ActionCheckpoint,
 		},
 
-		// ── Phase 7: verifier ─────────────────────────────────────────────────
+		// ── Phase 7: comprehensive reviewer ──────────────────────────────────
 		{
-			name: "phase7_verifier",
+			name: "phase7_comprehensive_reviewer",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				return newTestStateManager(t, "phase-7", nil)
 			},
 			wantType:  ActionSpawnAgent,
-			wantAgent: agentVerifier,
+			wantAgent: agentComprehensiveReview,
 		},
 
 		// ── Final verification ────────────────────────────────────────────────
@@ -873,7 +873,7 @@ func TestNextAction(t *testing.T) {
 			wantInputContains: "investigation.md",
 		},
 
-		// ── Decision 25: final-summary for feature uses comprehensive-reviewer
+		// ── Decision 25: final-summary for feature uses verifier (comprehensive review already done in phase-7)
 		{
 			name: "final_summary_feature",
 			setupSM: func(t *testing.T) *state.StateManager {
@@ -885,7 +885,7 @@ func TestNextAction(t *testing.T) {
 				})
 			},
 			wantType:  ActionSpawnAgent,
-			wantAgent: agentComprehensiveReview,
+			wantAgent: agentVerifier,
 		},
 
 		// ── Decision 26: post-to-source github_issue → exec ───────────────────
@@ -1017,6 +1017,107 @@ func TestNextAction(t *testing.T) {
 				if action.SetupOnly != *tc.wantSetupOnly {
 					t.Errorf("action.SetupOnly = %v, want %v", action.SetupOnly, *tc.wantSetupOnly)
 				}
+			}
+		})
+	}
+}
+
+func TestStripDatePrefix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"20260330-soa-2899-task-status", "soa-2899-task-status"},
+		{"20260330-x", "x"},
+		{"soa-2899", "soa-2899"},         // no date prefix
+		{"1234567-foo", "1234567-foo"},    // only 7 digits
+		{"12345678-foo", "foo"},           // 8 digits
+		{"1234567x-foo", "1234567x-foo"}, // non-digit in prefix
+		{"", ""},                          // empty string
+		{"12345678", "12345678"},          // no hyphen after 8 digits
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+			got := stripDatePrefix(tt.input)
+			if got != tt.want {
+				t.Errorf("stripDatePrefix(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDeriveBranchName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		specName string
+		want     string
+	}{
+		{"20260330-soa-2899-task-status", "forge/soa-2899-task-status"},
+		{"soa-2899-task-status", "forge/soa-2899-task-status"},
+		{"My Feature", "forge/my-feature"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.specName, func(t *testing.T) {
+			t.Parallel()
+			st := &state.State{SpecName: tt.specName}
+			got := deriveBranchName(st)
+			if got != tt.want {
+				t.Errorf("deriveBranchName(%q) = %q, want %q", tt.specName, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDeriveBranchName_Truncation(t *testing.T) {
+	t.Parallel()
+
+	long := "20260330-soa-2899-this-is-a-very-long-specification-name-that-exceeds-sixty-characters-limit"
+	got := deriveBranchName(&state.State{SpecName: long})
+
+	// Must start with forge/ and body must be <= 60 chars.
+	const prefix = "forge/"
+	body := got[len(prefix):]
+	if len(body) > 60 {
+		t.Errorf("branch body length = %d (> 60): %q", len(body), body)
+	}
+	// Must not end with a hyphen (truncated at word boundary).
+	if body[len(body)-1] == '-' {
+		t.Errorf("branch body ends with hyphen: %q", body)
+	}
+}
+
+func TestDerivePRTitle(t *testing.T) {
+	t.Parallel()
+
+	bugfix := TaskTypeBugfix
+	feature := TaskTypeFeature
+	docs := TaskTypeDocs
+
+	tests := []struct {
+		name     string
+		taskType *string
+		specName string
+		want     string
+	}{
+		{"bugfix", &bugfix, "20260330-soa-2899-fix-status", "fix: soa 2899 fix status"},
+		{"feature", &feature, "20260330-add-auth", "feat: add auth"},
+		{"docs", &docs, "update-readme", "docs: update readme"},
+		{"nil_type", nil, "some-task", "feat: some task"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			st := &state.State{SpecName: tt.specName, TaskType: tt.taskType}
+			got := derivePRTitle(st)
+			if got != tt.want {
+				t.Errorf("derivePRTitle() = %q, want %q", got, tt.want)
 			}
 		})
 	}
