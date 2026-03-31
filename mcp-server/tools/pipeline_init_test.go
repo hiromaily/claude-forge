@@ -667,6 +667,7 @@ func TestMakeWorkspacePath(t *testing.T) {
 	fixedDate := time.Date(2026, 3, 28, 0, 0, 0, 0, time.UTC)
 
 	t.Run("english_input", func(t *testing.T) {
+		t.Parallel()
 		got := makeWorkspacePath(fixedDate, "implement user login feature")
 		want := ".specs/20260328-implement-user-login-feature"
 		if got != want {
@@ -675,6 +676,7 @@ func TestMakeWorkspacePath(t *testing.T) {
 	})
 
 	t.Run("all_japanese_falls_back_to_task", func(t *testing.T) {
+		t.Parallel()
 		got := makeWorkspacePath(fixedDate, "タスクタイトル変更")
 		want := ".specs/20260328-task"
 		if got != want {
@@ -683,6 +685,7 @@ func TestMakeWorkspacePath(t *testing.T) {
 	})
 
 	t.Run("japanese_with_ascii_extracts_ascii", func(t *testing.T) {
+		t.Parallel()
 		got := makeWorkspacePath(fixedDate, "SOA-2896 アラート分析ジョブ")
 		want := ".specs/20260328-soa-2896"
 		if got != want {

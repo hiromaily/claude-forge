@@ -142,6 +142,8 @@ func handleReportResult(sm *state.StateManager, kb *history.KnowledgeBase, in re
 }
 
 // determineTransition decides the correct state transition and returns a partial response.
+//
+//nolint:gocyclo // complexity is inherent in the dispatch table
 func determineTransition(
 	sm *state.StateManager,
 	kb *history.KnowledgeBase,
