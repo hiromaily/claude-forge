@@ -839,6 +839,24 @@ handler fires first. The shell hook still fires on any `Bash` tool calls.
 - [ ] Add tests for both the shell guard (`test-hooks.sh`) and the Go guard (`tools/guards_test.go`)
 - [ ] Document the new rule in the "Guard Catalogue — Enforcement Reference" section below
 
+### Why are analysis.md and investigation.md separate files?
+
+The two Phase 1–2 output files have distinct roles and a strict data dependency between them:
+
+- **analysis.md** (Phase 1 — situation-analyst): maps the *current state* of the codebase — relevant files, interfaces, types, data flows, and existing tests. It is a read-only survey with no opinion on what should change.
+- **investigation.md** (Phase 2 — investigator): builds *on top of* analysis.md — the investigator agent reads analysis.md as an explicit input before adding root cause analysis, edge cases, risks, external dependencies, prior art, ambiguities, and deletion/rename impact.
+
+Merging them into one file would break this sequential dependency: the investigator would have to both read and write the same file, or the Phase 1 content would have to be injected into its prompt instead of residing on disk (violating the Files-Are-the-API principle).
+
+Four additional reasons the split is load-bearing:
+
+1. **Resume semantics** — each file is a separate phase checkpoint. If Phase 2 fails, Phase 1's analysis.md is already on disk and the investigator can retry without re-running the situation analyst.
+2. **Consumer granularity** — `task-decomposer` (Phase 4) reads only `investigation.md`; `architect` and `design-reviewer` read both. Separate files let each consumer load exactly what it needs.
+3. **Artifact guards** — `pipeline_report_result` validates `analysis.md` on Phase 1 completion and `investigation.md` on Phase 2 completion independently. A single merged file would require one guard to validate two distinct sections, coupling the guard logic to content structure.
+4. **Investigation task type** — when `task_type=investigation`, the pipeline ends after Phase 2 and presents both files as the final deliverable to the user. Keeping them separate makes the output navigable as two named documents.
+
+The `analyst.md` agent (lite flow) demonstrates that the *content* can be produced in a single agent call — it writes both files itself before the orchestrator skips Phase 2. But it still writes them as two separate files for all the reasons above.
+
 ### Why inline comment anchors for SKILL.md cross-references?
 
 SKILL.md is consumed by an LLM reading raw Markdown, not a renderer. HTML anchors
