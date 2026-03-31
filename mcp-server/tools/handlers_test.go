@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -431,6 +432,71 @@ func TestTaskInitHandlerZeroTasksError(t *testing.T) {
 	})
 	if !res.IsError {
 		t.Errorf("TaskInitHandler should fail with empty tasks map, got success")
+	}
+}
+
+// ---------- validateTaskDependencies ----------
+
+func TestValidateTaskDependencies_ValidTasks(t *testing.T) {
+	t.Parallel()
+	tasks := map[string]state.Task{
+		"1": {Title: "First", ExecutionMode: "parallel", Files: []string{"a.go"}},
+		"2": {Title: "Second", ExecutionMode: "parallel", Files: []string{"b.go"}},
+		"3": {Title: "Third", ExecutionMode: "sequential", DependsOn: []int{1, 2}, Files: []string{"c.go"}},
+	}
+	warnings := validateTaskDependencies(tasks)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", warnings)
+	}
+}
+
+func TestValidateTaskDependencies_InvalidDependsOn(t *testing.T) {
+	t.Parallel()
+	tasks := map[string]state.Task{
+		"1": {Title: "First", ExecutionMode: "sequential", DependsOn: []int{99}},
+	}
+	warnings := validateTaskDependencies(tasks)
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %d: %v", len(warnings), warnings)
+	}
+	if !strings.Contains(warnings[0], "does not exist") {
+		t.Errorf("unexpected warning: %s", warnings[0])
+	}
+}
+
+func TestValidateTaskDependencies_CircularDependency(t *testing.T) {
+	t.Parallel()
+	tasks := map[string]state.Task{
+		"1": {Title: "A", ExecutionMode: "sequential", DependsOn: []int{2}},
+		"2": {Title: "B", ExecutionMode: "sequential", DependsOn: []int{1}},
+	}
+	warnings := validateTaskDependencies(tasks)
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "circular") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected circular dependency warning, got %v", warnings)
+	}
+}
+
+func TestValidateTaskDependencies_ParallelFileConflict(t *testing.T) {
+	t.Parallel()
+	tasks := map[string]state.Task{
+		"1": {Title: "A", ExecutionMode: "parallel", Files: []string{"shared.go"}},
+		"2": {Title: "B", ExecutionMode: "parallel", Files: []string{"shared.go"}},
+	}
+	warnings := validateTaskDependencies(tasks)
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "both write to") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected parallel file conflict warning, got %v", warnings)
 	}
 }
 

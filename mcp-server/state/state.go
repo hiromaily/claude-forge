@@ -56,12 +56,14 @@ type Revisions struct {
 // Task represents a single implementation task entry inside state.Tasks.
 // ImplRetries and ReviewRetries are JSON numbers (int), not strings.
 type Task struct {
-	Title         string `json:"title"`
-	ExecutionMode string `json:"executionMode"`
-	ImplStatus    string `json:"implStatus"`
-	ReviewStatus  string `json:"reviewStatus"`
-	ImplRetries   int    `json:"implRetries"`
-	ReviewRetries int    `json:"reviewRetries"`
+	Title         string   `json:"title"`
+	ExecutionMode string   `json:"executionMode"`
+	DependsOn     []int    `json:"depends_on"`
+	Files         []string `json:"files"`
+	ImplStatus    string   `json:"implStatus"`
+	ReviewStatus  string   `json:"reviewStatus"`
+	ImplRetries   int      `json:"implRetries"`
+	ReviewRetries int      `json:"reviewRetries"`
 }
 
 // PhaseLogEntry records token/duration metrics for a completed phase.

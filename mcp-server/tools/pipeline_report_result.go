@@ -220,6 +220,30 @@ func determineTransition(
 		}, nil
 	}
 
+	// Step 9b: Phase-5 special handling — do not advance if pending tasks remain.
+	// After a parallel batch completes, there may be sequential tasks still pending.
+	// Re-enter handlePhaseFive by returning "setup_continue" instead of advancing.
+	if in.phase == "phase-5" {
+		s, err := loadState(in.workspace)
+		if err != nil {
+			return reportResultResponse{}, err
+		}
+		hasPending := false
+		for _, t := range s.Tasks {
+			if t.ImplStatus != "completed" {
+				hasPending = true
+				break
+			}
+		}
+		if hasPending {
+			return reportResultResponse{
+				StateUpdated:    true,
+				ArtifactWritten: artifactWritten,
+				NextActionHint:  "setup_continue",
+			}, nil
+		}
+	}
+
 	if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
 		return reportResultResponse{}, err
 	}

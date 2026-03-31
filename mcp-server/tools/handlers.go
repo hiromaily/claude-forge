@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -280,8 +281,16 @@ func TaskInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if len(tasks) == 0 {
 			return errorf("task_init: no tasks parsed from input — tasks.md may be empty or malformed")
 		}
+		// Validate dependency integrity before storing.
+		warnings := validateTaskDependencies(tasks)
 		if err := sm.TaskInit(workspace, tasks); err != nil {
 			return errorf("task_init: %v", err)
+		}
+		if len(warnings) > 0 {
+			return okJSON(map[string]any{
+				"status":   "ok",
+				"warnings": warnings,
+			})
 		}
 		return okText("ok")
 	}
@@ -734,6 +743,95 @@ func refreshIndexWithSpecsDir(specsDir string) server.ToolHandlerFunc {
 // for guard checks).  The StateManager methods do their own locking for mutations.
 func loadState(workspace string) (*state.State, error) {
 	return state.ReadState(workspace)
+}
+
+// validateTaskDependencies checks task dependency integrity at task_init time.
+// Returns a list of human-readable warning strings. An empty list means no issues.
+//
+// Checks performed:
+//  1. depends_on references exist as valid task keys
+//  2. No circular dependencies
+//  3. Parallel tasks do not write to the same files
+func validateTaskDependencies(tasks map[string]state.Task) []string {
+	var warnings []string
+
+	// Build a set of valid task keys.
+	validKeys := make(map[int]bool, len(tasks))
+	for k := range tasks {
+		n, err := strconv.Atoi(k)
+		if err != nil {
+			continue
+		}
+		validKeys[n] = true
+	}
+
+	// Check 1: depends_on references exist.
+	for k, task := range tasks {
+		for _, dep := range task.DependsOn {
+			if !validKeys[dep] {
+				warnings = append(warnings, fmt.Sprintf(
+					"task %s depends on task %d which does not exist", k, dep))
+			}
+		}
+	}
+
+	// Check 2: Circular dependency detection via DFS.
+	// Build adjacency list from depends_on.
+	adj := make(map[int][]int)
+	for k, task := range tasks {
+		n, err := strconv.Atoi(k)
+		if err != nil {
+			continue
+		}
+		adj[n] = task.DependsOn
+	}
+
+	// DFS cycle detection: 0=unvisited, 1=in-stack, 2=done.
+	color := make(map[int]int)
+	var hasCycle bool
+	var dfs func(int)
+	dfs = func(node int) {
+		if hasCycle {
+			return
+		}
+		color[node] = 1
+		for _, dep := range adj[node] {
+			switch color[dep] {
+			case 1:
+				hasCycle = true
+				return
+			case 0:
+				dfs(dep)
+			}
+		}
+		color[node] = 2
+	}
+	for k := range adj {
+		if color[k] == 0 {
+			dfs(k)
+		}
+	}
+	if hasCycle {
+		warnings = append(warnings, "circular dependency detected among tasks")
+	}
+
+	// Check 3: Parallel tasks must not write to the same files.
+	fileOwners := make(map[string]string) // file path → first parallel task key
+	for k, task := range tasks {
+		if task.ExecutionMode != "parallel" {
+			continue
+		}
+		for _, f := range task.Files {
+			if owner, exists := fileOwners[f]; exists {
+				warnings = append(warnings, fmt.Sprintf(
+					"parallel tasks %s and %s both write to %s", owner, k, f))
+			} else {
+				fileOwners[f] = k
+			}
+		}
+	}
+
+	return warnings
 }
 
 // publishEvent constructs an Event and publishes it to bus. If slack is non-nil,

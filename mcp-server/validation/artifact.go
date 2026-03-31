@@ -40,11 +40,13 @@ type artifactRule struct {
 //
 //nolint:gochecknoglobals // package-level lookup table for phase rules
 var artifactRules = map[string]artifactRule{
-	"phase-3":  {filename: "design.md", requiredHeading: "## "},
-	"phase-3b": {filename: "review-design.md", verdictSet: []string{"APPROVE_WITH_NOTES", "APPROVE", "REVISE"}},
-	"phase-4":  {filename: "tasks.md", requiredHeading: "## Task"},
-	"phase-4b": {filename: "review-tasks.md", verdictSet: []string{"APPROVE_WITH_NOTES", "APPROVE", "REVISE"}},
-	"phase-7":  {filename: "comprehensive-review.md", requireNonEmpty: true},
+	"phase-3":            {filename: "design.md", requiredHeading: "## "},
+	"phase-3b":           {filename: "review-design.md", verdictSet: []string{"APPROVE_WITH_NOTES", "APPROVE", "REVISE"}},
+	"phase-4":            {filename: "tasks.md", requiredHeading: "## Task"},
+	"phase-4b":           {filename: "review-tasks.md", verdictSet: []string{"APPROVE_WITH_NOTES", "APPROVE", "REVISE"}},
+	"phase-7":            {filename: "comprehensive-review.md", requireNonEmpty: true},
+	"final-summary":      {filename: "final-summary.md", requireNonEmpty: true},
+	"final-verification": {filename: "final-verification.md", requireNonEmpty: true},
 }
 
 // ValidateArtifacts checks that the expected artifact file exists in workspace
