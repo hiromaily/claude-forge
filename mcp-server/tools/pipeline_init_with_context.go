@@ -484,20 +484,14 @@ func boolField(m map[string]any, key string) bool {
 }
 
 // applyWorkspaceSlug replaces the slug portion of a workspace path with the
-// LLM-generated slug. The date prefix (YYYYMMDD) is preserved.
-// If slugify produces an empty result (e.g. the slug was pure Japanese),
+// LLM-generated slug. If slugify produces an empty result (e.g. pure Japanese input),
 // the original workspace path is returned unchanged.
 func applyWorkspaceSlug(workspace, rawSlug string) string {
 	cleaned := slugify(rawSlug)
 	if cleaned == "" {
 		return workspace
 	}
-	base := filepath.Base(workspace)
-	datePrefix := ""
-	if idx := strings.IndexByte(base, '-'); idx > 0 {
-		datePrefix = base[:idx] + "-"
-	}
-	return filepath.Dir(workspace) + "/" + datePrefix + cleaned
+	return replaceWorkspaceSlug(workspace, cleaned)
 }
 
 // hasNonASCII guards workspace paths against unreadable multibyte characters (e.g. Japanese).

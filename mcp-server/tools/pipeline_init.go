@@ -264,18 +264,22 @@ func refineWorkspacePath(workspace string, extCtx externalContext) string {
 		return workspace
 	}
 
-	// Extract date prefix from existing workspace path (e.g., "20260330" from ".specs/20260330-...")
-	base := filepath.Base(workspace)
-	datePrefix := base
-	if idx := strings.IndexByte(base, '-'); idx > 0 {
-		datePrefix = base[:idx]
-	}
-
 	slug := slugify(id + " " + summary)
 	if slug == "" {
 		slug = "task"
 	}
-	return filepath.Dir(workspace) + "/" + datePrefix + "-" + slug
+	return replaceWorkspaceSlug(workspace, slug)
+}
+
+// replaceWorkspaceSlug replaces the slug portion of a workspace path with newSlug,
+// preserving the YYYYMMDD date prefix when present.
+// Example: replaceWorkspaceSlug(".specs/20260330-old", "new-slug") → ".specs/20260330-new-slug"
+func replaceWorkspaceSlug(workspace, newSlug string) string {
+	base := filepath.Base(workspace)
+	if idx := strings.IndexByte(base, '-'); idx > 0 {
+		return filepath.Join(filepath.Dir(workspace), base[:idx]+"-"+newSlug)
+	}
+	return filepath.Join(filepath.Dir(workspace), newSlug)
 }
 
 // makeFetchNeeded constructs the FetchNeeded block for the given source type.
