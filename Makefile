@@ -55,7 +55,7 @@ clean:
 	rm -f bin/$(MCP_BINARY)
 
 # update-tag: Update the version tag in marketplace.json and plugin metadata to new version
-# e.g. make update-tag new=1.1.0 old=1.0.0
+# e.g. make update-tag new=2.0.1 old=2.0.0
 .PHONY: update-tag
 update-tag:
 	@echo "Updating tag to v${new} in marketplace.json"
@@ -66,7 +66,7 @@ update-tag:
 	@echo "Tag updated to v${new} in plugin.json"
 
 # update-git-tag: Create and push a git tag for the new version
-# e.g. make update-git-tag new=1.1.0
+# e.g. make update-git-tag new=2.0.0
 .PHONY: update-git-tag
 update-git-tag:
 	@echo "Creating git tag v${new}"
@@ -77,12 +77,12 @@ update-git-tag:
 	@echo "Git tag v${new} pushed to origin"
 
 # update-all: Update the version tag in marketplace.json and plugin metadata, then create and push a git tag for the new version
-# e.g. make update-all new=1.1.0 old=1.0.0
+# e.g. make update-all new=2.0.1 old=2.0.0
 .PHONY: update-all
 update-all: update-tag update-git-tag
 	@echo "Version updated to v${new} and git tag created and pushed"
 
-# e.g. make retag TAG=v1.1.0
+# e.g. make retag TAG=v2.0.0
 .PHONY: retag
 retag:
 	git tag -d $(TAG) 2>/dev/null || true
