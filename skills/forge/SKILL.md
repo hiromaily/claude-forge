@@ -7,11 +7,22 @@ description: Orchestrate a full development pipeline using MCP-driven subagents.
 
 ## Step 1: Initialize or Resume
 
-1. Call `mcp__forge-state__pipeline_init(raw_arguments=$ARGUMENTS)`.
-2. If `result.fetch_needed == true`: fetch external data from `result.fetch_url`, then
-   call `mcp__forge-state__pipeline_init_with_context(...)`.
-   Confirm workspace path and task summary with the user before continuing.
-3. If `result.status == "resume"`: confirm resume from `result.workspace`.
+1. Call `mcp__forge-state__pipeline_init(arguments=$ARGUMENTS)`.
+2. If `result.errors` is non-empty: surface the errors to the user and stop.
+3. If `result.resume == true`: confirm resume from `result.workspace` with the user, then go to Step 2.
+4. For all new pipelines (resume is false or absent):
+   a. If `result.fetch_needed` is non-null: fetch the external data described by `result.fetch_needed`
+      (GitHub issue fields or Jira issue fields), then call
+      `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags, external_context=<fetched data>)`.
+   b. If `result.fetch_needed` is null (plain text input): call
+      `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags)`.
+   In both cases, the response will contain `needs_user_confirmation`. Present the detected
+   `task_type`, `effort`, and `flow_template` to the user and wait for confirmation.
+   Then call `mcp__forge-state__pipeline_init_with_context` again with the same parameters plus
+   `user_confirmation={task_type: <confirmed>, effort: <confirmed>}`.
+   Use the `workspace` from the confirmed response for all subsequent calls.
+   **Important**: Never modify or replace the workspace path returned by `pipeline_init`.
+   Always pass it unchanged to `pipeline_init_with_context` and all subsequent MCP calls.
 
 ## Step 2: Main Loop
 

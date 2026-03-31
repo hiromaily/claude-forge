@@ -246,7 +246,13 @@ func initWorkspace(
 	skippedPhases []string,
 	extCtx externalContext,
 ) (string, error) {
-	// Step 7a: Create workspace directory.
+	// Step 7a: Validate workspace path — reject non-ASCII characters so that
+	// multibyte input (e.g. Japanese) never produces an unreadable directory name.
+	if hasNonASCII(workspace) {
+		return "", fmt.Errorf("workspace path %q contains non-ASCII characters; use only ASCII in directory names", workspace)
+	}
+
+	// Create workspace directory.
 	if err := os.MkdirAll(workspace, 0o750); err != nil {
 		return "", fmt.Errorf("MkdirAll %q: %w", workspace, err)
 	}
@@ -471,4 +477,14 @@ func boolField(m map[string]any, key string) bool {
 	}
 	b, _ := v.(bool)
 	return b
+}
+
+// hasNonASCII guards workspace paths against unreadable multibyte characters (e.g. Japanese).
+func hasNonASCII(s string) bool {
+	for _, r := range s {
+		if r > 0x7F {
+			return true
+		}
+	}
+	return false
 }

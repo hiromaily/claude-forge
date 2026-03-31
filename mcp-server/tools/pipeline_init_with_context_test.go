@@ -441,6 +441,62 @@ func TestPipelineInitWithContextSkipPhaseOrder(t *testing.T) {
 	}
 }
 
+// ---------- TestHasNonASCII ----------
+
+func TestHasNonASCII(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		s    string
+		want bool
+	}{
+		{name: "empty", s: "", want: false},
+		{name: "ascii_path", s: ".specs/20260331-my-feature", want: false},
+		{name: "ascii_only", s: "abcdefghijklmnopqrstuvwxyz0123456789-", want: false},
+		{name: "japanese", s: ".specs/20260331-日本語のタスク", want: true},
+		{name: "japanese_only", s: "日本語", want: true},
+		{name: "latin_extended", s: "caf\u00e9", want: true},
+		{name: "emoji", s: "task-\U0001F600", want: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := hasNonASCII(tc.s)
+			if got != tc.want {
+				t.Errorf("hasNonASCII(%q) = %v, want %v", tc.s, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- TestInitWorkspaceRejectsNonASCIIPath ----------
+
+func TestInitWorkspaceRejectsNonASCIIPath(t *testing.T) {
+	t.Parallel()
+
+	sm := newPIWCSM()
+	h := PipelineInitWithContextHandler(sm)
+
+	// Pass a workspace path containing Japanese characters directly.
+	res := callTool(t, h, map[string]any{
+		"workspace": ".specs/20260331-日本語のタスク",
+		"flags":     map[string]any{},
+		"user_confirmation": map[string]any{
+			"task_type": "feature",
+			"effort":    "M",
+		},
+	})
+
+	// Expect an MCP-level error (IsError=true) rejecting the non-ASCII path.
+	if !res.IsError {
+		t.Fatalf("expected MCP error for non-ASCII workspace, got success: %v", textContent(res))
+	}
+	if !strings.Contains(textContent(res), "non-ASCII") {
+		t.Errorf("error message should mention non-ASCII, got: %v", textContent(res))
+	}
+}
+
 // ---------- TestPipelineInitWithContextRequestMDContent ----------
 
 func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
