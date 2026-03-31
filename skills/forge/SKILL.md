@@ -17,7 +17,7 @@ description: Orchestrate a full development pipeline using MCP-driven subagents.
    b. If `result.fetch_needed` is null (plain text input): call
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags)`.
    In both cases, the response will contain `needs_user_confirmation`. Present the detected
-   `task_type`, `effort`, and `flow_template` to the user and wait for confirmation.
+   `detected_task_type`, `detected_effort`, and `flow_template` to the user and wait for confirmation.
    While waiting, generate a concise English slug (3–6 words, lowercase, hyphen-separated,
    ASCII only) that summarises the task — e.g. `"add-user-auth-endpoint"` or
    `"fix-report-export-timeout"`. If the input is in a non-English language, translate
