@@ -39,25 +39,31 @@ Repeat until done:
        parallel; wait for all to complete before calling report_result.
    - `checkpoint`: Call `mcp__forge-state__checkpoint(workspace, phase=action.name)`.
      Present `action.present_to_user` to the user. Wait for response.
-     - **Special: `post-to-jira` checkpoint** — when `action.name` is `"post-to-jira"`:
-       1. Ask the user whether to post the work report to Jira (use AskUserQuestion
+     - **Special: `post-to-github` / `post-to-jira` checkpoints** — when `action.name`
+       is `"post-to-github"` or `"post-to-jira"`:
+       1. Ask the user whether to post the work report (use AskUserQuestion
           with options "post" / "skip").
        2. If the user chooses **"post"**:
-          a. Read `{workspace}/request.md` front matter to extract `source_url`
-             (the Jira issue URL, e.g. `https://company.atlassian.net/browse/PROJ-123`).
-          b. Extract the Jira issue key from the URL (e.g. `PROJ-123`).
-          c. Read `{workspace}/final-summary.md` for the comment body.
-          d. Post the comment using one of these methods (try in order):
-             - Atlassian MCP tools (if available in the current environment)
-             - `curl` with Jira REST API v3:
+          a. Read `{workspace}/request.md` front matter to extract `source_url`.
+          b. Read `{workspace}/final-summary.md` for the comment body.
+          c. Post the comment based on `action.name`:
+             - **`post-to-github`**: Extract the issue URL from `source_url` and run:
                ```
-               curl -s -X POST \
-                 -H "Content-Type: application/json" \
-                 -u "$JIRA_USER:$JIRA_TOKEN" \
-                 "https://<domain>/rest/api/3/issue/<issue-key>/comment" \
-                 -d '{"body":{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"<summary content>"}]}]}}'
+               gh issue comment <issue-url> --body-file {workspace}/final-summary.md
                ```
-          e. Report success or failure to the user.
+             - **`post-to-jira`**: Extract the Jira issue key from the URL
+               (e.g. `PROJ-123` from `https://company.atlassian.net/browse/PROJ-123`).
+               Post using one of these methods (try in order):
+               - Atlassian MCP tools (if available in the current environment)
+               - `curl` with Jira REST API v3:
+                 ```
+                 curl -s -X POST \
+                   -H "Content-Type: application/json" \
+                   -u "$JIRA_USER:$JIRA_TOKEN" \
+                   "https://<domain>/rest/api/3/issue/<issue-key>/comment" \
+                   -d '{"body":{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"<summary content>"}]}]}}'
+                 ```
+          d. Report success or failure to the user.
        3. If the user chooses **"skip"**: do nothing.
      Call `mcp__forge-state__phase_complete(workspace, phase=action.name)`.
      Do NOT call pipeline_report_result for checkpoints.

@@ -707,10 +707,16 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 
 	switch sourceType {
 	case "github_issue":
-		return NewExecAction(PhasePostToSource, []string{
-			"gh", "issue", "comment",
-			"--body-file", filepath.Join(st.Workspace, "final-summary.md"),
-		}), nil
+		sourceURL := e.sourceURLReader(st.Workspace)
+		msg := fmt.Sprintf(
+			"Pipeline complete. Post the final summary as a comment to the GitHub issue?\n\nGitHub URL: %s\nSummary file: %s/final-summary.md",
+			sourceURL, st.Workspace,
+		)
+		return NewCheckpointAction(
+			"post-to-github",
+			msg,
+			[]string{"post", "skip"},
+		), nil
 	case "jira_issue":
 		sourceURL := e.sourceURLReader(st.Workspace)
 		msg := fmt.Sprintf(

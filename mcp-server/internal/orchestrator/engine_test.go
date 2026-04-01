@@ -887,7 +887,7 @@ func TestNextAction(t *testing.T) {
 			wantAgent: agentVerifier,
 		},
 
-		// ── Decision 26: post-to-source github_issue → exec ───────────────────
+		// ── Decision 26: post-to-source github_issue → checkpoint with post/skip ──
 		{
 			name: "post_to_source_github_issue",
 			setupSM: func(t *testing.T) *state.StateManager {
@@ -900,10 +900,10 @@ func TestNextAction(t *testing.T) {
 					specsDir:         "/test/specs",
 					verdictReader:    stubVerdictReader(VerdictApprove),
 					sourceTypeReader: stubSourceTypeReader("github_issue"),
+					sourceURLReader:  func(_ string) string { return "https://github.com/org/repo/issues/42" },
 				}
 			},
-			wantType:  ActionExec,
-			wantPhase: PhasePostToSource,
+			wantType: ActionCheckpoint,
 		},
 
 		// ── Decision 26: post-to-source text → skip (done with skip prefix) ──
@@ -1216,5 +1216,43 @@ func TestPostToJira_CheckpointOptions(t *testing.T) {
 
 	if !strings.Contains(action.PresentToUser, "https://example.atlassian.net/browse/PROJ-123") {
 		t.Errorf("action.PresentToUser does not contain Jira URL: %q", action.PresentToUser)
+	}
+}
+
+// TestPostToGitHub_CheckpointOptions verifies that the github_issue post-to-source
+// checkpoint returns "post" and "skip" options with the source URL in the message.
+func TestPostToGitHub_CheckpointOptions(t *testing.T) {
+	t.Parallel()
+
+	sm := newTestStateManager(t, "post-to-source", nil)
+
+	eng := &Engine{
+		agentDir:         "/test/agents",
+		specsDir:         "/test/specs",
+		verdictReader:    stubVerdictReader(VerdictApprove),
+		sourceTypeReader: stubSourceTypeReader("github_issue"),
+		sourceURLReader:  func(_ string) string { return "https://github.com/org/repo/issues/42" },
+	}
+
+	action, err := eng.NextAction(sm, "")
+	if err != nil {
+		t.Fatalf("NextAction: %v", err)
+	}
+
+	if action.Type != ActionCheckpoint {
+		t.Fatalf("action.Type = %q, want %q", action.Type, ActionCheckpoint)
+	}
+
+	if action.Name != "post-to-github" {
+		t.Errorf("action.Name = %q, want %q", action.Name, "post-to-github")
+	}
+
+	wantOptions := []string{"post", "skip"}
+	if !slices.Equal(action.Options, wantOptions) {
+		t.Errorf("action.Options = %v, want %v", action.Options, wantOptions)
+	}
+
+	if !strings.Contains(action.PresentToUser, "https://github.com/org/repo/issues/42") {
+		t.Errorf("action.PresentToUser does not contain GitHub URL: %q", action.PresentToUser)
 	}
 }
