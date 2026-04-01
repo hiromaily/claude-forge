@@ -4,8 +4,8 @@ set -uo pipefail
 # launch-mcp.sh — Self-healing launcher for forge-state-mcp.
 #
 # Called by Claude Code as the MCP server command (see .mcp.json).
-# If the binary is missing (e.g. Setup hook did not fire on install),
-# this script runs setup.sh to download/build it first, then exec's it.
+# Delegates version checking and installation to setup.sh (which exits 0
+# immediately if the correct version is already installed), then exec's the binary.
 #
 # Environment:
 #   CLAUDE_PLUGIN_ROOT  — set by Claude Code to the plugin install directory
@@ -18,9 +18,12 @@ fi
 
 BINARY="${PLUGIN_ROOT}/bin/forge-state-mcp"
 
-if [ ! -x "$BINARY" ]; then
-  echo "launch-mcp.sh: binary not found, running setup..." >&2
-  bash "${PLUGIN_ROOT}/scripts/setup.sh" >&2
+# Delegate version check and installation to setup.sh.
+# setup.sh exits 0 immediately if the correct version is already installed,
+# so this is a no-op on the hot path and handles missing/stale binaries.
+if ! bash "${PLUGIN_ROOT}/scripts/setup.sh" >&2; then
+  echo "launch-mcp.sh: setup failed, exiting" >&2
+  exit 1
 fi
 
 exec "$BINARY"
