@@ -207,6 +207,37 @@ flowchart TD
 
 ---
 
+## Pipeline Phase Execution by Effort Level
+
+Which phases run is primarily determined by effort level. ✅ = phase runs; blank = skipped.
+
+| Phase | Task | Effort S | Effort M | Effort L |
+| ----- | ------------------------- | --------- | -------- | ------------ |
+| 0 | Input Validation | ✅ | ✅ | ✅ |
+| 1 | Workspace Setup | ✅ | ✅ | ✅ |
+| 2 | Detect Task Type & Effort | ✅ | ✅ | ✅ |
+| 3 | Situation Analysis | ✅ | ✅ | ✅ |
+| 4 | Investigation | | ✅ | ✅ |
+| 5 | Design | ✅ | ✅ | ✅ |
+| 6 | Design Review | ✅ | ✅ | ✅ |
+| 7 | Checkpoint A | ✅ | ✅ | ✅ |
+| 8 | Task Decomposition | ✅ | ✅ | ✅ |
+| 9 | Tasks Review | | | ✅ |
+| 10 | Checkpoint B | | | ✅ |
+| 11 | Implementation | ✅ | ✅ | ✅ |
+| 12 | Code Review | | ✅ | ✅ |
+| 13 | Comprehensive Review | | ✅　| ✅ |
+| 14 | Final Verification | ✅ | ✅ | ✅ |
+| 15 | PR Creation | ✅ | ✅ | ✅ |
+| 16 | Final Summary | ✅ | ✅ | ✅ |
+| 17 | Post to Source | ✅ | ✅ | ✅ |
+| 18 | Done | ✅ | ✅ | ✅ |
+
+> S → light template · M → standard · L →  full
+> Checkpoints A and B are always blocking when their prerequisite phase ran (design and task decomposition respectively). Use `--auto` to allow the AI reviewer verdict to auto-approve them.
+
+---
+
 ## Human interaction points
 
 The pipeline pauses and returns control to the user at the following points. Points marked **blocking** require a response before the pipeline can continue; points marked **informational** present output with no further input needed.
@@ -224,42 +255,41 @@ The pipeline pauses and returns control to the user at the following points. Poi
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
 | 4 | Current git branch is not `main`/`master` | Branch name shown; choice to use the current branch or create a new one | Yes — waits for choice |
-| 5 | Task type or effort (or both) were inferred by heuristic | Inferred values with reasoning; asked to confirm or correct. Combined into one prompt if both are heuristic. Fires for GitHub label ambiguity too | Yes — waits for confirmation |
-| 6 | `full` template and `--auto` flag used together | Warning that `full` mandates manual checkpoints; asked to continue without auto-approve or abort | Yes — waits for choice |
+| 5 | Always — effort level selection is required on every run | Detected task type shown for context; user selects effort level (S / M / L) and sees which phases will execute for that choice | Yes — waits for selection |
 
 ### Checkpoint A — Design Review
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 7 | Auto-approve conditions met (`--auto` + AI verdict APPROVE or APPROVE_WITH_NOTES, no CRITICAL findings) | One-line notice: "Auto-approving Checkpoint A (AI verdict: …)" | No — informational |
-| 8 | Human approval required (no `--auto`, or `full` template, or AI returned REVISE) | Design summary: approach, key changes, risk level, AI verdict, any MINOR findings, workspace path. Asked to approve or give feedback. Sound notification plays. After each revision cycle the updated design is re-presented and the pipeline stops again | Yes — **STOP AND WAIT** |
+| 6 | Auto-approve conditions met (`--auto` + AI verdict APPROVE or APPROVE_WITH_NOTES, no CRITICAL findings) | One-line notice: "Auto-approving Checkpoint A (AI verdict: …)" | No — informational |
+| 7 | Human approval required (AI returned REVISE, or no `--auto`) | Design summary: approach, key changes, risk level, AI verdict, any MINOR findings, workspace path. Asked to approve or give feedback. Sound notification plays. After each revision cycle the updated design is re-presented and the pipeline stops again | Yes — **STOP AND WAIT** |
 
 ### Checkpoint B — Tasks Review
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 9 | Auto-approve conditions met | One-line notice: "Auto-approving Checkpoint B (AI verdict: …)" | No — informational |
-| 10 | Human approval required | Task overview: task count, risk level, AI verdict, any MINOR findings, workspace path. Asked to approve or give feedback. Sound notification plays. After each revision cycle the updated task list is re-presented and the pipeline stops again | Yes — **STOP AND WAIT** |
+| 8 | Auto-approve conditions met | One-line notice: "Auto-approving Checkpoint B (AI verdict: …)" | No — informational |
+| 9 | Human approval required | Task overview: task count, risk level, AI verdict, any MINOR findings, workspace path. Asked to approve or give feedback. Sound notification plays. After each revision cycle the updated task list is re-presented and the pipeline stops again | Yes — **STOP AND WAIT** |
 
 ### Implementation (Phase 5–6 loop)
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 11 | A task's impl-reviewer returns FAIL and the per-task retry limit (2) is exhausted | Failure report for that task; asked how to proceed | Yes — waits for instruction |
-| 12 | A subagent returns empty or incoherent output and the single retry also fails | Failure reported; `phase-fail` recorded in state | Yes — pipeline stalls until user intervenes |
-| 13 | Test suite fails after implementation completes | Failure output presented; `phase-fail` recorded in state | Yes — pipeline stalls |
+| 10 | A task's impl-reviewer returns FAIL and the per-task retry limit (2) is exhausted | Failure report for that task; asked how to proceed | Yes — waits for instruction |
+| 11 | A subagent returns empty or incoherent output and the single retry also fails | Failure reported; `phase-fail` recorded in state | Yes — pipeline stalls until user intervenes |
+| 12 | Test suite fails after implementation completes | Failure output presented; `phase-fail` recorded in state | Yes — pipeline stalls |
 
 ### Final Verification
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 14 | Verifier finds failures it cannot fix | Failure report presented to user | Yes — pipeline stalls |
+| 13 | Verifier finds failures it cannot fix | Failure report presented to user | Yes — pipeline stalls |
 
 ### Pipeline End
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 15 | `summary.md` written successfully | Full contents of `summary.md` displayed (request, branch, PR, task table, improvement report, execution stats). Sound notification plays. | No — informational |
+| 14 | `summary.md` written successfully | Full contents of `summary.md` displayed (request, branch, PR, task table, improvement report, execution stats). Sound notification plays. | No — informational |
 
 ---
 
