@@ -13,6 +13,29 @@ This project uses **Go 1.26**. Prefer modern language and standard library featu
 - `any` instead of `interface{}`
 - `t.Context()` in tests instead of `context.Background()`
 - `errors.New` for static error strings; `fmt.Errorf("...: %w", err)` for error wrapping
+- `new(expr)` for pointer literals — available since Go 1.26
+
+## Pointer literals
+
+Go 1.26 allows passing expressions directly to `new`, eliminating the need for a temporary variable or helper functions like `ToPtr()`:
+
+```go
+// Before Go 1.26 — create a temp variable first
+n := int64(300)
+ptr := &n
+
+// Also before — helper function workaround
+func ToPtr[T any](v T) *T { return &v }
+ptr := ToPtr(int64(300))
+
+// Go 1.26+ — pass the expression directly
+ptr := new(int64(300))
+```
+
+**Rules:**
+- Do **not** define or use `ToPtr`, `Ptr`, or similar pointer-helper functions.
+- Do **not** create a temporary variable solely to take its address.
+- Use `new(expr)` for all pointer literals to optional/nullable fields.
 
 ## Toolchain setup
 
