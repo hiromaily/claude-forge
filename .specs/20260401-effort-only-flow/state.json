@@ -11,14 +11,17 @@
   "useCurrentBranch": false,
   "debug": false,
   "skippedPhases": [],
-  "currentPhase": "checkpoint-a",
-  "currentPhaseStatus": "abandoned",
+  "currentPhase": "checkpoint-b",
+  "currentPhaseStatus": "awaiting_human",
   "completedPhases": [
     "setup",
     "phase-1",
     "phase-2",
     "phase-3",
-    "phase-3b"
+    "phase-3b",
+    "checkpoint-a",
+    "phase-4",
+    "phase-4b"
   ],
   "revisions": {
     "designRevisions": 0,
@@ -66,11 +69,25 @@
       "duration_ms": 71165,
       "model": "sonnet",
       "timestamp": "2026-04-01T09:59:54.631081Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 42536,
+      "duration_ms": 113048,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T12:05:42.68708Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 44345,
+      "duration_ms": 65249,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T12:07:20.399158Z"
     }
   ],
   "timestamps": {
     "created": "2026-04-01T08:56:19.606946Z",
-    "lastUpdated": "2026-04-01T10:00:37.598069Z",
+    "lastUpdated": "2026-04-01T12:07:20.402197Z",
     "phaseStarted": null
   },
   "error": null
