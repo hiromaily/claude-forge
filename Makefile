@@ -7,7 +7,7 @@ INSTALL_DIR := $(or $(GOBIN),$(HOME)/.local/bin)
 .PHONY: build
 build:
 	mkdir -p bin
-	cd $(MCP_DIR) && go build -o ../bin/$(MCP_BINARY) .
+	cd $(MCP_DIR)/cmd && go build -o ../bin/$(MCP_BINARY) .
 
 # install: Build and copy the binary to $(GOBIN) or ~/.local/bin
 .PHONY: install
