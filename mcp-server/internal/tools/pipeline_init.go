@@ -21,27 +21,39 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/validation"
 )
 
+// ResumeMode describes how a pipeline resume was triggered.
+// It is absent ("") for new pipelines.
+type ResumeMode = string
+
+const (
+	// ResumeModeNone is the zero value; indicates a new pipeline (not a resume).
+	ResumeModeNone ResumeMode = ""
+	// ResumeModeLegacy is set when the workspace was auto-detected via a .specs/ prefix.
+	// The orchestrator must confirm with the user before proceeding.
+	ResumeModeLegacy ResumeMode = "legacy"
+	// ResumeModeExplicit is set when the user passed --resume explicitly.
+	// The orchestrator skips confirmation and goes directly to the main loop.
+	ResumeModeExplicit ResumeMode = "explicit"
+)
+
 // PipelineInitResult is the structured result returned by PipelineInitHandler.
-// On resume path: Resume=true, Workspace and Instruction are set, all other fields zero.
+// On resume path: ResumeMode is "legacy" or "explicit", Workspace and Instruction are set.
+//   - "legacy": orchestrator must confirm with user before proceeding.
+//   - "explicit": user already stated intent; orchestrator skips confirmation.
 //
-//	ExplicitResume=true when the user passed --resume explicitly (skip confirmation,
-//	go directly to Step 2). ExplicitResume=false for legacy .specs/ prefix detection
-//	(confirm with user before proceeding).
-//
-// On new pipeline path: Resume=false, all detection fields are populated.
+// On new pipeline path: ResumeMode is absent, all detection fields are populated.
 // On error (invalid input or resume with missing state.json): Errors is non-empty.
 type PipelineInitResult struct {
-	Resume         bool               `json:"resume,omitempty"`
-	ExplicitResume bool               `json:"explicit_resume,omitempty"`
-	Workspace      string             `json:"workspace,omitempty"`
-	Instruction    string             `json:"instruction,omitempty"`
-	SpecName       string             `json:"spec_name,omitempty"`
-	SourceType     string             `json:"source_type,omitempty"`
-	SourceURL      string             `json:"source_url,omitempty"`
-	SourceID       string             `json:"source_id,omitempty"`
-	Flags          *PipelineInitFlags `json:"flags,omitempty"`
-	FetchNeeded    *FetchNeeded       `json:"fetch_needed,omitempty"`
-	Errors         []string           `json:"errors,omitempty"`
+	ResumeMode  ResumeMode         `json:"resume_mode,omitempty"`
+	Workspace   string             `json:"workspace,omitempty"`
+	Instruction string             `json:"instruction,omitempty"`
+	SpecName    string             `json:"spec_name,omitempty"`
+	SourceType  string             `json:"source_type,omitempty"`
+	SourceURL   string             `json:"source_url,omitempty"`
+	SourceID    string             `json:"source_id,omitempty"`
+	Flags       *PipelineInitFlags `json:"flags,omitempty"`
+	FetchNeeded *FetchNeeded       `json:"fetch_needed,omitempty"`
+	Errors      []string           `json:"errors,omitempty"`
 }
 
 // PipelineInitFlags holds the parsed flag values from the arguments string.
@@ -81,9 +93,9 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 		// Decision 1a: Resume detection (legacy style).
 		// If trimmed starts with ".specs/", verify state.json exists before confirming resume.
-		// explicit=false: orchestrator must confirm with user before proceeding.
+		// ResumeModeLegacy: orchestrator must confirm with user before proceeding.
 		if strings.HasPrefix(trimmed, ".specs/") {
-			return handleResumePath(trimmed, false)
+			return handleResumePath(trimmed, ResumeModeLegacy)
 		}
 
 		// Decision 2–4: Validate input and parse flags.
@@ -97,10 +109,10 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		// Decision 1b: Resume detection (explicit style).
 		// When --resume flag is present, the core text is the spec directory name
 		// (without the .specs/ prefix). Construct the full workspace path and resume.
-		// explicit=true: user already confirmed intent; orchestrator skips confirmation.
+		// ResumeModeExplicit: user already stated intent; orchestrator skips confirmation.
 		if hasFlag(result.Parsed.BareFlags, "resume") {
 			workspace := ".specs/" + result.Parsed.CoreText
-			return handleResumePath(workspace, true)
+			return handleResumePath(workspace, ResumeModeExplicit)
 		}
 
 		// Build flags from parsed validation result.
@@ -141,12 +153,11 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 }
 
 // handleResumePath handles the resume detection path.
-// explicit=true when the user passed --resume explicitly; the orchestrator skips
-// the confirmation step and goes directly to the main loop.
-// explicit=false for the legacy .specs/ prefix path; the orchestrator confirms
-// with the user before proceeding.
-// Returns resume:true if state.json exists, or an error result if it doesn't.
-func handleResumePath(workspace string, explicit bool) (*mcp.CallToolResult, error) {
+// mode is ResumeModeExplicit when the user passed --resume explicitly (orchestrator
+// skips confirmation) or ResumeModeLegacy for the auto-detected .specs/ prefix path
+// (orchestrator must confirm with the user first).
+// Returns a result with ResumeMode set if state.json exists, or an error result if not.
+func handleResumePath(workspace string, mode ResumeMode) (*mcp.CallToolResult, error) {
 	stateJSONPath := filepath.Join(workspace, "state.json")
 	if _, err := os.Stat(stateJSONPath); err != nil {
 		// state.json absent — return error result (not MCP error).
@@ -155,10 +166,9 @@ func handleResumePath(workspace string, explicit bool) (*mcp.CallToolResult, err
 		})
 	}
 	return okJSON(PipelineInitResult{
-		Resume:         true,
-		ExplicitResume: explicit,
-		Workspace:      workspace,
-		Instruction:    "call state_resume_info",
+		ResumeMode:  mode,
+		Workspace:   workspace,
+		Instruction: "call state_resume_info",
 	})
 }
 
