@@ -408,27 +408,6 @@ func SetBranchHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	}
 }
 
-// ---------- set_task_type ----------
-
-// SetTaskTypeHandler handles the "set_task_type" MCP tool.
-// Accepts: workspace (string), task_type (string).
-func SetTaskTypeHandler(sm *state.StateManager) server.ToolHandlerFunc {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		taskType, err := req.RequireString("task_type")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		if err := sm.SetTaskType(workspace, taskType); err != nil {
-			return errorf("set_task_type: %v", err)
-		}
-		return okText("ok")
-	}
-}
-
 // ---------- set_effort ----------
 
 // SetEffortHandler handles the "set_effort" MCP tool.

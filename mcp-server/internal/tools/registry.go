@@ -1,4 +1,4 @@
-// Package tools registers all 45 MCP tool handlers with the MCP server.
+// Package tools registers all 44 MCP tool handlers with the MCP server.
 // Tool names use underscores (MCP protocol requirement; hyphens are not permitted).
 package tools
 
@@ -14,7 +14,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
-// RegisterAll registers all 45 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 44 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
@@ -135,15 +135,6 @@ func RegisterAll(
 			mcp.WithString("branch", mcp.Required(), mcp.Description("Git branch name")),
 		),
 		SetBranchHandler(sm),
-	)
-
-	srv.AddTool(
-		mcp.NewTool("set_task_type",
-			mcp.WithDescription("Set the taskType field in state.json."),
-			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
-			mcp.WithString("task_type", mcp.Required(), mcp.Description("Task type identifier, e.g. feature, bugfix")),
-		),
-		SetTaskTypeHandler(sm),
 	)
 
 	srv.AddTool(
@@ -272,7 +263,6 @@ func RegisterAll(
 		mcp.NewTool("search_patterns",
 			mcp.WithDescription("Score .specs/index.json entries against request.md using BM25. Returns ranked markdown output (review-feedback or impl patterns)."),
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
-			mcp.WithString("task_type", mcp.Description("Task type used for BM25 taskType boost, e.g. feature, bugfix")),
 			mcp.WithNumber("top_k", mcp.Description("Maximum number of results (0 = mode-specific default: 3 for review-feedback, 2 for impl)")),
 			mcp.WithString("mode", mcp.Description("Output mode: \"impl\" for implementation patterns; any other value means review-feedback mode")),
 		),
@@ -415,7 +405,6 @@ func RegisterAll(
 				"Returns ranked results with metadata and design excerpts."),
 			mcp.WithString("query", mcp.Required(), mcp.Description("Search query string")),
 			mcp.WithNumber("limit", mcp.Description("Maximum number of results to return (default 3)")),
-			mcp.WithString("task_type_filter", mcp.Description("Filter results by task type, e.g. feature, bugfix")),
 		),
 		HistorySearchHandler(histIdx),
 	)
@@ -456,9 +445,8 @@ func RegisterAll(
 
 	srv.AddTool(
 		mcp.NewTool("analytics_estimate",
-			mcp.WithDescription("Return P50/P90 predictions for tokens, duration, and cost for a given (task_type, effort) combination."),
-			mcp.WithString("task_type", mcp.Required(), mcp.Description("Task type, e.g. feature, bugfix, refactor")),
-			mcp.WithString("effort", mcp.Required(), mcp.Description("Effort estimate: XS, S, M, or L")),
+			mcp.WithDescription("Return P50/P90 predictions for tokens, duration, and cost for a given effort."),
+			mcp.WithString("effort", mcp.Required(), mcp.Description("Effort estimate: S, M, or L")),
 		),
 		AnalyticsEstimateHandler(est),
 	)
