@@ -110,7 +110,7 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if isLegacyResume || isExplicitResume {
 			workspace := result.Parsed.CoreText
 			if !strings.HasPrefix(workspace, ".specs/") {
-				workspace = filepath.Join(".specs", workspace)
+				workspace = path.Join(".specs", workspace)
 			}
 			mode := ResumeModeLegacy
 			if isExplicitResume {
