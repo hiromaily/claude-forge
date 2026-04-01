@@ -22,7 +22,6 @@ var ValidTaskTypes = []string{
 }
 
 // jiraTypeMap maps Jira issue type strings to internal task type constants.
-// Includes both English and Japanese issue type names commonly used in Jira.
 var jiraTypeMap = map[string]string{
 	"Bug":           TaskTypeBugfix,
 	"Story":         TaskTypeFeature,
@@ -31,11 +30,23 @@ var jiraTypeMap = map[string]string{
 	"Task":          TaskTypeFeature,
 	"Sub-task":      TaskTypeFeature,
 	"Documentation": TaskTypeDocs,
-	// Japanese issue types
-	"カイゼン":  TaskTypeFeature,
-	"バグ":    TaskTypeBugfix,
-	"ストーリー": TaskTypeFeature,
-	"タスク":   TaskTypeFeature,
+	"Improvement":   TaskTypeFeature,
+}
+
+// jiraTypeFallbackRules maps keyword substrings (case-insensitive) in Jira
+// issue type names to task types. Used when the exact type name is not in
+// jiraTypeMap, enabling support for localized issue type names without
+// hardcoding every language variant.
+var jiraTypeFallbackRules = []struct {
+	substring string
+	taskType  string
+}{
+	{"bug", TaskTypeBugfix},
+	{"story", TaskTypeFeature},
+	{"task", TaskTypeFeature},
+	{"feature", TaskTypeFeature},
+	{"improvement", TaskTypeFeature},
+	{"doc", TaskTypeDocs},
 }
 
 // githubLabelRules maps label substrings (case-insensitive) to task types.
@@ -84,10 +95,17 @@ func DetectTaskType(flagTaskType, jiraType string, githubLabels []string, text s
 		return flagTaskType
 	}
 
-	// 2. Jira type mapping.
+	// 2. Jira type mapping (exact match, then substring fallback).
 	if jiraType != "" {
 		if mapped, ok := jiraTypeMap[jiraType]; ok {
 			return mapped
+		}
+		// Substring fallback for localized issue type names.
+		lower := strings.ToLower(jiraType)
+		for _, rule := range jiraTypeFallbackRules {
+			if strings.Contains(lower, rule.substring) {
+				return rule.taskType
+			}
 		}
 	}
 
@@ -120,34 +138,29 @@ func DetectTaskType(flagTaskType, jiraType string, githubLabels []string, text s
 var effortSmallKeywords = []string{
 	"validation",
 	"required",
-	"必須",
-	"バリデーション",
+	"optional",
 	"rename",
 	"typo",
 	"label",
-	"ラベル",
 	"message",
-	"メッセージ",
 	"toggle",
 	"flag",
-	"フラグ",
 	"visibility",
-	"表示",
-	"非表示",
 	"hide",
 	"show",
+	"enable",
+	"disable",
 }
 
 // effortLargeKeywords are text patterns that suggest a large (L) effort task.
 var effortLargeKeywords = []string{
 	"migration",
-	"マイグレーション",
 	"new service",
 	"new api",
+	"new endpoint",
 	"redesign",
-	"リファクタ",
 	"architecture",
-	"アーキテクチャ",
+	"rewrite",
 }
 
 // DetectEffort resolves effort from highest to lowest precedence:
