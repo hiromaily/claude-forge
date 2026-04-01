@@ -39,7 +39,9 @@ type PipelineInitResult struct {
 }
 
 // PipelineInitFlags holds the parsed flag values from the arguments string.
-// All five fields are always present in the Flags object (even if zero/nil).
+// All fields are always present in the Flags object (even if zero/nil).
+// Note: "resume" is a bare flag handled at the pipeline_init level (Decision 1b);
+// it is not forwarded into PipelineInitFlags because it short-circuits to handleResumePath.
 type PipelineInitFlags struct {
 	Auto           bool    `json:"auto"`
 	SkipPR         bool    `json:"skip_pr"`

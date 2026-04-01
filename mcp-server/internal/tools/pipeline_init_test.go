@@ -176,20 +176,11 @@ func TestPipelineInitExplicitResume(t *testing.T) {
 	sm := state.NewStateManager()
 	h := PipelineInitHandler(sm)
 
-	t.Run("resume_flag_with_dirname_state_json_exists", func(t *testing.T) {
+	t.Run("resume_flag_with_dirname_state_json_absent", func(t *testing.T) {
 		t.Parallel()
 
-		// Create a real .specs/<dirname>/state.json so handleResumePath succeeds.
-		dir := t.TempDir()
-		if err := sm.Init(dir, "test-spec"); err != nil {
-			t.Fatalf("Init: %v", err)
-		}
-
-		// The handler resolves ".specs/" + core_text, so we need to trick it by
-		// directly calling handleResumePath with the full path to confirm the helper
-		// works. The handler itself needs a real relative path; use a symlink approach.
-		// Instead, test handleResumePath directly (already covered in TestHandleResumePath).
-		// Here we test the full handler by relying on the error path when dirname doesn't exist.
+		// The handler constructs ".specs/" + core_text and checks for state.json.
+		// When state.json is absent, it must return an error result (not a new pipeline).
 		res := callTool(t, h, map[string]any{
 			"arguments": "20260101-nonexistent-spec-dir --resume",
 		})
@@ -197,7 +188,6 @@ func TestPipelineInitExplicitResume(t *testing.T) {
 			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
 		}
 		r := parsePipelineInitResult(t, textContent(res))
-		// No state.json → error result, not a new pipeline.
 		if r.Resume {
 			t.Errorf("resume should be false when state.json is absent")
 		}
