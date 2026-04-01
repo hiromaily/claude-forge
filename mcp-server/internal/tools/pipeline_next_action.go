@@ -67,6 +67,20 @@ func PipelineNextActionHandler(
 
 		resp := nextActionResponse{Action: action}
 
+		// Eliminate the window between pipeline_next_action returning a checkpoint action
+		// and the orchestrator calling mcp__forge-state__checkpoint().
+		// Set currentPhaseStatus to "awaiting_human" immediately so the stop hook permits
+		// session exit even if the conversation ends before the orchestrator calls checkpoint().
+		if action.Type == orchestrator.ActionCheckpoint {
+			if updateErr := sm2.Update(func(s *state.State) error {
+				s.CurrentPhaseStatus = "awaiting_human"
+				return nil
+			}); updateErr != nil {
+				// Fail-open: warn but still return the action.
+				resp.Warning = fmt.Sprintf("set awaiting_human: %v", updateErr)
+			}
+		}
+
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
 			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb, profiler); enrichErr != nil {
 				// Fail-open: return the action with a warning, not an error.

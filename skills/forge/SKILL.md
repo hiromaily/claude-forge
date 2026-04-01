@@ -47,8 +47,11 @@ Repeat until done:
    - `spawn_agent`: Call Agent tool with `action.prompt`. Use `action.agent` as description.
      - If `action.parallel_task_ids` is non-empty: spawn one Agent call per task ID in
        parallel; wait for all to complete before calling report_result.
-   - `checkpoint`: Call `mcp__forge-state__checkpoint(workspace, phase=action.name)`.
-     Present `action.present_to_user` to the user. Wait for response.
+   - `checkpoint`: **Before presenting anything to the user**, call
+     `mcp__forge-state__checkpoint(workspace, phase=action.name)`.
+     This is mandatory — it registers the pause so the pipeline can exit safely if
+     the user closes the conversation before responding. Never skip or defer this call.
+     Then present `action.present_to_user` to the user. Wait for response.
      - **Special: `post-to-github` / `post-to-jira` checkpoints** — when `action.name`
        is `"post-to-github"` or `"post-to-jira"`:
        1. Ask the user whether to post the work report (use AskUserQuestion
