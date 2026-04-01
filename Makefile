@@ -1,3 +1,7 @@
+#------------------------------------------------------------------------------
+# MCP Server Setup
+# - Development for mcp-server is at mcp-server/Makefile
+#------------------------------------------------------------------------------
 
 MCP_DIR    := mcp-server
 MCP_BINARY := forge-state-mcp
@@ -44,15 +48,14 @@ setup-manual: install
 	@echo "⚠ Restart your Claude Code session to activate the MCP server."
 	@echo "  After restart, run /mcp to verify forge-state shows as Connected."
 
-# test: Run the Go test suite for mcp-server/
-.PHONY: test
-test:
-	$(MAKE) -C mcp-server go-test
-
 # clean: Remove the built binary
 .PHONY: clean
 clean:
 	rm -f bin/$(MCP_BINARY)
+
+#------------------------------------------------------------------------------
+# Release
+#------------------------------------------------------------------------------
 
 # update-tag: Update the version tag in marketplace.json and plugin metadata to new version
 # e.g. make update-tag new=2.0.1 old=2.0.0
