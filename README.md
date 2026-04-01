@@ -399,8 +399,16 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as
 
 ### Resume an interrupted pipeline
 
+Pass the spec directory name (the folder under `.specs/`) and the `--resume` flag:
+
 ```text
-/forge .specs/20260320-fix-auth-timeout
+/forge 20260320-fix-auth-timeout --resume
+```
+
+Other flags can be combined with `--resume`:
+
+```text
+/forge 20260320-fix-auth-timeout --resume --auto
 ```
 
 ### Abandon a pipeline
