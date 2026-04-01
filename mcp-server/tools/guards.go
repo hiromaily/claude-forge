@@ -87,11 +87,14 @@ func Guard3cTasksNonEmpty(phase string, s *state.State) error {
 	return nil
 }
 
-// Guard3eCheckpointAwaitingHuman enforces Rule 3e: phase-complete on checkpoint-a
-// or checkpoint-b requires currentPhaseStatus == "awaiting_human".
-// Returns nil for non-checkpoint phases.
+// Guard3eCheckpointAwaitingHuman enforces Rule 3e: phase-complete on checkpoint-a,
+// checkpoint-b, or any phase currently in awaiting_human status requires
+// currentPhaseStatus == "awaiting_human".
+// Returns nil for phases that are not in awaiting_human status.
 func Guard3eCheckpointAwaitingHuman(phase string, s *state.State) error {
-	if phase != "checkpoint-a" && phase != "checkpoint-b" {
+	isCheckpoint := phase == "checkpoint-a" || phase == "checkpoint-b"
+	isAwaitingPhase := s.CurrentPhase == phase && s.CurrentPhaseStatus == "awaiting_human"
+	if !isCheckpoint && !isAwaitingPhase {
 		return nil
 	}
 	if s.CurrentPhaseStatus != "awaiting_human" {
@@ -121,7 +124,7 @@ func Guard3gCheckpointBDoneOrSkipped(s *state.State) error {
 // Guard3jCheckpointRevisionPending enforces Rule 3j: phase-complete on
 // checkpoint-a or checkpoint-b is blocked when checkpointRevisionPending for
 // that checkpoint is true.
-// Returns nil for non-checkpoint phases.
+// Returns nil for non-checkpoint phases and dynamic checkpoints (e.g., post-to-source).
 func Guard3jCheckpointRevisionPending(phase string, s *state.State) error {
 	if phase != "checkpoint-a" && phase != "checkpoint-b" {
 		return nil

@@ -11,7 +11,8 @@ import (
 
 // ArtifactResult is the structured result returned by ValidateArtifacts for a
 // single artifact file. For phase-6, ValidateArtifacts returns one element per
-// impl-*.md file found; for all other phases it returns exactly one element.
+// review-*.md file found (or impl-*.md as fallback); for all other phases it
+// returns exactly one element.
 type ArtifactResult struct {
 	Valid           bool           `json:"valid"`
 	File            string         `json:"file"`
@@ -53,8 +54,9 @@ var artifactRules = map[string]artifactRule{
 // for the given phase and that it meets the required content constraints.
 //
 // For all phases except phase-6 the returned slice contains exactly one element.
-// For phase-6 the slice contains one element per impl-*.md file found in
-// workspace, or one element with valid=false if no impl-*.md files exist.
+// For phase-6 the slice contains one element per review-*.md file found in
+// workspace (or impl-*.md as fallback), or one element with valid=false if
+// neither review nor impl files exist.
 func ValidateArtifacts(workspace, phase string) []ArtifactResult {
 	if phase == "phase-6" {
 		return validateArtifactPhase6(workspace)
@@ -168,23 +170,51 @@ func countFindings(content string) *FindingsCount {
 	}
 }
 
-// validateArtifactPhase6 validates impl-*.md files for phase-6.
-// Returns one result per impl-*.md file, or one error result if no files found.
+// validateArtifactPhase6 validates review-*.md files for phase-6.
+// The impl-reviewer writes verdicts (PASS/PASS_WITH_NOTES/FAIL) into review-N.md
+// files, not into impl-N.md files. This function validates review-*.md files and
+// falls back to impl-*.md if no review files are found (backward compatibility).
+// Returns one result per file, or one error result if no files found.
 func validateArtifactPhase6(workspace string) []ArtifactResult {
-	pattern := filepath.Join(workspace, "impl-*.md")
+	// Primary: look for review-*.md files (where impl-reviewer writes verdicts).
+	pattern := filepath.Join(workspace, "review-*.md")
 
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		return []ArtifactResult{{
 			Valid: false,
-			Error: "error searching for impl-*.md files: " + err.Error(),
+			Error: "error searching for review-*.md files: " + err.Error(),
 		}}
 	}
+
+	// Filter out review-design.md and review-tasks.md which belong to other phases.
+	filtered := make([]string, 0, len(matches))
+	for _, m := range matches {
+		base := filepath.Base(m)
+		if base == "review-design.md" || base == "review-tasks.md" {
+			continue
+		}
+		filtered = append(filtered, m)
+	}
+	matches = filtered
+
+	// Fallback: if no review-*.md found, try impl-*.md for backward compatibility.
 	if len(matches) == 0 {
-		return []ArtifactResult{{
-			Valid: false,
-			Error: "no impl-*.md files found in workspace",
-		}}
+		implPattern := filepath.Join(workspace, "impl-*.md")
+
+		matches, err = filepath.Glob(implPattern)
+		if err != nil {
+			return []ArtifactResult{{
+				Valid: false,
+				Error: "error searching for impl-*.md files: " + err.Error(),
+			}}
+		}
+		if len(matches) == 0 {
+			return []ArtifactResult{{
+				Valid: false,
+				Error: "no review-*.md or impl-*.md files found in workspace",
+			}}
+		}
 	}
 	sort.Strings(matches)
 

@@ -509,7 +509,9 @@ func (m *StateManager) PhaseFail(workspace, phase, message string) error {
 }
 
 // Checkpoint marks phase as awaiting_human, equivalent to _do_checkpoint.
-// Only checkpoint-a and checkpoint-b are valid values.
+// Accepts checkpoint-a, checkpoint-b, and any phase that matches the current
+// phase in state (e.g., post-to-source when the engine returns a checkpoint
+// action for Jira posting).
 func (m *StateManager) Checkpoint(workspace, phase string) error {
 	// Workspace entry-point guard.
 	if err := m.bindWorkspace(workspace); err != nil {
@@ -517,7 +519,13 @@ func (m *StateManager) Checkpoint(workspace, phase string) error {
 	}
 
 	if phase != "checkpoint-a" && phase != "checkpoint-b" {
-		return fmt.Errorf("Checkpoint: invalid phase %q (expected checkpoint-a or checkpoint-b)", phase)
+		s, err := readState(workspace)
+		if err != nil {
+			return fmt.Errorf("Checkpoint: read state: %w", err)
+		}
+		if s.CurrentPhase != phase {
+			return fmt.Errorf("Checkpoint: invalid phase %q (expected checkpoint-a, checkpoint-b, or current phase %q)", phase, s.CurrentPhase)
+		}
 	}
 
 	return m.Update(func(s *State) error {

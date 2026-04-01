@@ -30,6 +30,23 @@ var jiraTypeMap = map[string]string{
 	"Task":          TaskTypeFeature,
 	"Sub-task":      TaskTypeFeature,
 	"Documentation": TaskTypeDocs,
+	"Improvement":   TaskTypeFeature,
+}
+
+// jiraTypeFallbackRules maps keyword substrings (case-insensitive) in Jira
+// issue type names to task types. Used when the exact type name is not in
+// jiraTypeMap, enabling support for localized issue type names without
+// hardcoding every language variant.
+var jiraTypeFallbackRules = []struct {
+	substring string
+	taskType  string
+}{
+	{"bug", TaskTypeBugfix},
+	{"story", TaskTypeFeature},
+	{"task", TaskTypeFeature},
+	{"feature", TaskTypeFeature},
+	{"improvement", TaskTypeFeature},
+	{"doc", TaskTypeDocs},
 }
 
 // githubLabelRules maps label substrings (case-insensitive) to task types.
@@ -78,10 +95,17 @@ func DetectTaskType(flagTaskType, jiraType string, githubLabels []string, text s
 		return flagTaskType
 	}
 
-	// 2. Jira type mapping.
+	// 2. Jira type mapping (exact match, then substring fallback).
 	if jiraType != "" {
 		if mapped, ok := jiraTypeMap[jiraType]; ok {
 			return mapped
+		}
+		// Substring fallback for localized issue type names.
+		lower := strings.ToLower(jiraType)
+		for _, rule := range jiraTypeFallbackRules {
+			if strings.Contains(lower, rule.substring) {
+				return rule.taskType
+			}
 		}
 	}
 
@@ -109,12 +133,42 @@ func DetectTaskType(flagTaskType, jiraType string, githubLabels []string, text s
 	return TaskTypeFeature
 }
 
+// effortSmallKeywords are text patterns that suggest a small (S) effort task.
+// These are checked case-insensitively against the combined summary+description.
+var effortSmallKeywords = []string{
+	"validation",
+	"required",
+	"optional",
+	"rename",
+	"typo",
+	"label",
+	"message",
+	"toggle",
+	"flag",
+	"visibility",
+	"hide",
+	"show",
+	"enable",
+	"disable",
+}
+
+// effortLargeKeywords are text patterns that suggest a large (L) effort task.
+var effortLargeKeywords = []string{
+	"migration",
+	"new service",
+	"new api",
+	"new endpoint",
+	"redesign",
+	"architecture",
+	"rewrite",
+}
+
 // DetectEffort resolves effort from highest to lowest precedence:
 //  1. flagEffort (non-empty string from --effort= flag)
 //  2. storyPoints (int; <=0 means not provided)
 //  3. text heuristic (keyword scoring over text)
 //  4. default: "M"
-func DetectEffort(flagEffort string, storyPoints int, _ string) string {
+func DetectEffort(flagEffort string, storyPoints int, text string) string {
 	// 1. Flag override wins.
 	if flagEffort != "" {
 		return flagEffort
@@ -135,7 +189,24 @@ func DetectEffort(flagEffort string, storyPoints int, _ string) string {
 		}
 	}
 
-	// 3. Text heuristic — not implemented in this version; reserved for future extension.
+	// 3. Text heuristic — keyword-based estimation.
+	if text != "" {
+		lower := strings.ToLower(text)
+
+		// Check large keywords first (higher priority).
+		for _, kw := range effortLargeKeywords {
+			if strings.Contains(lower, kw) {
+				return "L"
+			}
+		}
+
+		// Check small keywords.
+		for _, kw := range effortSmallKeywords {
+			if strings.Contains(lower, kw) {
+				return "S"
+			}
+		}
+	}
 
 	// 4. Default.
 	return "M"
