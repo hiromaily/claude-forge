@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
@@ -886,7 +887,7 @@ func TestNextAction(t *testing.T) {
 			wantAgent: agentVerifier,
 		},
 
-		// ── Decision 26: post-to-source github_issue → exec ───────────────────
+		// ── Decision 26: post-to-source github_issue → checkpoint with post/skip ──
 		{
 			name: "post_to_source_github_issue",
 			setupSM: func(t *testing.T) *state.StateManager {
@@ -899,10 +900,10 @@ func TestNextAction(t *testing.T) {
 					specsDir:         "/test/specs",
 					verdictReader:    stubVerdictReader(VerdictApprove),
 					sourceTypeReader: stubSourceTypeReader("github_issue"),
+					sourceURLReader:  func(_ string) string { return "https://github.com/org/repo/issues/42" },
 				}
 			},
-			wantType:  ActionExec,
-			wantPhase: PhasePostToSource,
+			wantType: ActionCheckpoint,
 		},
 
 		// ── Decision 26: post-to-source text → skip (done with skip prefix) ──
@@ -924,7 +925,7 @@ func TestNextAction(t *testing.T) {
 			wantSummary: SkipSummaryPrefix + "post-to-source",
 		},
 
-		// ── Decision 26: post-to-source jira_issue → checkpoint ───────────────
+		// ── Decision 26: post-to-source jira_issue → checkpoint with post/skip options ──
 		{
 			name: "post_to_source_jira_issue",
 			setupSM: func(t *testing.T) *state.StateManager {
@@ -937,6 +938,7 @@ func TestNextAction(t *testing.T) {
 					specsDir:         "/test/specs",
 					verdictReader:    stubVerdictReader(VerdictApprove),
 					sourceTypeReader: stubSourceTypeReader("jira_issue"),
+					sourceURLReader:  func(_ string) string { return "https://example.atlassian.net/browse/PROJ-123" },
 				}
 			},
 			wantType: ActionCheckpoint,
@@ -1117,6 +1119,127 @@ func TestDerivePRTitle(t *testing.T) {
 			got := derivePRTitle(st)
 			if got != tt.want {
 				t.Errorf("derivePRTitle() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReadSourceURL groups tests for the readSourceURL helper.
+func TestReadSourceURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) string
+		want  string
+	}{
+		{
+			name: "present",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				content := "---\nsource_type: jira_issue\nsource_url: https://example.atlassian.net/browse/PROJ-123\nsource_id: PROJ-123\n---\n\n# Title\n"
+				if err := writeFileForTest(dir+"/request.md", content); err != nil {
+					t.Fatalf("writeFileForTest: %v", err)
+				}
+				return dir
+			},
+			want: "https://example.atlassian.net/browse/PROJ-123",
+		},
+		{
+			name: "absent",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				content := "---\nsource_type: text\n---\n\n# Title\n"
+				if err := writeFileForTest(dir+"/request.md", content); err != nil {
+					t.Fatalf("writeFileForTest: %v", err)
+				}
+				return dir
+			},
+			want: "",
+		},
+		{
+			name: "unreadable",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return "/nonexistent/path/that/cannot/exist"
+			},
+			want: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := tc.setup(t)
+			got := readSourceURL(dir)
+			if got != tc.want {
+				t.Errorf("readSourceURL(%q) = %q, want %q", dir, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPostToSource_CheckpointOptions verifies that github_issue and jira_issue
+// post-to-source checkpoints return "post"/"skip" options with the source URL.
+func TestPostToSource_CheckpointOptions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		sourceType     string
+		sourceURL      string
+		wantName       string
+		wantURLInMsg   string
+	}{
+		{
+			name:         "jira_issue",
+			sourceType:   "jira_issue",
+			sourceURL:    "https://example.atlassian.net/browse/PROJ-123",
+			wantName:     "post-to-jira",
+			wantURLInMsg: "https://example.atlassian.net/browse/PROJ-123",
+		},
+		{
+			name:         "github_issue",
+			sourceType:   "github_issue",
+			sourceURL:    "https://github.com/org/repo/issues/42",
+			wantName:     "post-to-github",
+			wantURLInMsg: "https://github.com/org/repo/issues/42",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sm := newTestStateManager(t, "post-to-source", nil)
+			eng := &Engine{
+				agentDir:         "/test/agents",
+				specsDir:         "/test/specs",
+				verdictReader:    stubVerdictReader(VerdictApprove),
+				sourceTypeReader: stubSourceTypeReader(tc.sourceType),
+				sourceURLReader:  func(_ string) string { return tc.sourceURL },
+			}
+
+			action, err := eng.NextAction(sm, "")
+			if err != nil {
+				t.Fatalf("NextAction: %v", err)
+			}
+
+			if action.Type != ActionCheckpoint {
+				t.Fatalf("action.Type = %q, want %q", action.Type, ActionCheckpoint)
+			}
+			if action.Name != tc.wantName {
+				t.Errorf("action.Name = %q, want %q", action.Name, tc.wantName)
+			}
+
+			wantOptions := []string{"post", "skip"}
+			if !slices.Equal(action.Options, wantOptions) {
+				t.Errorf("action.Options = %v, want %v", action.Options, wantOptions)
+			}
+			if !strings.Contains(action.PresentToUser, tc.wantURLInMsg) {
+				t.Errorf("action.PresentToUser does not contain URL %q: %q", tc.wantURLInMsg, action.PresentToUser)
 			}
 		})
 	}

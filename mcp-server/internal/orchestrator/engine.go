@@ -38,6 +38,7 @@ type Engine struct {
 	specsDir         string
 	verdictReader    func(path string) (Verdict, []Finding, error)
 	sourceTypeReader func(workspace string) string
+	sourceURLReader  func(workspace string) string
 }
 
 // NewEngine constructs a ready-to-use Engine with production I/O implementations.
@@ -48,6 +49,7 @@ func NewEngine(agentDir, specsDir string) *Engine {
 		specsDir:         specsDir,
 		verdictReader:    ParseVerdict,
 		sourceTypeReader: readSourceType,
+		sourceURLReader:  readSourceURL,
 	}
 }
 
@@ -703,33 +705,39 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 	// Decision 26 — Post-to-source dispatch
 	sourceType := e.sourceTypeReader(st.Workspace)
 
+	var checkpointName, label string
 	switch sourceType {
 	case "github_issue":
-		return NewExecAction(PhasePostToSource, []string{
-			"gh", "issue", "comment",
-			"--body-file", filepath.Join(st.Workspace, "final-summary.md"),
-		}), nil
+		checkpointName, label = "post-to-github", "GitHub issue"
 	case "jira_issue":
-		return NewCheckpointAction(
-			"post-to-jira",
-			"Post the final summary to the Jira issue. Review final-summary.md and post manually.",
-			[]string{"done"},
-		), nil
+		checkpointName, label = "post-to-jira", "Jira issue"
 	default: // "text" and anything else — skip this phase
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
 	}
+
+	sourceURL := e.sourceURLReader(st.Workspace)
+	if sourceURL == "" {
+		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
+	}
+
+	msg := fmt.Sprintf(
+		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/final-summary.md",
+		label, sourceURL, st.Workspace,
+	)
+	return NewCheckpointAction(checkpointName, msg, []string{"post", "skip"}), nil
 }
 
-// readSourceType reads the source_type field from {workspace}/request.md front matter.
-// Returns "text" when the field is absent or the file is unreadable.
-func readSourceType(workspace string) string {
+// readFrontMatterField reads a named field from {workspace}/request.md YAML front matter.
+// Returns fallback when the field is absent or the file is unreadable.
+func readFrontMatterField(workspace, field, fallback string) string {
 	path := filepath.Join(workspace, "request.md")
 	f, err := os.Open(path)
 	if err != nil {
-		return "text"
+		return fallback
 	}
 	defer func() { _ = f.Close() }()
 
+	prefix := field + ":"
 	scanner := bufio.NewScanner(f)
 	inFrontMatter := false
 
@@ -740,11 +748,10 @@ func readSourceType(workspace string) string {
 				inFrontMatter = true
 				continue
 			}
-			// Second --- ends front matter
 			break
 		}
 		if inFrontMatter {
-			if val, ok := strings.CutPrefix(line, "source_type:"); ok {
+			if val, ok := strings.CutPrefix(line, prefix); ok {
 				val = strings.TrimSpace(val)
 				if val != "" {
 					return val
@@ -753,7 +760,19 @@ func readSourceType(workspace string) string {
 		}
 	}
 
-	return "text"
+	return fallback
+}
+
+// readSourceType reads the source_type field from {workspace}/request.md front matter.
+// Returns "text" when the field is absent or the file is unreadable.
+func readSourceType(workspace string) string {
+	return readFrontMatterField(workspace, "source_type", "text")
+}
+
+// readSourceURL reads the source_url field from {workspace}/request.md front matter.
+// Returns "" when the field is absent or the file is unreadable.
+func readSourceURL(workspace string) string {
+	return readFrontMatterField(workspace, "source_url", "")
 }
 
 // deriveBranchName generates a deterministic branch name from the spec name.

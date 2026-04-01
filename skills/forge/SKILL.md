@@ -39,6 +39,22 @@ Repeat until done:
        parallel; wait for all to complete before calling report_result.
    - `checkpoint`: Call `mcp__forge-state__checkpoint(workspace, phase=action.name)`.
      Present `action.present_to_user` to the user. Wait for response.
+     - **Special: `post-to-github` / `post-to-jira` checkpoints** — when `action.name`
+       is `"post-to-github"` or `"post-to-jira"`:
+       1. Ask the user whether to post the work report (use AskUserQuestion
+          with options "post" / "skip").
+       2. If the user chooses **"post"**:
+          a. Extract the source URL from `action.present_to_user` (the line starting with `URL:`).
+          b. Post the comment based on `action.name`:
+             - **`post-to-github`**: run
+               `gh issue comment <url> --body-file {workspace}/final-summary.md`
+             - **`post-to-jira`**: Extract the domain and issue key from the URL
+               (e.g. `example.atlassian.net` and `PROJ-123` from `https://example.atlassian.net/browse/PROJ-123`). Try in order:
+               1. Atlassian MCP tools (if available)
+               2. Convert `{workspace}/final-summary.md` to Atlassian Document Format (ADF) and run:
+                  `curl -s -X POST -H "Content-Type: application/json" -u "$JIRA_USER:$JIRA_TOKEN" "https://<domain>/rest/api/3/issue/<key>/comment" -d '<ADF JSON>'`
+          c. Report success or failure to the user.
+       3. If the user chooses **"skip"**: do nothing.
      Call `mcp__forge-state__phase_complete(workspace, phase=action.name)`.
      Do NOT call pipeline_report_result for checkpoints.
    - `exec`: Execute `action.commands` based on the first element:
