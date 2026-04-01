@@ -229,15 +229,20 @@ func extractSourceID(sourceType, coreText string) string {
 	}
 }
 
+// slugifyOrDefault returns slugify(text), falling back to "task" when the result
+// would be empty (e.g., all-Japanese input or an empty string).
+func slugifyOrDefault(text string) string {
+	if s := slugify(text); s != "" {
+		return s
+	}
+	return "task"
+}
+
 // makeWorkspacePath generates the workspace path in the format .specs/YYYYMMDD-<slug>.
 // Falls back to "task" when slugify produces an empty result (e.g., all-Japanese input).
 func makeWorkspacePath(date time.Time, text string) string {
 	dateStr := date.Format("20060102")
-	slug := slugify(text)
-	if slug == "" {
-		slug = "task"
-	}
-	return ".specs/" + dateStr + "-" + slug
+	return ".specs/" + dateStr + "-" + slugifyOrDefault(text)
 }
 
 // maxSlugLen is the maximum length of a slug produced by slugify.
@@ -319,11 +324,7 @@ func refineWorkspacePath(workspace string, extCtx externalContext) string {
 	if id != "" {
 		combined = id + " " + summary
 	}
-	slug := slugify(combined)
-	if slug == "" {
-		slug = "task"
-	}
-	return replaceWorkspaceSlug(workspace, slug)
+	return replaceWorkspaceSlug(workspace, slugifyOrDefault(combined))
 }
 
 // replaceWorkspaceSlug replaces the slug portion of a workspace path with newSlug,

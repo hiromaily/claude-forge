@@ -557,8 +557,6 @@ func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
 				t.Fatalf("returned MCP error: %v", textContent(res))
 			}
 
-			// Use result.Workspace because the workspace may be renamed when
-			// external_context contains a title (title-only refinement).
 			result := parsePIWCResult(t, textContent(res))
 			reqPath := filepath.Join(result.Workspace, "request.md")
 			content, err := os.ReadFile(reqPath)
@@ -766,15 +764,10 @@ func TestPipelineInitWithContextSpecNameFallback(t *testing.T) {
 
 // ---------- TestTopLevelSourceIDRefinement ----------
 
-// TestTopLevelSourceIDRefinement verifies that passing source_id as a top-level
-// parameter causes the workspace to be renamed with the issue key + title.
-// This covers the common case where the orchestrator passes source_id from
-// pipeline_init result alongside the fetched GitHub/Jira context fields.
 func TestTopLevelSourceIDRefinement(t *testing.T) {
 	t.Parallel()
 
 	parentDir := t.TempDir()
-	// Simulate a URL-derived workspace name (what pipeline_init produces).
 	wsDir := filepath.Join(parentDir, "20260330-https-github-com-owner-repo-issues-42")
 
 	sm := newPIWCSM()
