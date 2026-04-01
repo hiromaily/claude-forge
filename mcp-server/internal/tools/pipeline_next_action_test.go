@@ -130,6 +130,40 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 	})
 
+	t.Run("checkpoint_sets_awaiting_human", func(t *testing.T) {
+		t.Parallel()
+		// When pipeline_next_action returns a checkpoint action, it must immediately
+		// set currentPhaseStatus = "awaiting_human" in state so the stop hook permits
+		// session exit even if the orchestrator hasn't called checkpoint() yet.
+		workspace, sm := initWorkspaceForNextAction(t, "checkpoint-b", nil)
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var action orchestrator.Action
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
+			t.Fatalf("unmarshal action: %v", err)
+		}
+		if action.Type != orchestrator.ActionCheckpoint {
+			t.Fatalf("action.Type = %q, want %q", action.Type, orchestrator.ActionCheckpoint)
+		}
+
+		after, err := loadState(workspace)
+		if err != nil {
+			t.Fatalf("loadState: %v", err)
+		}
+		if after.CurrentPhaseStatus != "awaiting_human" {
+			t.Errorf("currentPhaseStatus after checkpoint action = %q, want %q", after.CurrentPhaseStatus, "awaiting_human")
+		}
+	})
+
 	t.Run("skip_prefix_passthrough", func(t *testing.T) {
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-3b", func(s *state.State) error {
