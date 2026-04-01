@@ -23,19 +23,25 @@ import (
 
 // PipelineInitResult is the structured result returned by PipelineInitHandler.
 // On resume path: Resume=true, Workspace and Instruction are set, all other fields zero.
+//
+//	ExplicitResume=true when the user passed --resume explicitly (skip confirmation,
+//	go directly to Step 2). ExplicitResume=false for legacy .specs/ prefix detection
+//	(confirm with user before proceeding).
+//
 // On new pipeline path: Resume=false, all detection fields are populated.
 // On error (invalid input or resume with missing state.json): Errors is non-empty.
 type PipelineInitResult struct {
-	Resume      bool               `json:"resume,omitempty"`
-	Workspace   string             `json:"workspace,omitempty"`
-	Instruction string             `json:"instruction,omitempty"`
-	SpecName    string             `json:"spec_name,omitempty"`
-	SourceType  string             `json:"source_type,omitempty"`
-	SourceURL   string             `json:"source_url,omitempty"`
-	SourceID    string             `json:"source_id,omitempty"`
-	Flags       *PipelineInitFlags `json:"flags,omitempty"`
-	FetchNeeded *FetchNeeded       `json:"fetch_needed,omitempty"`
-	Errors      []string           `json:"errors,omitempty"`
+	Resume         bool               `json:"resume,omitempty"`
+	ExplicitResume bool               `json:"explicit_resume,omitempty"`
+	Workspace      string             `json:"workspace,omitempty"`
+	Instruction    string             `json:"instruction,omitempty"`
+	SpecName       string             `json:"spec_name,omitempty"`
+	SourceType     string             `json:"source_type,omitempty"`
+	SourceURL      string             `json:"source_url,omitempty"`
+	SourceID       string             `json:"source_id,omitempty"`
+	Flags          *PipelineInitFlags `json:"flags,omitempty"`
+	FetchNeeded    *FetchNeeded       `json:"fetch_needed,omitempty"`
+	Errors         []string           `json:"errors,omitempty"`
 }
 
 // PipelineInitFlags holds the parsed flag values from the arguments string.
@@ -75,8 +81,9 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 		// Decision 1a: Resume detection (legacy style).
 		// If trimmed starts with ".specs/", verify state.json exists before confirming resume.
+		// explicit=false: orchestrator must confirm with user before proceeding.
 		if strings.HasPrefix(trimmed, ".specs/") {
-			return handleResumePath(trimmed)
+			return handleResumePath(trimmed, false)
 		}
 
 		// Decision 2–4: Validate input and parse flags.
@@ -90,9 +97,10 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		// Decision 1b: Resume detection (explicit style).
 		// When --resume flag is present, the core text is the spec directory name
 		// (without the .specs/ prefix). Construct the full workspace path and resume.
+		// explicit=true: user already confirmed intent; orchestrator skips confirmation.
 		if hasFlag(result.Parsed.BareFlags, "resume") {
 			workspace := ".specs/" + result.Parsed.CoreText
-			return handleResumePath(workspace)
+			return handleResumePath(workspace, true)
 		}
 
 		// Build flags from parsed validation result.
@@ -133,8 +141,12 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 }
 
 // handleResumePath handles the resume detection path.
+// explicit=true when the user passed --resume explicitly; the orchestrator skips
+// the confirmation step and goes directly to the main loop.
+// explicit=false for the legacy .specs/ prefix path; the orchestrator confirms
+// with the user before proceeding.
 // Returns resume:true if state.json exists, or an error result if it doesn't.
-func handleResumePath(workspace string) (*mcp.CallToolResult, error) {
+func handleResumePath(workspace string, explicit bool) (*mcp.CallToolResult, error) {
 	stateJSONPath := filepath.Join(workspace, "state.json")
 	if _, err := os.Stat(stateJSONPath); err != nil {
 		// state.json absent — return error result (not MCP error).
@@ -143,9 +155,10 @@ func handleResumePath(workspace string) (*mcp.CallToolResult, error) {
 		})
 	}
 	return okJSON(PipelineInitResult{
-		Resume:      true,
-		Workspace:   workspace,
-		Instruction: "call state_resume_info",
+		Resume:         true,
+		ExplicitResume: explicit,
+		Workspace:      workspace,
+		Instruction:    "call state_resume_info",
 	})
 }
 

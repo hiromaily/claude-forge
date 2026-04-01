@@ -15,7 +15,12 @@ Example: `/forge 20260401-effort-only-flow --resume`
 
 1. Call `mcp__forge-state__pipeline_init(arguments=$ARGUMENTS)`.
 2. If `result.errors` is non-empty: surface the errors to the user and stop.
-3. If `result.resume == true`: confirm resume from `result.workspace` with the user, then go to Step 2.
+3. If `result.resume == true`:
+   - If `result.explicit_resume == true` (user passed `--resume` explicitly):
+     **do not ask for confirmation** — the user has already stated their intent.
+     Go directly to Step 2.
+   - Otherwise (legacy `.specs/` prefix auto-detection):
+     confirm resume from `result.workspace` with the user, then go to Step 2.
 4. For all new pipelines (resume is false or absent):
    a. If `result.fetch_needed` is non-null: fetch the external data described by `result.fetch_needed`
       (GitHub issue fields or Jira issue fields), then call

@@ -35,7 +35,7 @@ func TestHandleResumePath(t *testing.T) {
 
 	sm := state.NewStateManager()
 
-	t.Run("state_json_exists_returns_resume_true", func(t *testing.T) {
+	t.Run("state_json_exists_legacy_explicit_resume_false", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
@@ -43,13 +43,16 @@ func TestHandleResumePath(t *testing.T) {
 			t.Fatalf("Init: %v", err)
 		}
 
-		res, err := handleResumePath(dir)
+		res, err := handleResumePath(dir, false)
 		if err != nil {
 			t.Fatalf("handleResumePath returned go error: %v", err)
 		}
 		r := parsePipelineInitResult(t, textContent(res))
 		if !r.Resume {
 			t.Errorf("expected resume=true when state.json exists, got false")
+		}
+		if r.ExplicitResume {
+			t.Errorf("explicit_resume should be false for legacy path, got true")
 		}
 		if r.Workspace != dir {
 			t.Errorf("workspace: got %q, want %q", r.Workspace, dir)
@@ -62,13 +65,34 @@ func TestHandleResumePath(t *testing.T) {
 		}
 	})
 
+	t.Run("state_json_exists_explicit_resume_true", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		if err := sm.Init(dir, "test-spec"); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+
+		res, err := handleResumePath(dir, true)
+		if err != nil {
+			t.Fatalf("handleResumePath returned go error: %v", err)
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		if !r.Resume {
+			t.Errorf("expected resume=true when state.json exists, got false")
+		}
+		if !r.ExplicitResume {
+			t.Errorf("explicit_resume should be true for --resume flag path, got false")
+		}
+	})
+
 	t.Run("state_json_absent_returns_error_result", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
 		// Do NOT create state.json.
 
-		res, err := handleResumePath(dir)
+		res, err := handleResumePath(dir, false)
 		if err != nil {
 			t.Fatalf("handleResumePath returned go error: %v", err)
 		}
