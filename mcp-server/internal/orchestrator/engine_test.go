@@ -1181,78 +1181,66 @@ func TestReadSourceURL(t *testing.T) {
 	}
 }
 
-// TestPostToJira_CheckpointOptions verifies that the jira_issue post-to-source
-// checkpoint returns "post" and "skip" options with the source URL in the message.
-func TestPostToJira_CheckpointOptions(t *testing.T) {
+// TestPostToSource_CheckpointOptions verifies that github_issue and jira_issue
+// post-to-source checkpoints return "post"/"skip" options with the source URL.
+func TestPostToSource_CheckpointOptions(t *testing.T) {
 	t.Parallel()
 
-	sm := newTestStateManager(t, "post-to-source", nil)
-
-	eng := &Engine{
-		agentDir:         "/test/agents",
-		specsDir:         "/test/specs",
-		verdictReader:    stubVerdictReader(VerdictApprove),
-		sourceTypeReader: stubSourceTypeReader("jira_issue"),
-		sourceURLReader:  func(_ string) string { return "https://example.atlassian.net/browse/PROJ-123" },
+	tests := []struct {
+		name           string
+		sourceType     string
+		sourceURL      string
+		wantName       string
+		wantURLInMsg   string
+	}{
+		{
+			name:         "jira_issue",
+			sourceType:   "jira_issue",
+			sourceURL:    "https://example.atlassian.net/browse/PROJ-123",
+			wantName:     "post-to-jira",
+			wantURLInMsg: "https://example.atlassian.net/browse/PROJ-123",
+		},
+		{
+			name:         "github_issue",
+			sourceType:   "github_issue",
+			sourceURL:    "https://github.com/org/repo/issues/42",
+			wantName:     "post-to-github",
+			wantURLInMsg: "https://github.com/org/repo/issues/42",
+		},
 	}
 
-	action, err := eng.NextAction(sm, "")
-	if err != nil {
-		t.Fatalf("NextAction: %v", err)
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	if action.Type != ActionCheckpoint {
-		t.Fatalf("action.Type = %q, want %q", action.Type, ActionCheckpoint)
-	}
+			sm := newTestStateManager(t, "post-to-source", nil)
+			eng := &Engine{
+				agentDir:         "/test/agents",
+				specsDir:         "/test/specs",
+				verdictReader:    stubVerdictReader(VerdictApprove),
+				sourceTypeReader: stubSourceTypeReader(tc.sourceType),
+				sourceURLReader:  func(_ string) string { return tc.sourceURL },
+			}
 
-	if action.Name != "post-to-jira" {
-		t.Errorf("action.Name = %q, want %q", action.Name, "post-to-jira")
-	}
+			action, err := eng.NextAction(sm, "")
+			if err != nil {
+				t.Fatalf("NextAction: %v", err)
+			}
 
-	wantOptions := []string{"post", "skip"}
-	if !slices.Equal(action.Options, wantOptions) {
-		t.Errorf("action.Options = %v, want %v", action.Options, wantOptions)
-	}
+			if action.Type != ActionCheckpoint {
+				t.Fatalf("action.Type = %q, want %q", action.Type, ActionCheckpoint)
+			}
+			if action.Name != tc.wantName {
+				t.Errorf("action.Name = %q, want %q", action.Name, tc.wantName)
+			}
 
-	if !strings.Contains(action.PresentToUser, "https://example.atlassian.net/browse/PROJ-123") {
-		t.Errorf("action.PresentToUser does not contain Jira URL: %q", action.PresentToUser)
-	}
-}
-
-// TestPostToGitHub_CheckpointOptions verifies that the github_issue post-to-source
-// checkpoint returns "post" and "skip" options with the source URL in the message.
-func TestPostToGitHub_CheckpointOptions(t *testing.T) {
-	t.Parallel()
-
-	sm := newTestStateManager(t, "post-to-source", nil)
-
-	eng := &Engine{
-		agentDir:         "/test/agents",
-		specsDir:         "/test/specs",
-		verdictReader:    stubVerdictReader(VerdictApprove),
-		sourceTypeReader: stubSourceTypeReader("github_issue"),
-		sourceURLReader:  func(_ string) string { return "https://github.com/org/repo/issues/42" },
-	}
-
-	action, err := eng.NextAction(sm, "")
-	if err != nil {
-		t.Fatalf("NextAction: %v", err)
-	}
-
-	if action.Type != ActionCheckpoint {
-		t.Fatalf("action.Type = %q, want %q", action.Type, ActionCheckpoint)
-	}
-
-	if action.Name != "post-to-github" {
-		t.Errorf("action.Name = %q, want %q", action.Name, "post-to-github")
-	}
-
-	wantOptions := []string{"post", "skip"}
-	if !slices.Equal(action.Options, wantOptions) {
-		t.Errorf("action.Options = %v, want %v", action.Options, wantOptions)
-	}
-
-	if !strings.Contains(action.PresentToUser, "https://github.com/org/repo/issues/42") {
-		t.Errorf("action.PresentToUser does not contain GitHub URL: %q", action.PresentToUser)
+			wantOptions := []string{"post", "skip"}
+			if !slices.Equal(action.Options, wantOptions) {
+				t.Errorf("action.Options = %v, want %v", action.Options, wantOptions)
+			}
+			if !strings.Contains(action.PresentToUser, tc.wantURLInMsg) {
+				t.Errorf("action.PresentToUser does not contain URL %q: %q", tc.wantURLInMsg, action.PresentToUser)
+			}
+		})
 	}
 }

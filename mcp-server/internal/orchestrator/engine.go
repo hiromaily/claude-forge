@@ -705,103 +705,70 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 	// Decision 26 — Post-to-source dispatch
 	sourceType := e.sourceTypeReader(st.Workspace)
 
+	var checkpointName, label string
 	switch sourceType {
 	case "github_issue":
-		sourceURL := e.sourceURLReader(st.Workspace)
-		msg := fmt.Sprintf(
-			"Pipeline complete. Post the final summary as a comment to the GitHub issue?\n\nGitHub URL: %s\nSummary file: %s/final-summary.md",
-			sourceURL, st.Workspace,
-		)
-		return NewCheckpointAction(
-			"post-to-github",
-			msg,
-			[]string{"post", "skip"},
-		), nil
+		checkpointName, label = "post-to-github", "GitHub issue"
 	case "jira_issue":
-		sourceURL := e.sourceURLReader(st.Workspace)
-		msg := fmt.Sprintf(
-			"Pipeline complete. Post the final summary as a comment to the Jira issue?\n\nJira URL: %s\nSummary file: %s/final-summary.md",
-			sourceURL, st.Workspace,
-		)
-		return NewCheckpointAction(
-			"post-to-jira",
-			msg,
-			[]string{"post", "skip"},
-		), nil
+		checkpointName, label = "post-to-jira", "Jira issue"
 	default: // "text" and anything else — skip this phase
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
 	}
+
+	sourceURL := e.sourceURLReader(st.Workspace)
+	msg := fmt.Sprintf(
+		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/final-summary.md",
+		label, sourceURL, st.Workspace,
+	)
+	return NewCheckpointAction(checkpointName, msg, []string{"post", "skip"}), nil
+}
+
+// readFrontMatterField reads a named field from {workspace}/request.md YAML front matter.
+// Returns fallback when the field is absent or the file is unreadable.
+func readFrontMatterField(workspace, field, fallback string) string {
+	path := filepath.Join(workspace, "request.md")
+	f, err := os.Open(path)
+	if err != nil {
+		return fallback
+	}
+	defer func() { _ = f.Close() }()
+
+	prefix := field + ":"
+	scanner := bufio.NewScanner(f)
+	inFrontMatter := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "---" {
+			if !inFrontMatter {
+				inFrontMatter = true
+				continue
+			}
+			break
+		}
+		if inFrontMatter {
+			if val, ok := strings.CutPrefix(line, prefix); ok {
+				val = strings.TrimSpace(val)
+				if val != "" {
+					return val
+				}
+			}
+		}
+	}
+
+	return fallback
 }
 
 // readSourceType reads the source_type field from {workspace}/request.md front matter.
 // Returns "text" when the field is absent or the file is unreadable.
 func readSourceType(workspace string) string {
-	path := filepath.Join(workspace, "request.md")
-	f, err := os.Open(path)
-	if err != nil {
-		return "text"
-	}
-	defer func() { _ = f.Close() }()
-
-	scanner := bufio.NewScanner(f)
-	inFrontMatter := false
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "---" {
-			if !inFrontMatter {
-				inFrontMatter = true
-				continue
-			}
-			// Second --- ends front matter
-			break
-		}
-		if inFrontMatter {
-			if val, ok := strings.CutPrefix(line, "source_type:"); ok {
-				val = strings.TrimSpace(val)
-				if val != "" {
-					return val
-				}
-			}
-		}
-	}
-
-	return "text"
+	return readFrontMatterField(workspace, "source_type", "text")
 }
 
 // readSourceURL reads the source_url field from {workspace}/request.md front matter.
 // Returns "" when the field is absent or the file is unreadable.
 func readSourceURL(workspace string) string {
-	path := filepath.Join(workspace, "request.md")
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer func() { _ = f.Close() }()
-
-	scanner := bufio.NewScanner(f)
-	inFrontMatter := false
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "---" {
-			if !inFrontMatter {
-				inFrontMatter = true
-				continue
-			}
-			break
-		}
-		if inFrontMatter {
-			if val, ok := strings.CutPrefix(line, "source_url:"); ok {
-				val = strings.TrimSpace(val)
-				if val != "" {
-					return val
-				}
-			}
-		}
-	}
-
-	return ""
+	return readFrontMatterField(workspace, "source_url", "")
 }
 
 // deriveBranchName generates a deterministic branch name from the spec name.

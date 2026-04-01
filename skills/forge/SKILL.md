@@ -44,26 +44,16 @@ Repeat until done:
        1. Ask the user whether to post the work report (use AskUserQuestion
           with options "post" / "skip").
        2. If the user chooses **"post"**:
-          a. Read `{workspace}/request.md` front matter to extract `source_url`.
-          b. Read `{workspace}/final-summary.md` for the comment body.
-          c. Post the comment based on `action.name`:
-             - **`post-to-github`**: Extract the issue URL from `source_url` and run:
-               ```
-               gh issue comment <issue-url> --body-file {workspace}/final-summary.md
-               ```
-             - **`post-to-jira`**: Extract the Jira issue key from the URL
-               (e.g. `PROJ-123` from `https://company.atlassian.net/browse/PROJ-123`).
-               Post using one of these methods (try in order):
-               - Atlassian MCP tools (if available in the current environment)
-               - `curl` with Jira REST API v3:
-                 ```
-                 curl -s -X POST \
-                   -H "Content-Type: application/json" \
-                   -u "$JIRA_USER:$JIRA_TOKEN" \
-                   "https://<domain>/rest/api/3/issue/<issue-key>/comment" \
-                   -d '{"body":{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"<summary content>"}]}]}}'
-                 ```
-          d. Report success or failure to the user.
+          a. Extract the source URL from `action.present_to_user` (the line starting with `URL:`).
+          b. Post the comment based on `action.name`:
+             - **`post-to-github`**: run
+               `gh issue comment <url> --body-file {workspace}/final-summary.md`
+             - **`post-to-jira`**: Extract the issue key from the URL path
+               (e.g. `PROJ-123` from `.../browse/PROJ-123`). Try in order:
+               1. Atlassian MCP tools (if available)
+               2. `curl -s -X POST -H "Content-Type: application/json" -u "$JIRA_USER:$JIRA_TOKEN"
+                  "https://<domain>/rest/api/3/issue/<key>/comment" -d '<ADF body>'`
+          c. Report success or failure to the user.
        3. If the user chooses **"skip"**: do nothing.
      Call `mcp__forge-state__phase_complete(workspace, phase=action.name)`.
      Do NOT call pipeline_report_result for checkpoints.
