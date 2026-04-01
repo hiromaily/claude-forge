@@ -35,7 +35,7 @@ func TestHandleResumePath(t *testing.T) {
 
 	sm := state.NewStateManager()
 
-	t.Run("state_json_exists_returns_resume_true", func(t *testing.T) {
+	t.Run("state_json_exists_legacy_mode", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
@@ -43,13 +43,13 @@ func TestHandleResumePath(t *testing.T) {
 			t.Fatalf("Init: %v", err)
 		}
 
-		res, err := handleResumePath(dir)
+		res, err := handleResumePath(dir, ResumeModeLegacy)
 		if err != nil {
 			t.Fatalf("handleResumePath returned go error: %v", err)
 		}
 		r := parsePipelineInitResult(t, textContent(res))
-		if !r.Resume {
-			t.Errorf("expected resume=true when state.json exists, got false")
+		if r.ResumeMode != ResumeModeLegacy {
+			t.Errorf("resume_mode: got %q, want %q", r.ResumeMode, ResumeModeLegacy)
 		}
 		if r.Workspace != dir {
 			t.Errorf("workspace: got %q, want %q", r.Workspace, dir)
@@ -62,19 +62,37 @@ func TestHandleResumePath(t *testing.T) {
 		}
 	})
 
+	t.Run("state_json_exists_explicit_mode", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		if err := sm.Init(dir, "test-spec"); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+
+		res, err := handleResumePath(dir, ResumeModeExplicit)
+		if err != nil {
+			t.Fatalf("handleResumePath returned go error: %v", err)
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		if r.ResumeMode != ResumeModeExplicit {
+			t.Errorf("resume_mode: got %q, want %q", r.ResumeMode, ResumeModeExplicit)
+		}
+	})
+
 	t.Run("state_json_absent_returns_error_result", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
 		// Do NOT create state.json.
 
-		res, err := handleResumePath(dir)
+		res, err := handleResumePath(dir, ResumeModeLegacy)
 		if err != nil {
 			t.Fatalf("handleResumePath returned go error: %v", err)
 		}
 		r := parsePipelineInitResult(t, textContent(res))
-		if r.Resume {
-			t.Errorf("resume should be false when state.json is absent")
+		if r.ResumeMode != ResumeModeNone {
+			t.Errorf("resume_mode should be absent when state.json is absent, got %q", r.ResumeMode)
 		}
 		if len(r.Errors) == 0 {
 			t.Errorf("expected errors when state.json is absent, got none")
@@ -101,8 +119,8 @@ func TestPipelineInitResumeDetection(t *testing.T) {
 			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
 		}
 		r := parsePipelineInitResult(t, textContent(res))
-		if r.Resume {
-			t.Errorf("resume should be false when state.json is absent")
+		if r.ResumeMode != ResumeModeNone {
+			t.Errorf("resume_mode should be absent when state.json is absent, got %q", r.ResumeMode)
 		}
 		if len(r.Errors) == 0 {
 			t.Errorf("expected errors when state.json is absent for .specs/ prefix path, got none")
@@ -119,8 +137,8 @@ func TestPipelineInitResumeDetection(t *testing.T) {
 			t.Fatalf("handler returned MCP error for text input: %v", textContent(res))
 		}
 		r := parsePipelineInitResult(t, textContent(res))
-		if r.Resume {
-			t.Errorf("resume should be false for plain text input")
+		if r.ResumeMode != ResumeModeNone {
+			t.Errorf("resume_mode should be absent for plain text input, got %q", r.ResumeMode)
 		}
 		if r.SourceType != "text" {
 			t.Errorf("source_type: got %q, want %q", r.SourceType, "text")
@@ -138,15 +156,15 @@ func TestPipelineInitResumeDetection(t *testing.T) {
 			t.Fatalf("handler returned MCP error: %v", textContent(res))
 		}
 		r := parsePipelineInitResult(t, textContent(res))
-		if r.Resume {
-			t.Errorf("resume should be false when .specs/ is mid-string, not a prefix")
+		if r.ResumeMode != ResumeModeNone {
+			t.Errorf("resume_mode should be absent when .specs/ is mid-string, got %q", r.ResumeMode)
 		}
 	})
 
 	t.Run("whitespace_trimmed_before_prefix_check", func(t *testing.T) {
 		t.Parallel()
 
-		// Leading/trailing whitespace is trimmed before HasPrefix check.
+		// Leading/trailing whitespace is handled by ValidateInput.
 		// Use a .specs/ path that won't have state.json — checks the code path correctly.
 		res := callTool(t, h, map[string]any{
 			"arguments": "   .specs/20260101-whitespace-test-no-state-json   ",
@@ -155,14 +173,109 @@ func TestPipelineInitResumeDetection(t *testing.T) {
 			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
 		}
 		r := parsePipelineInitResult(t, textContent(res))
-		// The trimmed argument starts with ".specs/" → resume path triggered.
+		// CoreText starts with ".specs/" → resume path triggered.
 		// state.json doesn't exist → error result.
 		if len(r.Errors) == 0 {
-			t.Errorf("expected errors (no state.json for .specs/ path), got none; this verifies trimming occurred")
+			t.Errorf("expected errors (no state.json for .specs/ path), got none")
 		}
 		// It should NOT have been treated as a new pipeline.
 		if r.SourceType != "" {
 			t.Errorf("source_type should be empty for resume detection path, got %q", r.SourceType)
+		}
+	})
+
+	t.Run("specs_prefix_with_flags_strips_correctly", func(t *testing.T) {
+		t.Parallel()
+
+		// Bug fix: ".specs/my-dir --debug" previously passed HasPrefix but then
+		// called handleResumePath with the full raw string including flags, causing
+		// the state.json lookup at ".specs/my-dir --debug/state.json" to fail.
+		// Now detection runs on CoreText (flags stripped), so the workspace path is clean.
+		res := callTool(t, h, map[string]any{
+			"arguments": ".specs/20260101-flagged-path-no-state-json --debug",
+		})
+		if res.IsError {
+			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		// state.json absent → error result, but the error must mention the clean path.
+		if len(r.Errors) == 0 {
+			t.Fatalf("expected errors (no state.json), got none")
+		}
+		wantPath := ".specs/20260101-flagged-path-no-state-json"
+		if !strings.Contains(r.Errors[0], wantPath) {
+			t.Errorf("error should mention clean path %q (no flags), got: %q", wantPath, r.Errors[0])
+		}
+	})
+}
+
+// ---------- TestPipelineInitExplicitResume ----------
+// Tests the new explicit resume path: dirname + --resume flag.
+
+func TestPipelineInitExplicitResume(t *testing.T) {
+	t.Parallel()
+
+	sm := state.NewStateManager()
+	h := PipelineInitHandler(sm)
+
+	t.Run("resume_flag_with_dirname_state_json_absent", func(t *testing.T) {
+		t.Parallel()
+
+		// The handler constructs ".specs/" + core_text and checks for state.json.
+		// When state.json is absent, it must return an error result (not a new pipeline).
+		res := callTool(t, h, map[string]any{
+			"arguments": "20260101-nonexistent-spec-dir --resume",
+		})
+		if res.IsError {
+			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		if r.ResumeMode != ResumeModeNone {
+			t.Errorf("resume_mode should be absent when state.json is absent, got %q", r.ResumeMode)
+		}
+		if len(r.Errors) == 0 {
+			t.Errorf("expected errors when state.json is absent for --resume path, got none")
+		}
+		// source_type must be empty — this is NOT a new pipeline.
+		if r.SourceType != "" {
+			t.Errorf("source_type should be empty for --resume path, got %q", r.SourceType)
+		}
+	})
+
+	t.Run("resume_flag_without_dirname_returns_error", func(t *testing.T) {
+		t.Parallel()
+
+		// --resume with no core text should fail validation (only flags, no task).
+		res := callTool(t, h, map[string]any{
+			"arguments": "--resume",
+		})
+		if res.IsError {
+			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		if len(r.Errors) == 0 {
+			t.Errorf("expected validation errors for --resume with no dirname, got none")
+		}
+	})
+
+	t.Run("resume_flag_constructs_specs_prefix", func(t *testing.T) {
+		t.Parallel()
+
+		// Verify the workspace path is ".specs/<dirname>" by checking the error message.
+		res := callTool(t, h, map[string]any{
+			"arguments": "my-feature-branch --resume",
+		})
+		if res.IsError {
+			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		// state.json absent → error path, but error must mention the constructed path.
+		if len(r.Errors) == 0 {
+			t.Fatalf("expected errors (no state.json), got none")
+		}
+		wantPath := ".specs/my-feature-branch"
+		if !strings.Contains(r.Errors[0], wantPath) {
+			t.Errorf("error should mention constructed path %q, got: %q", wantPath, r.Errors[0])
 		}
 	})
 }
@@ -219,8 +332,8 @@ func TestPipelineInitSourceTypes(t *testing.T) {
 				t.Fatalf("handler returned MCP error: %v", textContent(res))
 			}
 			r := parsePipelineInitResult(t, textContent(res))
-			if r.Resume {
-				t.Errorf("should not be resume for source type test")
+			if r.ResumeMode != ResumeModeNone {
+				t.Errorf("resume_mode should be absent for source type test, got %q", r.ResumeMode)
 			}
 			if r.SourceType != tc.wantSourceType {
 				t.Errorf("source_type: got %q, want %q", r.SourceType, tc.wantSourceType)

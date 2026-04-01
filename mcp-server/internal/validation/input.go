@@ -28,13 +28,14 @@ type ParsedInput struct {
 // Key-value flags: --type=<val> and --effort=<val>.
 var reKeyValueFlag = regexp.MustCompile(`--(?:type|effort)=[^\s]+`)
 
-// Bare flags (word-boundary aware): --auto, --nopr, --debug.
+// Bare flags (word-boundary aware): --auto, --nopr, --debug, --resume.
 // Each pattern matches the flag only when preceded by start-of-string or
 // whitespace and followed by end-of-string or whitespace.
 var (
-	reBareAuto  = regexp.MustCompile(`(?:^|\s)--auto(?:\s|$)`)
-	reBareNopr  = regexp.MustCompile(`(?:^|\s)--nopr(?:\s|$)`)
-	reBareDebug = regexp.MustCompile(`(?:^|\s)--debug(?:\s|$)`)
+	reBareAuto   = regexp.MustCompile(`(?:^|\s)--auto(?:\s|$)`)
+	reBareNopr   = regexp.MustCompile(`(?:^|\s)--nopr(?:\s|$)`)
+	reBareDebug  = regexp.MustCompile(`(?:^|\s)--debug(?:\s|$)`)
+	reBareResume = regexp.MustCompile(`(?:^|\s)--resume(?:\s|$)`)
 )
 
 // Regexps for URL classification.
@@ -186,6 +187,9 @@ func parseFlags(trimmed string) (map[string]string, []string) {
 	if reBareDebug.MatchString(padded) {
 		bareFlags = append(bareFlags, "debug")
 	}
+	if reBareResume.MatchString(padded) {
+		bareFlags = append(bareFlags, "resume")
+	}
 	return flags, bareFlags
 }
 
@@ -201,6 +205,7 @@ func stripFlags(s string) string {
 	s = reBareAuto.ReplaceAllString(s, " ")
 	s = reBareNopr.ReplaceAllString(s, " ")
 	s = reBareDebug.ReplaceAllString(s, " ")
+	s = reBareResume.ReplaceAllString(s, " ")
 
 	return strings.TrimSpace(s)
 }
