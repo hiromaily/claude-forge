@@ -716,6 +716,10 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 	}
 
 	sourceURL := e.sourceURLReader(st.Workspace)
+	if sourceURL == "" {
+		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
+	}
+
 	msg := fmt.Sprintf(
 		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/final-summary.md",
 		label, sourceURL, st.Workspace,
