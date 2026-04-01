@@ -109,12 +109,47 @@ func DetectTaskType(flagTaskType, jiraType string, githubLabels []string, text s
 	return TaskTypeFeature
 }
 
+// effortSmallKeywords are text patterns that suggest a small (S) effort task.
+// These are checked case-insensitively against the combined summary+description.
+var effortSmallKeywords = []string{
+	"validation",
+	"required",
+	"必須",
+	"バリデーション",
+	"rename",
+	"typo",
+	"label",
+	"ラベル",
+	"message",
+	"メッセージ",
+	"toggle",
+	"flag",
+	"フラグ",
+	"visibility",
+	"表示",
+	"非表示",
+	"hide",
+	"show",
+}
+
+// effortLargeKeywords are text patterns that suggest a large (L) effort task.
+var effortLargeKeywords = []string{
+	"migration",
+	"マイグレーション",
+	"new service",
+	"new api",
+	"redesign",
+	"リファクタ",
+	"architecture",
+	"アーキテクチャ",
+}
+
 // DetectEffort resolves effort from highest to lowest precedence:
 //  1. flagEffort (non-empty string from --effort= flag)
 //  2. storyPoints (int; <=0 means not provided)
 //  3. text heuristic (keyword scoring over text)
 //  4. default: "M"
-func DetectEffort(flagEffort string, storyPoints int, _ string) string {
+func DetectEffort(flagEffort string, storyPoints int, text string) string {
 	// 1. Flag override wins.
 	if flagEffort != "" {
 		return flagEffort
@@ -135,7 +170,24 @@ func DetectEffort(flagEffort string, storyPoints int, _ string) string {
 		}
 	}
 
-	// 3. Text heuristic — not implemented in this version; reserved for future extension.
+	// 3. Text heuristic — keyword-based estimation.
+	if text != "" {
+		lower := strings.ToLower(text)
+
+		// Check large keywords first (higher priority).
+		for _, kw := range effortLargeKeywords {
+			if strings.Contains(lower, kw) {
+				return "L"
+			}
+		}
+
+		// Check small keywords.
+		for _, kw := range effortSmallKeywords {
+			if strings.Contains(lower, kw) {
+				return "S"
+			}
+		}
+	}
 
 	// 4. Default.
 	return "M"
