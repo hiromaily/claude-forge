@@ -22,6 +22,7 @@ var ValidTaskTypes = []string{
 }
 
 // jiraTypeMap maps Jira issue type strings to internal task type constants.
+// Includes both English and Japanese issue type names commonly used in Jira.
 var jiraTypeMap = map[string]string{
 	"Bug":           TaskTypeBugfix,
 	"Story":         TaskTypeFeature,
@@ -30,6 +31,11 @@ var jiraTypeMap = map[string]string{
 	"Task":          TaskTypeFeature,
 	"Sub-task":      TaskTypeFeature,
 	"Documentation": TaskTypeDocs,
+	// Japanese issue types
+	"カイゼン":  TaskTypeFeature,
+	"バグ":    TaskTypeBugfix,
+	"ストーリー": TaskTypeFeature,
+	"タスク":   TaskTypeFeature,
 }
 
 // githubLabelRules maps label substrings (case-insensitive) to task types.
