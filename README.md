@@ -406,12 +406,6 @@ Pass the spec directory name (the folder under `.specs/`) and the `--resume` fla
 /forge 20260320-fix-auth-timeout --resume
 ```
 
-Other flags can be combined with `--resume`:
-
-```text
-/forge 20260320-fix-auth-timeout --resume --auto
-```
-
 ### Abandon a pipeline
 
 Use the MCP tool from Claude Code:
