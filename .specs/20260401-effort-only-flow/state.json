@@ -1,0 +1,77 @@
+{
+  "version": 2,
+  "specName": "effort-only-flow",
+  "workspace": ".specs/20260401-effort-only-flow",
+  "branch": null,
+  "taskType": "feature",
+  "effort": "L",
+  "flowTemplate": "full",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "checkpoint-a",
+  "currentPhaseStatus": "abandoned",
+  "completedPhases": [
+    "setup",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "tasks": {},
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 74556,
+      "duration_ms": 176951,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T08:59:46.761869Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 125601,
+      "duration_ms": 376889,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T09:06:40.968004Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 62797,
+      "duration_ms": 229793,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T09:13:06.799377Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 49125,
+      "duration_ms": 120806,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T09:15:38.636082Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 34207,
+      "duration_ms": 71165,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T09:59:54.631081Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-04-01T08:56:19.606946Z",
+    "lastUpdated": "2026-04-01T10:00:37.598069Z",
+    "phaseStarted": null
+  },
+  "error": null
+}
