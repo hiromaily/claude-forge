@@ -278,7 +278,8 @@ func determineTransition(
 	}, nil
 }
 
-// handlePhase6Transition processes phase-6 results, parsing verdicts from impl-*.md files.
+// handlePhase6Transition processes phase-6 results, parsing verdicts from review-*.md
+// files (or impl-*.md as fallback for backward compatibility).
 func handlePhase6Transition(
 	sm *state.StateManager,
 	in reportResultInput,
