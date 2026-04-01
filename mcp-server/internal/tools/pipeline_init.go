@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -70,9 +71,8 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 		trimmed := strings.TrimSpace(arguments)
 
-		// Decision 1: Resume detection.
-		// Use HasPrefix check per design spec. If trimmed starts with ".specs/",
-		// verify state.json exists before confirming resume.
+		// Decision 1a: Resume detection (legacy style).
+		// If trimmed starts with ".specs/", verify state.json exists before confirming resume.
 		if strings.HasPrefix(trimmed, ".specs/") {
 			return handleResumePath(trimmed)
 		}
@@ -83,6 +83,14 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 			return okJSON(PipelineInitResult{
 				Errors: result.Errors,
 			})
+		}
+
+		// Decision 1b: Resume detection (explicit style).
+		// When --resume flag is present, the core text is the spec directory name
+		// (without the .specs/ prefix). Construct the full workspace path and resume.
+		if hasFlag(result.Parsed.BareFlags, "resume") {
+			workspace := ".specs/" + result.Parsed.CoreText
+			return handleResumePath(workspace)
 		}
 
 		// Build flags from parsed validation result.
@@ -137,6 +145,11 @@ func handleResumePath(workspace string) (*mcp.CallToolResult, error) {
 		Workspace:   workspace,
 		Instruction: "call state_resume_info",
 	})
+}
+
+// hasFlag reports whether flag is present in the bare flags slice.
+func hasFlag(bareFlags []string, flag string) bool {
+	return slices.Contains(bareFlags, flag)
 }
 
 // buildFlags constructs PipelineInitFlags from the parsed validation result.

@@ -7,6 +7,12 @@ description: Orchestrate a full development pipeline using MCP-driven subagents.
 
 ## Step 1: Initialize or Resume
 
+**To resume a suspended pipeline**, the user must supply two values:
+- The spec directory name from `.specs/` (e.g. `20260401-effort-only-flow`)
+- The `--resume` flag
+
+Example: `/forge 20260401-effort-only-flow --resume`
+
 1. Call `mcp__forge-state__pipeline_init(arguments=$ARGUMENTS)`.
 2. If `result.errors` is non-empty: surface the errors to the user and stop.
 3. If `result.resume == true`: confirm resume from `result.workspace` with the user, then go to Step 2.

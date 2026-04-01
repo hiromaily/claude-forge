@@ -88,6 +88,12 @@ func TestValidateInput(t *testing.T) {
 			wantSourceType: "text",
 		},
 		{
+			name:           "strip --resume flag leaving dirname as core",
+			input:          "20260401-effort-only-flow --resume",
+			wantValid:      true,
+			wantSourceType: "text",
+		},
+		{
 			name:           "strip all flags leaving valid core",
 			input:          "--type=bugfix --effort=S --auto --nopr --debug fix the crash",
 			wantValid:      true,
@@ -241,5 +247,30 @@ func TestValidateInputParsedFlags(t *testing.T) {
 	}
 	if !foundNopr {
 		t.Errorf("BareFlags should contain 'nopr', got %v", result.Parsed.BareFlags)
+	}
+}
+
+func TestValidateInputResumeFlagInBareFlags(t *testing.T) {
+	t.Parallel()
+
+	// --resume must appear in BareFlags and be stripped from CoreText.
+	result := validation.ValidateInput("20260401-effort-only-flow --resume")
+	if !result.Valid {
+		t.Fatalf("expected valid, got errors: %v", result.Errors)
+	}
+	foundResume := false
+	for _, f := range result.Parsed.BareFlags {
+		if f == "resume" {
+			foundResume = true
+		}
+	}
+	if !foundResume {
+		t.Errorf("BareFlags should contain 'resume', got %v", result.Parsed.BareFlags)
+	}
+	if strings.Contains(result.Parsed.CoreText, "--resume") {
+		t.Errorf("CoreText %q should not contain --resume after stripping", result.Parsed.CoreText)
+	}
+	if result.Parsed.CoreText != "20260401-effort-only-flow" {
+		t.Errorf("CoreText = %q, want %q", result.Parsed.CoreText, "20260401-effort-only-flow")
 	}
 }
