@@ -89,16 +89,10 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		arguments := req.GetString("arguments", "")
 		currentBranch := req.GetString("current_branch", "")
 
-		trimmed := strings.TrimSpace(arguments)
-
-		// Decision 1a: Resume detection (legacy style).
-		// If trimmed starts with ".specs/", verify state.json exists before confirming resume.
-		// ResumeModeLegacy: orchestrator must confirm with user before proceeding.
-		if strings.HasPrefix(trimmed, ".specs/") {
-			return handleResumePath(trimmed, ResumeModeLegacy)
-		}
-
-		// Decision 2–4: Validate input and parse flags.
+		// Decision 1–4: Validate input and parse flags first so that resume
+		// detection operates on stripped CoreText rather than the raw string.
+		// This fixes the bug where ".specs/my-dir --debug" would pass the old
+		// HasPrefix check but then fail state.json lookup due to the trailing flags.
 		result := validation.ValidateInput(arguments)
 		if !result.Valid {
 			return okJSON(PipelineInitResult{
@@ -106,13 +100,23 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 			})
 		}
 
-		// Decision 1b: Resume detection (explicit style).
-		// When --resume flag is present, the core text is the spec directory name
-		// (without the .specs/ prefix). Construct the full workspace path and resume.
-		// ResumeModeExplicit: user already stated intent; orchestrator skips confirmation.
-		if hasFlag(result.Parsed.BareFlags, "resume") {
-			workspace := ".specs/" + result.Parsed.CoreText
-			return handleResumePath(workspace, ResumeModeExplicit)
+		// Decision 1: Resume detection — unified after validation.
+		// 1a (legacy): CoreText starts with ".specs/" (user typed the full path).
+		//              ResumeModeLegacy: orchestrator must confirm with user.
+		// 1b (explicit): --resume flag present; CoreText is the spec dirname.
+		//              ResumeModeExplicit: orchestrator skips confirmation.
+		isLegacyResume := strings.HasPrefix(result.Parsed.CoreText, ".specs/")
+		isExplicitResume := hasFlag(result.Parsed.BareFlags, "resume")
+		if isLegacyResume || isExplicitResume {
+			workspace := result.Parsed.CoreText
+			if !strings.HasPrefix(workspace, ".specs/") {
+				workspace = filepath.Join(".specs", workspace)
+			}
+			mode := ResumeModeLegacy
+			if isExplicitResume {
+				mode = ResumeModeExplicit
+			}
+			return handleResumePath(workspace, mode)
 		}
 
 		// Build flags from parsed validation result.

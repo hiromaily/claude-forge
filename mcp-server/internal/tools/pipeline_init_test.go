@@ -164,7 +164,7 @@ func TestPipelineInitResumeDetection(t *testing.T) {
 	t.Run("whitespace_trimmed_before_prefix_check", func(t *testing.T) {
 		t.Parallel()
 
-		// Leading/trailing whitespace is trimmed before HasPrefix check.
+		// Leading/trailing whitespace is handled by ValidateInput.
 		// Use a .specs/ path that won't have state.json — checks the code path correctly.
 		res := callTool(t, h, map[string]any{
 			"arguments": "   .specs/20260101-whitespace-test-no-state-json   ",
@@ -173,14 +173,38 @@ func TestPipelineInitResumeDetection(t *testing.T) {
 			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
 		}
 		r := parsePipelineInitResult(t, textContent(res))
-		// The trimmed argument starts with ".specs/" → resume path triggered.
+		// CoreText starts with ".specs/" → resume path triggered.
 		// state.json doesn't exist → error result.
 		if len(r.Errors) == 0 {
-			t.Errorf("expected errors (no state.json for .specs/ path), got none; this verifies trimming occurred")
+			t.Errorf("expected errors (no state.json for .specs/ path), got none")
 		}
 		// It should NOT have been treated as a new pipeline.
 		if r.SourceType != "" {
 			t.Errorf("source_type should be empty for resume detection path, got %q", r.SourceType)
+		}
+	})
+
+	t.Run("specs_prefix_with_flags_strips_correctly", func(t *testing.T) {
+		t.Parallel()
+
+		// Bug fix: ".specs/my-dir --debug" previously passed HasPrefix but then
+		// called handleResumePath with the full raw string including flags, causing
+		// the state.json lookup at ".specs/my-dir --debug/state.json" to fail.
+		// Now detection runs on CoreText (flags stripped), so the workspace path is clean.
+		res := callTool(t, h, map[string]any{
+			"arguments": ".specs/20260101-flagged-path-no-state-json --debug",
+		})
+		if res.IsError {
+			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		// state.json absent → error result, but the error must mention the clean path.
+		if len(r.Errors) == 0 {
+			t.Fatalf("expected errors (no state.json), got none")
+		}
+		wantPath := ".specs/20260101-flagged-path-no-state-json"
+		if !strings.Contains(r.Errors[0], wantPath) {
+			t.Errorf("error should mention clean path %q (no flags), got: %q", wantPath, r.Errors[0])
 		}
 	})
 }
