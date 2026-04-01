@@ -23,7 +23,7 @@ Example: `/forge 20260401-effort-only-flow --resume`
 4. For all new pipelines (resume is false or absent):
    a. If `result.fetch_needed` is non-null: fetch the external data described by `result.fetch_needed`
       (GitHub issue fields or Jira issue fields), then call
-      `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags, external_context=<fetched data>)`.
+      `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, source_id=result.source_id, flags=result.flags, external_context=<fetched data>)`.
    b. If `result.fetch_needed` is null (plain text input): call
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags)`.
    In both cases, the response will contain `needs_user_confirmation`. Present the detected

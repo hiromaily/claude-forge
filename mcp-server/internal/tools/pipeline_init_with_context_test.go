@@ -557,7 +557,8 @@ func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
 				t.Fatalf("returned MCP error: %v", textContent(res))
 			}
 
-			reqPath := filepath.Join(dir, "request.md")
+			result := parsePIWCResult(t, textContent(res))
+			reqPath := filepath.Join(result.Workspace, "request.md")
 			content, err := os.ReadFile(reqPath)
 			if err != nil {
 				t.Fatalf("ReadFile request.md: %v", err)
@@ -758,5 +759,48 @@ func TestPipelineInitWithContextSpecNameFallback(t *testing.T) {
 				t.Errorf("SpecName = %q, want %q", s.SpecName, tc.wantSpecName)
 			}
 		})
+	}
+}
+
+// ---------- TestTopLevelSourceIDRefinement ----------
+
+func TestTopLevelSourceIDRefinement(t *testing.T) {
+	t.Parallel()
+
+	parentDir := t.TempDir()
+	wsDir := filepath.Join(parentDir, "20260330-https-github-com-owner-repo-issues-42")
+
+	sm := newPIWCSM()
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": wsDir,
+		"source_id": "42",
+		"external_context": map[string]any{
+			"github_title": "Fix auth timeout in middleware",
+			"github_body":  "requests timeout after 30s",
+		},
+		"flags": map[string]any{},
+		"user_confirmation": map[string]any{
+			"task_type": "bugfix",
+			"effort":    "S",
+		},
+	})
+
+	if res.IsError {
+		t.Fatalf("unexpected MCP error: %v", textContent(res))
+	}
+
+	result := parsePIWCResult(t, textContent(res))
+	wantWorkspace := filepath.Join(parentDir, "20260330-42-fix-auth-timeout-in-middleware")
+	if result.Workspace != wantWorkspace {
+		t.Errorf("Workspace = %q, want %q", result.Workspace, wantWorkspace)
+	}
+
+	s, err := state.ReadState(result.Workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if s.SpecName != "42-fix-auth-timeout-in-middleware" {
+		t.Errorf("SpecName = %q, want %q", s.SpecName, "42-fix-auth-timeout-in-middleware")
 	}
 }

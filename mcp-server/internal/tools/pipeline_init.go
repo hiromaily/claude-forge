@@ -229,15 +229,20 @@ func extractSourceID(sourceType, coreText string) string {
 	}
 }
 
+// slugifyOrDefault returns slugify(text), falling back to "task" when the result
+// would be empty (e.g., all-Japanese input or an empty string).
+func slugifyOrDefault(text string) string {
+	if s := slugify(text); s != "" {
+		return s
+	}
+	return "task"
+}
+
 // makeWorkspacePath generates the workspace path in the format .specs/YYYYMMDD-<slug>.
 // Falls back to "task" when slugify produces an empty result (e.g., all-Japanese input).
 func makeWorkspacePath(date time.Time, text string) string {
 	dateStr := date.Format("20060102")
-	slug := slugify(text)
-	if slug == "" {
-		slug = "task"
-	}
-	return ".specs/" + dateStr + "-" + slug
+	return ".specs/" + dateStr + "-" + slugifyOrDefault(text)
 }
 
 // maxSlugLen is the maximum length of a slug produced by slugify.
@@ -292,9 +297,10 @@ func deriveSpecName(workspace string) string {
 }
 
 // refineWorkspacePath replaces a URL-derived workspace path with a meaningful one
-// when external context provides a source ID and summary (Jira or GitHub).
-// For Jira: ".specs/20260330-soa-2883-skip-minutes-job-without-integration"
-// For GitHub: ".specs/20260330-42-fix-auth-timeout"
+// when external context provides a source ID and/or summary (Jira or GitHub).
+// For Jira with ID: ".specs/20260330-soa-2883-skip-minutes-job-without-integration"
+// For GitHub with ID: ".specs/20260330-42-fix-auth-timeout"
+// For title only (source_id absent): ".specs/20260330-fix-auth-timeout"
 // Returns the original workspace path if no refinement is possible.
 func refineWorkspacePath(workspace string, extCtx externalContext) string {
 	var id, summary string
@@ -306,15 +312,19 @@ func refineWorkspacePath(workspace string, extCtx externalContext) string {
 	case extCtx.SourceID != "" && extCtx.GitHubTitle != "":
 		id = extCtx.SourceID
 		summary = extCtx.GitHubTitle
+	case extCtx.JiraSummary != "":
+		summary = extCtx.JiraSummary
+	case extCtx.GitHubTitle != "":
+		summary = extCtx.GitHubTitle
 	default:
 		return workspace
 	}
 
-	slug := slugify(id + " " + summary)
-	if slug == "" {
-		slug = "task"
+	combined := summary
+	if id != "" {
+		combined = id + " " + summary
 	}
-	return replaceWorkspaceSlug(workspace, slug)
+	return replaceWorkspaceSlug(workspace, slugifyOrDefault(combined))
 }
 
 // replaceWorkspaceSlug replaces the slug portion of a workspace path with newSlug,

@@ -95,6 +95,13 @@ func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFu
 			return errorf("parse external_context: %v", err)
 		}
 
+		// source_id is returned by pipeline_init but isn't a fetched field, so the
+		// orchestrator passes it as a top-level parameter rather than embedding it
+		// inside external_context alongside the fetched GitHub/Jira fields.
+		if topSourceID := stringField(args, "source_id"); topSourceID != "" && extCtx.SourceID == "" {
+			extCtx.SourceID = topSourceID
+		}
+
 		// Parse flags object.
 		flags, err := parseFlags(args)
 		if err != nil {
