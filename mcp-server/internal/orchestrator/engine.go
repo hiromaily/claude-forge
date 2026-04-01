@@ -38,6 +38,7 @@ type Engine struct {
 	specsDir         string
 	verdictReader    func(path string) (Verdict, []Finding, error)
 	sourceTypeReader func(workspace string) string
+	sourceURLReader  func(workspace string) string
 }
 
 // NewEngine constructs a ready-to-use Engine with production I/O implementations.
@@ -48,6 +49,7 @@ func NewEngine(agentDir, specsDir string) *Engine {
 		specsDir:         specsDir,
 		verdictReader:    ParseVerdict,
 		sourceTypeReader: readSourceType,
+		sourceURLReader:  readSourceURL,
 	}
 }
 
@@ -710,10 +712,15 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 			"--body-file", filepath.Join(st.Workspace, "final-summary.md"),
 		}), nil
 	case "jira_issue":
+		sourceURL := e.sourceURLReader(st.Workspace)
+		msg := fmt.Sprintf(
+			"Pipeline complete. Post the final summary as a comment to the Jira issue?\n\nJira URL: %s\nSummary file: %s/final-summary.md",
+			sourceURL, st.Workspace,
+		)
 		return NewCheckpointAction(
 			"post-to-jira",
-			"Post the final summary to the Jira issue. Review final-summary.md and post manually.",
-			[]string{"done"},
+			msg,
+			[]string{"post", "skip"},
 		), nil
 	default: // "text" and anything else — skip this phase
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
@@ -754,6 +761,41 @@ func readSourceType(workspace string) string {
 	}
 
 	return "text"
+}
+
+// readSourceURL reads the source_url field from {workspace}/request.md front matter.
+// Returns "" when the field is absent or the file is unreadable.
+func readSourceURL(workspace string) string {
+	path := filepath.Join(workspace, "request.md")
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+
+	scanner := bufio.NewScanner(f)
+	inFrontMatter := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "---" {
+			if !inFrontMatter {
+				inFrontMatter = true
+				continue
+			}
+			break
+		}
+		if inFrontMatter {
+			if val, ok := strings.CutPrefix(line, "source_url:"); ok {
+				val = strings.TrimSpace(val)
+				if val != "" {
+					return val
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 // deriveBranchName generates a deterministic branch name from the spec name.
