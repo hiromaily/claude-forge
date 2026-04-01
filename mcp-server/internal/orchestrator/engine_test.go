@@ -1187,11 +1187,11 @@ func TestPostToSource_CheckpointOptions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		sourceType     string
-		sourceURL      string
-		wantName       string
-		wantURLInMsg   string
+		name         string
+		sourceType   string
+		sourceURL    string
+		wantName     string
+		wantURLInMsg string
 	}{
 		{
 			name:         "jira_issue",
