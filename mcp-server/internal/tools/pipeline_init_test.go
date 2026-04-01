@@ -1065,6 +1065,22 @@ func TestRefineWorkspacePath(t *testing.T) {
 			extCtx:    externalContext{},
 			want:      ".specs/20260330-implement-a-new-feature",
 		},
+		{
+			name:      "github_title_only_no_source_id",
+			workspace: ".specs/20260330-https-github-com-owner-repo-issues-42",
+			extCtx: externalContext{
+				GitHubTitle: "Fix auth timeout in middleware",
+			},
+			want: ".specs/20260330-fix-auth-timeout-in-middleware",
+		},
+		{
+			name:      "jira_summary_only_no_source_id",
+			workspace: ".specs/20260330-https-legalforce-atlassian-net-browse-so",
+			extCtx: externalContext{
+				JiraSummary: "Skip minutes job without integration",
+			},
+			want: ".specs/20260330-skip-minutes-job-without-integration",
+		},
 	}
 
 	for _, tc := range tests {

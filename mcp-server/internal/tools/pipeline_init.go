@@ -292,9 +292,10 @@ func deriveSpecName(workspace string) string {
 }
 
 // refineWorkspacePath replaces a URL-derived workspace path with a meaningful one
-// when external context provides a source ID and summary (Jira or GitHub).
-// For Jira: ".specs/20260330-soa-2883-skip-minutes-job-without-integration"
-// For GitHub: ".specs/20260330-42-fix-auth-timeout"
+// when external context provides a source ID and/or summary (Jira or GitHub).
+// For Jira with ID: ".specs/20260330-soa-2883-skip-minutes-job-without-integration"
+// For GitHub with ID: ".specs/20260330-42-fix-auth-timeout"
+// For title only (source_id absent): ".specs/20260330-fix-auth-timeout"
 // Returns the original workspace path if no refinement is possible.
 func refineWorkspacePath(workspace string, extCtx externalContext) string {
 	var id, summary string
@@ -306,11 +307,19 @@ func refineWorkspacePath(workspace string, extCtx externalContext) string {
 	case extCtx.SourceID != "" && extCtx.GitHubTitle != "":
 		id = extCtx.SourceID
 		summary = extCtx.GitHubTitle
+	case extCtx.JiraSummary != "":
+		summary = extCtx.JiraSummary
+	case extCtx.GitHubTitle != "":
+		summary = extCtx.GitHubTitle
 	default:
 		return workspace
 	}
 
-	slug := slugify(id + " " + summary)
+	combined := summary
+	if id != "" {
+		combined = id + " " + summary
+	}
+	slug := slugify(combined)
 	if slug == "" {
 		slug = "task"
 	}
