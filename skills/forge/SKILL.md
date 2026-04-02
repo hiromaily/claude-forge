@@ -27,13 +27,14 @@ Example: `/forge 20260401-effort-only-flow --resume`
    b. If `result.fetch_needed` is null (plain text input): call
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags)`.
    In both cases, the response will contain `needs_user_confirmation`. Present the detected
-   `detected_task_type`, `detected_effort`, and `flow_template` to the user and wait for confirmation.
+   `detected_effort` and all three effort options from `effort_options` (S, M, L — each with
+   their skipped phases list) to the user and wait for confirmation.
    While waiting, generate a concise English slug (3–6 words, lowercase, hyphen-separated,
    ASCII only) that summarises the task — e.g. `"add-user-auth-endpoint"` or
    `"fix-report-export-timeout"`. If the input is in a non-English language, translate
    the core intent into English for the slug.
    Then call `mcp__forge-state__pipeline_init_with_context` again with the same parameters plus
-   `user_confirmation={task_type: <confirmed>, effort: <confirmed>, workspace_slug: <slug>}`.
+   `user_confirmation={effort: <confirmed>, workspace_slug: <slug>}`.
    Use the `workspace` from the confirmed response for all subsequent calls.
    **Important**: Always pass the workspace path from `pipeline_init` unchanged to the first
    `pipeline_init_with_context` call. Never construct workspace paths manually.
