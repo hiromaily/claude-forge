@@ -61,7 +61,7 @@ func TestScoreTermFrequency(t *testing.T) {
 		{SpecName: "one", RequestSummary: "alpha"},      // tf=2
 		{SpecName: "two", RequestSummary: "alpha beta"}, // tf=1
 	}
-	results := Score(entries, "alpha", "", DefaultBM25Params())
+	results := Score(entries, "alpha", DefaultBM25Params())
 	if len(results) < 2 {
 		t.Fatalf("expected 2 scored entries, got %d", len(results))
 	}
@@ -89,8 +89,8 @@ func TestScoreIDF(t *testing.T) {
 	// "common" appears in all 3 docs (high df, low IDF)
 	// "rare" appears in only 1 doc (low df, high IDF)
 	// entry "a" has both; score with rare query vs common query
-	rareResults := Score(entries, "rare", "", DefaultBM25Params())
-	commonResults := Score(entries, "common", "", DefaultBM25Params())
+	rareResults := Score(entries, "rare", DefaultBM25Params())
+	commonResults := Score(entries, "common", DefaultBM25Params())
 
 	// "a" should appear in rare results
 	if len(rareResults) == 0 || rareResults[0].Entry.SpecName != "a" {
@@ -120,7 +120,7 @@ func TestScoreOrdering(t *testing.T) {
 		{SpecName: "high", RequestSummary: "alpha beta gamma delta"},
 		{SpecName: "mid", RequestSummary: "alpha beta gamma delta epsilon"},
 	}
-	results := Score(entries, "alpha", "", DefaultBM25Params())
+	results := Score(entries, "alpha", DefaultBM25Params())
 	if len(results) < 3 {
 		t.Fatalf("expected 3 scored entries, got %d", len(results))
 	}
@@ -145,7 +145,7 @@ func TestScoreZeroExclusion(t *testing.T) {
 		{SpecName: "nomatch", RequestSummary: "unrelated content here"},
 	}
 	// Query with a term that only appears in "match"
-	results := Score(entries, "golang", "", DefaultBM25Params())
+	results := Score(entries, "golang", DefaultBM25Params())
 	for _, r := range results {
 		if r.Score <= 0 {
 			t.Errorf("entry %q has score %f <= 0, should be excluded", r.Entry.SpecName, r.Score)
@@ -159,33 +159,12 @@ func TestScoreZeroExclusion(t *testing.T) {
 	}
 }
 
-// TestScoreTaskTypeBoost verifies that a matching taskType entry ranks above
-// an entry with equal BM25 score.
-func TestScoreTaskTypeBoost(t *testing.T) {
-	// Identical requestSummary means equal BM25, but one has matching taskType
-	taskType := "feature"
-	entries := []IndexEntry{
-		{SpecName: "noboosted", RequestSummary: "implement search scoring", TaskType: new("bugfix")},
-		{SpecName: "boosted", RequestSummary: "implement search scoring", TaskType: new("feature")},
-	}
-	results := Score(entries, "implement search scoring", taskType, DefaultBM25Params())
-	if len(results) < 2 {
-		t.Fatalf("expected 2 results, got %d", len(results))
-	}
-	if results[0].Entry.SpecName != "boosted" {
-		t.Errorf("expected boosted entry first, got %q", results[0].Entry.SpecName)
-	}
-	if results[0].Score <= results[1].Score {
-		t.Errorf("boosted score %f should be > unboosted score %f", results[0].Score, results[1].Score)
-	}
-}
-
 // TestScoreEmptyQuery verifies empty query returns empty slice.
 func TestScoreEmptyQuery(t *testing.T) {
 	entries := []IndexEntry{
 		{SpecName: "a", RequestSummary: "some content"},
 	}
-	results := Score(entries, "", "", DefaultBM25Params())
+	results := Score(entries, "", DefaultBM25Params())
 	if len(results) != 0 {
 		t.Errorf("expected empty results for empty query, got %v", results)
 	}
@@ -193,7 +172,7 @@ func TestScoreEmptyQuery(t *testing.T) {
 
 // TestScoreEmptyEntries verifies empty entries returns empty slice.
 func TestScoreEmptyEntries(t *testing.T) {
-	results := Score([]IndexEntry{}, "query", "", DefaultBM25Params())
+	results := Score([]IndexEntry{}, "query", DefaultBM25Params())
 	if len(results) != 0 {
 		t.Errorf("expected empty results for empty entries, got %v", results)
 	}
@@ -204,7 +183,7 @@ func TestScoreSingleDocument(t *testing.T) {
 	entries := []IndexEntry{
 		{SpecName: "only", RequestSummary: "golang search implementation"},
 	}
-	results := Score(entries, "golang", "", DefaultBM25Params())
+	results := Score(entries, "golang", DefaultBM25Params())
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}

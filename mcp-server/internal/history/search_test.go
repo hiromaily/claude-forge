@@ -30,58 +30,12 @@ func TestSearch_empty(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	idx := history.New(dir)
-	results, err := history.Search(idx, "some query", 10, "")
+	results, err := history.Search(idx, "some query", 10)
 	if err != nil {
 		t.Fatalf("Search() returned unexpected error: %v", err)
 	}
 	if len(results) != 0 {
 		t.Fatalf("expected 0 results, got %d", len(results))
-	}
-}
-
-func TestSearch_taskTypeFilter(t *testing.T) {
-	t.Parallel()
-
-	entries := []history.IndexEntry{
-		{
-			SpecName: "spec-bugfix-1",
-			OneLiner: "fix authentication token expiry bug",
-			TaskType: "bugfix",
-			Outcome:  "completed",
-			Tags:     []string{"authentication", "token", "expiry", "bugfix"},
-		},
-		{
-			SpecName: "spec-feature-1",
-			OneLiner: "add user profile feature request",
-			TaskType: "feature",
-			Outcome:  "completed",
-			Tags:     []string{"user", "profile", "feature", "request"},
-		},
-		{
-			SpecName: "spec-bugfix-2",
-			OneLiner: "fix database connection pool exhaustion",
-			TaskType: "bugfix",
-			Outcome:  "completed",
-			Tags:     []string{"database", "connection", "pool", "exhaustion"},
-		},
-	}
-
-	dir := t.TempDir()
-	writeHistoryIndexFile(t, dir, entries)
-	idx := history.New(dir)
-	if err := idx.Build(); err != nil {
-		t.Fatalf("Build() error: %v", err)
-	}
-
-	results, err := history.Search(idx, "fix authentication bug", 10, "bugfix")
-	if err != nil {
-		t.Fatalf("Search() error: %v", err)
-	}
-
-	for _, r := range results {
-		if r.TaskType != "bugfix" {
-			t.Errorf("expected only bugfix results, got TaskType=%q for %q", r.TaskType, r.SpecName)
-		}
 	}
 }
 
@@ -92,21 +46,18 @@ func TestSearch_limit(t *testing.T) {
 		{
 			SpecName: "spec-1",
 			OneLiner: "refactor authentication middleware layer",
-			TaskType: "feature",
 			Outcome:  "completed",
 			Tags:     []string{"refactor", "authentication", "middleware", "layer"},
 		},
 		{
 			SpecName: "spec-2",
 			OneLiner: "refactor database query optimization pipeline",
-			TaskType: "feature",
 			Outcome:  "completed",
 			Tags:     []string{"refactor", "database", "query", "optimization"},
 		},
 		{
 			SpecName: "spec-3",
 			OneLiner: "refactor cache invalidation strategy implementation",
-			TaskType: "feature",
 			Outcome:  "completed",
 			Tags:     []string{"refactor", "cache", "invalidation", "strategy"},
 		},
@@ -119,7 +70,7 @@ func TestSearch_limit(t *testing.T) {
 		t.Fatalf("Build() error: %v", err)
 	}
 
-	results, err := history.Search(idx, "refactor", 1, "")
+	results, err := history.Search(idx, "refactor", 1)
 	if err != nil {
 		t.Fatalf("Search() error: %v", err)
 	}
@@ -137,7 +88,6 @@ func TestSearch_designExcerpt(t *testing.T) {
 		{
 			SpecName: specName,
 			OneLiner: "implement search feature for user queries",
-			TaskType: "feature",
 			Outcome:  "completed",
 			Tags:     []string{"search", "feature", "user", "queries"},
 		},
@@ -163,7 +113,7 @@ func TestSearch_designExcerpt(t *testing.T) {
 		t.Fatalf("Build() error: %v", err)
 	}
 
-	results, err := history.Search(idx, "search feature user queries keyword", 10, "")
+	results, err := history.Search(idx, "search feature user queries keyword", 10)
 	if err != nil {
 		t.Fatalf("Search() error: %v", err)
 	}
@@ -198,7 +148,6 @@ func TestSearch_noDesignMd(t *testing.T) {
 		{
 			SpecName: specName,
 			OneLiner: "implement cache invalidation strategy pattern",
-			TaskType: "feature",
 			Outcome:  "completed",
 			Tags:     []string{"cache", "invalidation", "strategy", "pattern"},
 		},
@@ -219,7 +168,7 @@ func TestSearch_noDesignMd(t *testing.T) {
 		t.Fatalf("Build() error: %v", err)
 	}
 
-	results, err := history.Search(idx, "cache invalidation strategy pattern", 10, "")
+	results, err := history.Search(idx, "cache invalidation strategy pattern", 10)
 	if err != nil {
 		t.Fatalf("Search() error: %v", err)
 	}

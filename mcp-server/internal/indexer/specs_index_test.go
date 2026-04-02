@@ -421,11 +421,10 @@ Fix a critical bug.
 	}
 
 	type indexEntry struct {
-		SpecName       string  `json:"specName"`
-		Timestamp      string  `json:"timestamp"`
-		TaskType       *string `json:"taskType"`
-		RequestSummary string  `json:"requestSummary"`
-		Outcome        string  `json:"outcome"`
+		SpecName       string `json:"specName"`
+		Timestamp      string `json:"timestamp"`
+		RequestSummary string `json:"requestSummary"`
+		Outcome        string `json:"outcome"`
 	}
 
 	var entries []indexEntry
@@ -455,10 +454,6 @@ Fix a critical bug.
 
 	if ws1Entry.Timestamp != "2026-01-01T00:00:00Z" {
 		t.Errorf("ws1 Timestamp = %q, want %q", ws1Entry.Timestamp, "2026-01-01T00:00:00Z")
-	}
-
-	if ws1Entry.TaskType == nil || *ws1Entry.TaskType != "feature" {
-		t.Errorf("ws1 TaskType = %v, want %q", ws1Entry.TaskType, "feature")
 	}
 
 	// Verify workspace 2 (no state.json — falls back to dir basename)

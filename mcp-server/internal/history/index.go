@@ -27,7 +27,6 @@ const maxTags = 50
 type IndexEntry struct {
 	SpecName     string    `json:"specName"`
 	OneLiner     string    `json:"oneLiner"`
-	TaskType     string    `json:"taskType"`
 	Effort       string    `json:"effort"`
 	FlowTemplate string    `json:"flowTemplate"`
 	Tags         []string  `json:"tags"`
@@ -212,7 +211,6 @@ func loadExisting(path string) (IndexFile, error) {
 type stateJSON struct {
 	SpecName     string     `json:"specName"`
 	CurrentPhase string     `json:"currentPhase"`
-	TaskType     *string    `json:"taskType"`
 	Effort       *string    `json:"effort"`
 	FlowTemplate *string    `json:"flowTemplate"`
 	PhaseLog     []phaseLog `json:"phaseLog"`
@@ -238,7 +236,7 @@ type timestamps struct {
 //
 // The indexedAt parameter is the watermark from the existing index; if zero,
 // all terminal specs are parsed.
-func parseSpec(specDir string, indexedAt time.Time) (IndexEntry, error) { //nolint:cyclop,gocyclo // complexity is inherent in multi-field parsing
+func parseSpec(specDir string, indexedAt time.Time) (IndexEntry, error) { //nolint:cyclop // complexity is inherent in multi-field parsing
 	stateData, err := os.ReadFile(filepath.Join(specDir, "state.json"))
 	if err != nil {
 		return IndexEntry{}, errSkip
@@ -308,11 +306,6 @@ func parseSpec(specDir string, indexedAt time.Time) (IndexEntry, error) { //noli
 	}
 
 	// Dereference pointer fields.
-	taskType := ""
-	if st.TaskType != nil {
-		taskType = *st.TaskType
-	}
-
 	effort := ""
 	if st.Effort != nil {
 		effort = *st.Effort
@@ -326,7 +319,6 @@ func parseSpec(specDir string, indexedAt time.Time) (IndexEntry, error) { //noli
 	return IndexEntry{
 		SpecName:     specName,
 		OneLiner:     oneLiner,
-		TaskType:     taskType,
 		Effort:       effort,
 		FlowTemplate: flowTemplate,
 		Tags:         tags,

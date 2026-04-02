@@ -157,7 +157,7 @@ func enrichPrompt(
 			oneLiner = filepath.Base(workspace)
 		}
 
-		results, searchErr := history.Search(histIdx, oneLiner, similarPipelinesSearchLimit, "")
+		results, searchErr := history.Search(histIdx, oneLiner, similarPipelinesSearchLimit)
 		if searchErr != nil {
 			// Fail-open: record warning and proceed with empty history context.
 			if resp.Warning != "" {

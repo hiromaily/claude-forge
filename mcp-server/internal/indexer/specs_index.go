@@ -64,12 +64,10 @@ func buildEntry(workspaceDir string) search.IndexEntry {
 	stateFile := filepath.Join(workspaceDir, "state.json")
 	specName := dirBasename
 	timestamp := "unknown"
-	var taskType *string
 
 	if data, err := os.ReadFile(stateFile); err == nil {
 		var state struct {
-			SpecName   string  `json:"specName"`
-			TaskType   *string `json:"taskType"`
+			SpecName   string `json:"specName"`
 			Timestamps *struct {
 				Created string `json:"created"`
 			} `json:"timestamps"`
@@ -83,8 +81,6 @@ func buildEntry(workspaceDir string) search.IndexEntry {
 			if state.Timestamps != nil && state.Timestamps.Created != "" {
 				timestamp = state.Timestamps.Created
 			}
-
-			taskType = state.TaskType
 		}
 	}
 
@@ -97,7 +93,6 @@ func buildEntry(workspaceDir string) search.IndexEntry {
 	return search.IndexEntry{
 		SpecName:       specName,
 		Timestamp:      timestamp,
-		TaskType:       taskType,
 		RequestSummary: requestSummary,
 		ReviewFeedback: reviewFeedback,
 		ImplOutcomes:   implOutcomes,
