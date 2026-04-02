@@ -79,9 +79,9 @@ func TestSkipsForEffort(t *testing.T) {
 			want:   []string{},
 		},
 		{
-			name:   "unknown returns empty skips",
+			name:   "unknown falls back to standard skips",
 			effort: "unknown",
-			want:   []string{},
+			want:   []string{PhaseFourB, PhaseCheckpointB},
 		},
 	}
 

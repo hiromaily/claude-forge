@@ -543,14 +543,21 @@ func derivePRTitle(st *state.State) string {
 }
 
 // handleFinalSummary handles the final-summary phase — Decision 25.
-// Uses a fixed input file list: comprehensive-review.md, design.md, tasks.md.
-func (*Engine) handleFinalSummary(_ *state.State) (Action, error) {
+// comprehensive-review.md is included only when PhaseSeven was not skipped
+// (i.e., the flow template is standard or full). For effort S (light template),
+// PhaseSeven is skipped and the file does not exist.
+func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
+	inputs := []string{"design.md", "tasks.md"}
+	if !slices.Contains(st.SkippedPhases, PhaseSeven) {
+		inputs = append([]string{"comprehensive-review.md"}, inputs...)
+	}
+
 	return NewSpawnAgentAction(
 		agentVerifier,
 		"Generate final summary with pipeline statistics.",
 		"sonnet",
 		PhaseFinalSummary,
-		[]string{"comprehensive-review.md", "design.md", "tasks.md"},
+		inputs,
 		"final-summary.md",
 	), nil
 }

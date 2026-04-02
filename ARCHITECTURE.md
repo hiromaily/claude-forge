@@ -319,7 +319,7 @@ $ARGUMENTS
 ┌──────────────────┐
 │ Phase 1           │ situation-analyst → analysis.md
 │ Phase 2           │ investigator → investigation.md
-└──────┬───────────┘   [phase-2 skipped for docs]
+└──────┬───────────┘
        │
        ▼
 ┌──────────────────────────────────────────────────┐
@@ -327,7 +327,6 @@ $ARGUMENTS
 │ architect → design.md                              │
 │ design-reviewer → review-design.md                 │
 └──────┬───────────────────────────────────────────┘
-       │ [phase-3 skipped for docs flows (stub written instead); phase-3b and checkpoint-a run otherwise]
        │ Checkpoint A (human approval)
        ▼
 ┌──────────────────────────────────────────────────┐
@@ -335,8 +334,8 @@ $ARGUMENTS
 │ task-decomposer → tasks.md                         │
 │ task-reviewer → review-tasks.md                    │
 └──────┬───────────────────────────────────────────┘
-       │ [phase-4, phase-4b, checkpoint-b skipped for bugfix/docs/investigation]
-       │ Checkpoint B (human approval)
+       │ [phase-4b, checkpoint-b skipped for effort S and M]
+       │ Checkpoint B (human approval; effort L only)
        ▼
 ┌──────────────────────────────────────────────────┐
 │ Phase 5-6 (per task, parallel where safe)          │
@@ -344,22 +343,21 @@ $ARGUMENTS
 │ impl-reviewer → review-{N}.md                      │
 │ (FAIL → retry, max 2 attempts)                     │
 └──────┬───────────────────────────────────────────┘
-       │ [phase-5, phase-6 skipped for investigation]
        ▼
 ┌──────────────────────────────────────────────────┐
 │ Phase 7 — Comprehensive Review                     │
 │ comprehensive-reviewer → comprehensive-review.md   │
 └──────┬───────────────────────────────────────────┘
-       │ [phase-7 skipped for bugfix/docs/investigation]
+       │ [phase-7 skipped for effort S]
        ▼
 ┌──────────────────┐
 │ Final Verification│ verifier (typecheck + test suite)
-└──────┬───────────┘  [skipped for investigation]
+└──────┬───────────┘
        │
        ▼
 ┌──────────────────┐
 │ PR Creation       │ git push + gh pr create → PR #
-└──────┬───────────┘  [skipped for investigation]
+└──────┬───────────┘
        │
        ▼
 ┌──────────────────┐
@@ -380,13 +378,13 @@ The information flow is strictly forward — no agent reads output from a later 
 |-------|---------------------|
 | situation-analyst | request.md |
 | investigator | request.md, analysis.md |
-| architect | request.md, analysis.md, investigation.md (+review-design.md on revision) — _investigation.md is optional: absent only if phase-2 was unexpectedly skipped for a non-docs flow; proceed without it_ |
+| architect | request.md, analysis.md, investigation.md (+review-design.md on revision) |
 | design-reviewer | request.md, analysis.md, investigation.md, design.md |
 | Checkpoint A (orchestrator) | design.md, review-design.md (to present summary to human) |
 | task-decomposer | request.md, design.md, investigation.md (+review-tasks.md on revision) |
 | task-reviewer | request.md, design.md, investigation.md, tasks.md |
 | Checkpoint B (orchestrator) | tasks.md, review-tasks.md (to present summary to human) |
-| implementer | request.md, design.md (may be an orchestrator-written stub for docs flows), tasks.md (may be a single-task stub for bugfix flows), review-{dep}.md (+review-{N}.md on retry) — plus `## Similar Past Implementations` block injected by orchestrator via `mcp__forge-state__search_patterns` (BM25) |
+| implementer | request.md, design.md, tasks.md, review-{dep}.md (+review-{N}.md on retry) — plus `## Similar Past Implementations` block injected by orchestrator via `mcp__forge-state__search_patterns` (BM25) |
 | impl-reviewer | request.md, tasks.md, design.md, impl-{N}.md, git diff (file-scoped, main...HEAD) |
 | comprehensive-reviewer | request.md, design.md, tasks.md, all impl-{N}.md, all review-{N}.md, git diff + selective structural reads |
 | verifier | (reads code on feature branch directly) |
@@ -547,22 +545,6 @@ All `skip-phase` calls happen **upfront during Workspace Setup**, in canonical P
 
 The orchestrator still checks a skip gate at each phase block — if the effort level maps to skipping that phase, it proceeds directly to the next block without calling `phase-start` or spawning an agent.
 
-**Exception:** Phases that bookend stub synthesis cannot have their stubs written upfront (the stubs depend on earlier-phase outputs). The `skip-phase` calls for those phases are still made upfront, but the actual stub writing happens at the correct point in the orchestrator's execution flow.
-
-### Stub Synthesis Pattern for `docs` and `bugfix`
-
-Because `docs` and `bugfix` flows skip the agent phases that normally produce `design.md` and `tasks.md`, the orchestrator synthesises stub files to satisfy the implementer agent's input requirements.
-
-**`docs` flow** — after Phase 1 completes, before proceeding to Phase 5:
-
-The orchestrator writes a stub `design.md` with front matter `stub: true`, describing the direct documentation edits approach. It also writes a stub `tasks.md` with a single "Apply documentation edits" task. Because all intermediate phases (`phase-2` through `checkpoint-b`) were already skipped during Workspace Setup, `currentPhase` is already `phase-5` at this point.
-
-**`bugfix` flow** — after Phase 3 completes, before proceeding to Phase 5:
-
-The orchestrator writes a stub `tasks.md` with a single "Implement bug fix" task pointing to the Fix Strategy section of `design.md`. Because `phase-3b`, `checkpoint-a`, `phase-4`, `phase-4b`, `checkpoint-b` were already skipped during Workspace Setup, `currentPhase` is already `phase-5` at this point.
-
-**`investigation` flow** — no stub files needed. Phase 5-6-7 are all skipped. The `final-summary` phase writes `summary.md` as the deliverable.
-
 ### Effort Detection Priority
 
 The orchestrator detects `{effort}` using this priority order during Workspace Setup:
@@ -613,8 +595,6 @@ Single reference for which workspace artifact files are present after a complete
 | S | `light` | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | — |
 | M | `standard` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | L | `full` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-
-**Notes on stubs (S):** For `bugfix` pipelines, `tasks.md` is a single-task stub written by the orchestrator after Phase 3 completes (since Phase 4 is skipped). For `docs` pipelines, `design.md` and `tasks.md` stubs are written after Phase 1 completes (since Phases 2–4 are skipped).
 
 ### Resume Behaviour
 
@@ -715,7 +695,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 |---|---------|-------------------|---------|
 | 15 | `summary.md` written successfully | Full contents of `summary.md` displayed (request, branch, PR, task table, improvement report, execution stats). Sound notification plays. | No — informational |
 
-> **Skipped checkpoints:** Checkpoint A is skipped entirely for `investigation` tasks (all effort levels). Checkpoint B is skipped for all `bugfix`, `docs`, `investigation`, and `refactor` tasks regardless of effort, and is also skipped for effort S and M (only effort L runs Checkpoint B for feature/refactor).
+> **Skipped checkpoints:** Checkpoint B is skipped for effort S and M (only effort L runs Checkpoint B). Phase 4b (task reviewer) is also skipped for effort S and M.
 
 ## Key Technical Decisions
 

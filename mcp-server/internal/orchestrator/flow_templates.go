@@ -25,20 +25,9 @@ func SkipsForTemplate(template string) []string {
 	return skips
 }
 
-// validEfforts are the known effort values recognised by SkipsForEffort.
-var validEfforts = map[string]bool{
-	"S": true,
-	"M": true,
-	"L": true,
-}
-
 // SkipsForEffort returns the phase skip list for a given effort level.
 // Delegates to EffortToTemplate to resolve the template, then SkipsForTemplate.
-// Returns an empty slice for unknown effort values (safe default: skip nothing).
+// Unknown effort values fall through to EffortToTemplate's default ("standard").
 func SkipsForEffort(effort string) []string {
-	if !validEfforts[effort] {
-		return []string{}
-	}
-
 	return SkipsForTemplate(EffortToTemplate(effort))
 }
