@@ -31,7 +31,7 @@ func TestRegisterAllNewSignatureCount(t *testing.T) {
 	t.Parallel()
 
 	srv := server.NewMCPServer("forge-state", "1.0.0")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
 	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
@@ -62,7 +62,7 @@ func TestSetTaskTypeToolNotRegistered(t *testing.T) {
 	t.Parallel()
 
 	srv := server.NewMCPServer("forge-state", "1.0.0")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
 	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
@@ -94,7 +94,7 @@ func TestSearchPatternsToolSchemaNoTaskType(t *testing.T) {
 	t.Parallel()
 
 	srv := server.NewMCPServer("forge-state", "1.0.0")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
 	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
@@ -131,7 +131,7 @@ func TestAnalyticsEstimateToolSchemaNoTaskType(t *testing.T) {
 	t.Parallel()
 
 	srv := server.NewMCPServer("forge-state", "1.0.0")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
 	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
@@ -168,7 +168,7 @@ func TestHistorySearchToolSchemaNoTaskTypeFilter(t *testing.T) {
 	t.Parallel()
 
 	srv := server.NewMCPServer("forge-state", "1.0.0")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
 	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
@@ -203,7 +203,7 @@ func TestHistorySearchToolSchemaNoTaskTypeFilter(t *testing.T) {
 // of the registered tools when RegisterAll is called with the 13-arg signature.
 func TestRegisterAllSubscribeEventsRegistered(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
 	RegisterAll(srv, sm, bus, slack, "9090", orchestrator.NewEngine("", ""), "",
@@ -238,7 +238,7 @@ func TestRegisterAllSubscribeEventsRegistered(t *testing.T) {
 // is used by event-emitting handlers (not a fresh NewEventBus() instance).
 func TestRegisterAllBusPassedToHandlers(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier("")
 

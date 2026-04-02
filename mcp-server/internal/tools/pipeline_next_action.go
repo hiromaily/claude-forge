@@ -55,7 +55,8 @@ func PipelineNextActionHandler(
 		userResponse := req.GetString("user_response", "")
 
 		// Per-call StateManager: create a fresh instance to avoid workspace-mismatch errors.
-		sm2 := state.NewStateManager()
+		// Version is empty because this SM only reads state (LoadFromFile) — Init is never called.
+		sm2 := state.NewStateManager("")
 		if err := sm2.LoadFromFile(workspace); err != nil {
 			return errorf("load state: %v", err)
 		}

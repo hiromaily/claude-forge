@@ -70,7 +70,7 @@ if [ "$HTTP_CODE" != "200" ] || [ ! -f "${BINARY_PATH}.gz" ]; then
   if command -v go >/dev/null 2>&1 && [ -d "${PLUGIN_ROOT}/mcp-server" ]; then
     echo "setup.sh: release not found, building from source..." >&2
     cd "${PLUGIN_ROOT}/mcp-server"
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$BINARY_PATH" .
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.appVersion=v${VERSION}" -o "$BINARY_PATH" .
   else
     die "Failed to download ${URL} (HTTP ${HTTP_CODE}) and Go is not available for fallback build"
   fi

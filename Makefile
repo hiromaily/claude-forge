@@ -6,12 +6,13 @@
 MCP_DIR    := mcp-server
 MCP_BINARY := forge-state-mcp
 INSTALL_DIR := $(or $(GOBIN),$(HOME)/.local/bin)
+APP_VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo dev)
 
 # build: Compile the MCP server binary to bin/forge-state-mcp
 .PHONY: build
 build:
 	mkdir -p bin
-	cd $(MCP_DIR)/cmd && go build -o ../../bin/$(MCP_BINARY) .
+	cd $(MCP_DIR)/cmd && go build -ldflags="-s -w -X main.appVersion=$(APP_VERSION)" -o ../../bin/$(MCP_BINARY) .
 
 # install: Build and copy the binary to $(GOBIN) or ~/.local/bin
 .PHONY: install

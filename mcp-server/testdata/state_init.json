@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "forge-state-mcp-version": "dev",
   "specName": "golden-spec",
   "workspace": "WORKSPACE_PLACEHOLDER",
   "branch": null,

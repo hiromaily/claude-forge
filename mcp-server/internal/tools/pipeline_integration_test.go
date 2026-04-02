@@ -28,7 +28,7 @@ func TestPipelineRoundTrip_Phase1ToPhase2(t *testing.T) {
 	workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 	eng := orchestrator.NewEngine("", "")
 	nextActionH := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
-	reportResultH := PipelineReportResultHandler(state.NewStateManager(), history.NewKnowledgeBase(""))
+	reportResultH := PipelineReportResultHandler(state.NewStateManager("dev"), history.NewKnowledgeBase(""))
 
 	// Step 1: call pipeline_next_action at phase-1.
 	result, err := callNextAction(t, nextActionH, workspace)
@@ -120,14 +120,14 @@ func TestPipelineRoundTrip_SkipSignal(t *testing.T) {
 	// Step 2: simulate SKILL.md loop — call phase_complete for the skipped phase,
 	// then call pipeline_next_action again.
 	// Use a fresh StateManager to avoid workspace-binding conflicts.
-	smPhaseComplete := state.NewStateManager()
+	smPhaseComplete := state.NewStateManager("dev")
 	if err := smPhaseComplete.PhaseComplete(workspace, "phase-2"); err != nil {
 		t.Fatalf("PhaseComplete(phase-2): %v", err)
 	}
 
 	// Step 3: call pipeline_next_action again — should return the next non-skipped phase.
 	// Create a new handler bound to the updated workspace.
-	smNext := state.NewStateManager()
+	smNext := state.NewStateManager("dev")
 	if err := smNext.LoadFromFile(workspace); err != nil {
 		t.Fatalf("LoadFromFile after phase_complete: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestPipelineRoundTrip_ExecPhase(t *testing.T) {
 	workspace, sm := initWorkspaceForNextAction(t, "pr-creation", nil)
 	eng := orchestrator.NewEngine("", "")
 	nextActionH := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
-	reportResultH := PipelineReportResultHandler(state.NewStateManager(), history.NewKnowledgeBase(""))
+	reportResultH := PipelineReportResultHandler(state.NewStateManager("dev"), history.NewKnowledgeBase(""))
 
 	// Step 1: call pipeline_next_action at pr-creation.
 	result, err := callNextAction(t, nextActionH, workspace)

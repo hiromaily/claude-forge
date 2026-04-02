@@ -25,11 +25,14 @@ type StateManager struct {
 	mu        sync.RWMutex
 	state     *State // in-memory cache; nil until LoadFromFile or Init
 	workspace string // bound workspace path; empty until first bind
+	version   string // MCP server binary version; written to state.json on Init
 }
 
 // NewStateManager constructs a StateManager ready for use.
-func NewStateManager() *StateManager {
-	return &StateManager{}
+// version is the MCP server binary version (e.g. "v2.1.0") and is written to
+// the forge-state-mcp-version field of state.json when Init is called.
+func NewStateManager(version string) *StateManager {
+	return &StateManager{version: version}
 }
 
 // ---------- helpers ----------
@@ -149,6 +152,7 @@ func (m *StateManager) Init(workspace, specName string) error {
 	ts := nowISO()
 	s := &State{
 		Version:            2,
+		MCPVersion:         m.version,
 		SpecName:           specName,
 		Workspace:          workspace,
 		Branch:             nil,

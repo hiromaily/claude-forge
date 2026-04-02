@@ -36,7 +36,7 @@ func loadState(t *testing.T, workspace string) state.State {
 }
 
 func newManager() *state.StateManager {
-	return state.NewStateManager()
+	return state.NewStateManager("dev")
 }
 
 // ---------- Init ----------

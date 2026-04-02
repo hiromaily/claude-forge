@@ -15,7 +15,7 @@ func newTestStateManager(t *testing.T, phase string, modify func(*state.State) e
 	t.Helper()
 
 	dir := t.TempDir()
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	if err := sm.Init(dir, "test-spec"); err != nil {
 		t.Fatalf("sm.Init: %v", err)
