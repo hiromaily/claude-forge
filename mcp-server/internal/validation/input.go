@@ -24,6 +24,10 @@ type ParsedInput struct {
 	SourceType string            `json:"source_type"` // "github_issue","jira_issue","workspace","text"
 }
 
+// effortXS is the effort level that is explicitly not supported.
+// Valid efforts are S, M, L; XS is rejected at input validation time.
+const effortXS = "XS"
+
 // Compiled regexps for flag stripping.
 // Key-value flags: --type=<val> and --effort=<val>.
 var reKeyValueFlag = regexp.MustCompile(`--(?:type|effort)=[^\s]+`)
@@ -73,7 +77,7 @@ func ValidateInput(arguments string) InputResult {
 	flags, bareFlags := parseFlags(trimmed)
 
 	// Check: XS effort is not supported.
-	if flags["effort"] == "XS" {
+	if flags["effort"] == effortXS {
 		return InputResult{
 			Valid:  false,
 			Errors: []string{`effort "XS" is not supported; valid efforts are: S, M, L`},

@@ -44,7 +44,7 @@ func DetectEffort(flagEffort string, storyPoints int, text string) string {
 		return flagEffort
 	}
 
-	// 2. Story points mapping.
+	// 2. Story points mapping: SP ≤ 4 → S, SP ≤ 12 → M, SP > 12 → L.
 	// <=0 means not provided; skip.
 	if storyPoints >= 1 {
 		switch {
