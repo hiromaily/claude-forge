@@ -70,7 +70,7 @@ if [ "$HTTP_CODE" != "200" ] || [ ! -f "${BINARY_PATH}.gz" ]; then
   if command -v go >/dev/null 2>&1 && [ -d "${PLUGIN_ROOT}/mcp-server/cmd" ]; then
     echo "setup.sh: release not found, building from source..." >&2
     cd "${PLUGIN_ROOT}/mcp-server/cmd"
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.appVersion=v${VERSION}" -o "$BINARY_PATH" .
+    go build -trimpath -ldflags="-s -w -X main.appVersion=v${VERSION}" -o "$BINARY_PATH" .
   elif [ -x "$BINARY_PATH" ]; then
     echo "setup.sh: release v${VERSION} not found and source build unavailable, keeping existing binary" >&2
     echo "$VERSION" > "$MARKER"
