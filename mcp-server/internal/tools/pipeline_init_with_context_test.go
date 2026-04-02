@@ -17,7 +17,7 @@ import (
 
 // newSM returns a fresh StateManager for use in pipeline_init_with_context tests.
 func newPIWCSM() *state.StateManager {
-	return state.NewStateManager()
+	return state.NewStateManager("dev")
 }
 
 // parsePIWCResult unmarshals PipelineInitWithContextResult from a content string.

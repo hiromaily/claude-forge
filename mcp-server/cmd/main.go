@@ -25,6 +25,8 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/tools"
 )
 
+var appVersion = "dev"
+
 // resolveSpecsDir resolves the .specs/ directory path using a 3-stage strategy:
 //  1. FORGE_SPECS_DIR environment variable (required in production)
 //  2. Path derived from runtime.Caller(0) — only used as a dev fallback; skipped
@@ -93,8 +95,8 @@ func startSSEServer(addr string, bus *events.EventBus) *http.Server {
 }
 
 func main() {
-	sm := state.NewStateManager()
-	srv := server.NewMCPServer("forge-state", "1.0.0")
+	sm := state.NewStateManager(appVersion)
+	srv := server.NewMCPServer("forge-state", appVersion)
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier(os.Getenv("FORGE_SLACK_WEBHOOK_URL"))
 	eventsPort := os.Getenv("FORGE_EVENTS_PORT")

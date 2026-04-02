@@ -33,7 +33,7 @@ func parsePipelineInitResult(t *testing.T, raw string) PipelineInitResult {
 func TestHandleResumePath(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	t.Run("state_json_exists_legacy_mode", func(t *testing.T) {
 		t.Parallel()
@@ -105,7 +105,7 @@ func TestHandleResumePath(t *testing.T) {
 func TestPipelineInitResumeDetection(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	t.Run("resume_with_specs_prefix_missing_state_json", func(t *testing.T) {
@@ -215,7 +215,7 @@ func TestPipelineInitResumeDetection(t *testing.T) {
 func TestPipelineInitExplicitResume(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	t.Run("resume_flag_with_dirname_state_json_absent", func(t *testing.T) {
@@ -285,7 +285,7 @@ func TestPipelineInitExplicitResume(t *testing.T) {
 func TestPipelineInitSourceTypes(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	tests := []struct {
@@ -350,7 +350,7 @@ func TestPipelineInitSourceTypes(t *testing.T) {
 func TestPipelineInitFlagParsing(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	t.Run("auto_flag", func(t *testing.T) {
@@ -474,7 +474,7 @@ func TestPipelineInitFlagParsing(t *testing.T) {
 func TestPipelineInitFetchNeeded(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	t.Run("github_non_null", func(t *testing.T) {
@@ -551,7 +551,7 @@ func TestPipelineInitFetchNeeded(t *testing.T) {
 func TestPipelineInitWorkspacePath(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	t.Run("format_specs_date_slug", func(t *testing.T) {
@@ -639,7 +639,7 @@ func TestPipelineInitWorkspacePath(t *testing.T) {
 func TestPipelineInitInvalidInput(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	tests := []struct {
@@ -786,7 +786,7 @@ func TestMakeWorkspacePath(t *testing.T) {
 func TestPipelineInitSpecName(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	res := callTool(t, h, map[string]any{
@@ -815,7 +815,7 @@ func TestPipelineInitSpecName(t *testing.T) {
 func TestPipelineInitNewPipelineFields(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	res := callTool(t, h, map[string]any{
@@ -949,7 +949,7 @@ func TestExtractSourceID(t *testing.T) {
 func TestPipelineInitFlagsAllFourFields(t *testing.T) {
 	t.Parallel()
 
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	res := callTool(t, h, map[string]any{
@@ -994,7 +994,7 @@ func TestPipelineInitNoSideEffects(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	h := PipelineInitHandler(sm)
 
 	res := callTool(t, h, map[string]any{

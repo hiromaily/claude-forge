@@ -23,6 +23,7 @@ var ValidRevTypes = []string{"design", "tasks"}
 // State mirrors the top-level state.json object written by the Go MCP server state package.
 type State struct {
 	Version                   int             `json:"version"`
+	MCPVersion                string          `json:"forge-state-mcp-version,omitempty"`
 	SpecName                  string          `json:"specName"`
 	Workspace                 string          `json:"workspace"`
 	Branch                    *string         `json:"branch"`

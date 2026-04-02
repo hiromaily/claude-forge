@@ -27,7 +27,7 @@ import (
 func setupWorkspace(t *testing.T, specName string) string {
 	t.Helper()
 	dir := t.TempDir()
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	if err := sm.Init(dir, specName); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -50,7 +50,7 @@ func callTool(t *testing.T, handler server.ToolHandlerFunc, args map[string]any)
 
 func TestRegisterAllCount(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "",
 		orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""),
 		profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
@@ -78,7 +78,7 @@ func TestRegisterAllCount(t *testing.T) {
 
 func TestToolNamesUseUnderscores(t *testing.T) {
 	srv := server.NewMCPServer("forge-state", "1.0.0")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	RegisterAll(srv, sm, events.NewEventBus(), events.NewSlackNotifier(""), "",
 		orchestrator.NewEngine("", ""), "", history.New(""), history.NewKnowledgeBase(""),
 		profile.New("", ""), (*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
@@ -108,7 +108,7 @@ func TestToolNamesUseUnderscores(t *testing.T) {
 
 func TestInitHandlerValidated(t *testing.T) {
 	dir := t.TempDir()
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	// Remove state.json so init creates it fresh.
 	_ = os.Remove(filepath.Join(dir, "state.json"))
 
@@ -128,7 +128,7 @@ func TestInitHandlerValidated(t *testing.T) {
 
 func TestInitHandlerNotValidated(t *testing.T) {
 	dir := t.TempDir()
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := InitHandler(sm)
 	res := callTool(t, h, map[string]any{
@@ -145,7 +145,7 @@ func TestInitHandlerNotValidated(t *testing.T) {
 
 func TestGetHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := GetHandler(sm)
 	res := callTool(t, h, map[string]any{
@@ -164,7 +164,7 @@ func TestGetHandler(t *testing.T) {
 
 func TestPhaseStartHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := PhaseStartHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
@@ -180,7 +180,7 @@ func TestPhaseStartHandler(t *testing.T) {
 
 func TestPhaseStartHandlerGuard3c(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := PhaseStartHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
@@ -196,7 +196,7 @@ func TestPhaseStartHandlerGuard3c(t *testing.T) {
 
 func TestPhaseCompleteHandlerWarning3i(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	// Create the required artifact for phase-1.
 	if err := os.WriteFile(filepath.Join(dir, "analysis.md"), []byte("analysis"), 0o644); err != nil {
 		t.Fatal(err)
@@ -216,7 +216,7 @@ func TestPhaseCompleteHandlerWarning3i(t *testing.T) {
 
 func TestPhaseCompleteHandlerGuard3a(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	// Do NOT create analysis.md — artifact is missing.
 	h := PhaseCompleteHandler(sm, events.NewEventBus(), events.NewSlackNotifier(""))
 	res := callTool(t, h, map[string]any{
@@ -232,7 +232,7 @@ func TestPhaseCompleteHandlerGuard3a(t *testing.T) {
 
 func TestPhaseFailHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	if err := sm.PhaseStart(dir, "phase-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestPhaseFailHandler(t *testing.T) {
 
 func TestAbandonHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := AbandonHandler(sm, events.NewEventBus(), events.NewSlackNotifier(""))
 	res := callTool(t, h, map[string]any{
@@ -267,7 +267,7 @@ func TestAbandonHandler(t *testing.T) {
 
 func TestSetBranchHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := SetBranchHandler(sm)
 	res := callTool(t, h, map[string]any{
@@ -283,7 +283,7 @@ func TestSetBranchHandler(t *testing.T) {
 
 func TestSetEffortHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := SetEffortHandler(sm)
 	res := callTool(t, h, map[string]any{
@@ -297,7 +297,7 @@ func TestSetEffortHandler(t *testing.T) {
 
 func TestSetEffortHandlerInvalid(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := SetEffortHandler(sm)
 	res := callTool(t, h, map[string]any{
@@ -313,7 +313,7 @@ func TestSetEffortHandlerInvalid(t *testing.T) {
 
 func TestResumeInfoHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := ResumeInfoHandler(sm)
 	res := callTool(t, h, map[string]any{
@@ -357,7 +357,7 @@ func TestRefreshIndexHandlerGoImpl_EmptyDir(t *testing.T) {
 
 func TestTaskInitHandlerGuard3g(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := TaskInitHandler(sm)
 	res := callTool(t, h, map[string]any{
@@ -373,7 +373,7 @@ func TestTaskInitHandlerGuard3g(t *testing.T) {
 
 func TestPhaseCompleteHandlerGuard3j(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	// Put checkpoint-a into awaiting_human status (required by guard 3e).
 	if err := sm.Checkpoint(dir, "checkpoint-a"); err != nil {
@@ -398,7 +398,7 @@ func TestPhaseCompleteHandlerGuard3j(t *testing.T) {
 
 func TestTaskInitHandlerGuard3gSkipped(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	// Mark checkpoint-b as skipped — guard 3g should allow task_init.
 	if err := sm.SkipPhase(dir, "checkpoint-b"); err != nil {
@@ -419,7 +419,7 @@ func TestTaskInitHandlerGuard3gSkipped(t *testing.T) {
 
 func TestTaskInitHandlerZeroTasksError(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	if err := sm.SkipPhase(dir, "checkpoint-b"); err != nil {
 		t.Fatalf("SkipPhase: %v", err)
@@ -504,7 +504,7 @@ func TestValidateTaskDependencies_ParallelFileConflict(t *testing.T) {
 
 func TestPhaseLogHandler(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := PhaseLogHandler(sm)
 	res := callTool(t, h, map[string]any{
@@ -523,7 +523,7 @@ func TestPhaseLogHandler(t *testing.T) {
 
 func TestPhaseLogHandlerWarn3d(t *testing.T) {
 	dir := setupWorkspace(t, "test-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 
 	h := PhaseLogHandler(sm)
 	// First call — no warning.
@@ -564,7 +564,7 @@ func drainEvent(ch <-chan events.Event) (events.Event, bool) {
 
 func TestPhaseStartHandlerPublishesEvent(t *testing.T) {
 	dir := setupWorkspace(t, "my-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	_, ch := bus.Subscribe()
 
@@ -603,7 +603,7 @@ func TestPhaseStartHandlerPublishesEvent(t *testing.T) {
 
 func TestPhaseStartHandlerNoPublishOnError(t *testing.T) {
 	dir := setupWorkspace(t, "my-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	_, ch := bus.Subscribe()
 
@@ -623,7 +623,7 @@ func TestPhaseStartHandlerNoPublishOnError(t *testing.T) {
 
 func TestPhaseCompleteHandlerPublishesEvent(t *testing.T) {
 	dir := setupWorkspace(t, "my-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	_, ch := bus.Subscribe()
 	// Write required artifact for phase-1.
@@ -654,7 +654,7 @@ func TestPhaseCompleteHandlerPublishesEvent(t *testing.T) {
 
 func TestPhaseFailHandlerPublishesEvent(t *testing.T) {
 	dir := setupWorkspace(t, "my-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	if err := sm.PhaseStart(dir, "phase-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -685,7 +685,7 @@ func TestPhaseFailHandlerPublishesEvent(t *testing.T) {
 
 func TestCheckpointHandlerPublishesEvent(t *testing.T) {
 	dir := setupWorkspace(t, "my-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	_, ch := bus.Subscribe()
 
@@ -712,7 +712,7 @@ func TestCheckpointHandlerPublishesEvent(t *testing.T) {
 
 func TestAbandonHandlerPublishesEvent(t *testing.T) {
 	dir := setupWorkspace(t, "my-spec")
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	bus := events.NewEventBus()
 	_, ch := bus.Subscribe()
 

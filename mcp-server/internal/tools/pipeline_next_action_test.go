@@ -19,7 +19,7 @@ import (
 func initWorkspaceForNextAction(t *testing.T, phase string, modify func(*state.State) error) (string, *state.StateManager) {
 	t.Helper()
 	dir := t.TempDir()
-	sm := state.NewStateManager()
+	sm := state.NewStateManager("dev")
 	if err := sm.Init(dir, "test-spec"); err != nil {
 		t.Fatalf("sm.Init: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestPipelineNextAction(t *testing.T) {
 
 	t.Run("workspace_not_found", func(t *testing.T) {
 		t.Parallel()
-		sm := state.NewStateManager()
+		sm := state.NewStateManager("dev")
 		eng := orchestrator.NewEngine("", "")
 		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
 

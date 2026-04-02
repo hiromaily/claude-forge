@@ -321,7 +321,7 @@ func TestPipelineReportResult(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			sm := state.NewStateManager()
+			sm := state.NewStateManager("dev")
 			dir := initPRRWorkspace(t, sm)
 
 			if tc.setup != nil {
