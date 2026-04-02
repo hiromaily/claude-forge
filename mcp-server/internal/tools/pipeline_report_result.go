@@ -282,7 +282,9 @@ func determineTransition(
 				break
 			}
 		}
-		if hasPending {
+		// Also hold in phase-5 if a batch commit is pending (e.g. last parallel
+		// batch just completed — all tasks done but git commit not yet run).
+		if hasPending || s.NeedsBatchCommit {
 			return reportResultResponse{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
