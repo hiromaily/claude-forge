@@ -13,7 +13,7 @@ import (
 )
 
 // AnalyticsEstimateHandler handles the "analytics_estimate" MCP tool.
-// Accepts: task_type (required, string), effort (required, string).
+// Accepts: effort (required, string).
 // When est is nil, returns an MCP error result.
 // When est is non-nil, calls est.Estimate and returns the result as JSON.
 func AnalyticsEstimateHandler(est *analytics.Estimator) server.ToolHandlerFunc {
@@ -21,15 +21,11 @@ func AnalyticsEstimateHandler(est *analytics.Estimator) server.ToolHandlerFunc {
 		if est == nil {
 			return mcp.NewToolResultError("estimator not available"), nil
 		}
-		taskType, err := req.RequireString("task_type")
-		if err != nil {
-			return errorf("%v", err)
-		}
 		effort, err := req.RequireString("effort")
 		if err != nil {
 			return errorf("%v", err)
 		}
-		result, err := est.Estimate(taskType, effort)
+		result, err := est.Estimate(effort)
 		if err != nil {
 			return errorf("analytics_estimate: %v", err)
 		}

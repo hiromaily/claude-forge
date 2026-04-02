@@ -42,8 +42,7 @@ func TestAnalyticsEstimateHandler_EmptySpecs(t *testing.T) {
 
 	req := mcp.CallToolRequest{}
 	req.Params.Arguments = map[string]any{
-		"task_type": "feature",
-		"effort":    "M",
+		"effort": "M",
 	}
 
 	result, err := handler(t.Context(), req)

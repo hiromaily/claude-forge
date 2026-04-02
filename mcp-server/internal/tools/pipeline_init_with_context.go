@@ -1,6 +1,6 @@
 // Package tools — pipeline_init_with_context MCP handler.
-// Implements the two-call confirmation flow for decisions 6–13.
-// First call (user_confirmation absent): runs decisions and returns needs_user_confirmation.
+// Implements the two-call confirmation flow.
+// First call (user_confirmation absent): detects effort and returns needs_user_confirmation.
 // Second call (user_confirmation present): validates, initialises workspace, writes state.json + request.md.
 package tools
 
@@ -24,11 +24,9 @@ import (
 type PipelineInitWithContextResult struct {
 	Ready                 bool                    `json:"ready,omitempty"`
 	Workspace             string                  `json:"workspace,omitempty"`
-	TaskType              string                  `json:"task_type,omitempty"`
 	Effort                string                  `json:"effort,omitempty"`
 	FlowTemplate          string                  `json:"flow_template,omitempty"`
 	SkippedPhases         []string                `json:"skipped_phases,omitempty"`
-	SynthesizeStubs       bool                    `json:"synthesize_stubs,omitempty"`
 	RequestMDContent      string                  `json:"request_md_content,omitempty"`
 	Warning               string                  `json:"warning,omitempty"`
 	NeedsUserConfirmation *UserConfirmationPrompt `json:"needs_user_confirmation,omitempty"`
@@ -36,11 +34,9 @@ type PipelineInitWithContextResult struct {
 
 // UserConfirmationPrompt holds the detected values to present to the user.
 type UserConfirmationPrompt struct {
-	DetectedTaskType string   `json:"detected_task_type"`
-	DetectedEffort   string   `json:"detected_effort"`
-	FlowTemplate     string   `json:"flow_template"`
-	SkippedPhases    []string `json:"skipped_phases"`
-	Message          string   `json:"message"`
+	DetectedEffort string              `json:"detected_effort"`
+	EffortOptions  map[string][]string `json:"effort_options"`
+	Message        string              `json:"message"`
 }
 
 // externalContext holds parsed GitHub/Jira context fields.
@@ -64,20 +60,18 @@ type pipelineFlags struct {
 	Auto           bool
 	SkipPR         bool
 	Debug          bool
-	TypeOverride   string
 	EffortOverride string
 	CurrentBranch  string
 }
 
-// userConfirmation holds confirmed task_type, effort, and optional workspace slug from the second call.
+// userConfirmation holds confirmed effort and optional workspace slug from the second call.
 type userConfirmation struct {
-	TaskType      string
 	Effort        string
 	WorkspaceSlug string // optional LLM-generated ASCII slug; overrides the auto-derived slug
 }
 
 // PipelineInitWithContextHandler handles the "pipeline_init_with_context" MCP tool.
-// First call (user_confirmation absent): runs decisions 6–13 and returns needs_user_confirmation.
+// First call (user_confirmation absent): detects effort and returns needs_user_confirmation.
 // Second call (user_confirmation present): finalizes workspace — creates directory, initialises
 // state, applies all setters, skips phases, writes request.md.
 func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFunc {
@@ -127,26 +121,32 @@ func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFu
 // ---------- first call ----------
 
 func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFlags) (*mcp.CallToolResult, error) {
-	taskType, effort, flowTemplate, skippedPhases, warning := runDecisions(extCtx, flags)
+	// Detect effort.
+	combinedText := strings.TrimSpace(extCtx.GitHubTitle + " " + extCtx.GitHubBody + " " +
+		extCtx.JiraSummary + " " + extCtx.JiraDescription)
+	effort := orchestrator.DetectEffort(flags.EffortOverride, extCtx.JiraStoryPoints, combinedText)
+
+	// Build EffortOptions for all three valid efforts.
+	effortOptions := map[string][]string{
+		"S": orchestrator.SkipsForEffort("S"),
+		"M": orchestrator.SkipsForEffort("M"),
+		"L": orchestrator.SkipsForEffort("L"),
+	}
 
 	nuc := &UserConfirmationPrompt{
-		DetectedTaskType: taskType,
-		DetectedEffort:   effort,
-		FlowTemplate:     flowTemplate,
-		SkippedPhases:    skippedPhases,
+		DetectedEffort: effort,
+		EffortOptions:  effortOptions,
 		Message: fmt.Sprintf(
-			"Detected task_type=%q, effort=%q, flow_template=%q. "+
-				"Please confirm or override these values by calling pipeline_init_with_context "+
-				"again with user_confirmation={task_type:..., effort:...}.",
-			taskType, effort, flowTemplate,
+			"Detected effort=%q. "+
+				"Please confirm or override by calling pipeline_init_with_context "+
+				"again with user_confirmation={effort:...}. "+
+				"Available options: S (light flow), M (standard flow), L (full flow).",
+			effort,
 		),
 	}
 
 	result := PipelineInitWithContextResult{
 		NeedsUserConfirmation: nuc,
-	}
-	if warning != "" {
-		result.Warning = warning
 	}
 	_ = workspace // workspace echoed only; no I/O on first call
 	return okJSON(result)
@@ -161,20 +161,16 @@ func handleSecondCall(
 	flags pipelineFlags,
 	uc userConfirmation,
 ) (*mcp.CallToolResult, error) {
-	// Step 1: Validate task_type.
-	if !slices.Contains(orchestrator.ValidTaskTypes, uc.TaskType) {
-		return errorf("invalid task_type %q: must be one of %v", uc.TaskType, orchestrator.ValidTaskTypes)
-	}
-
-	// Step 2: Validate effort.
+	// Validate effort.
 	if !slices.Contains(state.ValidEfforts, uc.Effort) {
 		return errorf("invalid effort %q: must be one of %v", uc.Effort, state.ValidEfforts)
 	}
 
-	// Steps 3–5: Re-derive flow template and skip phases; apply decision 12.
-	flowTemplate, skippedPhases, warning := deriveFlowDecisions(uc.TaskType, uc.Effort, flags.Auto)
+	// Derive flow template and skip phases directly from effort.
+	flowTemplate := orchestrator.EffortToTemplate(uc.Effort)
+	skippedPhases := orchestrator.SkipsForEffort(uc.Effort)
 
-	// Step 6: Derive specName and optionally rename workspace for better readability.
+	// Derive specName and optionally rename workspace for better readability.
 	// Priority order: external context (Jira/GitHub) > LLM-provided slug > auto-derived slug.
 	workspace = refineWorkspacePath(workspace, extCtx)
 	if uc.WorkspaceSlug != "" {
@@ -182,68 +178,23 @@ func handleSecondCall(
 	}
 	specName := deriveSpecName(workspace)
 
-	// Steps 7a–7l: Create directory, initialise state, write request.md.
+	// Create directory, initialise state, write request.md.
 	requestMD, err := initWorkspace(sm, workspace, specName, flags, uc, flowTemplate, skippedPhases, extCtx)
 	if err != nil {
 		return errorf("%v", err)
 	}
 
-	synthesizeStubs := orchestrator.ShouldSynthesizeStubs(flowTemplate)
-
 	return okJSON(PipelineInitWithContextResult{
 		Ready:            true,
 		Workspace:        workspace,
-		TaskType:         uc.TaskType,
 		Effort:           uc.Effort,
 		FlowTemplate:     flowTemplate,
 		SkippedPhases:    skippedPhases,
-		SynthesizeStubs:  synthesizeStubs,
 		RequestMDContent: requestMD,
-		Warning:          warning,
 	})
 }
 
-// ---------- decisions 6–13 ----------
-
-// runDecisions runs decisions 6–13 and returns taskType, effort, flowTemplate, skippedPhases, warning.
-func runDecisions(extCtx externalContext, flags pipelineFlags) (taskType, effort, flowTemplate string, skippedPhases []string, warning string) {
-	// Decision 6–8: detect task type (single call handles all precedences).
-	combinedText := strings.TrimSpace(extCtx.GitHubTitle + " " + extCtx.GitHubBody + " " +
-		extCtx.JiraSummary + " " + extCtx.JiraDescription)
-	taskType = orchestrator.DetectTaskType(
-		flags.TypeOverride,
-		extCtx.JiraIssueType,
-		extCtx.GitHubLabels,
-		combinedText,
-	)
-
-	// Decision 9: detect effort.
-	effort = orchestrator.DetectEffort(flags.EffortOverride, extCtx.JiraStoryPoints, combinedText)
-
-	// Decisions 10–12: flow template, skip sequence, auto conflict.
-	flowTemplate, skippedPhases, warning = deriveFlowDecisions(taskType, effort, flags.Auto)
-
-	// Decision 13: stub synthesis (reflected in flowTemplate; result conveyed in response).
-	return taskType, effort, flowTemplate, skippedPhases, warning
-}
-
-// deriveFlowDecisions derives flowTemplate, skippedPhases, and warning for decisions 10–12.
-// Decision 12: if flowTemplate is "full" and autoFlag=true, downgrade to "standard".
-func deriveFlowDecisions(taskType, effort string, autoFlag bool) (flowTemplate string, skippedPhases []string, warning string) {
-	flowTemplate = orchestrator.DeriveFlowTemplate(taskType, effort)
-	skippedPhases = orchestrator.SkipsForCell(taskType, effort)
-	if flowTemplate == orchestrator.TemplateFull && autoFlag {
-		warning = fmt.Sprintf(
-			"flow_template %q conflicts with auto=true; downgrading to %q",
-			orchestrator.TemplateFull, orchestrator.TemplateStandard,
-		)
-		flowTemplate = orchestrator.TemplateStandard
-		skippedPhases = orchestrator.SkipsForTemplate(orchestrator.TemplateStandard)
-	}
-	return flowTemplate, skippedPhases, warning
-}
-
-// initWorkspace executes the 8-step I/O sequence for the second call (steps 7a–7l).
+// initWorkspace executes the 8-step I/O sequence for the second call.
 // It creates the workspace directory, initialises state, applies all configuration in
 // a single write via sm.Configure, and writes request.md.
 // Returns the request.md content on success.
@@ -256,7 +207,7 @@ func initWorkspace(
 	skippedPhases []string,
 	extCtx externalContext,
 ) (string, error) {
-	// Step 7a: Validate workspace path — reject non-ASCII characters so that
+	// Validate workspace path — reject non-ASCII characters so that
 	// multibyte input (e.g. Japanese) never produces an unreadable directory name.
 	if hasNonASCII(workspace) {
 		return "", fmt.Errorf("workspace path %q contains non-ASCII characters; use only ASCII in directory names", workspace)
@@ -267,20 +218,19 @@ func initWorkspace(
 		return "", fmt.Errorf("MkdirAll %q: %w", workspace, err)
 	}
 
-	// Step 7b: Check state.json doesn't already exist.
+	// Check state.json doesn't already exist.
 	stateFile := filepath.Join(workspace, "state.json")
 	if _, err := os.Stat(stateFile); err == nil {
 		return "", fmt.Errorf("workspace %q already initialised: state.json exists", workspace)
 	}
 
-	// Step 7c: sm.Init.
+	// sm.Init.
 	if err := sm.Init(workspace, specName); err != nil {
 		return "", fmt.Errorf("sm.Init: %w", err)
 	}
 
-	// Steps 7d–7k: Apply all configuration in a single write to state.json.
+	// Apply all configuration in a single write to state.json.
 	cfg := state.PipelineConfig{
-		TaskType:      uc.TaskType,
 		Effort:        uc.Effort,
 		FlowTemplate:  flowTemplate,
 		AutoApprove:   flags.Auto,
@@ -296,8 +246,8 @@ func initWorkspace(
 		return "", fmt.Errorf("configure: %w", err)
 	}
 
-	// Step 7l: Write request.md.
-	requestMD := buildRequestMD(extCtx, uc.TaskType)
+	// Write request.md.
+	requestMD := buildRequestMD(extCtx)
 	reqPath := filepath.Join(workspace, "request.md")
 	if err := os.WriteFile(reqPath, []byte(requestMD), 0o600); err != nil {
 		return "", fmt.Errorf("write request.md: %w", err)
@@ -391,14 +341,13 @@ func parseFlags(args map[string]any) (pipelineFlags, error) {
 	flags.Auto = boolField(m, "auto")
 	flags.SkipPR = boolField(m, "skip_pr")
 	flags.Debug = boolField(m, "debug")
-	flags.TypeOverride = stringField(m, "type_override")
 	flags.EffortOverride = stringField(m, "effort_override")
 	flags.CurrentBranch = stringField(m, "current_branch")
 
 	return flags, nil
 }
 
-// parseUserConfirmation extracts task_type and effort from user_confirmation raw value.
+// parseUserConfirmation extracts effort and optional workspace_slug from user_confirmation raw value.
 func parseUserConfirmation(raw any) (userConfirmation, error) {
 	var uc userConfirmation
 
@@ -411,14 +360,13 @@ func parseUserConfirmation(raw any) (userConfirmation, error) {
 		return uc, fmt.Errorf("unmarshal user_confirmation: %w", err)
 	}
 
-	uc.TaskType = stringField(m, "task_type")
 	uc.Effort = stringField(m, "effort")
 	uc.WorkspaceSlug = stringField(m, "workspace_slug")
 	return uc, nil
 }
 
 // buildRequestMD constructs the request.md content.
-func buildRequestMD(extCtx externalContext, taskType string) string {
+func buildRequestMD(extCtx externalContext) string {
 	var sb strings.Builder
 
 	// Determine source_type and body.
@@ -447,9 +395,6 @@ func buildRequestMD(extCtx externalContext, taskType string) string {
 		sb.WriteString(extCtx.SourceID)
 		sb.WriteString("\n")
 	}
-	sb.WriteString("task_type: ")
-	sb.WriteString(taskType)
-	sb.WriteString("\n")
 	sb.WriteString("---\n")
 
 	if body != "" {

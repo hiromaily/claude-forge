@@ -127,7 +127,7 @@ func TestAnalyticsPipelineSummaryHandler_happy_path(t *testing.T) {
 
 	// Verify expected fields are present.
 	for _, field := range []string{
-		"pipeline", "task_type", "effort", "flow_template",
+		"pipeline", "effort", "flow_template",
 		"total_tokens", "total_duration_ms", "estimated_cost_usd",
 		"phases_executed", "phases_skipped", "retries", "review_findings",
 	} {

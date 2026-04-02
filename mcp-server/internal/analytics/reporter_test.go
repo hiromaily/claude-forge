@@ -141,15 +141,6 @@ func TestDashboard_MixedPipelines(t *testing.T) {
 	if dash.ReviewPassRate != wantPassRate {
 		t.Errorf("ReviewPassRate = %f, want %f", dash.ReviewPassRate, wantPassRate)
 	}
-
-	// ByTaskType should have entries for "feature" and "bugfix".
-	if _, ok := dash.ByTaskType["feature"]; !ok {
-		t.Error("ByTaskType missing 'feature'")
-	}
-
-	if _, ok := dash.ByTaskType["bugfix"]; !ok {
-		t.Error("ByTaskType missing 'bugfix'")
-	}
 }
 
 // TestDashboard_NilKnowledgeBase verifies that a nil KnowledgeBase does not
