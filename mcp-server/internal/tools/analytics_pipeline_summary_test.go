@@ -70,7 +70,6 @@ func TestAnalyticsPipelineSummaryHandler_happy_path(t *testing.T) {
 	// Write a minimal state.json fixture.
 	stateJSON := `{
 		"specName": "test-pipeline",
-		"taskType": "feature",
 		"effort": "M",
 		"flowTemplate": "standard",
 		"currentPhase": "completed",

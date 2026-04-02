@@ -26,11 +26,10 @@ func writeStateJSON(t *testing.T, dir string, state map[string]any) {
 
 // completedState returns a minimal completed pipeline state map.
 // taskRevisions is always 0; only designRevisions varies across tests.
-func completedState(taskType, effort, flowTemplate string, designRev int) map[string]any {
+func completedState(effort, flowTemplate string, designRev int) map[string]any {
 	return map[string]any{
 		"specName":                  "test-spec",
 		"currentPhase":              "completed",
-		"taskType":                  taskType,
 		"effort":                    effort,
 		"flowTemplate":              flowTemplate,
 		"completedPhases":           []string{"phase-1", "phase-2"},
@@ -48,7 +47,6 @@ func abandonedState() map[string]any {
 	return map[string]any{
 		"specName":                  "abandoned-spec",
 		"currentPhase":              "abandoned",
-		"taskType":                  "feature",
 		"effort":                    "M",
 		"flowTemplate":              "standard",
 		"completedPhases":           []string{},
@@ -103,13 +101,13 @@ func TestDashboard_MixedPipelines(t *testing.T) {
 	if err := os.Mkdir(spec1, 0o750); err != nil {
 		t.Fatalf("mkdir spec-pass: %v", err)
 	}
-	writeStateJSON(t, spec1, completedState("feature", "M", "standard", 0))
+	writeStateJSON(t, spec1, completedState("M", "standard", 0))
 
 	spec2 := filepath.Join(specsDir, "spec-fail")
 	if err := os.Mkdir(spec2, 0o750); err != nil {
 		t.Fatalf("mkdir spec-fail: %v", err)
 	}
-	writeStateJSON(t, spec2, completedState("bugfix", "S", "lite", 1))
+	writeStateJSON(t, spec2, completedState("S", "lite", 1))
 
 	spec3 := filepath.Join(specsDir, "spec-abandoned")
 	if err := os.Mkdir(spec3, 0o750); err != nil {
@@ -194,13 +192,13 @@ func TestDashboard_ByFlowTemplate(t *testing.T) {
 	if err := os.Mkdir(spec1, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	writeStateJSON(t, spec1, completedState("feature", "M", "standard", 0))
+	writeStateJSON(t, spec1, completedState("M", "standard", 0))
 
 	spec2 := filepath.Join(specsDir, "spec-lite")
 	if err := os.Mkdir(spec2, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	writeStateJSON(t, spec2, completedState("bugfix", "S", "lite", 0))
+	writeStateJSON(t, spec2, completedState("S", "lite", 0))
 
 	rep := analytics.NewReporter(specsDir, nil)
 
@@ -230,7 +228,7 @@ func TestDashboard_TotalTokensAndCost(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	st := completedState("feature", "M", "standard", 0)
+	st := completedState("M", "standard", 0)
 	st["phaseLog"] = []any{
 		map[string]any{
 			"phase":       "phase-1",
@@ -278,7 +276,7 @@ func TestDashboard_AvgRetriesPerPipeline(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	st := completedState("feature", "M", "standard", 0)
+	st := completedState("M", "standard", 0)
 	st["tasks"] = map[string]any{
 		"1": map[string]any{
 			"title":         "Task 1",
