@@ -77,7 +77,7 @@ sequenceDiagram
     %% ── Workspace Setup ──
     Orch->>SM: init {workspace} {spec-name}
     SM->>FS: create state.json
-    Orch->>SM: set-task-type {workspace} feature
+    Orch->>SM: set-effort {workspace} {effort}
     Orch->>SM: set-auto-approve (if --auto)
     Orch->>FS: write request.md
 
@@ -310,9 +310,9 @@ $ARGUMENTS
        ▼
 ┌──────────────────┐
 │ Workspace Setup   │ → request.md, state.json
-│ (detects task     │   (also sets taskType and calls skip-phase
-│  type, sets       │    for each skipped phase upfront)
-│  skipped phases)  │
+│ (detects effort,  │   (also sets effort/flowTemplate and calls
+│  sets flow        │    skip-phase for each skipped phase upfront)
+│  template)        │
 └──────┬───────────┘
        │
        ▼
@@ -380,7 +380,6 @@ The information flow is strictly forward — no agent reads output from a later 
 |-------|---------------------|
 | situation-analyst | request.md |
 | investigator | request.md, analysis.md |
-| analyst (Phase 1+2 merged, lite flow template) | request.md |
 | architect | request.md, analysis.md, investigation.md (+review-design.md on revision) — _investigation.md is optional: absent only if phase-2 was unexpectedly skipped for a non-docs flow; proceed without it_ |
 | design-reviewer | request.md, analysis.md, investigation.md, design.md |
 | Checkpoint A (orchestrator) | design.md, review-design.md (to present summary to human) |
@@ -484,9 +483,7 @@ The pipeline adapts its execution based on the detected task type. The orchestra
 
 Five task types are supported. The `feature` type runs the full pipeline. All other types skip one or more phases:
 
-> **Note:** With F13 (effort-aware pipeline), these are now the **task-type supplemental skip sets** that get unioned with a template base skip set. The 20-cell canonical skip sequence table in SKILL.md is the authoritative reference; this table shows only the task-type contribution to the final skip set.
-
-| Task type | Phases to skip (task-type supplemental) |
+| Task type | Phases to skip |
 |-----------|----------------|
 | `feature` | (none) |
 | `bugfix` | `phase-4`, `phase-4b`, `checkpoint-b`, `phase-7` |
@@ -508,10 +505,9 @@ Several top-level fields have been added to `state.json` beyond the initial v1 s
 ```json
 {
   "version": 1,
-  "taskType": "feature | bugfix | investigation | docs | refactor | null",
-  "effort": "XS | S | M | L | null",
-  "flowTemplate": "direct | lite | light | standard | full | null",
-  "skippedPhases": ["phase-4", "phase-4b", "checkpoint-b", "phase-7"],
+  "effort": "S | M | L | null",
+  "flowTemplate": "light | standard | full | null",
+  "skippedPhases": ["phase-4b", "checkpoint-b", "phase-7"],
   "autoApprove": false,
   "phaseLog": [
     {"phase": "phase-1", "tokens": 5000, "duration_ms": 30000, "model": "sonnet", "timestamp": "..."}
@@ -520,9 +516,8 @@ Several top-level fields have been added to `state.json` beyond the initial v1 s
 }
 ```
 
-- `taskType` is `null` until set during Workspace Setup. Set via `mcp__forge-state__set_task_type`.
-- `effort` is `null` until set during Workspace Setup. Set via `mcp__forge-state__set_effort`. Valid values: `XS`, `S`, `M`, `L`.
-- `flowTemplate` is `null` until set during Workspace Setup. Set via `mcp__forge-state__set_flow_template`. Valid values: `direct`, `lite`, `light`, `standard`, `full`. Stored in state (not re-derived) to guarantee resume consistency.
+- `effort` is `null` until set during Workspace Setup. Set via `mcp__forge-state__set_effort`. Valid values: `S`, `M`, `L` (XS is not supported).
+- `flowTemplate` is `null` until set during Workspace Setup. Set via `mcp__forge-state__set_flow_template`. Valid values: `light`, `standard`, `full`. Stored in state (not re-derived) to guarantee resume consistency.
 - `skippedPhases` is `[]` until populated. Each call to `skip-phase` appends one phase ID to this array.
 - `autoApprove` defaults to `false`. Set via `set-auto-approve` when `--auto` flag is present.
 - `phaseLog` records per-phase metrics (tokens, duration, model) via `phase-log`. Used by `phase-stats` and the Final Summary Execution Stats table.
@@ -548,12 +543,12 @@ Because `skip-phase` uses the same `next_phase()` ordering logic as `phase-compl
 
 All `skip-phase` calls happen **upfront during Workspace Setup**, in canonical PHASES-array order, before the first real phase begins. This means:
 
-1. The orchestrator determines `{task_type}` during Workspace Setup.
-2. It calls `mcp__forge-state__set_task_type` with `{workspace}` and `{task_type}`.
+1. The orchestrator determines `{effort}` during Workspace Setup.
+2. It calls `mcp__forge-state__set_effort` with `{workspace}` and `{effort}`.
 3. For each phase in the skip table (in canonical order), it calls `mcp__forge-state__skip_phase` with `{workspace}` and `<phase>`.
 4. By the time the orchestrator reaches the first phase block, `currentPhase` already points past all skipped phases.
 
-The orchestrator still checks a skip gate at each phase block — if `{task_type}` maps to skipping that phase, it proceeds directly to the next block without calling `phase-start` or spawning an agent.
+The orchestrator still checks a skip gate at each phase block — if the effort level maps to skipping that phase, it proceeds directly to the next block without calling `phase-start` or spawning an agent.
 
 **Exception:** Phases that bookend stub synthesis cannot have their stubs written upfront (the stubs depend on earlier-phase outputs). The `skip-phase` calls for those phases are still made upfront, but the actual stub writing happens at the correct point in the orchestrator's execution flow.
 
@@ -571,17 +566,6 @@ The orchestrator writes a stub `tasks.md` with a single "Implement bug fix" task
 
 **`investigation` flow** — no stub files needed. Phase 5-6-7 are all skipped. The `final-summary` phase writes `summary.md` as the deliverable.
 
-### Task Type Detection Priority
-
-The orchestrator detects `{task_type}` using this priority order during Workspace Setup:
-
-1. **Explicit flag**: `--type=<value>` in `$ARGUMENTS` (strip from description before writing `request.md`)
-2. **Jira issue type**: `issuetype.name` from the fetched Jira issue (Bug → bugfix, Story/Epic → feature, etc.)
-3. **GitHub labels**: keyword matching on `labels[].name` (bug → bugfix, docs → docs, etc.)
-4. **Plain-text heuristic**: keyword scan of the first sentence of `$ARGUMENTS`
-
-When the type is determined by heuristic (cases 2–4), the orchestrator confirms with the user before proceeding. Explicit `--type=` skips confirmation.
-
 ### Effort Detection Priority
 
 The orchestrator detects `{effort}` using this priority order during Workspace Setup (immediately after task-type detection):
@@ -593,111 +577,54 @@ The orchestrator detects `{effort}` using this priority order during Workspace S
 
 After detection, call: `$SM set-effort {workspace} {effort}`
 
-### Flow Template Matrix
+### Flow Template Selection
 
-The `(task_type, effort)` pair determines the `flowTemplate` string stored in state. The matrix is authoritative — do not re-derive `flowTemplate` from task type alone.
+The effort level alone determines the `flowTemplate` string stored in state. XS effort is not supported; the minimum supported effort is S. After lookup, call: `$SM set-flow-template {workspace} {flow_template}`
 
-```
-             XS       S        M         L
-feature    | lite   | light  | standard | full
-bugfix     | direct | lite   | light    | standard
-refactor   | lite   | light  | standard | full
-docs       | direct | direct | lite     | light
-investig.  | lite   | lite   | light    | standard
-```
+| Effort | Template | Skipped phases |
+|--------|----------|----------------|
+| S | `light` | `phase-4b`, `checkpoint-b`, `phase-7` |
+| M | `standard` | `phase-4b`, `checkpoint-b` |
+| L | `full` | _(none)_ |
 
-After lookup, call: `$SM set-flow-template {workspace} {flow_template}`
+New Go helper functions:
+- `EffortToTemplate(effort string) string` — maps effort to template name
+- `SkipsForEffort(effort string) []string` — returns the canonical skip list for the given effort level
 
 #### Template definitions
 
-Phases listed are for `feature` task type. Task-type supplemental skips may remove additional phases (see union rule below). Actual phase sequence for any `(task_type, effort)` cell: see the 20-cell table in SKILL.md.
-
-| Template | Phases run (`feature` task type) | Agent count |
+| Template | Phases run | Agent count |
 |----------|-----------|-------------|
-| `direct` | Stubs → Phase 3b → Checkpoint A → Phase 5 → Verification → PR | 2 |
-| `lite` | Phase 1+2 (merged) → Phase 3 → Phase 3b → Checkpoint A → Phase 4 → Phase 5 → Verification → PR | 4+ |
 | `light` | Phase 1 → Phase 2 → Phase 3 → Phase 3b → Checkpoint A → Phase 4 → Phase 5 → Phase 6 → Verification → PR | 5+ |
-| `standard` | Full pipeline (all phases, both checkpoints) | 10+ |
+| `standard` | Full pipeline (all phases, both checkpoints except 4b/checkpoint-b) | 10+ |
 | `full` | Standard + all checkpoints mandatory (auto-approve disabled even with `--auto`) | 10+ |
 
-#### Union rule for skip-set computation
+#### Skip-set computation
 
-The final set of phases skipped for any `(task_type, effort)` combination is the **union** of:
-
-- The **template base skip set** (derived from `flowTemplate`), AND
-- The **task-type supplemental skip set** (the existing 1D table, unchanged)
-
-Both sets are emitted as `skip-phase` calls in canonical PHASES-array order during Workspace Setup. The orchestrator computes the union upfront — no runtime re-computation is needed.
-
-**Template base skip sets** (in canonical PHASES-array order):
-
-```
-direct:   phase-1, phase-2, phase-3, phase-4, phase-4b, checkpoint-b, phase-6, phase-7
-          NOTE: phase-3b and checkpoint-a are NOT skipped — they run on orchestrator-written stubs.
-lite:     phase-4b, checkpoint-b, phase-6, phase-7
-          IMPORTANT: phase-2 is NOT included here. It is skipped by one dedicated call
-          inside the Phase 1 execution block, after phase-complete phase-1.
-light:    phase-4b, checkpoint-b, phase-7
-standard: (no base skips — full pipeline)
-full:     (no base skips — same as standard; autoApprove is forced false)
-```
-
-**Task-type supplemental skip sets:**
-
-```
-feature:       (none)
-bugfix:        phase-4, phase-4b, checkpoint-b, phase-7
-investigation: phase-3, phase-3b, checkpoint-a, phase-4, phase-4b, checkpoint-b, phase-5, phase-6, phase-7, final-verification, pr-creation
-docs:          phase-2, phase-3, phase-4, phase-4b, checkpoint-b, phase-7
-refactor:      (none)
-```
+The skip set for any pipeline run is determined entirely by the effort level. Skip sets are emitted as `skip-phase` calls in canonical PHASES-array order during Workspace Setup. The orchestrator computes the list upfront — no runtime re-computation is needed.
 
 ### Consolidated Artifact Availability
 
-Single reference for which workspace artifact files are present after a completed pipeline. Derived from the 20-cell canonical skip sequence table in SKILL.md — consult that table for the exact `skip-phase` call sequences.
+Single reference for which workspace artifact files are present after a completed pipeline. Derived from the effort-to-template table and the skip sets in [Flow Template Selection](#flow-template-selection).
 
-**Legend:** `✓` agent-produced · `✓†` `analyst` agent (merged Phase 1+2) · `S` orchestrator stub · `—` not produced
+**Legend:** `✓` agent-produced · `S` orchestrator stub · `—` not produced
 
-`summary.md` is always produced and is omitted from the table. `†` Both `analysis.md` and `investigation.md` are written by the `analyst` agent in a single merged Phase 1+2 call; `skip-phase phase-2` is called afterward to advance the state machine.
+`summary.md` is always produced and is omitted from the table.
 
-| task_type | effort | template | `analysis.md` | `investigation.md` | `design.md` | `review-design.md` | `tasks.md` | `review-tasks.md` | `impl-{N}.md` | `review-{N}.md` | `comprehensive-review.md` |
-|-----------|--------|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `feature` | XS | `lite` | ✓† | ✓† | ✓ | ✓ | ✓ | — | ✓ | — | — |
-| `feature` | S | `light` | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | — |
-| `feature` | M | `standard` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `feature` | L | `full` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `bugfix` | XS | `direct` | S | — | S | ✓ | S | — | ✓ | — | — |
-| `bugfix` | S | `lite` | ✓† | ✓† | ✓ | ✓ | S | — | ✓ | — | — |
-| `bugfix` | M | `light` | ✓ | ✓ | ✓ | ✓ | S | — | ✓ | ✓ | — |
-| `bugfix` | L | `standard` | ✓ | ✓ | ✓ | ✓ | S | — | ✓ | ✓ | — |
-| `refactor` | XS | `lite` | ✓† | ✓† | ✓ | ✓ | ✓ | — | ✓ | — | — |
-| `refactor` | S | `light` | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | — |
-| `refactor` | M | `standard` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `refactor` | L | `full` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `docs` | XS | `direct` | S | — | S | ✓ | S | — | ✓ | — | — |
-| `docs` | S | `direct` | S | — | S | ✓ | S | — | ✓ | — | — |
-| `docs` | M | `lite` | ✓ | — | S | ✓ | S | — | ✓ | — | — |
-| `docs` | L | `light` | ✓ | — | S | ✓ | S | — | ✓ | ✓ | — |
-| `investigation` | XS | `lite` | ✓† | ✓† | — | — | — | — | — | — | — |
-| `investigation` | S | `lite` | ✓† | ✓† | — | — | — | — | — | — | — |
-| `investigation` | M | `light` | ✓ | ✓ | — | — | — | — | — | — | — |
-| `investigation` | L | `standard` | ✓ | ✓ | — | — | — | — | — | — | — |
+| effort | template | `analysis.md` | `investigation.md` | `design.md` | `review-design.md` | `tasks.md` | `review-tasks.md` | `impl-{N}.md` | `review-{N}.md` | `comprehensive-review.md` |
+|--------|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| S | `light` | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | — |
+| M | `standard` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| L | `full` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-**Notes on stubs (S):** For `direct` template cells, the orchestrator writes `analysis.md`, `design.md`, and `tasks.md` stubs during Workspace Setup before Phase 3b runs. For `bugfix` cells (S/M/L), `tasks.md` is a single-task stub written by the orchestrator after Phase 3 completes (since Phase 4 is skipped). For `docs` cells, `design.md` and `tasks.md` stubs are written after Phase 1 completes (since Phases 2–4 are skipped).
+**Notes on stubs (S):** For `bugfix` pipelines, `tasks.md` is a single-task stub written by the orchestrator after Phase 3 completes (since Phase 4 is skipped). For `docs` pipelines, `design.md` and `tasks.md` stubs are written after Phase 1 completes (since Phases 2–4 are skipped).
 
 ### Resume Behaviour
 
-On resume, the orchestrator restores `{task_type}` from `resume_info.taskType` and `{skipped_phases}` from `resume_info.skippedPhases`. Fallback rules:
+On resume, the orchestrator restores `{effort}` from `resume_info.effort`, `{flow_template}` from `resume_info.flowTemplate`, and `{skipped_phases}` from `resume_info.skippedPhases`. Fallback rules:
 
-- If `taskType` is `null` (pipeline started before this feature was deployed): default to `feature` and log a warning.
-- If `skippedPhases` is empty/absent but `taskType` is non-null: re-derive the skip list from the task type skip table.
-
-#### Effort and flowTemplate null-fallback (pre-F13 pipelines)
-
-Pipelines started before F13 will have `effort: null` and `flowTemplate: null` in state. On resume:
-
-- If `effort` is null: set `{effort}` to `M` **in-context only** and log a note. Do NOT call `set-effort` on the running pipeline — the `skippedPhases` were already correctly set by the original 1D task-type dispatch. The effort value is used in-context for Final Summary display only.
-- If `flowTemplate` is null: re-derive from `(taskType, M)` using the matrix and store **in-context only**. Do NOT call `set-flow-template` — the original `skippedPhases` remain authoritative. This is in-context only for display and logging.
+- If `effort` is null (pipeline started before effort-only flow was deployed): default to `M` **in-context only** and log a note. Do NOT call `set-effort` — the `skippedPhases` already recorded in state remain authoritative.
+- If `flowTemplate` is null: re-derive from effort using `EffortToTemplate` and store **in-context only**. Do NOT call `set-flow-template` — the original `skippedPhases` remain authoritative.
 - Retain `{effort}` and `{flow_template}` as in-context variables for the duration of the resumed pipeline.
 
 ## Concurrency Model (Phase 5)
@@ -754,7 +681,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
 | 4 | Current git branch is not `main`/`master` | Branch name shown; choice to use the current branch or create a new one | Yes — waits for choice |
-| 5 | Task type or effort (or both) were inferred by heuristic | Inferred values with reasoning; asked to confirm or correct. Combined into one prompt if both are heuristic. Fires for GitHub label ambiguity too | Yes — waits for confirmation |
+| 5 | Effort level was inferred by heuristic | Inferred value with reasoning; asked to confirm or correct | Yes — waits for confirmation |
 | 6 | `full` template and `--auto` flag used together | Warning that `full` mandates manual checkpoints; asked to continue without auto-approve or abort | Yes — waits for choice |
 
 ### Checkpoint A — Design Review
@@ -791,7 +718,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 |---|---------|-------------------|---------|
 | 15 | `summary.md` written successfully | Full contents of `summary.md` displayed (request, branch, PR, task table, improvement report, execution stats). Sound notification plays. | No — informational |
 
-> **Skipped checkpoints:** Checkpoint A is skipped entirely for `investigation` tasks (all effort levels). Checkpoint B is skipped for all `bugfix`, `docs`, `investigation`, and `refactor` tasks regardless of effort. The `direct` flow (bugfix/XS, docs/XS-S) still runs Checkpoint A on a stub design before implementation begins.
+> **Skipped checkpoints:** Checkpoint A is skipped entirely for `investigation` tasks (all effort levels). Checkpoint B is skipped for all `bugfix`, `docs`, `investigation`, and `refactor` tasks regardless of effort, and is also skipped for effort S and M (only effort L runs Checkpoint B for feature/refactor).
 
 ## Key Technical Decisions
 
@@ -855,7 +782,7 @@ Four additional reasons the split is load-bearing:
 3. **Artifact guards** — `pipeline_report_result` validates `analysis.md` on Phase 1 completion and `investigation.md` on Phase 2 completion independently. A single merged file would require one guard to validate two distinct sections, coupling the guard logic to content structure.
 4. **Investigation task type** — when `task_type=investigation`, the pipeline ends after Phase 2 and presents both files as the final deliverable to the user. Keeping them separate makes the output navigable as two named documents.
 
-The `analyst.md` agent (lite flow) demonstrates that the *content* can be produced in a single agent call — it writes both files itself before the orchestrator skips Phase 2. But it still writes them as two separate files for all the reasons above.
+The two-file split is maintained regardless of effort level. Even though both files are produced in the same pipeline run, they serve distinct roles and are consumed by different downstream agents.
 
 ### Why inline comment anchors for SKILL.md cross-references?
 

@@ -58,7 +58,7 @@ Ordered by priority. Higher rows should be tackled first.
 
 When making changes to this plugin, verify:
 
-- [ ] Go state manager: all commands work — run `cd mcp-server && go test ./state/...` to verify init, phase-start, phase-complete, phase-fail, checkpoint, task-init, task-update, revision-bump, set-branch, set-task-type, skip-phase, set-auto-approve, set-skip-pr, phase-log, phase-stats, abandon, resume-info, get, set-effort, set-flow-template
+- [ ] Go state manager: all commands work — run `cd mcp-server && go test ./state/...` to verify init, phase-start, phase-complete, phase-fail, checkpoint, task-init, task-update, revision-bump, set-branch, skip-phase, set-auto-approve, set-skip-pr, phase-log, phase-stats, abandon, resume-info, get, set-effort, set-flow-template
 - [ ] Go state manager: PHASES array includes phase-7, pr-creation, post-to-source — `cd mcp-server && go test ./state/...`
 - [ ] Go state manager: numeric fields (implRetries, reviewRetries) stay as numbers after task-update — `cd mcp-server && go test ./state/...`
 - [ ] Go state manager: special characters in spec-name don't break JSON — `cd mcp-server && go test ./state/...`
@@ -66,8 +66,8 @@ When making changes to this plugin, verify:
 - [ ] Go state manager: `resume_info` projects `autoApprove` with false default — `cd mcp-server && go test ./state/...`
 - [ ] Go state manager: `set_skip_pr` sets `skipPr: true` and updates `lastUpdated` — `cd mcp-server && go test ./state/...`
 - [ ] Go state manager: `resume_info` projects `skipPr` with false default — `cd mcp-server && go test ./state/...`
-- [ ] Go state manager: `set_effort` — XS/S/M/L accepted; invalid value rejected — `cd mcp-server && go test ./state/...`
-- [ ] Go state manager: `set_flow_template` — all five templates accepted (direct/lite/light/standard/full); invalid value rejected — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `set_effort` — S/M/L accepted; XS and invalid values rejected — `cd mcp-server && go test ./state/...`
+- [ ] Go state manager: `set_flow_template` — all three templates accepted (light/standard/full); invalid value rejected — `cd mcp-server && go test ./state/...`
 - [ ] Go state manager: `resume_info` — `effort` and `flowTemplate` fields present and null-safe — `cd mcp-server && go test ./state/...`
 - [ ] Go state manager: `phase_log` appends to `phaseLog` array with correct fields — `cd mcp-server && go test ./state/...`
 - [ ] Go state manager: `phase_stats` outputs formatted table — `cd mcp-server && go test ./state/...`
@@ -102,7 +102,7 @@ When making changes to this plugin, verify:
 - [ ] SKILL.md: PR Creation has two-gate skip structure (task-type + --nopr)
 - [ ] SKILL.md: Final Summary omits PR line when `{pr-number}` is `none`
 - [ ] SKILL.md: Checkpoint A and B have two-gate skip structure (task-type + auto-approve)
-- [ ] SKILL.md: Mandatory Calls section lists set-task-type, phase-log, checkpoint
+- [ ] SKILL.md: Mandatory Calls section lists set-effort, phase-log, checkpoint
 - [ ] SKILL.md: `full` template + `--auto` flag — `autoApprove` stays `false` when conflict prompt is accepted (orchestrator must NOT call `set-auto-approve` in this case)
 
 ---
