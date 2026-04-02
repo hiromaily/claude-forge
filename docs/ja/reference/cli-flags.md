@@ -1,0 +1,73 @@
+# CLIフラグ
+
+## 使用方法
+
+```text
+/forge [フラグ] <タスクの説明またはURL>
+```
+
+## フラグ
+
+### `--effort=<S|M|L>`
+
+工数レベルを指定。フローテンプレートを決定します：
+
+| 工数 | テンプレート | スキップされるフェーズ |
+| --- | --- | --- |
+| S | `light` | タスクレビュー (4b)、チェックポイント B、包括的レビュー (7) |
+| M | `standard` | タスクレビュー (4b)、チェックポイント B |
+| L | `full` | なし — 全チェックポイント必須 |
+
+デフォルト：`M`。XSはサポート外。
+
+### `--auto`
+
+AIレビュアーの判定がAPPROVEまたはAPPROVE_WITH_NOTES（CRITICALな指摘なし）の場合、ヒューマンチェックポイントをスキップ。REVISEの場合は一時停止。
+
+工数Lでは無視 — 人間の承認が常に必要。
+
+### `--nopr`
+
+PR作成をスキップ。変更はフィーチャーブランチにコミット・プッシュされますが、プルリクエストは作成されません。
+
+### `--debug`
+
+`summary.md` に `## Debug Report` セクションを追加。実行フロー診断を含みます：
+- トークン外れ値
+- リトライ回数
+- リビジョンサイクル
+- 欠落しているphase-logエントリ
+
+注意：`## Improvement Report` はこのフラグに関係なく常に追加されます。
+
+### `--resume`
+
+中断されたパイプラインを現在のフェーズから再開。specディレクトリ名を入力として指定：
+
+```text
+/forge 20260320-fix-auth-timeout --resume
+```
+
+確認プロンプトをスキップし、即座にパイプラインループに入ります。
+
+## 使用例
+
+```text
+# 小規模タスク、チェックポイント自動承認
+/forge --effort=S --auto 認証ミドルウェアのnullポインタクラッシュを修正
+
+# 中規模タスク、PR作成なし
+/forge --nopr APIクライアントにリトライロジックを追加
+
+# 大規模タスク、デバッグ出力付き
+/forge --effort=L --debug 新しいバリデーションレイヤーを追加
+
+# GitHub Issueから
+/forge https://github.com/org/repo/issues/123
+
+# Jiraから
+/forge https://myorg.atlassian.net/browse/PROJ-456
+
+# 中断されたパイプラインの再開
+/forge 20260320-fix-auth-timeout --resume
+```
