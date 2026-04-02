@@ -27,7 +27,6 @@ var (
 // correctly using the exact JSON keys expected by state.json.
 func TestStateJSONRoundTrip(t *testing.T) {
 	branch := "feature/foo"
-	taskType := "feature"
 	effort := "L"
 	flowTemplate := "full"
 	phaseStarted := "2026-03-26T01:47:48Z"
@@ -37,7 +36,6 @@ func TestStateJSONRoundTrip(t *testing.T) {
 		SpecName:           "test-spec",
 		Workspace:          ".specs/test",
 		Branch:             &branch,
-		TaskType:           &taskType,
 		Effort:             &effort,
 		FlowTemplate:       &flowTemplate,
 		AutoApprove:        false,
@@ -121,7 +119,7 @@ func TestStateJSONKeys(t *testing.T) {
 	}
 
 	expectedKeys := []string{
-		"version", "specName", "workspace", "branch", "taskType",
+		"version", "specName", "workspace", "branch",
 		"effort", "flowTemplate", "autoApprove", "skipPr",
 		"useCurrentBranch", "debug", "skippedPhases", "currentPhase",
 		"currentPhaseStatus", "completedPhases", "revisions",
@@ -223,22 +221,22 @@ func TestValidConstants(t *testing.T) {
 
 	hasEffort := false
 	for _, e := range ValidEfforts {
-		if e == "XS" {
+		if e == "S" {
 			hasEffort = true
 		}
 	}
 	if !hasEffort {
-		t.Error("ValidEfforts should contain 'XS'")
+		t.Error("ValidEfforts should contain 'S'")
 	}
 
 	hasTemplate := false
 	for _, tmpl := range ValidTemplates {
-		if tmpl == "lite" {
+		if tmpl == "light" {
 			hasTemplate = true
 		}
 	}
 	if !hasTemplate {
-		t.Error("ValidTemplates should contain 'lite'")
+		t.Error("ValidTemplates should contain 'light'")
 	}
 
 	hasRevType := false

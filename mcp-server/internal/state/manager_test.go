@@ -63,9 +63,6 @@ func TestInit_CreatesStateJSON(t *testing.T) {
 	if s.Branch != nil {
 		t.Errorf("branch: got %v, want nil", s.Branch)
 	}
-	if s.TaskType != nil {
-		t.Errorf("taskType: got %v, want nil", s.TaskType)
-	}
 	if s.AutoApprove != false {
 		t.Error("autoApprove: want false")
 	}
@@ -688,7 +685,7 @@ func TestSetEffort_InvalidValue_ReturnsDescriptiveError(t *testing.T) {
 		t.Error("SetEffort error message must not be empty")
 	}
 	// Check that it references "INVALID" or lists valid options
-	if !containsAny(msg, "INVALID", "XS", "S", "M", "L") {
+	if !containsAny(msg, "INVALID", "S", "M", "L") {
 		t.Errorf("SetEffort error not descriptive enough: %q", msg)
 	}
 }
@@ -746,7 +743,7 @@ func TestSetFlowTemplate_InvalidValue_ReturnsDescriptiveError(t *testing.T) {
 		t.Error("SetFlowTemplate error message must not be empty")
 	}
 	// Error must mention the invalid value or list valid options.
-	if !containsAny(msg, "heavy", "direct", "lite", "standard", "full") {
+	if !containsAny(msg, "heavy", "light", "standard", "full") {
 		t.Errorf("SetFlowTemplate error not descriptive enough: %q", msg)
 	}
 }
@@ -1328,48 +1325,6 @@ func TestSetBranch_OverwritesPreviousBranch(t *testing.T) {
 	s := loadState(t, dir)
 	if s.Branch == nil || *s.Branch != "feature/new" {
 		t.Errorf("branch: got %v, want %q", s.Branch, "feature/new")
-	}
-}
-
-// ---------- SetTaskType ----------
-
-func TestSetTaskType_SetsTaskTypeField(t *testing.T) {
-	dir := t.TempDir()
-	m := newManager()
-	if err := m.Init(dir, "s"); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-
-	if err := m.SetTaskType(dir, "bugfix"); err != nil {
-		t.Fatalf("SetTaskType: %v", err)
-	}
-
-	s := loadState(t, dir)
-	if s.TaskType == nil {
-		t.Fatal("taskType: want non-nil")
-	}
-	if *s.TaskType != "bugfix" {
-		t.Errorf("taskType: got %q, want %q", *s.TaskType, "bugfix")
-	}
-}
-
-func TestSetTaskType_OverwritesPreviousValue(t *testing.T) {
-	dir := t.TempDir()
-	m := newManager()
-	if err := m.Init(dir, "s"); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-
-	if err := m.SetTaskType(dir, "feature"); err != nil {
-		t.Fatalf("SetTaskType(feature): %v", err)
-	}
-	if err := m.SetTaskType(dir, "docs"); err != nil {
-		t.Fatalf("SetTaskType(docs): %v", err)
-	}
-
-	s := loadState(t, dir)
-	if s.TaskType == nil || *s.TaskType != "docs" {
-		t.Errorf("taskType: got %v, want %q", s.TaskType, "docs")
 	}
 }
 
@@ -2132,7 +2087,6 @@ func TestConfigure_AppliesAllFieldsInOneWrite(t *testing.T) {
 	}
 
 	cfg := state.PipelineConfig{
-		TaskType:         "bugfix",
 		Effort:           "S",
 		FlowTemplate:     "standard",
 		AutoApprove:      true,
@@ -2147,9 +2101,6 @@ func TestConfigure_AppliesAllFieldsInOneWrite(t *testing.T) {
 	}
 
 	s := loadState(t, dir)
-	if s.TaskType == nil || *s.TaskType != "bugfix" {
-		t.Errorf("TaskType = %v, want %q", s.TaskType, "bugfix")
-	}
 	if s.Effort == nil || *s.Effort != "S" {
 		t.Errorf("Effort = %v, want %q", s.Effort, "S")
 	}
@@ -2190,7 +2141,6 @@ func TestConfigure_InvalidEffort_ReturnsError(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 	err := m.Configure(dir, state.PipelineConfig{
-		TaskType:     "feature",
 		Effort:       "INVALID",
 		FlowTemplate: "standard",
 	})
@@ -2210,7 +2160,6 @@ func TestConfigure_InvalidFlowTemplate_ReturnsError(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 	err := m.Configure(dir, state.PipelineConfig{
-		TaskType:     "feature",
 		Effort:       "M",
 		FlowTemplate: "bad-template",
 	})
@@ -2230,7 +2179,6 @@ func TestConfigure_InvalidPhase_ReturnsError(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 	err := m.Configure(dir, state.PipelineConfig{
-		TaskType:      "feature",
 		Effort:        "M",
 		FlowTemplate:  "standard",
 		SkippedPhases: []string{"not-a-phase"},
@@ -2254,7 +2202,6 @@ func TestConfigure_SkippedPhasesDoNotAdvanceCurrentPhaseUnlessLanding(t *testing
 			t.Fatalf("Init: %v", err)
 		}
 		if err := m.Configure(dir, state.PipelineConfig{
-			TaskType:      "feature",
 			Effort:        "M",
 			FlowTemplate:  "standard",
 			SkippedPhases: []string{"phase-3b"},
@@ -2275,7 +2222,6 @@ func TestConfigure_SkippedPhasesDoNotAdvanceCurrentPhaseUnlessLanding(t *testing
 			t.Fatalf("Init: %v", err)
 		}
 		if err := m.Configure(dir, state.PipelineConfig{
-			TaskType:      "feature",
 			Effort:        "M",
 			FlowTemplate:  "standard",
 			SkippedPhases: []string{"phase-1", "phase-2"},
@@ -2295,14 +2241,13 @@ func TestConfigure_SkippedPhasesDoNotAdvanceCurrentPhaseUnlessLanding(t *testing
 		if err := m.Init(dir, "s"); err != nil {
 			t.Fatalf("Init: %v", err)
 		}
-		// Reproducer for the original bug: lite flow bugfix/S skips
-		// [phase-4, phase-4b, checkpoint-b, phase-6, phase-7].
+		// Reproducer for the original bug: light flow S skips
+		// [phase-4b, checkpoint-b, phase-7].
 		// None of these are the initial phase-1, so currentPhase must stay at phase-1.
 		if err := m.Configure(dir, state.PipelineConfig{
-			TaskType:      "bugfix",
 			Effort:        "S",
-			FlowTemplate:  "lite",
-			SkippedPhases: []string{"phase-4", "phase-4b", "checkpoint-b", "phase-6", "phase-7"},
+			FlowTemplate:  "light",
+			SkippedPhases: []string{"phase-4b", "checkpoint-b", "phase-7"},
 		}); err != nil {
 			t.Fatalf("Configure: %v", err)
 		}

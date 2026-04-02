@@ -72,6 +72,14 @@ func ValidateInput(arguments string) InputResult {
 	// Parse flags.
 	flags, bareFlags := parseFlags(trimmed)
 
+	// Check: XS effort is not supported.
+	if flags["effort"] == "XS" {
+		return InputResult{
+			Valid:  false,
+			Errors: []string{`effort "XS" is not supported; valid efforts are: S, M, L`},
+		}
+	}
+
 	// Strip flags to get the core task description.
 	core := stripFlags(trimmed)
 
