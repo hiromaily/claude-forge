@@ -34,9 +34,9 @@ type PipelineInitWithContextResult struct {
 
 // UserConfirmationPrompt holds the detected values to present to the user.
 type UserConfirmationPrompt struct {
-	DetectedEffort string              `json:"detected_effort"`
-	EffortOptions  map[string][]string `json:"effort_options"`
-	Message        string              `json:"message"`
+	DetectedEffort string                                  `json:"detected_effort"`
+	EffortOptions  map[string][]orchestrator.SkipLabel     `json:"effort_options"`
+	Message        string                                  `json:"message"`
 }
 
 // externalContext holds parsed GitHub/Jira context fields.
@@ -89,11 +89,14 @@ func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFu
 			return errorf("parse external_context: %v", err)
 		}
 
-		// source_id is returned by pipeline_init but isn't a fetched field, so the
-		// orchestrator passes it as a top-level parameter rather than embedding it
-		// inside external_context alongside the fetched GitHub/Jira fields.
+		// source_id and source_url are returned by pipeline_init but aren't fetched
+		// fields, so the orchestrator passes them as top-level parameters rather than
+		// embedding them inside external_context alongside the fetched GitHub/Jira fields.
 		if topSourceID := stringField(args, "source_id"); topSourceID != "" && extCtx.SourceID == "" {
 			extCtx.SourceID = topSourceID
+		}
+		if topSourceURL := stringField(args, "source_url"); topSourceURL != "" && extCtx.SourceURL == "" {
+			extCtx.SourceURL = topSourceURL
 		}
 
 		// Parse flags object.
@@ -126,11 +129,11 @@ func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFla
 		extCtx.JiraSummary + " " + extCtx.JiraDescription)
 	effort := orchestrator.DetectEffort(flags.EffortOverride, extCtx.JiraStoryPoints, combinedText)
 
-	// Build EffortOptions for all three valid efforts.
-	effortOptions := map[string][]string{
-		"S": orchestrator.SkipsForEffort("S"),
-		"M": orchestrator.SkipsForEffort("M"),
-		"L": orchestrator.SkipsForEffort("L"),
+	// Build EffortOptions for all three valid efforts with human-readable labels.
+	effortOptions := map[string][]orchestrator.SkipLabel{
+		"S": orchestrator.SkipsWithLabelsForEffort("S"),
+		"M": orchestrator.SkipsWithLabelsForEffort("M"),
+		"L": orchestrator.SkipsWithLabelsForEffort("L"),
 	}
 
 	nuc := &UserConfirmationPrompt{

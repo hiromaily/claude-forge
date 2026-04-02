@@ -31,3 +31,35 @@ func SkipsForTemplate(template string) []string {
 func SkipsForEffort(effort string) []string {
 	return SkipsForTemplate(EffortToTemplate(effort))
 }
+
+// phaseLabels maps phase IDs to human-readable labels for display in effort_options.
+var phaseLabels = map[string]string{
+	PhaseFourB:       "Tasks AI Review",
+	PhaseCheckpointA: "Design Checkpoint",
+	PhaseCheckpointB: "Tasks Checkpoint",
+	PhaseSeven:       "Comprehensive Review",
+}
+
+// PhaseLabel returns a human-readable label for a phase ID.
+func PhaseLabel(phaseID string) string {
+	if label, ok := phaseLabels[phaseID]; ok {
+		return label
+	}
+	return phaseID
+}
+
+// SkipLabel represents a skipped phase with both its ID and human-readable label.
+type SkipLabel struct {
+	PhaseID string `json:"phase_id"`
+	Label   string `json:"label"`
+}
+
+// SkipsWithLabelsForEffort returns the skip list with human-readable labels for an effort level.
+func SkipsWithLabelsForEffort(effort string) []SkipLabel {
+	ids := SkipsForEffort(effort)
+	result := make([]SkipLabel, len(ids))
+	for i, id := range ids {
+		result[i] = SkipLabel{PhaseID: id, Label: PhaseLabel(id)}
+	}
+	return result
+}

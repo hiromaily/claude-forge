@@ -356,6 +356,7 @@ func RegisterAll(
 				"Second call (user_confirmation present): finalizes workspace, writes state.json and request.md."),
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Workspace path from pipeline_init result")),
 			mcp.WithString("source_id", mcp.Description("Source identifier from pipeline_init (e.g. GitHub issue number or Jira key). Pass result.source_id to enable meaningful workspace naming.")),
+			mcp.WithString("source_url", mcp.Description("Source URL from pipeline_init (e.g. GitHub issue URL or Jira browse URL). Pass result.source_url to enable post-to-source at pipeline end.")),
 			mcp.WithObject("external_context", mcp.Description("GitHub or Jira context fields")),
 			mcp.WithObject("flags", mcp.Description("Parsed flags from pipeline_init: auto, skip_pr, debug, type_override, effort_override, current_branch")),
 			// mcp.WithObject is the correct mechanism for complex nested parameters.

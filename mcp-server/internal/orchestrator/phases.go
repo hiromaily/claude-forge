@@ -29,7 +29,7 @@ var AllPhases = []string{
 	PhaseSetup, PhaseOne, PhaseTwo, PhaseThree, PhaseThreeB,
 	PhaseCheckpointA, PhaseFour, PhaseFourB, PhaseCheckpointB,
 	PhaseFive, PhaseSix, PhaseSeven, PhaseFinalVerification,
-	PhasePRCreation, PhaseFinalSummary, PhasePostToSource, PhaseCompleted,
+	PhaseFinalSummary, PhasePRCreation, PhasePostToSource, PhaseCompleted,
 }
 
 // nonSkippable is the set of phases that can never be passed to skip-phase.

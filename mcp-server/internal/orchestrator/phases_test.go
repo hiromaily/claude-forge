@@ -22,7 +22,7 @@ func TestAllPhasesOrder(t *testing.T) {
 		"setup", "phase-1", "phase-2", "phase-3", "phase-3b",
 		"checkpoint-a", "phase-4", "phase-4b", "checkpoint-b",
 		"phase-5", "phase-6", "phase-7", "final-verification",
-		"pr-creation", "final-summary", "post-to-source", "completed",
+		"final-summary", "pr-creation", "post-to-source", "completed",
 	}
 
 	if len(AllPhases) != len(want) {

@@ -23,12 +23,13 @@ Example: `/forge 20260401-effort-only-flow --resume`
 4. For all new pipelines (resume is false or absent):
    a. If `result.fetch_needed` is non-null: fetch the external data described by `result.fetch_needed`
       (GitHub issue fields or Jira issue fields), then call
-      `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, source_id=result.source_id, flags=result.flags, external_context=<fetched data>)`.
+      `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, source_id=result.source_id, source_url=result.source_url, flags=result.flags, external_context=<fetched data>)`.
    b. If `result.fetch_needed` is null (plain text input): call
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags)`.
    In both cases, the response will contain `needs_user_confirmation`. Present the detected
    `detected_effort` and all three effort options from `effort_options` (S, M, L — each with
-   their skipped phases list) to the user and wait for confirmation.
+   their skipped phases, including `phase_id` and human-readable `label`) to the user and
+   wait for confirmation. Use the `label` field when displaying to the user.
    While waiting, generate a concise English slug (3–6 words, lowercase, hyphen-separated,
    ASCII only) that summarises the task — e.g. `"add-user-auth-endpoint"` or
    `"fix-report-export-timeout"`. If the input is in a non-English language, translate
@@ -76,6 +77,11 @@ Repeat until done:
        (parse tasks from `tasks.md` in the workspace and pass as the `tasks` parameter).
      - If `action.commands[0]` is `create_branch`: run `git checkout -b <action.commands[1]>`
        via Bash, then call `mcp__forge-state__set_branch(workspace, branch=action.commands[1])`.
+     - If `action.commands[0]` is `batch_commit`: commit all uncommitted changes from
+       parallel tasks. Run `git status --short` to identify changed files, then `git add`
+       only the files belonging to the parallel tasks (check each task's file list in
+       `tasks.md`). Then `git commit` with a message summarising the parallel batch
+       (e.g. "chore: batch commit parallel tasks N, M, ...").
      - Otherwise: run `action.commands` via Bash.
      Then call `pipeline_report_result` with `phase=action.phase`.
      If `action.setup_only` is true, pass `setup_only=true` to `pipeline_report_result`.
