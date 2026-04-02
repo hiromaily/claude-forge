@@ -784,7 +784,7 @@ func TestTopLevelSourceIDRefinement(t *testing.T) {
 // ---------- helpers ----------
 
 // stringSliceEqual compares two string slices for equality (both nil and empty are equal).
-func stringSliceEqual(a, b []string) bool {
+func stringSliceEqual(a, b []string) bool { //nolint:unused // kept for future test use
 	if len(a) == 0 && len(b) == 0 {
 		return true
 	}
