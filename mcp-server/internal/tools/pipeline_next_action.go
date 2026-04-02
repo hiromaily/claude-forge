@@ -40,7 +40,7 @@ type nextActionResponse struct {
 // delegates to eng.NextAction, and — for spawn_agent actions — enriches the prompt
 // with the agent .md file contents and each input artifact's contents.
 func PipelineNextActionHandler(
-	_ *state.StateManager,
+	sm *state.StateManager,
 	eng *orchestrator.Engine,
 	agentDir string,
 	histIdx *history.HistoryIndex,
@@ -55,8 +55,7 @@ func PipelineNextActionHandler(
 		userResponse := req.GetString("user_response", "")
 
 		// Per-call StateManager: create a fresh instance to avoid workspace-mismatch errors.
-		// Version is empty because this SM only reads state (LoadFromFile) — Init is never called.
-		sm2 := state.NewStateManager("")
+		sm2 := state.NewStateManager(sm.Version())
 		if err := sm2.LoadFromFile(workspace); err != nil {
 			return errorf("load state: %v", err)
 		}

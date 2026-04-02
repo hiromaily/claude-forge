@@ -35,6 +35,11 @@ func NewStateManager(version string) *StateManager {
 	return &StateManager{version: version}
 }
 
+// Version returns the MCP server binary version that was passed to NewStateManager.
+func (m *StateManager) Version() string {
+	return m.version
+}
+
 // ---------- helpers ----------
 
 func statePath(workspace string) string {
@@ -109,20 +114,21 @@ func nextPhase(current string) string {
 // allowedGetFields is the set of top-level and dot-notation sub-fields that
 // Get supports.  This mirrors what cmd_get does via `jq -r ".${field}"`.
 var allowedGetFields = map[string]bool{
-	"version":            true,
-	"specName":           true,
-	"workspace":          true,
-	"branch":             true,
-	"effort":             true,
-	"flowTemplate":       true,
-	"autoApprove":        true,
-	"skipPr":             true,
-	"useCurrentBranch":   true,
-	"debug":              true,
-	"skippedPhases":      true,
-	"currentPhase":       true,
-	"currentPhaseStatus": true,
-	"completedPhases":    true,
+	"version":                 true,
+	"forge-state-mcp-version": true,
+	"specName":                true,
+	"workspace":               true,
+	"branch":                  true,
+	"effort":                  true,
+	"flowTemplate":            true,
+	"autoApprove":             true,
+	"skipPr":                  true,
+	"useCurrentBranch":        true,
+	"debug":                   true,
+	"skippedPhases":           true,
+	"currentPhase":            true,
+	"currentPhaseStatus":      true,
+	"completedPhases":         true,
 	// dot-notation sub-fields
 	"revisions":                       true,
 	"revisions.designRevisions":       true,
@@ -352,6 +358,8 @@ func getField(s *State, field string) (string, error) {
 	switch field {
 	case "version":
 		return strconv.Itoa(s.Version), nil
+	case "forge-state-mcp-version":
+		return s.MCPVersion, nil
 	case "specName":
 		return s.SpecName, nil
 	case "workspace":
