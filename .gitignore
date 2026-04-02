@@ -5,6 +5,8 @@ bin/
 # Dependency directories
 node_modules/
 
+docs/.vitepress/cache/
+
 # build / generate output
 /target
 dist/

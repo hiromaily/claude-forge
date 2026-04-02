@@ -1,5 +1,9 @@
 # claude-forge
 
+**[📖 Documentation](https://hiromaily.github.io/claude-forge/)** | **[📖 ドキュメント (日本語)](https://hiromaily.github.io/claude-forge/ja/)**
+
+---
+
 Spec-Driven Development got you most of the way there.
 
 You write the spec. AI does the implementation. You review. It works — until you realize you're still managing every handoff manually. You kick off analysis, wait for output, hand off context to the next prompt, watch for mistakes, review intermediate work, decide when to proceed — on every task, on every run.
