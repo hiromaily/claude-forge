@@ -66,13 +66,13 @@ To act on it, feed the report back into a new pipeline:
 
 This turns every completed run into a compounding investment — the codebase progressively gets easier for both humans and future AI runs.
 
-### 3. Flow optimization — task type × effort level
+### 3. Flow optimization — effort-aware scaling
 
 Not every task needs 11 phases and 3 review cycles.
 
-claude-forge detects the task type (feature / bugfix / docs / refactor) and effort level (XS → L), and selects the appropriate pipeline template — from a 2-phase direct fix to a full 11-phase pipeline with mandatory human checkpoints.
+claude-forge selects the pipeline template based on effort level (S / M / L) — from a lean light pipeline to a full 11-phase run with mandatory human checkpoints.
 
-A tiny bugfix doesn't go through task review. A large feature doesn't skip it. The workflow adapts to the task, not the other way around.
+A small task doesn't go through task review. A large one doesn't skip it. The workflow adapts to the effort, not the other way around.
 
 ### 4. Deterministic guardrails — hooks, not just prompts
 
@@ -95,7 +95,7 @@ These aren't instructions the agent can misinterpret. They're hard stops.
 | **Context management** | One growing conversation; quality degrades as context fills | Each phase runs in an isolated subagent with a clean context window |
 | **State persistence** | Lost on session restart or context compaction | Disk-based `state.json` — resume anytime, survives compaction |
 | **Constraint enforcement** | Prompt instructions only (probabilistic) | Two-layer: prompt instructions + deterministic hook scripts |
-| **Adaptability** | One-size-fits-all workflow | 5 task types × 4 effort levels → 5 flow templates (direct/lite/light/standard/full) |
+| **Adaptability** | One-size-fits-all workflow | 3 effort levels (S/M/L) → 3 flow templates (light/standard/full) |
 | **Quality gates** | Manual review at the end | Built-in AI review loops (APPROVE/REVISE) + human checkpoints |
 | **Concurrency** | Sequential only | Parallel task implementation with atomic locking |
 | **Observability** | None | Per-phase token count, duration, and model tracking |
@@ -211,13 +211,13 @@ flowchart TD
 
 Which phases run is primarily determined by effort level. ✅ = phase runs; blank = skipped.
 
-| Phase | Task | Effort S | Effort M | Effort L |
+| Phase | Task | Effort S (`light`) | Effort M (`standard`) | Effort L (`full`) |
 | ----- | ------------------------- | --------- | -------- | ------------ |
 | 0 | Input Validation | ✅ | ✅ | ✅ |
 | 1 | Workspace Setup | ✅ | ✅ | ✅ |
-| 2 | Detect Task Type & Effort | ✅ | ✅ | ✅ |
+| 2 | Detect Effort | ✅ | ✅ | ✅ |
 | 3 | Situation Analysis | ✅ | ✅ | ✅ |
-| 4 | Investigation | | ✅ | ✅ |
+| 4 | Investigation | ✅ | ✅ | ✅ |
 | 5 | Design | ✅ | ✅ | ✅ |
 | 6 | Design Review | ✅ | ✅ | ✅ |
 | 7 | Checkpoint A | ✅ | ✅ | ✅ |
@@ -225,16 +225,16 @@ Which phases run is primarily determined by effort level. ✅ = phase runs; blan
 | 9 | Tasks Review | | | ✅ |
 | 10 | Checkpoint B | | | ✅ |
 | 11 | Implementation | ✅ | ✅ | ✅ |
-| 12 | Code Review | | ✅ | ✅ |
-| 13 | Comprehensive Review | | ✅　| ✅ |
+| 12 | Code Review | ✅ | ✅ | ✅ |
+| 13 | Comprehensive Review | | ✅ | ✅ |
 | 14 | Final Verification | ✅ | ✅ | ✅ |
 | 15 | PR Creation | ✅ | ✅ | ✅ |
 | 16 | Final Summary | ✅ | ✅ | ✅ |
 | 17 | Post to Source | ✅ | ✅ | ✅ |
 | 18 | Done | ✅ | ✅ | ✅ |
 
-> S → light template · M → standard · L →  full
-> Checkpoints A and B are always blocking when their prerequisite phase ran (design and task decomposition respectively). Use `--auto` to allow the AI reviewer verdict to auto-approve them.
+> XS effort is not supported; use S for small tasks.
+> Checkpoint A is always blocking when design ran. Checkpoint B runs only for effort L. Use `--auto` to allow AI reviewer verdict to auto-approve Checkpoint A.
 
 ---
 
@@ -293,22 +293,21 @@ The pipeline pauses and returns control to the user at the following points. Poi
 
 ---
 
-> **Skipped checkpoints:** Checkpoint A is skipped entirely for `investigation` tasks (all effort levels). Checkpoint B is skipped for all `bugfix`, `docs`, `investigation`, and `refactor` tasks regardless of effort. The `direct` flow (bugfix/XS, docs/XS-S) still runs Checkpoint A on a stub design before implementation begins.
+> **Skipped checkpoints:** Checkpoint A is skipped entirely for `investigation` tasks (all effort levels). Checkpoint B is skipped for all `bugfix`, `docs`, `investigation`, and `refactor` tasks regardless of effort, and is also skipped for effort S and M (only effort L runs Checkpoint B).
 
 ---
 
 ## Feature list
 
-- **Effort-aware scaling** — `(task_type, effort)` matrix determines one of 5 flow templates, from a 2-agent direct fix to a 10+ agent full pipeline with mandatory checkpoints
-- **Task-type adaptation** — 5 task types (feature, bugfix, investigation, docs, refactor) with tailored phase skip tables
+- **Effort-aware scaling** — effort level (S/M/L) selects one of 3 flow templates (light/standard/full), from a lean pipeline to a full 10+ agent run with mandatory checkpoints
 - **Deterministic hook guardrails** — PreToolUse hooks block source edits during analysis, block git commits during parallel execution, and block checkout to main/master during an active pipeline
 - **AI review loops** — Design and task plans go through APPROVE/REVISE cycles with dedicated reviewer agents before implementation begins
-- **Multi-phase pipeline** — 11 specialist agents across up to 12 phases (analysis → investigation → design → review → tasks → review → implementation → code review → comprehensive review → verification → PR → summary)
+- **Multi-phase pipeline** — 10 specialist agents across up to 12 phases (analysis → investigation → design → review → tasks → review → implementation → code review → comprehensive review → verification → PR → summary)
 - **Parallel implementation** — Tasks marked `[parallel]` run concurrently with mkdir-based atomic locking for state updates
 - **Human checkpoints** — Pause for human approval at design and task decomposition stages; skippable with `--auto` (except `full` template)
 - **Improvement report** — Always-on retrospective appended to `summary.md` identifying documentation gaps, code readability friction, and AI agent support issues encountered during the run
 - **Past implementation pattern injection** — Before each implementer invocation, `mcp__forge-state__search_patterns` (BM25 scorer) scans the specs index for similar past pipelines and injects their file-modification patterns into the prompt, surfacing real implementation examples rather than generic guidance
-- **Disk-based state machine** — All progress tracked in `state.json` via the Go MCP server (45 MCP tools including `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`, `profile_get`, `history_search`, `history_get_patterns`, `history_get_friction_map`, `analytics_pipeline_summary`, `analytics_repo_dashboard`, and `analytics_estimate`); pipelines survive context compaction and session restarts
+- **Disk-based state machine** — All progress tracked in `state.json` via the Go MCP server (44 MCP tools including `search_patterns`, `subscribe_events`, `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`, `validate_input`, `validate_artifact`, `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`, `profile_get`, `history_search`, `history_get_patterns`, `history_get_friction_map`, `analytics_pipeline_summary`, `analytics_repo_dashboard`, and `analytics_estimate`); pipelines survive context compaction and session restarts
 - **Resume and abandon** — Resume an interrupted pipeline from any phase; abandon cleanly when needed
 - **Input validation** — Two-layer guard: deterministic `mcp__forge-state__validate_input` MCP tool (empty, too-short, malformed URL) + LLM semantic check blocks nonsensical or non-development requests before any tokens are spent on workspace setup
 - **Phase metrics** — Every agent invocation logged with token count, duration, and model; included in the Final Summary
@@ -385,15 +384,14 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as
 
 | Flag | Description |
 | --- | --- |
-| `--type=<type>` | Force a task type: `feature`, `bugfix`, `investigation`, `docs`, `refactor`. Skips heuristic detection and user confirmation. |
-| `--effort=<effort>` | Force an effort level: `XS`, `S`, `M`, `L`. Determines flow template (direct/lite/light/standard/full). Skips heuristic detection. Default: `M`. |
+| `--effort=<effort>` | Force an effort level: `S`, `M`, `L`. Determines flow template (light/standard/full). Skips heuristic detection. Default: `M`. XS is not supported. |
 | `--auto` | Skip human checkpoints when the AI reviewer verdict is APPROVE. REVISE verdicts still pause for human input. |
 | `--nopr` | Skip PR creation. Changes are committed and pushed to the feature branch, but no pull request is opened. |
 | `--debug` | Append a `## Debug Report` section to `summary.md` with execution flow diagnostics (token outliers, retries, revision cycles, missing phase-log entries). Note: `## Improvement Report` is always appended regardless of this flag. |
 | `--resume` | Resume an interrupted pipeline. Provide the spec directory name as the input (e.g. `/forge 20260320-fix-auth-timeout --resume`). Skips the confirmation prompt and enters the pipeline loop immediately. |
 
 ```text
-/forge --type=bugfix --auto Fix the null pointer crash in auth middleware
+/forge --effort=S --auto Fix the null pointer crash in auth middleware
 /forge --nopr Add retry logic to the API client
 /forge --debug Add a new validation layer
 ```
@@ -422,19 +420,16 @@ rm .specs/20260320-fix-auth-timeout/state.json
 
 ---
 
-## Task types
+## Flow templates
 
-The pipeline adapts its execution based on the detected task type and effort level. The combination `(task_type, effort)` determines one of 5 flow templates:
+The effort level determines the flow template. XS effort is not supported; use S for small tasks.
 
-| Template | Phases | When used |
+| Effort | Template | Skipped phases |
 | --- | --- | --- |
-| **direct** | Implementation → Verification → PR | Tiny changes (bugfix/XS, docs/XS-S) |
-| **lite** | Merged Analysis → Design → Tasks → Implementation → Verification → PR | Small tasks (feature/XS, bugfix/S) |
-| **light** | Full analysis → Design → Implementation → Review → Verification → PR | Medium tasks without checkpoints |
-| **standard** | Full pipeline (current default) | Medium-large tasks (feature/M) |
-| **full** | Standard + mandatory checkpoints (ignores `--auto`) | Large tasks (feature/L) |
+| **S** | `light` | Task review (4b), Checkpoint B, Comprehensive Review (7) |
+| **M** | `standard` | Task review (4b), Checkpoint B |
+| **L** | `full` | _(none)_ — all checkpoints mandatory, `--auto` ignored |
 
-Task type is detected from: `--type=` flag > Jira issue type > GitHub labels > heuristic.
 Effort is detected from: `--effort=` flag > Jira story points > heuristic > default `M`.
 
 ---
@@ -455,7 +450,7 @@ For the full data flow, state machine, hook architecture, agent input/output mat
 
 ```text
 claude-forge/
-  agents/             11 specialist agents (.md files with YAML frontmatter)
+  agents/             10 specialist agents (.md files with YAML frontmatter)
   hooks/              Hook definitions (hooks.json)
   scripts/
     common.sh                 Shared find_active_workspace helper (sourced by pre-tool-hook and stop-hook)

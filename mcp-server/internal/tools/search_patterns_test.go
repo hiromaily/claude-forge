@@ -62,11 +62,10 @@ func callSearchPatterns(t *testing.T, indexPath, requestPath string, args map[st
 }
 
 // makeEntry constructs an IndexEntry for use in test fixtures.
-func makeEntry(specName, requestSummary, outcome string, taskType *string, feedback []search.ReviewFeedback, patterns []search.ImplPattern) search.IndexEntry {
+func makeEntry(specName, requestSummary, outcome string, feedback []search.ReviewFeedback, patterns []search.ImplPattern) search.IndexEntry {
 	return search.IndexEntry{
 		SpecName:       specName,
 		Timestamp:      "2024-01-01T00:00:00Z",
-		TaskType:       taskType,
 		RequestSummary: requestSummary,
 		ReviewFeedback: feedback,
 		ImplPatterns:   patterns,
@@ -118,7 +117,7 @@ func TestSearchPatternsHandler(t *testing.T) {
 		requestPath := filepath.Join(dir, "workspace", "request.md") // does not exist
 
 		entries := []search.IndexEntry{
-			makeEntry("spec-a", "mcp server feature implementation", "completed", nil,
+			makeEntry("spec-a", "mcp server feature implementation", "completed",
 				[]search.ReviewFeedback{{Source: "review-1.md", Verdict: "pass", Findings: []string{"good code"}}},
 				nil,
 			),
@@ -145,13 +144,13 @@ func TestSearchPatternsHandler(t *testing.T) {
 		requestPath := filepath.Join(dir, "workspace", "request.md")
 
 		entries := []search.IndexEntry{
-			makeEntry("spec-alpha", "implement mcp server feature with golang tools patterns", "completed", nil,
+			makeEntry("spec-alpha", "implement mcp server feature with golang tools patterns", "completed",
 				[]search.ReviewFeedback{
 					{Source: "review-1.md", Verdict: "pass", Findings: []string{"finding one", "finding two"}},
 				},
 				nil,
 			),
-			makeEntry("spec-beta", "mcp server golang implementation patterns", "completed", nil,
+			makeEntry("spec-beta", "mcp server golang implementation patterns", "completed",
 				[]search.ReviewFeedback{
 					{Source: "review-2.md", Verdict: "pass", Findings: []string{"another finding"}},
 				},
@@ -187,15 +186,14 @@ func TestSearchPatternsHandler(t *testing.T) {
 		indexPath := filepath.Join(dir, "index.json")
 		requestPath := filepath.Join(dir, "workspace", "request.md")
 
-		ft := new("feature")
 		entries := []search.IndexEntry{
-			makeEntry("spec-completed", "implement mcp server golang feature tools patterns", "completed", ft,
+			makeEntry("spec-completed", "implement mcp server golang feature tools patterns", "completed",
 				nil,
 				[]search.ImplPattern{
 					{TaskTitle: "Task 1: Add handler", FilesModified: []string{"tools/handler.go", "tools/registry.go"}},
 				},
 			),
-			makeEntry("spec-abandoned", "implement mcp server golang feature tools patterns", "abandoned", ft,
+			makeEntry("spec-abandoned", "implement mcp server golang feature tools patterns", "abandoned",
 				nil,
 				[]search.ImplPattern{
 					{TaskTitle: "Task 2: Abandoned task", FilesModified: []string{"tools/other.go"}},
@@ -206,9 +204,8 @@ func TestSearchPatternsHandler(t *testing.T) {
 		buildRequest(t, requestPath, "implement mcp server golang feature tools patterns")
 
 		res := callSearchPatterns(t, indexPath, requestPath, map[string]any{
-			"mode":      "impl",
-			"top_k":     float64(2),
-			"task_type": "feature",
+			"mode":  "impl",
+			"top_k": float64(2),
 		})
 		if res.IsError {
 			t.Errorf("impl mode returned error: %v", textContent(res))
@@ -221,7 +218,7 @@ func TestSearchPatternsHandler(t *testing.T) {
 		}
 		// Assert exact bullet format for completed entry.
 		wantBullet := fmt.Sprintf(implBullet,
-			"spec-completed", *ft,
+			"spec-completed",
 			"Task 1: Add handler",
 			"tools/handler.go, tools/registry.go")
 		if !strings.Contains(got, wantBullet) {
@@ -246,7 +243,6 @@ func TestSearchPatternsHandler(t *testing.T) {
 				"spec-"+string(rune('a'+i)),
 				"implement mcp server golang feature tools patterns",
 				"completed",
-				nil,
 				[]search.ReviewFeedback{
 					{Source: "review.md", Verdict: "pass", Findings: []string{"finding " + string(rune('a'+i))}},
 				},
@@ -282,56 +278,6 @@ func TestSearchPatternsHandler(t *testing.T) {
 		bulletCount0 := strings.Count(got0, "\n- **[")
 		if bulletCount0 != 3 {
 			t.Errorf("top_k=0 review-feedback default (3): expected 3 bullets, got %d in output:\n%s", bulletCount0, got0)
-		}
-	})
-
-	// (g) task_type boost ordering — matching task_type entry appears first.
-	t.Run("task_type_boost_ordering", func(t *testing.T) {
-		dir := t.TempDir()
-		indexPath := filepath.Join(dir, "index.json")
-		requestPath := filepath.Join(dir, "workspace", "request.md")
-
-		ft := new("feature")
-		bx := new("bugfix")
-		// Both entries have identical requestSummary → equal BM25 scores.
-		// spec-feature matches task_type "feature" and receives a 2× boost.
-		entries := []search.IndexEntry{
-			makeEntry("spec-bugfix", "implement mcp server golang feature tools patterns review", "completed", bx,
-				[]search.ReviewFeedback{
-					{Source: "review-bugfix.md", Verdict: "pass", Findings: []string{"bugfix finding"}},
-				},
-				nil,
-			),
-			makeEntry("spec-feature", "implement mcp server golang feature tools patterns review", "completed", ft,
-				[]search.ReviewFeedback{
-					{Source: "review-feature.md", Verdict: "pass", Findings: []string{"feature finding"}},
-				},
-				nil,
-			),
-		}
-		buildIndex(t, indexPath, entries)
-		buildRequest(t, requestPath, "implement mcp server golang feature tools patterns review")
-
-		res := callSearchPatterns(t, indexPath, requestPath, map[string]any{
-			"mode":      "review-feedback",
-			"top_k":     float64(2),
-			"task_type": "feature",
-		})
-		if res.IsError {
-			t.Errorf("task_type boost returned error: %v", textContent(res))
-		}
-		got := textContent(res)
-		if got == "" {
-			t.Fatalf("task_type boost: expected non-empty output")
-		}
-		// spec-feature (boosted) must appear before spec-bugfix (not boosted).
-		featurePos := strings.Index(got, "review-feature.md")
-		bugfixPos := strings.Index(got, "review-bugfix.md")
-		if featurePos == -1 || bugfixPos == -1 {
-			t.Fatalf("task_type boost: expected both entries in output:\n%s", got)
-		}
-		if featurePos >= bugfixPos {
-			t.Errorf("task_type boost: feature entry (boosted) should appear before bugfix entry\noutput:\n%s", got)
 		}
 	})
 }

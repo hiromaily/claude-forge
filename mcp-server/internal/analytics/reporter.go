@@ -26,23 +26,15 @@ func NewReporter(specsDir string, kb *history.KnowledgeBase) *Reporter {
 
 // RepoDashboard holds aggregate statistics across all pipeline runs.
 type RepoDashboard struct {
-	TotalPipelines        int                      `json:"total_pipelines"`
-	Completed             int                      `json:"completed"`
-	Abandoned             int                      `json:"abandoned"`
-	ByTaskType            map[string]TaskTypeStats `json:"by_task_type"`
-	ByFlowTemplate        map[string]FlowStats     `json:"by_flow_template"`
-	TotalTokens           int                      `json:"total_tokens"`
-	EstimatedTotalCostUSD float64                  `json:"estimated_total_cost_usd"`
-	ReviewPassRate        float64                  `json:"review_pass_rate"`
-	AvgRetriesPerPipeline float64                  `json:"avg_retries_per_pipeline"`
-	MostCommonFindings    []PatternEntry           `json:"most_common_findings"`
-}
-
-// TaskTypeStats holds per-task-type aggregate metrics.
-type TaskTypeStats struct {
-	Count     int     `json:"count"`
-	AvgTokens float64 `json:"avg_tokens"`
-	AvgDurMin float64 `json:"avg_duration_min"`
+	TotalPipelines        int                  `json:"total_pipelines"`
+	Completed             int                  `json:"completed"`
+	Abandoned             int                  `json:"abandoned"`
+	ByFlowTemplate        map[string]FlowStats `json:"by_flow_template"`
+	TotalTokens           int                  `json:"total_tokens"`
+	EstimatedTotalCostUSD float64              `json:"estimated_total_cost_usd"`
+	ReviewPassRate        float64              `json:"review_pass_rate"`
+	AvgRetriesPerPipeline float64              `json:"avg_retries_per_pipeline"`
+	MostCommonFindings    []PatternEntry       `json:"most_common_findings"`
 }
 
 // FlowStats holds per-flow-template aggregate metrics.
@@ -55,13 +47,6 @@ type PatternEntry struct {
 	Description string `json:"description"`
 	Count       int    `json:"count"`
 	Severity    string `json:"severity"`
-}
-
-// taskTypeAccumulator accumulates raw sums for computing averages.
-type taskTypeAccumulator struct {
-	count       int
-	totalTokens int
-	totalDurMs  int
 }
 
 // Dashboard scans specsDir and builds aggregate pipeline statistics.
@@ -77,12 +62,8 @@ func (r *Reporter) Dashboard() (*RepoDashboard, error) {
 	}
 
 	dash := &RepoDashboard{
-		ByTaskType:     make(map[string]TaskTypeStats),
 		ByFlowTemplate: make(map[string]FlowStats),
 	}
-
-	// accumulators for computing averages after the scan
-	taskTypeAcc := make(map[string]*taskTypeAccumulator)
 
 	var (
 		totalRetries    int
@@ -125,30 +106,9 @@ func (r *Reporter) Dashboard() (*RepoDashboard, error) {
 
 		// All metrics below are only for completed pipelines.
 
-		// Task type stats accumulation.
-		taskType := ""
-		if s.TaskType != nil {
-			taskType = *s.TaskType
-		}
-
 		flowTemplate := ""
 		if s.FlowTemplate != nil {
 			flowTemplate = *s.FlowTemplate
-		}
-
-		if taskType != "" {
-			acc, exists := taskTypeAcc[taskType]
-			if !exists {
-				acc = &taskTypeAccumulator{}
-				taskTypeAcc[taskType] = acc
-			}
-
-			acc.count++
-
-			for _, pl := range s.PhaseLog {
-				acc.totalTokens += pl.Tokens
-				acc.totalDurMs += pl.DurationMs
-			}
 		}
 
 		// Flow template stats.
@@ -182,21 +142,6 @@ func (r *Reporter) Dashboard() (*RepoDashboard, error) {
 		dash.AvgRetriesPerPipeline = float64(totalRetries) / float64(completedCount)
 	}
 
-	// Populate ByTaskType from accumulators.
-	for tt, acc := range taskTypeAcc {
-		var avgTokens, avgDurMin float64
-		if acc.count > 0 {
-			avgTokens = float64(acc.totalTokens) / float64(acc.count)
-			avgDurMin = float64(acc.totalDurMs) / float64(acc.count) / 60000.0
-		}
-
-		dash.ByTaskType[tt] = TaskTypeStats{
-			Count:     acc.count,
-			AvgTokens: avgTokens,
-			AvgDurMin: avgDurMin,
-		}
-	}
-
 	// Populate MostCommonFindings from knowledge base.
 	dash.MostCommonFindings = r.mostCommonFindings()
 
@@ -206,7 +151,6 @@ func (r *Reporter) Dashboard() (*RepoDashboard, error) {
 // emptyDashboard returns a zero-value RepoDashboard with non-nil slices/maps.
 func (*Reporter) emptyDashboard() *RepoDashboard {
 	return &RepoDashboard{
-		ByTaskType:         make(map[string]TaskTypeStats),
 		ByFlowTemplate:     make(map[string]FlowStats),
 		MostCommonFindings: []PatternEntry{},
 	}

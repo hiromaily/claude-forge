@@ -18,7 +18,6 @@ import (
 // Agent name constants — unexported; used only inside NextAction dispatch.
 const (
 	agentSituationAnalyst    = "situation-analyst"
-	agentAnalyst             = "analyst"
 	agentInvestigator        = "investigator"
 	agentArchitect           = "architect"
 	agentDesignReviewer      = "design-reviewer"
@@ -116,28 +115,9 @@ func (e *Engine) NextAction(sm *state.StateManager, _ string) (Action, error) {
 	}
 }
 
-// handlePhaseOne handles Phase 1 (situation analysis / analyst).
-// Implements Decision 15 (lite → analyst) and Decision 16 (docs stub synthesis).
-func (e *Engine) handlePhaseOne(st *state.State) (Action, error) {
-	// Decision 16 — docs M/L stub synthesis (after Phase 1 completes)
-	if st.TaskType != nil && *st.TaskType == TaskTypeDocs &&
-		slices.Contains(st.CompletedPhases, PhaseOne) {
-		return e.handleDocsStubSynthesis(st, PhaseOne)
-	}
-
-	// Decision 15 — lite → analyst agent
-	if st.FlowTemplate != nil && *st.FlowTemplate == TemplateLite {
-		return NewSpawnAgentAction(
-			agentAnalyst,
-			"Run Phase 1+2 analysis for the pipeline.",
-			"sonnet",
-			PhaseOne,
-			[]string{"request.md"},
-			"analysis.md",
-		), nil
-	}
-
-	// Standard Phase 1: situation-analyst
+// handlePhaseOne handles Phase 1 (situation analysis).
+// Always dispatches agentSituationAnalyst.
+func (*Engine) handlePhaseOne(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentSituationAnalyst,
 		"Run Phase 1 situation analysis for the pipeline.",
@@ -145,51 +125,6 @@ func (e *Engine) handlePhaseOne(st *state.State) (Action, error) {
 		PhaseOne,
 		[]string{"request.md"},
 		"analysis.md",
-	), nil
-}
-
-// handleDocsStubSynthesis implements Decision 16 — docs M/L stub synthesis.
-// Returns stub write actions one at a time based on file existence.
-// phase is the pipeline phase under which these actions are issued (always PhaseOne from caller).
-func (*Engine) handleDocsStubSynthesis(st *state.State, phase string) (Action, error) {
-	workspace := st.Workspace
-
-	// Step 1: design.md absent → write stub
-	designPath := filepath.Join(workspace, "design.md")
-	if _, err := os.Stat(designPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return Action{}, fmt.Errorf("handleDocsStubSynthesis: stat %s: %w", designPath, err)
-		}
-		content := "# Design\n\n_Auto-generated stub for docs task type. " +
-			"Fill in the design details or leave as-is._\n"
-		return NewWriteFileAction(phase, designPath, content), nil
-	}
-
-	// Step 2: tasks.md absent → write stub
-	tasksPath := filepath.Join(workspace, "tasks.md")
-	if _, err := os.Stat(tasksPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return Action{}, fmt.Errorf("handleDocsStubSynthesis: stat %s: %w", tasksPath, err)
-		}
-		content := "## Task 1: Implement documentation [sequential]\n\n" +
-			"**Depends on:** None\n**Files:** TBD\n\n" +
-			"**Acceptance criteria:**\n- [ ] **AC-1:** Documentation is complete.\n"
-		return NewWriteFileAction(phase, tasksPath, content), nil
-	}
-
-	// Step 3: both present but tasks map empty → run task_init
-	if len(st.Tasks) == 0 {
-		return NewExecAction(phase, []string{"task_init", workspace}), nil
-	}
-
-	// Step 4: all done → advance to Phase 3b
-	return NewSpawnAgentAction(
-		agentDesignReviewer,
-		"Review the design document.",
-		"sonnet",
-		PhaseThreeB,
-		[]string{"design.md"},
-		"review-design.md",
 	), nil
 }
 
@@ -205,14 +140,8 @@ func (*Engine) handlePhaseTwo(_ *state.State) (Action, error) {
 	), nil
 }
 
-// handlePhaseThree handles Phase 3 (architect) and Decision 17 (bugfix stub synthesis).
-func (e *Engine) handlePhaseThree(st *state.State) (Action, error) {
-	// Decision 17 — bugfix stub synthesis (after Phase 3 completes)
-	if st.TaskType != nil && *st.TaskType == TaskTypeBugfix &&
-		slices.Contains(st.CompletedPhases, PhaseThree) {
-		return e.handleBugfixStubSynthesis(st, PhaseThree)
-	}
-
+// handlePhaseThree handles Phase 3 (architect).
+func (*Engine) handlePhaseThree(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentArchitect,
 		"Run Phase 3 architecture/design.",
@@ -220,50 +149,6 @@ func (e *Engine) handlePhaseThree(st *state.State) (Action, error) {
 		PhaseThree,
 		[]string{"request.md", "analysis.md", "investigation.md"},
 		"design.md",
-	), nil
-}
-
-// handleBugfixStubSynthesis implements Decision 17 — bugfix stub synthesis.
-// phase is the pipeline phase under which these actions are issued (always PhaseThree from caller).
-func (*Engine) handleBugfixStubSynthesis(st *state.State, phase string) (Action, error) {
-	workspace := st.Workspace
-
-	// Step 1: design.md absent → write stub
-	designPath := filepath.Join(workspace, "design.md")
-	if _, err := os.Stat(designPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return Action{}, fmt.Errorf("handleBugfixStubSynthesis: stat %s: %w", designPath, err)
-		}
-		content := "# Design\n\n_Auto-generated stub for bugfix task type. " +
-			"Fill in the fix description or leave as-is._\n"
-		return NewWriteFileAction(phase, designPath, content), nil
-	}
-
-	// Step 2: tasks.md absent → write stub
-	tasksPath := filepath.Join(workspace, "tasks.md")
-	if _, err := os.Stat(tasksPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return Action{}, fmt.Errorf("handleBugfixStubSynthesis: stat %s: %w", tasksPath, err)
-		}
-		content := "## Task 1: Apply bugfix [sequential]\n\n" +
-			"**Depends on:** None\n**Files:** TBD\n\n" +
-			"**Acceptance criteria:**\n- [ ] **AC-1:** Bug is fixed.\n"
-		return NewWriteFileAction(phase, tasksPath, content), nil
-	}
-
-	// Step 3: both present but tasks map empty → run task_init
-	if len(st.Tasks) == 0 {
-		return NewExecAction(phase, []string{"task_init", workspace}), nil
-	}
-
-	// Step 4: all done → advance to Phase 4b (task reviewer)
-	return NewSpawnAgentAction(
-		agentTaskReviewer,
-		"Review the task decomposition.",
-		"sonnet",
-		PhaseFourB,
-		[]string{"tasks.md"},
-		"review-tasks.md",
 	), nil
 }
 
@@ -629,19 +514,24 @@ func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 }
 
 // derivePRTitle generates a meaningful PR title from state context.
-// It uses the task type prefix and spec name as a basis.
+// The commit-type prefix is derived from the branch name prefix
+// (feature/ → feat, fix/ → fix, refactor/ → refactor, docs/ → docs, chore/ → chore).
+// Falls back to "feat" for unrecognised or absent branch prefixes.
 func derivePRTitle(st *state.State) string {
 	prefix := "feat"
-	if st.TaskType != nil {
-		switch *st.TaskType {
-		case TaskTypeBugfix:
+	if st.Branch != nil {
+		branch := *st.Branch
+		switch {
+		case strings.HasPrefix(branch, "fix/"):
 			prefix = "fix"
-		case TaskTypeDocs:
-			prefix = "docs"
-		case TaskTypeRefactor:
+		case strings.HasPrefix(branch, "refactor/"):
 			prefix = "refactor"
-		case TaskTypeInvestigation:
+		case strings.HasPrefix(branch, "docs/"):
+			prefix = "docs"
+		case strings.HasPrefix(branch, "chore/"):
 			prefix = "chore"
+		case strings.HasPrefix(branch, "feature/"):
+			prefix = "feat"
 		}
 	}
 
@@ -653,51 +543,23 @@ func derivePRTitle(st *state.State) string {
 }
 
 // handleFinalSummary handles the final-summary phase — Decision 25.
+// comprehensive-review.md is included only when PhaseSeven was not skipped
+// (i.e., the flow template is standard or full). For effort S (light template),
+// PhaseSeven is skipped and the file does not exist.
 func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
-	// Decision 25 — Final Summary template
-	taskType := TaskTypeFeature
-	if st.TaskType != nil {
-		taskType = *st.TaskType
+	inputs := []string{"design.md", "tasks.md"}
+	if !slices.Contains(st.SkippedPhases, PhaseSeven) {
+		inputs = append([]string{"comprehensive-review.md"}, inputs...)
 	}
 
-	switch taskType {
-	case TaskTypeBugfix, TaskTypeDocs:
-		// summary reads review-{N}.md files; no comprehensive-review.md
-		taskKeys := sortedTaskKeys(st.Tasks)
-		inputFiles := make([]string, 0, len(taskKeys))
-		for _, k := range taskKeys {
-			inputFiles = append(inputFiles, "review-"+k+".md")
-		}
-		return NewSpawnAgentAction(
-			agentVerifier,
-			"Generate final summary for "+taskType+" task.",
-			"sonnet",
-			PhaseFinalSummary,
-			inputFiles,
-			"final-summary.md",
-		), nil
-	case TaskTypeInvestigation:
-		// summary reads analysis.md and investigation.md
-		return NewSpawnAgentAction(
-			agentVerifier,
-			"Generate final summary for investigation task.",
-			"sonnet",
-			PhaseFinalSummary,
-			[]string{"analysis.md", "investigation.md"},
-			"final-summary.md",
-		), nil
-	default:
-		// feature, refactor, default: phase-7 already ran comprehensive review,
-		// so final-summary just generates a summary document from its output.
-		return NewSpawnAgentAction(
-			agentVerifier,
-			"Generate final summary with pipeline statistics.",
-			"sonnet",
-			PhaseFinalSummary,
-			[]string{"comprehensive-review.md", "design.md", "tasks.md"},
-			"final-summary.md",
-		), nil
-	}
+	return NewSpawnAgentAction(
+		agentVerifier,
+		"Generate final summary with pipeline statistics.",
+		"sonnet",
+		PhaseFinalSummary,
+		inputs,
+		"final-summary.md",
+	), nil
 }
 
 // handlePostToSource handles the post-to-source phase — Decision 26.

@@ -66,8 +66,8 @@ func TestRegisterAllCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 45 {
-		t.Errorf("RegisterAll: expected 45 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 44 {
+		t.Errorf("RegisterAll: expected 44 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
 		}

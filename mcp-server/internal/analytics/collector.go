@@ -26,7 +26,6 @@ func NewCollector(_ string) *Collector {
 // PipelineSummary contains aggregated metrics for a single pipeline run.
 type PipelineSummary struct {
 	Pipeline         string        `json:"pipeline"`
-	TaskType         string        `json:"task_type"`
 	Effort           string        `json:"effort"`
 	FlowTemplate     string        `json:"flow_template"`
 	TotalTokens      int           `json:"total_tokens"`
@@ -76,7 +75,6 @@ func (c *Collector) Collect(workspace string) (*PipelineSummary, error) {
 
 	summary := &PipelineSummary{
 		Pipeline:         s.SpecName,
-		TaskType:         derefString(s.TaskType),
 		Effort:           derefString(s.Effort),
 		FlowTemplate:     derefString(s.FlowTemplate),
 		TotalTokens:      totalTokens,

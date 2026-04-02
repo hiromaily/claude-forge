@@ -256,21 +256,6 @@ func TestNextAction(t *testing.T) {
 			wantSummary: SkipSummaryPrefix + "phase-2",
 		},
 
-		// ── Decision 15: lite flow template ──────────────────────────────────
-		{
-			name: "lite_flow_template",
-			setupSM: func(t *testing.T) *state.StateManager {
-				t.Helper()
-				lite := TemplateLite
-				return newTestStateManager(t, "phase-1", func(s *state.State) error {
-					s.FlowTemplate = &lite
-					return nil
-				})
-			},
-			wantType:  ActionSpawnAgent,
-			wantAgent: agentAnalyst,
-		},
-
 		// ── Decision 15: standard flow template ──────────────────────────────
 		{
 			name: "standard_flow_template",
@@ -280,96 +265,6 @@ func TestNextAction(t *testing.T) {
 			},
 			wantType:  ActionSpawnAgent,
 			wantAgent: agentSituationAnalyst,
-		},
-
-		// ── Decision 16: docs stub synthesis (uses TempDir for disk I/O) ──────
-		{
-			name: "docs_stub_synthesis",
-			setupSM: func(t *testing.T) *state.StateManager {
-				t.Helper()
-				docs := TaskTypeDocs
-				return newTestStateManager(t, "phase-1", func(s *state.State) error {
-					s.TaskType = &docs
-					s.CompletedPhases = []string{"setup", PhaseOne}
-					return nil
-				})
-			},
-			wantType:  ActionWriteFile,
-			wantPhase: PhaseOne,
-		},
-
-		// ── Decision 17: bugfix stub synthesis (uses TempDir for disk I/O) ───
-		{
-			name: "bugfix_stub_synthesis",
-			setupSM: func(t *testing.T) *state.StateManager {
-				t.Helper()
-				bugfix := TaskTypeBugfix
-				return newTestStateManager(t, "phase-3", func(s *state.State) error {
-					s.TaskType = &bugfix
-					s.CompletedPhases = []string{"setup", PhaseOne, PhaseTwo, PhaseThree}
-					return nil
-				})
-			},
-			wantType:  ActionWriteFile,
-			wantPhase: PhaseThree,
-		},
-
-		// ── Decision 16: docs stub synthesis exec step (both stubs present, tasks empty) ──
-		{
-			name: "docs_stub_synthesis_exec",
-			setupSM: func(t *testing.T) *state.StateManager {
-				t.Helper()
-				docs := TaskTypeDocs
-				sm := newTestStateManager(t, "phase-1", func(s *state.State) error {
-					s.TaskType = &docs
-					s.CompletedPhases = []string{"setup", PhaseOne}
-					return nil
-				})
-				st, err := sm.GetState()
-				if err != nil {
-					t.Fatalf("GetState: %v", err)
-				}
-				// Write both stub files so synthesis advances to exec step
-				if err := writeFileForTest(st.Workspace+"/design.md", "# Design\n"); err != nil {
-					t.Fatalf("writeFileForTest design.md: %v", err)
-				}
-				if err := writeFileForTest(st.Workspace+"/tasks.md", "## Task 1\n"); err != nil {
-					t.Fatalf("writeFileForTest tasks.md: %v", err)
-				}
-				return sm
-			},
-			wantType:      ActionExec,
-			wantPhase:     PhaseOne,
-			wantSetupOnly: new(false),
-		},
-
-		// ── Decision 17: bugfix stub synthesis exec step (both stubs present, tasks empty) ──
-		{
-			name: "bugfix_stub_synthesis_exec",
-			setupSM: func(t *testing.T) *state.StateManager {
-				t.Helper()
-				bugfix := TaskTypeBugfix
-				sm := newTestStateManager(t, "phase-3", func(s *state.State) error {
-					s.TaskType = &bugfix
-					s.CompletedPhases = []string{"setup", PhaseOne, PhaseTwo, PhaseThree}
-					return nil
-				})
-				st, err := sm.GetState()
-				if err != nil {
-					t.Fatalf("GetState: %v", err)
-				}
-				// Write both stub files so synthesis advances to exec step
-				if err := writeFileForTest(st.Workspace+"/design.md", "# Design\n"); err != nil {
-					t.Fatalf("writeFileForTest design.md: %v", err)
-				}
-				if err := writeFileForTest(st.Workspace+"/tasks.md", "## Task 1\n"); err != nil {
-					t.Fatalf("writeFileForTest tasks.md: %v", err)
-				}
-				return sm
-			},
-			wantType:      ActionExec,
-			wantPhase:     PhaseThree,
-			wantSetupOnly: new(false),
 		},
 
 		// ── Phase 2: investigator ─────────────────────────────────────────────
@@ -857,34 +752,16 @@ func TestNextAction(t *testing.T) {
 			wantSummary: SkipSummaryPrefix + "pr-creation",
 		},
 
-		// ── Decision 25: final-summary for investigation ─────────────────────
+		// ── Decision 25: final-summary uses fixed input file list ───────────
 		{
-			name: "final_summary_investigation",
+			name: "final_summary_fixed_inputs",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
-				investigation := TaskTypeInvestigation
-				return newTestStateManager(t, "final-summary", func(s *state.State) error {
-					s.TaskType = &investigation
-					return nil
-				})
+				return newTestStateManager(t, "final-summary", nil)
 			},
 			wantType:          ActionSpawnAgent,
-			wantInputContains: "investigation.md",
-		},
-
-		// ── Decision 25: final-summary for feature uses verifier (comprehensive review already done in phase-7)
-		{
-			name: "final_summary_feature",
-			setupSM: func(t *testing.T) *state.StateManager {
-				t.Helper()
-				feature := TaskTypeFeature
-				return newTestStateManager(t, "final-summary", func(s *state.State) error {
-					s.TaskType = &feature
-					return nil
-				})
-			},
-			wantType:  ActionSpawnAgent,
-			wantAgent: agentVerifier,
+			wantAgent:         agentVerifier,
+			wantInputContains: "comprehensive-review.md",
 		},
 
 		// ── Decision 26: post-to-source github_issue → checkpoint with post/skip ──
@@ -1096,26 +973,30 @@ func TestDeriveBranchName_Truncation(t *testing.T) {
 func TestDerivePRTitle(t *testing.T) {
 	t.Parallel()
 
-	bugfix := TaskTypeBugfix
-	feature := TaskTypeFeature
-	docs := TaskTypeDocs
-
 	tests := []struct {
 		name     string
-		taskType *string
+		branch   string
 		specName string
 		want     string
 	}{
-		{"bugfix", &bugfix, "20260330-soa-2899-fix-status", "fix: soa 2899 fix status"},
-		{"feature", &feature, "20260330-add-auth", "feat: add auth"},
-		{"docs", &docs, "update-readme", "docs: update readme"},
-		{"nil_type", nil, "some-task", "feat: some task"},
+		{"feature_prefix", "feature/add-auth", "20260330-add-auth", "feat: add auth"},
+		{"fix_prefix", "fix/soa-2899-fix-status", "20260330-soa-2899-fix-status", "fix: soa 2899 fix status"},
+		{"refactor_prefix", "refactor/clean-up", "clean-up", "refactor: clean up"},
+		{"docs_prefix", "docs/update-readme", "update-readme", "docs: update readme"},
+		{"chore_prefix", "chore/bump-deps", "bump-deps", "chore: bump deps"},
+		{"unknown_prefix_defaults_feat", "forge/some-task", "some-task", "feat: some task"},
+		{"no_branch_defaults_feat", "", "some-task", "feat: some task"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			st := &state.State{SpecName: tt.specName, TaskType: tt.taskType}
+			var branch *string
+			if tt.branch != "" {
+				b := tt.branch
+				branch = &b
+			}
+			st := &state.State{SpecName: tt.specName, Branch: branch}
 			got := derivePRTitle(st)
 			if got != tt.want {
 				t.Errorf("derivePRTitle() = %q, want %q", got, tt.want)

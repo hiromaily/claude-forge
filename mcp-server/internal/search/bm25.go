@@ -13,7 +13,6 @@ import (
 type IndexEntry struct {
 	SpecName       string           `json:"specName"`
 	Timestamp      string           `json:"timestamp"`
-	TaskType       *string          `json:"taskType"`
 	RequestSummary string           `json:"requestSummary"`
 	ReviewFeedback []ReviewFeedback `json:"reviewFeedback"`
 	ImplPatterns   []ImplPattern    `json:"implPatterns"`
@@ -76,11 +75,11 @@ func Tokenize(text string) []string {
 	return result
 }
 
-// Score runs BM25 over entries using query tokens derived from queryText,
-// applies the taskType multiplicative boost, and returns entries sorted by
-// descending score. Entries with score <= 0 are excluded from the result.
-// An empty query or empty entries slice returns an empty slice.
-func Score(entries []IndexEntry, queryText string, taskType string, params BM25Params) []ScoredEntry {
+// Score runs BM25 over entries using query tokens derived from queryText
+// and returns entries sorted by descending score. Entries with score <= 0
+// are excluded from the result. An empty query or empty entries slice returns
+// an empty slice.
+func Score(entries []IndexEntry, queryText string, params BM25Params) []ScoredEntry {
 	if len(entries) == 0 {
 		return []ScoredEntry{}
 	}
@@ -149,14 +148,7 @@ func Score(entries []IndexEntry, queryText string, taskType string, params BM25P
 			continue
 		}
 
-		// Apply taskType post-score multiplicative boost.
-		typeBoost := 0.0
-		if taskType != "" && e.TaskType != nil && *e.TaskType == taskType {
-			typeBoost = 1.0
-		}
-		finalScore := bm25 * (1 + typeBoost)
-
-		scored = append(scored, ScoredEntry{Entry: e, Score: finalScore})
+		scored = append(scored, ScoredEntry{Entry: e, Score: bm25})
 	}
 
 	// Sort descending by final score.

@@ -16,7 +16,7 @@ import (
 const defaultHistorySearchLimit = 3
 
 // HistorySearchHandler handles the "history_search" MCP tool.
-// Accepts: query (required), limit (optional, default 3), task_type_filter (optional).
+// Accepts: query (required), limit (optional, default 3).
 func HistorySearchHandler(idx *history.HistoryIndex) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return historySearchWithIndex(ctx, req, idx, idx.SpecsDir())
@@ -34,7 +34,6 @@ func historySearchWithIndex(
 ) (*mcp.CallToolResult, error) {
 	query := req.GetString("query", "")
 	limit := req.GetInt("limit", 0)
-	taskTypeFilter := req.GetString("task_type_filter", "")
 
 	// Default limit is 3 when absent or zero.
 	if limit <= 0 {
@@ -44,7 +43,7 @@ func historySearchWithIndex(
 	// Build the search result using the history.Search function.
 	// specsDir is threaded through so readDesignExcerpt can resolve design.md files.
 	// We wrap idx with the provided specsDir by creating an adjusted index view.
-	results, err := historySearchWithSpecsDir(idx, query, limit, taskTypeFilter, specsDir)
+	results, err := historySearchWithSpecsDir(idx, query, limit, specsDir)
 	if err != nil {
 		return errorf("history_search: %v", err)
 	}
@@ -67,11 +66,10 @@ func historySearchWithSpecsDir(
 	idx *history.HistoryIndex,
 	query string,
 	limit int,
-	taskTypeFilter string,
 	specsDir string,
 ) ([]history.SearchResult, error) {
 	if specsDir == "" || specsDir == idx.SpecsDir() {
-		return history.Search(idx, query, limit, taskTypeFilter)
+		return history.Search(idx, query, limit)
 	}
-	return history.SearchWithSpecsDir(idx, query, limit, taskTypeFilter, specsDir)
+	return history.SearchWithSpecsDir(idx, query, limit, specsDir)
 }

@@ -2,7 +2,7 @@
   "version": 2,
   "specName": "effort-only-flow",
   "workspace": ".specs/20260401-effort-only-flow",
-  "branch": null,
+  "branch": "forge/effort-only-flow",
   "taskType": "feature",
   "effort": "L",
   "flowTemplate": "full",
@@ -11,8 +11,8 @@
   "useCurrentBranch": false,
   "debug": false,
   "skippedPhases": [],
-  "currentPhase": "checkpoint-b",
-  "currentPhaseStatus": "awaiting_human",
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
   "completedPhases": [
     "setup",
     "phase-1",
@@ -21,7 +21,15 @@
     "phase-3b",
     "checkpoint-a",
     "phase-4",
-    "phase-4b"
+    "phase-4b",
+    "checkpoint-b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "final-verification",
+    "pr-creation",
+    "final-summary",
+    "post-to-source"
   ],
   "revisions": {
     "designRevisions": 0,
@@ -33,7 +41,235 @@
     "checkpoint-a": false,
     "checkpoint-b": false
   },
-  "tasks": {},
+  "tasks": {
+    "1": {
+      "title": "Remove task type and XS effort from state package",
+      "executionMode": "",
+      "depends_on": [],
+      "files": [
+        "mcp-server/internal/state/state.go",
+        "mcp-server/internal/state/manager.go",
+        "mcp-server/internal/state/state_test.go",
+        "mcp-server/internal/state/manager_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "10": {
+      "title": "Remove task type from history and search subsystems",
+      "executionMode": "",
+      "depends_on": [
+        1
+      ],
+      "files": [
+        "mcp-server/internal/history/index.go",
+        "mcp-server/internal/history/search.go",
+        "mcp-server/internal/tools/history_search.go",
+        "mcp-server/internal/search/bm25.go",
+        "mcp-server/internal/tools/search_patterns.go",
+        "mcp-server/internal/indexer/specs_index.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "11": {
+      "title": "Delete agents/analyst.md",
+      "executionMode": "",
+      "depends_on": [
+        4
+      ],
+      "files": [
+        "agents/analyst.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "12": {
+      "title": "Update documentation files",
+      "executionMode": "",
+      "depends_on": [
+        11
+      ],
+      "files": [
+        "agents/README.md",
+        "CLAUDE.md",
+        "ARCHITECTURE.md",
+        "README.md",
+        "BACKLOG.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "13": {
+      "title": "Update SKILL.md orchestrator instructions",
+      "executionMode": "",
+      "depends_on": [
+        6,
+        9,
+        10
+      ],
+      "files": [
+        "skills/forge/SKILL.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "14": {
+      "title": "Full build and test verification",
+      "executionMode": "",
+      "depends_on": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "files": [],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Refactor detection.go - remove task type logic, add EffortToTemplate",
+      "executionMode": "",
+      "depends_on": [],
+      "files": [
+        "mcp-server/internal/orchestrator/detection.go",
+        "mcp-server/internal/orchestrator/detection_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Refactor flow_templates.go - remove cell-based logic, add SkipsForEffort",
+      "executionMode": "",
+      "depends_on": [],
+      "files": [
+        "mcp-server/internal/orchestrator/flow_templates.go",
+        "mcp-server/internal/orchestrator/flow_templates_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Simplify engine.go - remove task-type dispatch, analyst agent, stub synthesis",
+      "executionMode": "",
+      "depends_on": [
+        2,
+        3
+      ],
+      "files": [
+        "mcp-server/internal/orchestrator/engine.go",
+        "mcp-server/internal/orchestrator/engine_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Remove SetTaskTypeHandler and set_task_type tool registration",
+      "executionMode": "",
+      "depends_on": [
+        1
+      ],
+      "files": [
+        "mcp-server/internal/tools/handlers.go",
+        "mcp-server/internal/tools/registry.go",
+        "mcp-server/internal/tools/handlers_test.go",
+        "mcp-server/internal/tools/registry_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "Reshape pipeline_init_with_context.go - remove task type, always-prompt UX",
+      "executionMode": "",
+      "depends_on": [
+        2,
+        3,
+        5
+      ],
+      "files": [
+        "mcp-server/internal/tools/pipeline_init_with_context.go",
+        "mcp-server/internal/tools/pipeline_init_with_context_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "7": {
+      "title": "Remove TypeOverride from pipeline_init.go",
+      "executionMode": "",
+      "depends_on": [
+        6
+      ],
+      "files": [
+        "mcp-server/internal/tools/pipeline_init.go",
+        "mcp-server/internal/tools/pipeline_init_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "8": {
+      "title": "Add XS rejection to validation/input.go",
+      "executionMode": "",
+      "depends_on": [],
+      "files": [
+        "mcp-server/internal/validation/input.go",
+        "mcp-server/internal/validation/input_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "9": {
+      "title": "Remove task type from analytics subsystem",
+      "executionMode": "",
+      "depends_on": [
+        1
+      ],
+      "files": [
+        "mcp-server/internal/analytics/collector.go",
+        "mcp-server/internal/analytics/reporter.go",
+        "mcp-server/internal/analytics/estimator.go",
+        "mcp-server/internal/tools/analytics_estimate.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "",
+      "implRetries": 0,
+      "reviewRetries": 0
+    }
+  },
   "phaseLog": [
     {
       "phase": "phase-1",
@@ -83,11 +319,158 @@
       "duration_ms": 65249,
       "model": "sonnet",
       "timestamp": "2026-04-01T12:07:20.399158Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-01T13:28:21.535763Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-01T13:28:39.422432Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 81830,
+      "duration_ms": 346722,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T13:35:42.263288Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 53586,
+      "duration_ms": 107348,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T13:38:21.237885Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 59438,
+      "duration_ms": 223575,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T13:42:52.92178Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 85123,
+      "duration_ms": 291693,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T13:48:55.478416Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 76529,
+      "duration_ms": 217612,
+      "model": "sonnet",
+      "timestamp": "2026-04-01T13:53:26.527653Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 102062,
+      "duration_ms": 323718,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:01:08.186518Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 36669,
+      "duration_ms": 116529,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:03:52.408022Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 34997,
+      "duration_ms": 50905,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:05:05.681136Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 62329,
+      "duration_ms": 218496,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:09:21.474524Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 115615,
+      "duration_ms": 603358,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:20:09.65542Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 18191,
+      "duration_ms": 30839,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:22:07.13977Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 78717,
+      "duration_ms": 463743,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:30:19.054444Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 21101,
+      "duration_ms": 46854,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:31:31.086879Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 18175,
+      "duration_ms": 35760,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:32:26.640317Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 79397,
+      "duration_ms": 310206,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:38:02.025511Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 81667,
+      "duration_ms": 372468,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:44:36.883904Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 18864,
+      "duration_ms": 34932,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:45:28.951925Z"
+    },
+    {
+      "phase": "pr-creation",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:46:26.963886Z"
+    },
+    {
+      "phase": "final-summary",
+      "tokens": 17373,
+      "duration_ms": 23151,
+      "model": "sonnet",
+      "timestamp": "2026-04-02T01:47:30.859264Z"
     }
   ],
   "timestamps": {
     "created": "2026-04-01T08:56:19.606946Z",
-    "lastUpdated": "2026-04-01T12:07:20.402197Z",
+    "lastUpdated": "2026-04-02T01:47:40.485699Z",
     "phaseStarted": null
   },
   "error": null

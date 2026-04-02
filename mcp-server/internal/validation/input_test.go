@@ -168,6 +168,38 @@ func TestValidateInput(t *testing.T) {
 			wantValid:      true,
 			wantSourceType: "workspace",
 		},
+		// XS effort rejection (AC-1)
+		{
+			name:           "effort XS rejected",
+			input:          "--effort=XS implement login",
+			wantValid:      false,
+			wantErrContain: `effort "XS" is not supported; valid efforts are: S, M, L`,
+		},
+		{
+			name:           "effort XS rejected with other flags",
+			input:          "--auto --effort=XS implement the feature",
+			wantValid:      false,
+			wantErrContain: `effort "XS" is not supported; valid efforts are: S, M, L`,
+		},
+		// Valid efforts pass XS check (AC-2)
+		{
+			name:           "effort S passes validation",
+			input:          "--effort=S implement login",
+			wantValid:      true,
+			wantSourceType: "text",
+		},
+		{
+			name:           "effort M passes validation",
+			input:          "--effort=M implement login",
+			wantValid:      true,
+			wantSourceType: "text",
+		},
+		{
+			name:           "effort L passes validation",
+			input:          "--effort=L implement login",
+			wantValid:      true,
+			wantSourceType: "text",
+		},
 	}
 
 	for _, tc := range tests {

@@ -43,9 +43,9 @@ type sample struct {
 	durationMs int
 }
 
-// Estimate scans specsDir for completed pipelines matching (taskType, effort)
+// Estimate scans specsDir for completed pipelines matching effort
 // and returns P50/P90 predictions for tokens, duration, and cost.
-func (e *Estimator) Estimate(taskType, effort string) (*EstimateResult, error) {
+func (e *Estimator) Estimate(effort string) (*EstimateResult, error) {
 	entries, err := os.ReadDir(e.specsDir)
 	if err != nil {
 		return nil, fmt.Errorf("estimator ReadDir %s: %w", e.specsDir, err)
@@ -67,10 +67,6 @@ func (e *Estimator) Estimate(taskType, effort string) (*EstimateResult, error) {
 		}
 
 		if s.CurrentPhase != "completed" {
-			continue
-		}
-
-		if s.TaskType == nil || *s.TaskType != taskType {
 			continue
 		}
 
@@ -102,7 +98,7 @@ func (e *Estimator) Estimate(taskType, effort string) (*EstimateResult, error) {
 			DurationMin: Percentiles{},
 			CostUSD:     Percentiles{},
 			Confidence:  confidence,
-			Note:        fmt.Sprintf("No completed pipelines found for task_type=%q effort=%q. Predictions will improve as pipelines are completed.", taskType, effort),
+			Note:        fmt.Sprintf("No completed pipelines found for effort=%q. Predictions will improve as pipelines are completed.", effort),
 		}, nil
 	}
 
@@ -135,7 +131,7 @@ func (e *Estimator) Estimate(taskType, effort string) (*EstimateResult, error) {
 			P90: percentile(costVals, 90),
 		},
 		Confidence: confidence,
-		Note:       fmt.Sprintf("Based on %d completed pipeline(s) for task_type=%q effort=%q.", n, taskType, effort),
+		Note:       fmt.Sprintf("Based on %d completed pipeline(s) for effort=%q.", n, effort),
 	}, nil
 }
 

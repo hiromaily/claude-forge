@@ -64,7 +64,6 @@ type PipelineInitFlags struct {
 	Auto           bool    `json:"auto"`
 	SkipPR         bool    `json:"skip_pr"`
 	Debug          bool    `json:"debug"`
-	TypeOverride   *string `json:"type_override"`
 	EffortOverride *string `json:"effort_override"`
 	CurrentBranch  string  `json:"current_branch,omitempty"`
 }
@@ -199,11 +198,7 @@ func buildFlags(parsed validation.ParsedInput, currentBranch string) *PipelineIn
 		}
 	}
 
-	// Key-value flags: type and effort overrides.
-	if v, ok := parsed.Flags["type"]; ok {
-		s := v
-		flags.TypeOverride = &s
-	}
+	// Key-value flags: effort override.
 	if v, ok := parsed.Flags["effort"]; ok {
 		s := v
 		flags.EffortOverride = &s

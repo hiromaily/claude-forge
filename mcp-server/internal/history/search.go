@@ -14,7 +14,6 @@ import (
 type SearchResult struct {
 	SpecName        string  `json:"spec_name"`
 	Similarity      float64 `json:"similarity"`
-	TaskType        string  `json:"task_type"`
 	Effort          string  `json:"effort"`
 	FlowTemplate    string  `json:"flow_template"`
 	OneLiner        string  `json:"one_liner"`
@@ -25,46 +24,30 @@ type SearchResult struct {
 }
 
 // Search queries the history index using BM25 scoring and returns results ordered
-// by descending Similarity. When taskTypeFilter is non-empty, only entries with
-// matching TaskType are included before scoring. Results are capped to limit.
-func Search(idx *HistoryIndex, query string, limit int, taskTypeFilter string) ([]SearchResult, error) {
-	return SearchWithSpecsDir(idx, query, limit, taskTypeFilter, idx.specsDir)
+// by descending Similarity. Results are capped to limit.
+func Search(idx *HistoryIndex, query string, limit int) ([]SearchResult, error) {
+	return SearchWithSpecsDir(idx, query, limit, idx.specsDir)
 }
 
 // SearchWithSpecsDir is like Search but uses an explicit specsDir for design excerpt
 // resolution instead of the idx.specsDir field. This allows tests to inject a
 // temporary directory without needing to modify the index's internal state.
-func SearchWithSpecsDir(idx *HistoryIndex, query string, limit int, taskTypeFilter string, specsDir string) ([]SearchResult, error) {
+func SearchWithSpecsDir(idx *HistoryIndex, query string, limit int, specsDir string) ([]SearchResult, error) {
 	entries := idx.Entries()
 	if len(entries) == 0 {
 		return []SearchResult{}, nil
 	}
 
-	// Apply taskTypeFilter as a hard pre-filter.
-	filtered := entries
-	if taskTypeFilter != "" {
-		filtered = make([]IndexEntry, 0, len(entries))
-		for _, e := range entries {
-			if e.TaskType == taskTypeFilter {
-				filtered = append(filtered, e)
-			}
-		}
-	}
-
-	if len(filtered) == 0 {
-		return []SearchResult{}, nil
-	}
-
 	// Project IndexEntry slice to search.IndexEntry slice and build a lookup map.
-	searchEntries := make([]bm25.IndexEntry, len(filtered))
-	entryMap := make(map[string]IndexEntry, len(filtered))
-	for i, e := range filtered {
+	searchEntries := make([]bm25.IndexEntry, len(entries))
+	entryMap := make(map[string]IndexEntry, len(entries))
+	for i, e := range entries {
 		searchEntries[i] = toSearchEntry(e)
 		entryMap[e.SpecName] = e
 	}
 
 	// Run BM25 scoring.
-	scored := bm25.Score(searchEntries, query, "", bm25.DefaultBM25Params())
+	scored := bm25.Score(searchEntries, query, bm25.DefaultBM25Params())
 
 	// Sort descending by score (Score already returns descending, but be explicit).
 	sort.Slice(scored, func(i, j int) bool {
@@ -85,7 +68,6 @@ func SearchWithSpecsDir(idx *HistoryIndex, query string, limit int, taskTypeFilt
 		results = append(results, SearchResult{
 			SpecName:        orig.SpecName,
 			Similarity:      se.Score,
-			TaskType:        orig.TaskType,
 			Effort:          orig.Effort,
 			FlowTemplate:    orig.FlowTemplate,
 			OneLiner:        orig.OneLiner,
@@ -101,11 +83,9 @@ func SearchWithSpecsDir(idx *HistoryIndex, query string, limit int, taskTypeFilt
 
 // toSearchEntry projects a history.IndexEntry into a search.IndexEntry for BM25 scoring.
 func toSearchEntry(e IndexEntry) bm25.IndexEntry {
-	v := e.TaskType
 	return bm25.IndexEntry{
 		SpecName:       e.SpecName,
 		RequestSummary: e.OneLiner + " " + strings.Join(e.Tags, " "),
-		TaskType:       &v,
 		Outcome:        e.Outcome,
 	}
 }

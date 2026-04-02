@@ -22,12 +22,14 @@ import (
 )
 
 // TestRegisterAllNewSignatureCount verifies that the updated 13-arg RegisterAll
-// registers exactly 45 tools, including subscribe_events, ast_summary, ast_find_definition,
-// dependency_graph, impact_scope, pipeline_init, pipeline_init_with_context,
-// pipeline_next_action, pipeline_report_result, history_search, history_get_patterns,
-// history_get_friction_map, profile_get, analytics_pipeline_summary,
-// analytics_repo_dashboard, and analytics_estimate.
+// registers exactly 44 tools (set_task_type removed), including subscribe_events,
+// ast_summary, ast_find_definition, dependency_graph, impact_scope, pipeline_init,
+// pipeline_init_with_context, pipeline_next_action, pipeline_report_result,
+// history_search, history_get_patterns, history_get_friction_map, profile_get,
+// analytics_pipeline_summary, analytics_repo_dashboard, and analytics_estimate.
 func TestRegisterAllNewSignatureCount(t *testing.T) {
+	t.Parallel()
+
 	srv := server.NewMCPServer("forge-state", "1.0.0")
 	sm := state.NewStateManager()
 	bus := events.NewEventBus()
@@ -46,10 +48,153 @@ func TestRegisterAllNewSignatureCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 45 {
-		t.Errorf("RegisterAll: expected 45 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 44 {
+		t.Errorf("RegisterAll: expected 44 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
+		}
+	}
+}
+
+// TestSetTaskTypeToolNotRegistered verifies that set_task_type is not among the
+// registered MCP tools after Task 5 removes it.
+func TestSetTaskTypeToolNotRegistered(t *testing.T) {
+	t.Parallel()
+
+	srv := server.NewMCPServer("forge-state", "1.0.0")
+	sm := state.NewStateManager()
+	bus := events.NewEventBus()
+	slack := events.NewSlackNotifier("")
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
+		history.New(""), history.NewKnowledgeBase(""), profile.New("", ""),
+		(*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+
+	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	var resp struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	raw, _ := json.Marshal(msg)
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("unmarshal tools/list: %v", err)
+	}
+	for _, tool := range resp.Result.Tools {
+		if tool.Name == "set_task_type" {
+			t.Errorf("set_task_type should not be registered after Task 5 removal")
+		}
+	}
+}
+
+// TestSearchPatternsToolSchemaNoTaskType verifies that the search_patterns tool
+// does not include a task_type parameter in its schema.
+func TestSearchPatternsToolSchemaNoTaskType(t *testing.T) {
+	t.Parallel()
+
+	srv := server.NewMCPServer("forge-state", "1.0.0")
+	sm := state.NewStateManager()
+	bus := events.NewEventBus()
+	slack := events.NewSlackNotifier("")
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
+		history.New(""), history.NewKnowledgeBase(""), profile.New("", ""),
+		(*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+
+	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	var resp struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				InputSchema struct {
+					Properties map[string]any `json:"properties"`
+				} `json:"inputSchema"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	raw, _ := json.Marshal(msg)
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("unmarshal tools/list: %v", err)
+	}
+	for _, tool := range resp.Result.Tools {
+		if tool.Name == "search_patterns" {
+			if _, hasTaskType := tool.InputSchema.Properties["task_type"]; hasTaskType {
+				t.Errorf("search_patterns schema should not have task_type parameter")
+			}
+		}
+	}
+}
+
+// TestAnalyticsEstimateToolSchemaNoTaskType verifies that analytics_estimate does
+// not include a task_type parameter in its schema.
+func TestAnalyticsEstimateToolSchemaNoTaskType(t *testing.T) {
+	t.Parallel()
+
+	srv := server.NewMCPServer("forge-state", "1.0.0")
+	sm := state.NewStateManager()
+	bus := events.NewEventBus()
+	slack := events.NewSlackNotifier("")
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
+		history.New(""), history.NewKnowledgeBase(""), profile.New("", ""),
+		(*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+
+	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	var resp struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				InputSchema struct {
+					Properties map[string]any `json:"properties"`
+				} `json:"inputSchema"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	raw, _ := json.Marshal(msg)
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("unmarshal tools/list: %v", err)
+	}
+	for _, tool := range resp.Result.Tools {
+		if tool.Name == "analytics_estimate" {
+			if _, hasTaskType := tool.InputSchema.Properties["task_type"]; hasTaskType {
+				t.Errorf("analytics_estimate schema should not have task_type parameter")
+			}
+		}
+	}
+}
+
+// TestHistorySearchToolSchemaNoTaskTypeFilter verifies that history_search does
+// not include a task_type_filter parameter in its schema.
+func TestHistorySearchToolSchemaNoTaskTypeFilter(t *testing.T) {
+	t.Parallel()
+
+	srv := server.NewMCPServer("forge-state", "1.0.0")
+	sm := state.NewStateManager()
+	bus := events.NewEventBus()
+	slack := events.NewSlackNotifier("")
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
+		history.New(""), history.NewKnowledgeBase(""), profile.New("", ""),
+		(*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+
+	msg := srv.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	var resp struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				InputSchema struct {
+					Properties map[string]any `json:"properties"`
+				} `json:"inputSchema"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	raw, _ := json.Marshal(msg)
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("unmarshal tools/list: %v", err)
+	}
+	for _, tool := range resp.Result.Tools {
+		if tool.Name == "history_search" {
+			if _, hasFilter := tool.InputSchema.Properties["task_type_filter"]; hasFilter {
+				t.Errorf("history_search schema should not have task_type_filter parameter")
+			}
 		}
 	}
 }

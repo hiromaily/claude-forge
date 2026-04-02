@@ -32,16 +32,17 @@ func parsePIWCResult(t *testing.T, content string) PipelineInitWithContextResult
 
 // ---------- TestPipelineInitWithContextFirstCall ----------
 
-func TestPipelineInitWithContextFirstCall(t *testing.T) {
+// TestPipelineInitWithContextFirstCallEffortOptions asserts that the first call
+// always returns needs_user_confirmation with EffortOptions keys "S", "M", "L"
+// and DetectedEffort set, regardless of external_context.
+func TestPipelineInitWithContextFirstCallEffortOptions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name            string
 		externalContext map[string]any
 		flags           map[string]any
-		wantTaskType    string
 		wantEffort      string
-		wantTemplate    string
 		wantNoStateJSON bool
 	}{
 		{
@@ -52,9 +53,7 @@ func TestPipelineInitWithContextFirstCall(t *testing.T) {
 				"github_body":   "application crashes on startup",
 			},
 			flags:           map[string]any{},
-			wantTaskType:    orchestrator.TaskTypeBugfix,
 			wantEffort:      "M",
-			wantTemplate:    "light",
 			wantNoStateJSON: true,
 		},
 		{
@@ -65,18 +64,14 @@ func TestPipelineInitWithContextFirstCall(t *testing.T) {
 				"jira_description": "Users cannot log in",
 			},
 			flags:           map[string]any{},
-			wantTaskType:    orchestrator.TaskTypeBugfix,
 			wantEffort:      "M",
-			wantTemplate:    "light",
 			wantNoStateJSON: true,
 		},
 		{
-			name:            "text_heuristic_feature",
+			name:            "text_heuristic_default",
 			externalContext: map[string]any{},
 			flags:           map[string]any{},
-			wantTaskType:    orchestrator.TaskTypeFeature,
 			wantEffort:      "M",
-			wantTemplate:    "standard",
 			wantNoStateJSON: true,
 		},
 	}
@@ -107,15 +102,43 @@ func TestPipelineInitWithContextFirstCall(t *testing.T) {
 			}
 
 			nuc := result.NeedsUserConfirmation
-			if nuc.DetectedTaskType != tc.wantTaskType {
-				t.Errorf("detected_task_type = %q, want %q", nuc.DetectedTaskType, tc.wantTaskType)
+
+			// DetectedEffort must be set
+			if nuc.DetectedEffort == "" {
+				t.Errorf("detected_effort is empty, want non-empty")
 			}
 			if nuc.DetectedEffort != tc.wantEffort {
 				t.Errorf("detected_effort = %q, want %q", nuc.DetectedEffort, tc.wantEffort)
 			}
-			if nuc.FlowTemplate != tc.wantTemplate {
-				t.Errorf("flow_template = %q, want %q", nuc.FlowTemplate, tc.wantTemplate)
+
+			// EffortOptions must contain keys "S", "M", "L"
+			if nuc.EffortOptions == nil {
+				t.Fatalf("effort_options is nil")
 			}
+			for _, key := range []string{"S", "M", "L"} {
+				if _, ok := nuc.EffortOptions[key]; !ok {
+					t.Errorf("effort_options missing key %q; got keys: %v", key, nuc.EffortOptions)
+				}
+			}
+			// Must not contain extra keys
+			if len(nuc.EffortOptions) != 3 {
+				t.Errorf("effort_options has %d keys, want exactly 3 (S, M, L); got: %v", len(nuc.EffortOptions), nuc.EffortOptions)
+			}
+
+			// Verify each effort option maps to the correct skips
+			wantS := orchestrator.SkipsForEffort("S")
+			wantM := orchestrator.SkipsForEffort("M")
+			wantL := orchestrator.SkipsForEffort("L")
+			if !stringSliceEqual(nuc.EffortOptions["S"], wantS) {
+				t.Errorf("effort_options[S] = %v, want %v", nuc.EffortOptions["S"], wantS)
+			}
+			if !stringSliceEqual(nuc.EffortOptions["M"], wantM) {
+				t.Errorf("effort_options[M] = %v, want %v", nuc.EffortOptions["M"], wantM)
+			}
+			if !stringSliceEqual(nuc.EffortOptions["L"], wantL) {
+				t.Errorf("effort_options[L] = %v, want %v", nuc.EffortOptions["L"], wantL)
+			}
+
 			if nuc.Message == "" {
 				t.Errorf("message field is empty")
 			}
@@ -131,12 +154,12 @@ func TestPipelineInitWithContextFirstCall(t *testing.T) {
 	}
 }
 
-// ---------- TestPipelineInitWithContextDecision12 ----------
-
-func TestPipelineInitWithContextDecision12(t *testing.T) {
+// TestPipelineInitWithContextFirstCallAlwaysPrompts asserts that the first call
+// always returns needs_user_confirmation even when auto=true and effort_override="L"
+// (no --auto bypass).
+func TestPipelineInitWithContextFirstCallAlwaysPrompts(t *testing.T) {
 	t.Parallel()
 
-	// feature + L = full; with auto=true → downgrade to standard
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
@@ -147,34 +170,26 @@ func TestPipelineInitWithContextDecision12(t *testing.T) {
 		"flags": map[string]any{
 			"auto":            true,
 			"effort_override": "L",
-			"type_override":   "feature",
 		},
 		// no user_confirmation
 	})
 
 	if res.IsError {
-		t.Fatalf("decision 12 first call returned MCP error: %v", textContent(res))
+		t.Fatalf("first call with auto=true returned MCP error: %v", textContent(res))
 	}
 
 	result := parsePIWCResult(t, textContent(res))
+	// Must still return needs_user_confirmation (no --auto bypass)
 	if result.NeedsUserConfirmation == nil {
-		t.Fatalf("expected needs_user_confirmation, got nil")
+		t.Fatalf("expected needs_user_confirmation even with auto=true, got nil; result=%+v", result)
 	}
 
 	nuc := result.NeedsUserConfirmation
-	// Should be downgraded to standard
-	if nuc.FlowTemplate != "standard" {
-		t.Errorf("flow_template = %q, want %q (should be downgraded from full)", nuc.FlowTemplate, "standard")
-	}
-	// Warning must be non-empty
-	if result.Warning == "" {
-		t.Errorf("warning field is empty; expected downgrade warning")
-	}
-
-	// skipped_phases must match SkipsForTemplate("standard")
-	expectedSkips := orchestrator.SkipsForTemplate("standard")
-	if len(nuc.SkippedPhases) != len(expectedSkips) {
-		t.Errorf("skipped_phases len = %d, want %d (standard skips)", len(nuc.SkippedPhases), len(expectedSkips))
+	// EffortOptions must still contain S, M, L
+	for _, key := range []string{"S", "M", "L"} {
+		if _, ok := nuc.EffortOptions[key]; !ok {
+			t.Errorf("effort_options missing key %q with auto=true", key)
+		}
 	}
 }
 
@@ -188,14 +203,13 @@ func TestPipelineInitWithContextSecondCall(t *testing.T) {
 
 	h := PipelineInitWithContextHandler(sm)
 
-	// Second call: with user_confirmation
+	// Second call: with user_confirmation (no task_type)
 	res := callTool(t, h, map[string]any{
 		"workspace":        dir,
 		"external_context": map[string]any{},
 		"flags":            map[string]any{},
 		"user_confirmation": map[string]any{
-			"task_type": "feature",
-			"effort":    "M",
+			"effort": "M",
 		},
 	})
 
@@ -217,19 +231,16 @@ func TestPipelineInitWithContextSecondCall(t *testing.T) {
 		t.Errorf("state.json should be created on second call: %v", err)
 	}
 
-	// Verify state contents
+	// Verify state contents — no TaskType written
 	s, err := state.ReadState(dir)
 	if err != nil {
 		t.Fatalf("ReadState: %v", err)
 	}
-	if s.TaskType == nil || *s.TaskType != "feature" {
-		t.Errorf("state.TaskType = %v, want feature", s.TaskType)
-	}
 	if s.Effort == nil || *s.Effort != "M" {
 		t.Errorf("state.Effort = %v, want M", s.Effort)
 	}
-	if s.FlowTemplate == nil || *s.FlowTemplate != "standard" {
-		t.Errorf("state.FlowTemplate = %v, want standard", s.FlowTemplate)
+	if s.FlowTemplate == nil || *s.FlowTemplate != orchestrator.EffortToTemplate("M") {
+		t.Errorf("state.FlowTemplate = %v, want %q", s.FlowTemplate, orchestrator.EffortToTemplate("M"))
 	}
 
 	// request.md must be written
@@ -244,12 +255,34 @@ func TestPipelineInitWithContextSecondCall(t *testing.T) {
 		"external_context": map[string]any{},
 		"flags":            map[string]any{},
 		"user_confirmation": map[string]any{
-			"task_type": "feature",
-			"effort":    "M",
+			"effort": "M",
 		},
 	})
 	if !res2.IsError {
 		t.Errorf("second call when state.json exists should return MCP error")
+	}
+}
+
+// TestPipelineInitWithContextSecondCallXSReturnsError asserts that passing
+// effort: "XS" in user_confirmation returns an error.
+func TestPipelineInitWithContextSecondCallXSReturnsError(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace":        dir,
+		"external_context": map[string]any{},
+		"flags":            map[string]any{},
+		"user_confirmation": map[string]any{
+			"effort": "XS",
+		},
+	})
+
+	if !res.IsError {
+		t.Errorf("effort XS should return MCP error, but got success")
 	}
 }
 
@@ -285,8 +318,7 @@ func TestPipelineInitWithContextCurrentBranch(t *testing.T) {
 				"external_context": map[string]any{},
 				"flags":            flags,
 				"user_confirmation": map[string]any{
-					"task_type": "feature",
-					"effort":    "M",
+					"effort": "M",
 				},
 			})
 
@@ -308,71 +340,6 @@ func TestPipelineInitWithContextCurrentBranch(t *testing.T) {
 	}
 }
 
-// ---------- TestPipelineInitWithContextUserOverride ----------
-
-func TestPipelineInitWithContextUserOverride(t *testing.T) {
-	t.Parallel()
-
-	// detected type would be "feature" (default), but user confirms "bugfix"
-	dir := t.TempDir()
-	sm := newPIWCSM()
-
-	h := PipelineInitWithContextHandler(sm)
-	res := callTool(t, h, map[string]any{
-		"workspace":        dir,
-		"external_context": map[string]any{},
-		"flags":            map[string]any{},
-		"user_confirmation": map[string]any{
-			"task_type": "bugfix",
-			"effort":    "S",
-		},
-	})
-
-	if res.IsError {
-		t.Fatalf("returned MCP error: %v", textContent(res))
-	}
-
-	result := parsePIWCResult(t, textContent(res))
-	if !result.Ready {
-		t.Fatalf("ready = false")
-	}
-
-	s, err := state.ReadState(dir)
-	if err != nil {
-		t.Fatalf("ReadState: %v", err)
-	}
-	if s.TaskType == nil || *s.TaskType != "bugfix" {
-		t.Errorf("state.TaskType = %v, want bugfix", s.TaskType)
-	}
-	if s.Effort == nil || *s.Effort != "S" {
-		t.Errorf("state.Effort = %v, want S", s.Effort)
-	}
-}
-
-// ---------- TestPipelineInitWithContextInvalidConfirmedType ----------
-
-func TestPipelineInitWithContextInvalidConfirmedType(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	sm := newPIWCSM()
-
-	h := PipelineInitWithContextHandler(sm)
-	res := callTool(t, h, map[string]any{
-		"workspace":        dir,
-		"external_context": map[string]any{},
-		"flags":            map[string]any{},
-		"user_confirmation": map[string]any{
-			"task_type": "unknown",
-			"effort":    "M",
-		},
-	})
-
-	if !res.IsError {
-		t.Errorf("invalid task_type should return MCP error")
-	}
-}
-
 // ---------- TestPipelineInitWithContextInvalidConfirmedEffort ----------
 
 func TestPipelineInitWithContextInvalidConfirmedEffort(t *testing.T) {
@@ -387,57 +354,12 @@ func TestPipelineInitWithContextInvalidConfirmedEffort(t *testing.T) {
 		"external_context": map[string]any{},
 		"flags":            map[string]any{},
 		"user_confirmation": map[string]any{
-			"task_type": "feature",
-			"effort":    "XL",
+			"effort": "XL",
 		},
 	})
 
 	if !res.IsError {
 		t.Errorf("invalid effort should return MCP error")
-	}
-}
-
-// ---------- TestPipelineInitWithContextSkipPhaseOrder ----------
-
-func TestPipelineInitWithContextSkipPhaseOrder(t *testing.T) {
-	t.Parallel()
-
-	// bugfix + XS → "direct" template with many skips
-	dir := t.TempDir()
-	sm := newPIWCSM()
-
-	h := PipelineInitWithContextHandler(sm)
-	res := callTool(t, h, map[string]any{
-		"workspace":        dir,
-		"external_context": map[string]any{},
-		"flags":            map[string]any{},
-		"user_confirmation": map[string]any{
-			"task_type": "bugfix",
-			"effort":    "XS",
-		},
-	})
-
-	if res.IsError {
-		t.Fatalf("second call returned MCP error: %v", textContent(res))
-	}
-
-	s, err := state.ReadState(dir)
-	if err != nil {
-		t.Fatalf("ReadState: %v", err)
-	}
-
-	expectedSkips := orchestrator.SkipsForCell("bugfix", "XS")
-	if len(s.SkippedPhases) != len(expectedSkips) {
-		t.Errorf("skipped_phases len = %d, want %d; got %v, want %v",
-			len(s.SkippedPhases), len(expectedSkips), s.SkippedPhases, expectedSkips)
-	}
-	for i, phase := range expectedSkips {
-		if i >= len(s.SkippedPhases) {
-			break
-		}
-		if s.SkippedPhases[i] != phase {
-			t.Errorf("skipped_phases[%d] = %q, want %q", i, s.SkippedPhases[i], phase)
-		}
 	}
 }
 
@@ -483,8 +405,7 @@ func TestInitWorkspaceRejectsNonASCIIPath(t *testing.T) {
 		"workspace": ".specs/20260331-日本語のタスク",
 		"flags":     map[string]any{},
 		"user_confirmation": map[string]any{
-			"task_type": "feature",
-			"effort":    "M",
+			"effort": "M",
 		},
 	})
 
@@ -503,10 +424,11 @@ func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name              string
-		externalContext   map[string]any
-		wantInBody        string
-		wantInFrontMatter string
+		name                 string
+		externalContext      map[string]any
+		wantInBody           string
+		wantInFrontMatter    string
+		wantNotInFrontMatter string
 	}{
 		{
 			name: "github",
@@ -515,8 +437,9 @@ func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
 				"github_title":  "Fix the crash",
 				"github_body":   "Application crashes on startup",
 			},
-			wantInBody:        "Fix the crash",
-			wantInFrontMatter: "source_type",
+			wantInBody:           "Fix the crash",
+			wantInFrontMatter:    "source_type",
+			wantNotInFrontMatter: "task_type",
 		},
 		{
 			name: "jira",
@@ -525,14 +448,16 @@ func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
 				"jira_summary":     "Login broken",
 				"jira_description": "Users cannot log in",
 			},
-			wantInBody:        "Login broken",
-			wantInFrontMatter: "task_type",
+			wantInBody:           "Login broken",
+			wantInFrontMatter:    "source_type",
+			wantNotInFrontMatter: "task_type",
 		},
 		{
-			name:              "text",
-			externalContext:   map[string]any{},
-			wantInBody:        "",
-			wantInFrontMatter: "task_type",
+			name:                 "text",
+			externalContext:      map[string]any{},
+			wantInBody:           "",
+			wantInFrontMatter:    "source_type",
+			wantNotInFrontMatter: "task_type",
 		},
 	}
 
@@ -548,8 +473,7 @@ func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
 				"external_context": tc.externalContext,
 				"flags":            map[string]any{},
 				"user_confirmation": map[string]any{
-					"task_type": "feature",
-					"effort":    "M",
+					"effort": "M",
 				},
 			})
 
@@ -570,6 +494,10 @@ func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
 			}
 			if tc.wantInBody != "" && !strings.Contains(contentStr, tc.wantInBody) {
 				t.Errorf("request.md does not contain body %q; content: %s", tc.wantInBody, contentStr)
+			}
+			// task_type must NOT be in request.md front-matter
+			if strings.Contains(contentStr, tc.wantNotInFrontMatter) {
+				t.Errorf("request.md should NOT contain %q; content: %s", tc.wantNotInFrontMatter, contentStr)
 			}
 		})
 	}
@@ -601,10 +529,15 @@ func TestPipelineInitWithContextTextSource(t *testing.T) {
 		t.Fatalf("expected needs_user_confirmation, got nil")
 	}
 
-	// Default text heuristic with empty text → feature
-	if result.NeedsUserConfirmation.DetectedTaskType != orchestrator.TaskTypeFeature {
-		t.Errorf("empty context: detected_task_type = %q, want feature",
-			result.NeedsUserConfirmation.DetectedTaskType)
+	// First call should return EffortOptions even for empty context
+	nuc := result.NeedsUserConfirmation
+	if nuc.EffortOptions == nil {
+		t.Fatalf("effort_options is nil for text source first call")
+	}
+	for _, key := range []string{"S", "M", "L"} {
+		if _, ok := nuc.EffortOptions[key]; !ok {
+			t.Errorf("effort_options missing key %q", key)
+		}
 	}
 }
 
@@ -679,7 +612,6 @@ func TestInitWorkspaceUsesWorkspaceSlug(t *testing.T) {
 		"external_context": map[string]any{},
 		"flags":            map[string]any{},
 		"user_confirmation": map[string]any{
-			"task_type":      "feature",
 			"effort":         "M",
 			"workspace_slug": "add user authentication",
 		},
@@ -742,8 +674,7 @@ func TestPipelineInitWithContextSpecNameFallback(t *testing.T) {
 				"external_context": map[string]any{},
 				"flags":            map[string]any{},
 				"user_confirmation": map[string]any{
-					"task_type": "feature",
-					"effort":    "M",
+					"effort": "M",
 				},
 			})
 
@@ -781,8 +712,7 @@ func TestTopLevelSourceIDRefinement(t *testing.T) {
 		},
 		"flags": map[string]any{},
 		"user_confirmation": map[string]any{
-			"task_type": "bugfix",
-			"effort":    "S",
+			"effort": "S",
 		},
 	})
 
@@ -803,4 +733,22 @@ func TestTopLevelSourceIDRefinement(t *testing.T) {
 	if s.SpecName != "42-fix-auth-timeout-in-middleware" {
 		t.Errorf("SpecName = %q, want %q", s.SpecName, "42-fix-auth-timeout-in-middleware")
 	}
+}
+
+// ---------- helpers ----------
+
+// stringSliceEqual compares two string slices for equality (both nil and empty are equal).
+func stringSliceEqual(a, b []string) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

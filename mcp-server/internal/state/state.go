@@ -12,10 +12,10 @@ var ValidPhases = []string{
 }
 
 // ValidEfforts enumerates legal effort labels.
-var ValidEfforts = []string{"XS", "S", "M", "L"}
+var ValidEfforts = []string{"S", "M", "L"}
 
 // ValidTemplates enumerates legal flow template names.
-var ValidTemplates = []string{"direct", "lite", "light", "standard", "full"}
+var ValidTemplates = []string{"light", "standard", "full"}
 
 // ValidRevTypes enumerates legal revision type identifiers.
 var ValidRevTypes = []string{"design", "tasks"}
@@ -26,7 +26,6 @@ type State struct {
 	SpecName                  string          `json:"specName"`
 	Workspace                 string          `json:"workspace"`
 	Branch                    *string         `json:"branch"`
-	TaskType                  *string         `json:"taskType"`
 	Effort                    *string         `json:"effort"`
 	FlowTemplate              *string         `json:"flowTemplate"`
 	AutoApprove               bool            `json:"autoApprove"`

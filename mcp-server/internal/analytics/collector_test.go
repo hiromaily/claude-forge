@@ -43,14 +43,12 @@ func TestCollect_BasicAggregation(t *testing.T) {
 
 	dir := t.TempDir()
 
-	taskType := "feature"
 	effort := "M"
 	flowTemplate := "standard"
 
 	s := state.State{
 		SpecName:        "test-collect",
 		Workspace:       dir,
-		TaskType:        &taskType,
 		Effort:          &effort,
 		FlowTemplate:    &flowTemplate,
 		CompletedPhases: []string{"phase-1", "phase-2", "phase-3"},
@@ -100,10 +98,6 @@ func TestCollect_BasicAggregation(t *testing.T) {
 		t.Errorf("Retries = %d, want 4", summary.Retries)
 	}
 
-	if summary.TaskType != "feature" {
-		t.Errorf("TaskType = %q, want %q", summary.TaskType, "feature")
-	}
-
 	if summary.Effort != "M" {
 		t.Errorf("Effort = %q, want %q", summary.Effort, "M")
 	}
@@ -123,7 +117,6 @@ func TestCollect_NilPointerFields(t *testing.T) {
 	s := state.State{
 		SpecName:        "nil-fields",
 		Workspace:       dir,
-		TaskType:        nil,
 		Effort:          nil,
 		FlowTemplate:    nil,
 		CompletedPhases: []string{},
@@ -136,10 +129,6 @@ func TestCollect_NilPointerFields(t *testing.T) {
 	summary, err := col.Collect(dir)
 	if err != nil {
 		t.Fatalf("Collect: %v", err)
-	}
-
-	if summary.TaskType != "" {
-		t.Errorf("TaskType = %q, want empty string", summary.TaskType)
 	}
 
 	if summary.Effort != "" {

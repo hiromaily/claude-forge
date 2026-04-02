@@ -12,7 +12,7 @@ import (
 )
 
 // writeStateJSON writes a minimal state.json into specDir.
-func writeStateJSON(t *testing.T, specDir string, currentPhase string, taskType string, effort string, flowTemplate string) {
+func writeStateJSON(t *testing.T, specDir string, currentPhase string, effort string, flowTemplate string) {
 	t.Helper()
 
 	lastUpdated := time.Now().UTC().Format(time.RFC3339)
@@ -22,7 +22,6 @@ func writeStateJSON(t *testing.T, specDir string, currentPhase string, taskType 
 		"version":      1,
 		"specName":     filepath.Base(specDir),
 		"currentPhase": currentPhase,
-		"taskType":     taskType,
 		"effort":       effort,
 		"flowTemplate": flowTemplate,
 		"phaseLog":     []any{},
@@ -97,7 +96,7 @@ func TestBuild_skipsNonTerminal(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	writeStateJSON(t, specDir, "phase-2", "feature", "M", "standard")
+	writeStateJSON(t, specDir, "phase-2", "M", "standard")
 	writeRequestMD(t, specDir, "# My Feature\nSome description")
 
 	h := history.New(specsDir)
@@ -120,7 +119,7 @@ func TestBuild_indexesCompleted(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	writeStateJSON(t, specDir, "completed", "feature", "M", "standard")
+	writeStateJSON(t, specDir, "completed", "M", "standard")
 	writeRequestMD(t, specDir, "---\nsource_type: github_issue\n---\n\nAdd new feature for users")
 
 	h := history.New(specsDir)
@@ -156,7 +155,7 @@ func TestBuild_indexesAbandoned(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	writeStateJSON(t, specDir, "abandoned", "bugfix", "S", "lite")
+	writeStateJSON(t, specDir, "abandoned", "S", "lite")
 	writeRequestMD(t, specDir, "# Bug Report\nResolve the crash in login")
 
 	h := history.New(specsDir)
@@ -184,7 +183,7 @@ func TestBuild_idempotent(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	writeStateJSON(t, specDir, "completed", "feature", "M", "standard")
+	writeStateJSON(t, specDir, "completed", "M", "standard")
 	writeRequestMD(t, specDir, "# My Feature\nSome description")
 
 	h := history.New(specsDir)
@@ -251,7 +250,7 @@ func TestBuild_differentialUpdate(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	writeStateJSON(t, spec1Dir, "completed", "feature", "M", "standard")
+	writeStateJSON(t, spec1Dir, "completed", "M", "standard")
 	writeRequestMD(t, spec1Dir, "# First Feature\nFirst description")
 
 	h := history.New(specsDir)
@@ -276,7 +275,6 @@ func TestBuild_differentialUpdate(t *testing.T) {
 		"version":      1,
 		"specName":     "spec-second",
 		"currentPhase": "completed",
-		"taskType":     "bugfix",
 		"effort":       "S",
 		"flowTemplate": "lite",
 		"phaseLog":     []any{},
@@ -330,7 +328,7 @@ func TestBuild_indexFileWritten(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	writeStateJSON(t, specDir, "completed", "feature", "M", "standard")
+	writeStateJSON(t, specDir, "completed", "M", "standard")
 	writeRequestMD(t, specDir, "# Test Feature\nTest description")
 
 	h := history.New(specsDir)
@@ -374,7 +372,7 @@ func TestBuild_absentRequestMD(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	writeStateJSON(t, specDir, "completed", "feature", "M", "standard")
+	writeStateJSON(t, specDir, "completed", "M", "standard")
 	// No request.md written.
 
 	h := history.New(specsDir)

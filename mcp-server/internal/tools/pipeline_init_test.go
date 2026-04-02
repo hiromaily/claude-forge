@@ -404,26 +404,6 @@ func TestPipelineInitFlagParsing(t *testing.T) {
 		}
 	})
 
-	t.Run("type_override", func(t *testing.T) {
-		t.Parallel()
-		res := callTool(t, h, map[string]any{
-			"arguments": "implement feature --type=bugfix",
-		})
-		if res.IsError {
-			t.Fatalf("handler returned MCP error: %v", textContent(res))
-		}
-		r := parsePipelineInitResult(t, textContent(res))
-		if r.Flags == nil {
-			t.Fatalf("flags is nil")
-		}
-		if r.Flags.TypeOverride == nil {
-			t.Fatalf("type_override is nil")
-		}
-		if *r.Flags.TypeOverride != "bugfix" {
-			t.Errorf("type_override: got %q, want %q", *r.Flags.TypeOverride, "bugfix")
-		}
-	})
-
 	t.Run("effort_override", func(t *testing.T) {
 		t.Parallel()
 		res := callTool(t, h, map[string]any{
@@ -447,7 +427,7 @@ func TestPipelineInitFlagParsing(t *testing.T) {
 	t.Run("combined_flags", func(t *testing.T) {
 		t.Parallel()
 		res := callTool(t, h, map[string]any{
-			"arguments": "implement feature --auto --nopr --debug --type=feature --effort=M",
+			"arguments": "implement feature --auto --nopr --debug --effort=M",
 		})
 		if res.IsError {
 			t.Fatalf("handler returned MCP error: %v", textContent(res))
@@ -464,9 +444,6 @@ func TestPipelineInitFlagParsing(t *testing.T) {
 		}
 		if !r.Flags.Debug {
 			t.Errorf("debug: got false, want true")
-		}
-		if r.Flags.TypeOverride == nil || *r.Flags.TypeOverride != "feature" {
-			t.Errorf("type_override: got %v, want feature", r.Flags.TypeOverride)
 		}
 		if r.Flags.EffortOverride == nil || *r.Flags.EffortOverride != "M" {
 			t.Errorf("effort_override: got %v, want M", r.Flags.EffortOverride)
@@ -872,12 +849,11 @@ func TestPipelineInitNewPipelineFields(t *testing.T) {
 	if r.FetchNeeded == nil {
 		t.Errorf("fetch_needed should not be nil for github_issue")
 	}
-	// Verify all five Flags fields are present (not zero for bool fields).
+	// Verify all four Flags fields are present (not zero for bool fields).
 	// The flags struct should always be populated.
 	_ = r.Flags.Auto           // exists
 	_ = r.Flags.SkipPR         // exists
 	_ = r.Flags.Debug          // exists
-	_ = r.Flags.TypeOverride   // exists (may be nil)
 	_ = r.Flags.EffortOverride // exists (may be nil)
 }
 
@@ -967,10 +943,10 @@ func TestExtractSourceID(t *testing.T) {
 	}
 }
 
-// ---------- TestPipelineInitFlagsAllFiveFields ----------
-// AC-2: flags contains all five fields.
+// ---------- TestPipelineInitFlagsAllFourFields ----------
+// AC-2: flags contains all four fields (type_override removed).
 
-func TestPipelineInitFlagsAllFiveFields(t *testing.T) {
+func TestPipelineInitFlagsAllFourFields(t *testing.T) {
 	t.Parallel()
 
 	sm := state.NewStateManager()
@@ -983,7 +959,7 @@ func TestPipelineInitFlagsAllFiveFields(t *testing.T) {
 		t.Fatalf("handler returned MCP error: %v", textContent(res))
 	}
 
-	// Unmarshal raw to check all five fields are present in the JSON.
+	// Unmarshal raw to check all four fields are present in the JSON.
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(textContent(res)), &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -997,12 +973,17 @@ func TestPipelineInitFlagsAllFiveFields(t *testing.T) {
 		t.Fatalf("flags is not a map")
 	}
 
-	// Verify all five fields are present in JSON.
-	requiredFields := []string{"auto", "skip_pr", "debug", "type_override", "effort_override"}
+	// Verify all four fields are present in JSON (type_override removed).
+	requiredFields := []string{"auto", "skip_pr", "debug", "effort_override"}
 	for _, field := range requiredFields {
 		if _, ok := flagsMap[field]; !ok {
 			t.Errorf("flags.%s missing from JSON response", field)
 		}
+	}
+
+	// Verify type_override is NOT present in JSON.
+	if _, ok := flagsMap["type_override"]; ok {
+		t.Errorf("flags.type_override should not be present in JSON response")
 	}
 }
 

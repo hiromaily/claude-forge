@@ -11,7 +11,7 @@ import (
 )
 
 // writeFixtureState writes a minimal state.json to dir/name/state.json.
-func writeFixtureState(t *testing.T, baseDir, name, currentPhase, taskType, effort string, tokens, durationMs int) {
+func writeFixtureState(t *testing.T, baseDir, name, currentPhase, effort string, tokens, durationMs int) {
 	t.Helper()
 
 	specDir := filepath.Join(baseDir, name)
@@ -19,7 +19,6 @@ func writeFixtureState(t *testing.T, baseDir, name, currentPhase, taskType, effo
 		t.Fatalf("mkdir %s: %v", specDir, err)
 	}
 
-	taskTypeVal := taskType
 	effortVal := effort
 
 	s := map[string]any{
@@ -27,7 +26,6 @@ func writeFixtureState(t *testing.T, baseDir, name, currentPhase, taskType, effo
 		"specName":     name,
 		"workspace":    specDir,
 		"currentPhase": currentPhase,
-		"taskType":     &taskTypeVal,
 		"effort":       &effortVal,
 		"phaseLog": []map[string]any{
 			{
@@ -74,7 +72,7 @@ func TestEstimateEmptySpecs(t *testing.T) {
 	dir := t.TempDir()
 	est := analytics.NewEstimator(dir)
 
-	result, err := est.Estimate("feature", "M")
+	result, err := est.Estimate("M")
 	if err != nil {
 		t.Fatalf("Estimate returned error: %v", err)
 	}
@@ -96,10 +94,10 @@ func TestEstimateOnePipeline(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	writeFixtureState(t, dir, "run1", "completed", "feature", "M", 1000, 60000)
+	writeFixtureState(t, dir, "run1", "completed", "M", 1000, 60000)
 
 	est := analytics.NewEstimator(dir)
-	result, err := est.Estimate("feature", "M")
+	result, err := est.Estimate("M")
 	if err != nil {
 		t.Fatalf("Estimate returned error: %v", err)
 	}
@@ -141,14 +139,14 @@ func TestEstimateThreePipelinesMediumConfidence(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	// Create 3 completed feature/M pipelines with different token counts
+	// Create 3 completed M pipelines with different token counts
 	// tokens: 1000, 2000, 3000
-	writeFixtureState(t, dir, "run1", "completed", "feature", "M", 1000, 60000)
-	writeFixtureState(t, dir, "run2", "completed", "feature", "M", 2000, 120000)
-	writeFixtureState(t, dir, "run3", "completed", "feature", "M", 3000, 180000)
+	writeFixtureState(t, dir, "run1", "completed", "M", 1000, 60000)
+	writeFixtureState(t, dir, "run2", "completed", "M", 2000, 120000)
+	writeFixtureState(t, dir, "run3", "completed", "M", 3000, 180000)
 
 	est := analytics.NewEstimator(dir)
-	result, err := est.Estimate("feature", "M")
+	result, err := est.Estimate("M")
 	if err != nil {
 		t.Fatalf("Estimate returned error: %v", err)
 	}
@@ -184,11 +182,11 @@ func TestEstimateTenPipelinesHighConfidence(t *testing.T) {
 	for i := range 10 {
 		tokens := (i + 1) * 1000
 		dur := (i + 1) * 60000
-		writeFixtureState(t, dir, "run"+string(rune('0'+i)), "completed", "bugfix", "S", tokens, dur)
+		writeFixtureState(t, dir, "run"+string(rune('0'+i)), "completed", "S", tokens, dur)
 	}
 
 	est := analytics.NewEstimator(dir)
-	result, err := est.Estimate("bugfix", "S")
+	result, err := est.Estimate("S")
 	if err != nil {
 		t.Fatalf("Estimate returned error: %v", err)
 	}
@@ -202,38 +200,38 @@ func TestEstimateTenPipelinesHighConfidence(t *testing.T) {
 	}
 }
 
-func TestEstimateMixedTypesFiltered(t *testing.T) {
+func TestEstimateMixedEffortsFiltered(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	// feature/M pipelines
-	writeFixtureState(t, dir, "feat1", "completed", "feature", "M", 1000, 60000)
-	writeFixtureState(t, dir, "feat2", "completed", "feature", "M", 2000, 120000)
-	// bugfix/S pipelines — should not be counted in feature/M query
-	writeFixtureState(t, dir, "bug1", "completed", "bugfix", "S", 500, 30000)
-	writeFixtureState(t, dir, "bug2", "completed", "bugfix", "S", 600, 36000)
-	writeFixtureState(t, dir, "bug3", "completed", "bugfix", "S", 700, 42000)
+	// M effort pipelines
+	writeFixtureState(t, dir, "m1", "completed", "M", 1000, 60000)
+	writeFixtureState(t, dir, "m2", "completed", "M", 2000, 120000)
+	// S effort pipelines — should not be counted in M query
+	writeFixtureState(t, dir, "s1", "completed", "S", 500, 30000)
+	writeFixtureState(t, dir, "s2", "completed", "S", 600, 36000)
+	writeFixtureState(t, dir, "s3", "completed", "S", 700, 42000)
 
 	est := analytics.NewEstimator(dir)
 
-	// Query feature/M — should only see 2 samples
-	result, err := est.Estimate("feature", "M")
+	// Query M — should only see 2 samples
+	result, err := est.Estimate("M")
 	if err != nil {
 		t.Fatalf("Estimate returned error: %v", err)
 	}
 
 	if result.SampleSize != 2 {
-		t.Errorf("feature/M SampleSize = %d, want 2", result.SampleSize)
+		t.Errorf("M SampleSize = %d, want 2", result.SampleSize)
 	}
 
-	// Query bugfix/S — should only see 3 samples
-	resultBug, err := est.Estimate("bugfix", "S")
+	// Query S — should only see 3 samples
+	resultS, err := est.Estimate("S")
 	if err != nil {
-		t.Fatalf("Estimate bugfix returned error: %v", err)
+		t.Fatalf("Estimate S returned error: %v", err)
 	}
 
-	if resultBug.SampleSize != 3 {
-		t.Errorf("bugfix/S SampleSize = %d, want 3", resultBug.SampleSize)
+	if resultS.SampleSize != 3 {
+		t.Errorf("S SampleSize = %d, want 3", resultS.SampleSize)
 	}
 }
 
@@ -242,14 +240,14 @@ func TestEstimateAbandonedExcluded(t *testing.T) {
 
 	dir := t.TempDir()
 	// completed pipeline
-	writeFixtureState(t, dir, "completed1", "completed", "feature", "M", 1000, 60000)
+	writeFixtureState(t, dir, "completed1", "completed", "M", 1000, 60000)
 	// abandoned pipeline — should not be counted
-	writeFixtureState(t, dir, "abandoned1", "abandoned", "feature", "M", 2000, 120000)
+	writeFixtureState(t, dir, "abandoned1", "abandoned", "M", 2000, 120000)
 	// in-progress pipeline — should not be counted
-	writeFixtureState(t, dir, "inprogress1", "phase-5", "feature", "M", 3000, 180000)
+	writeFixtureState(t, dir, "inprogress1", "phase-5", "M", 3000, 180000)
 
 	est := analytics.NewEstimator(dir)
-	result, err := est.Estimate("feature", "M")
+	result, err := est.Estimate("M")
 	if err != nil {
 		t.Fatalf("Estimate returned error: %v", err)
 	}
@@ -267,9 +265,9 @@ func TestEstimateStoresSpesDirField(t *testing.T) {
 
 	// Verify NewEstimator stores specsDir by checking it scans the right directory.
 	// Write a fixture to this specific dir; it should be found.
-	writeFixtureState(t, dir, "run1", "completed", "refactor", "L", 5000, 300000)
+	writeFixtureState(t, dir, "run1", "completed", "L", 5000, 300000)
 
-	result, err := est.Estimate("refactor", "L")
+	result, err := est.Estimate("L")
 	if err != nil {
 		t.Fatalf("Estimate returned error: %v", err)
 	}
@@ -310,11 +308,11 @@ func TestEstimateConfidenceBoundaries(t *testing.T) {
 					name = "run" + string(rune('A'+i%26))
 				}
 
-				writeFixtureState(t, dir, name, "completed", "docs", "XS", tokens, dur)
+				writeFixtureState(t, dir, name, "completed", "S", tokens, dur)
 			}
 
 			est := analytics.NewEstimator(dir)
-			result, err := est.Estimate("docs", "XS")
+			result, err := est.Estimate("S")
 			if err != nil {
 				t.Fatalf("Estimate returned error: %v", err)
 			}

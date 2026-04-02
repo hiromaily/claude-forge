@@ -110,7 +110,6 @@ var allowedGetFields = map[string]bool{
 	"specName":           true,
 	"workspace":          true,
 	"branch":             true,
-	"taskType":           true,
 	"effort":             true,
 	"flowTemplate":       true,
 	"autoApprove":        true,
@@ -153,7 +152,6 @@ func (m *StateManager) Init(workspace, specName string) error {
 		SpecName:           specName,
 		Workspace:          workspace,
 		Branch:             nil,
-		TaskType:           nil,
 		Effort:             nil,
 		FlowTemplate:       nil,
 		AutoApprove:        false,
@@ -359,11 +357,6 @@ func getField(s *State, field string) (string, error) {
 			return "null", nil
 		}
 		return *s.Branch, nil
-	case "taskType":
-		if s.TaskType == nil {
-			return "null", nil
-		}
-		return *s.TaskType, nil
 	case "effort":
 		if s.Effort == nil {
 			return "null", nil
@@ -620,7 +613,6 @@ func (m *StateManager) InlineRevisionBump(workspace, revType string) error {
 // PipelineConfig holds the initial pipeline configuration values applied after Init.
 // Using Configure instead of individual setters reduces disk I/O to a single write.
 type PipelineConfig struct {
-	TaskType         string
 	Effort           string
 	FlowTemplate     string
 	AutoApprove      bool
@@ -632,7 +624,7 @@ type PipelineConfig struct {
 }
 
 // Configure applies the initial pipeline configuration in a single write to state.json,
-// replacing separate SetTaskType/SetEffort/SetFlowTemplate/SkipPhase calls that would
+// replacing separate SetEffort/SetFlowTemplate/SkipPhase calls that would
 // each trigger their own read-modify-write disk cycle.
 func (m *StateManager) Configure(workspace string, cfg PipelineConfig) error {
 	if err := m.bindWorkspace(workspace); err != nil {
@@ -655,7 +647,6 @@ func (m *StateManager) Configure(workspace string, cfg PipelineConfig) error {
 	}
 
 	return m.Update(func(s *State) error {
-		s.TaskType = &cfg.TaskType
 		s.Effort = &cfg.Effort
 		s.FlowTemplate = &cfg.FlowTemplate
 		if cfg.AutoApprove {
@@ -696,19 +687,6 @@ func (m *StateManager) SetBranch(workspace, branch string) error {
 
 	return m.Update(func(s *State) error {
 		s.Branch = &branch
-		return nil
-	})
-}
-
-// SetTaskType sets the taskType field, equivalent to _do_set_task_type.
-func (m *StateManager) SetTaskType(workspace, taskType string) error {
-	// Workspace entry-point guard.
-	if err := m.bindWorkspace(workspace); err != nil {
-		return err
-	}
-
-	return m.Update(func(s *State) error {
-		s.TaskType = &taskType
 		return nil
 	})
 }
@@ -963,7 +941,6 @@ type ResumeInfoResult struct {
 	CurrentPhaseStatus        string          `json:"currentPhaseStatus"`
 	CompletedPhases           []string        `json:"completedPhases"`
 	SkippedPhases             []string        `json:"skippedPhases"`
-	TaskType                  *string         `json:"taskType"`
 	Effort                    *string         `json:"effort"`
 	FlowTemplate              *string         `json:"flowTemplate"`
 	AutoApprove               bool            `json:"autoApprove"`
@@ -1050,7 +1027,6 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 		CurrentPhaseStatus:        s.CurrentPhaseStatus,
 		CompletedPhases:           s.CompletedPhases,
 		SkippedPhases:             skipped,
-		TaskType:                  s.TaskType,
 		Effort:                    s.Effort,
 		FlowTemplate:              s.FlowTemplate,
 		AutoApprove:               s.AutoApprove,

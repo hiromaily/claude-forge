@@ -24,11 +24,11 @@ const (
 	reviewFeedbackHeader = "## Past Review Feedback (from similar pipelines)\n\n"
 	reviewFeedbackBullet = "- **[%s]** %s _(from: %s)_\n"
 	implHeader           = "## Similar Past Implementations (from similar pipelines)\n\n"
-	implBullet           = "- **%s** (%s): %s — files: %s\n"
+	implBullet           = "- **%s**: %s — files: %s\n"
 )
 
 // SearchPatternsHandler handles the "search_patterns" MCP tool.
-// Accepts: workspace (required), task_type (optional), top_k (optional), mode (optional).
+// Accepts: workspace (required), top_k (optional), mode (optional).
 // sm is accepted for signature consistency with other handlers but is not used.
 func SearchPatternsHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -50,7 +50,6 @@ func searchPatternsWithPaths(
 	indexPath string,
 	requestPath string,
 ) (*mcp.CallToolResult, error) {
-	taskType := req.GetString("task_type", "")
 	topK := req.GetInt("top_k", 0)
 	mode := req.GetString("mode", "")
 
@@ -84,7 +83,7 @@ func searchPatternsWithPaths(
 	requestBody = stripFrontmatter(requestBody)
 
 	// Step 7: call BM25 scorer.
-	scored := search.Score(entries, requestBody, taskType, search.DefaultBM25Params())
+	scored := search.Score(entries, requestBody, search.DefaultBM25Params())
 
 	// Step 8: apply mode-specific filters and top-K selection.
 	isImpl := mode == "impl"
@@ -177,13 +176,9 @@ func formatImplOutput(scored []search.ScoredEntry, topK int) (*mcp.CallToolResul
 
 	var sb strings.Builder
 	for _, se := range top {
-		taskType := ""
-		if se.Entry.TaskType != nil {
-			taskType = *se.Entry.TaskType
-		}
 		for _, pat := range se.Entry.ImplPatterns {
 			files := strings.Join(pat.FilesModified, ", ")
-			fmt.Fprintf(&sb, implBullet, se.Entry.SpecName, taskType, pat.TaskTitle, files)
+			fmt.Fprintf(&sb, implBullet, se.Entry.SpecName, pat.TaskTitle, files)
 		}
 	}
 
