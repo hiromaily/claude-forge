@@ -13,6 +13,7 @@ APP_VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo dev)
 build:
 	mkdir -p bin
 	cd $(MCP_DIR)/cmd && go build -ldflags="-s -w -X main.appVersion=$(APP_VERSION)" -o ../../bin/$(MCP_BINARY) .
+	@echo "$(APP_VERSION)" | sed 's/^v//' > bin/.installed-version
 
 # install: Build and copy the binary to $(GOBIN) or ~/.local/bin
 .PHONY: install
@@ -88,11 +89,14 @@ update-git-tag:
 	@git push origin "v${new}"
 	@echo "Git tag v${new} pushed to origin"
 
-# update-all: Update the version tag in marketplace.json and plugin metadata, then create and push a git tag for the new version
+# update-all: Update version, commit, tag, and push — full release flow
 # e.g. make update-all new=2.1.1 old=2.1.0
 .PHONY: update-all
-update-all: update-tag update-git-tag
-	@echo "Version updated to v${new} and git tag created and pushed"
+update-all: update-tag
+	@git add .claude-plugin/marketplace.json .claude-plugin/plugin.json
+	@git commit -m "chore: bump version to v${new}"
+	@$(MAKE) update-git-tag new=${new}
+	@echo "Version updated to v${new}, committed, tagged, and pushed"
 
 # e.g. make retag TAG=v2.1.0
 .PHONY: retag
