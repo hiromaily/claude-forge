@@ -8,7 +8,7 @@ var ValidPhases = []string{
 	"setup", "phase-1", "phase-2", "phase-3", "phase-3b",
 	"checkpoint-a", "phase-4", "phase-4b", "checkpoint-b",
 	"phase-5", "phase-6", "phase-7", "final-verification",
-	"pr-creation", "final-summary", "post-to-source", "completed",
+	"final-summary", "pr-creation", "post-to-source", "completed",
 }
 
 // ValidEfforts enumerates legal effort labels.
@@ -39,6 +39,7 @@ type State struct {
 	CompletedPhases           []string        `json:"completedPhases"`
 	Revisions                 Revisions       `json:"revisions"`
 	CheckpointRevisionPending map[string]bool `json:"checkpointRevisionPending"`
+	NeedsBatchCommit          bool            `json:"needsBatchCommit"`
 	Tasks                     map[string]Task `json:"tasks"`
 	PhaseLog                  []PhaseLogEntry `json:"phaseLog"`
 	Timestamps                Timestamps      `json:"timestamps"`

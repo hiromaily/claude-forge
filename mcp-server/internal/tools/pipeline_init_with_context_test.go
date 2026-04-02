@@ -125,17 +125,17 @@ func TestPipelineInitWithContextFirstCallEffortOptions(t *testing.T) {
 				t.Errorf("effort_options has %d keys, want exactly 3 (S, M, L); got: %v", len(nuc.EffortOptions), nuc.EffortOptions)
 			}
 
-			// Verify each effort option maps to the correct skips
-			wantS := orchestrator.SkipsForEffort("S")
-			wantM := orchestrator.SkipsForEffort("M")
-			wantL := orchestrator.SkipsForEffort("L")
-			if !stringSliceEqual(nuc.EffortOptions["S"], wantS) {
+			// Verify each effort option maps to the correct skips with labels
+			wantS := orchestrator.SkipsWithLabelsForEffort("S")
+			wantM := orchestrator.SkipsWithLabelsForEffort("M")
+			wantL := orchestrator.SkipsWithLabelsForEffort("L")
+			if !skipLabelSliceEqual(nuc.EffortOptions["S"], wantS) {
 				t.Errorf("effort_options[S] = %v, want %v", nuc.EffortOptions["S"], wantS)
 			}
-			if !stringSliceEqual(nuc.EffortOptions["M"], wantM) {
+			if !skipLabelSliceEqual(nuc.EffortOptions["M"], wantM) {
 				t.Errorf("effort_options[M] = %v, want %v", nuc.EffortOptions["M"], wantM)
 			}
-			if !stringSliceEqual(nuc.EffortOptions["L"], wantL) {
+			if !skipLabelSliceEqual(nuc.EffortOptions["L"], wantL) {
 				t.Errorf("effort_options[L] = %v, want %v", nuc.EffortOptions["L"], wantL)
 			}
 
@@ -503,6 +503,52 @@ func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
 	}
 }
 
+// ---------- TestPipelineInitWithContextSourceURL ----------
+
+// TestPipelineInitWithContextSourceURL verifies that source_url passed as a
+// top-level parameter is written into request.md front matter.
+func TestPipelineInitWithContextSourceURL(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace":  dir,
+		"source_id":  "SOA-123",
+		"source_url": "https://example.atlassian.net/browse/SOA-123",
+		"external_context": map[string]any{
+			"jira_issue_type":  "Bug",
+			"jira_summary":     "Fix login",
+			"jira_description": "Users cannot log in",
+		},
+		"flags": map[string]any{},
+		"user_confirmation": map[string]any{
+			"effort": "S",
+		},
+	})
+
+	if res.IsError {
+		t.Fatalf("returned MCP error: %v", textContent(res))
+	}
+
+	result := parsePIWCResult(t, textContent(res))
+	reqPath := filepath.Join(result.Workspace, "request.md")
+	content, err := os.ReadFile(reqPath)
+	if err != nil {
+		t.Fatalf("ReadFile request.md: %v", err)
+	}
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "source_url: https://example.atlassian.net/browse/SOA-123") {
+		t.Errorf("request.md missing source_url in front matter; content:\n%s", contentStr)
+	}
+	if !strings.Contains(contentStr, "source_id: SOA-123") {
+		t.Errorf("request.md missing source_id in front matter; content:\n%s", contentStr)
+	}
+}
+
 // ---------- TestPipelineInitWithContextTextSource ----------
 
 func TestPipelineInitWithContextTextSource(t *testing.T) {
@@ -738,7 +784,7 @@ func TestTopLevelSourceIDRefinement(t *testing.T) {
 // ---------- helpers ----------
 
 // stringSliceEqual compares two string slices for equality (both nil and empty are equal).
-func stringSliceEqual(a, b []string) bool {
+func stringSliceEqual(a, b []string) bool { //nolint:unused // kept for future test use
 	if len(a) == 0 && len(b) == 0 {
 		return true
 	}
@@ -747,6 +793,21 @@ func stringSliceEqual(a, b []string) bool {
 	}
 	for i := range a {
 		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func skipLabelSliceEqual(a, b []orchestrator.SkipLabel) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].PhaseID != b[i].PhaseID || a[i].Label != b[i].Label {
 			return false
 		}
 	}

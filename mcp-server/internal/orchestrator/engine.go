@@ -345,6 +345,11 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		return NewSetupExecAction(PhaseFive, []string{"create_branch", deriveBranchName(st)}), nil
 	}
 
+	// Decision 29 — Batch commit after parallel tasks complete
+	if st.NeedsBatchCommit {
+		return NewSetupExecAction(PhaseFive, []string{"batch_commit"}), nil
+	}
+
 	// Decision 22 — Phase 5 parallel/sequential ordering
 	taskKeys := sortedTaskKeys(st.Tasks)
 	if len(taskKeys) == 0 {

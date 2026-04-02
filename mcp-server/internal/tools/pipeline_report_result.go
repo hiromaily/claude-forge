@@ -216,6 +216,20 @@ func determineTransition(
 
 	// Step 9: All other phases — advance unless setup_only.
 	if in.setupOnly {
+		// Clear batch commit flag only after a batch_commit exec completes.
+		// Other phase-5 setup actions (task_init, create_branch) must not clear it.
+		s, stateErr := sm.GetState()
+		if stateErr != nil {
+			return reportResultResponse{}, stateErr
+		}
+		if in.phase == "phase-5" && s.NeedsBatchCommit {
+			if updateErr := sm.Update(func(st *state.State) error {
+				st.NeedsBatchCommit = false
+				return nil
+			}); updateErr != nil {
+				return reportResultResponse{}, updateErr
+			}
+		}
 		return reportResultResponse{
 			StateUpdated:    true,
 			ArtifactWritten: artifactWritten,
@@ -231,16 +245,25 @@ func determineTransition(
 		// The implementer agent writes impl-N.md but may not call task_update
 		// explicitly, so we reconcile task status from artifact presence.
 		// Batch all updates in a single transaction to avoid O(N) disk I/O.
+		// Also detect parallel batch completion and set NeedsBatchCommit flag.
 		if updateErr := sm.Update(func(st *state.State) error {
+			newlyCompleted := 0
 			for k, t := range st.Tasks {
 				if t.ImplStatus == "completed" {
 					continue
 				}
 				implFile := filepath.Join(in.workspace, "impl-"+k+".md")
 				if _, statErr := os.Stat(implFile); statErr == nil {
+					if t.ExecutionMode == "parallel" {
+						newlyCompleted++
+					}
 					t.ImplStatus = "completed"
 					st.Tasks[k] = t
 				}
+			}
+			// If parallel tasks were just completed, signal batch commit needed.
+			if newlyCompleted > 0 {
+				st.NeedsBatchCommit = true
 			}
 			return nil
 		}); updateErr != nil {
@@ -259,7 +282,9 @@ func determineTransition(
 				break
 			}
 		}
-		if hasPending {
+		// Also hold in phase-5 if a batch commit is pending (e.g. last parallel
+		// batch just completed — all tasks done but git commit not yet run).
+		if hasPending || s.NeedsBatchCommit {
 			return reportResultResponse{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
