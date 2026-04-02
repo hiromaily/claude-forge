@@ -40,8 +40,8 @@ jobs:
           APP_VERSION: ${{ github.ref_name }}
         run: |
           cd mcp-server/cmd
-          go build -trimpath -ldflags="-s -w -X main.appVersion=${APP_VERSION}" -o ../forge-state-mcp .
-          cd ..
+          go build -trimpath -ldflags="-s -w -X main.appVersion=${APP_VERSION}" -o ../../forge-state-mcp .
+          cd ../..
           gzip -c forge-state-mcp > forge-state-mcp-${{ matrix.goos }}-${{ matrix.goarch }}.gz
 
       - name: Upload artifact
