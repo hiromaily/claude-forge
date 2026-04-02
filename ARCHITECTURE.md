@@ -48,7 +48,7 @@ All hooks are **fail-open**: if jq is missing or state.json can't be read, the a
 
 ## Sequence Diagram
 
-> **Note:** Shows the full `feature` flow. Other task types skip labelled phases — see the [Task-type-aware Flow](#task-type-aware-flow) section.
+> **Note:** Shows the full `L` (full) effort flow. Lower effort levels (S, M) skip labelled phases — see the [Effort-driven Flow](#effort-driven-flow) section.
 
 ```mermaid
 sequenceDiagram
@@ -296,7 +296,7 @@ sequenceDiagram
 
 ## Data Flow
 
-> **Note:** The diagram below shows the full linear flow for the `feature` task type (the default). Other task types (`bugfix`, `investigation`, `docs`, `refactor`) omit labelled phases — see the [Task-type-aware Flow](#task-type-aware-flow) section for the skip tables and flow variations.
+> **Note:** The diagram below shows the full linear flow for effort `L` (`full` template). Lower effort levels (S, M) skip labelled phases — see the [Effort-driven Flow](#effort-driven-flow) section for the skip tables.
 
 ```
 $ARGUMENTS
@@ -327,7 +327,7 @@ $ARGUMENTS
 │ architect → design.md                              │
 │ design-reviewer → review-design.md                 │
 └──────┬───────────────────────────────────────────┘
-       │ [phase-3 skipped for docs (stub written instead); phase-3b and checkpoint-a run for all task types]
+       │ [phase-3 skipped for docs flows (stub written instead); phase-3b and checkpoint-a run otherwise]
        │ Checkpoint A (human approval)
        ▼
 ┌──────────────────────────────────────────────────┐
@@ -386,12 +386,12 @@ The information flow is strictly forward — no agent reads output from a later 
 | task-decomposer | request.md, design.md, investigation.md (+review-tasks.md on revision) |
 | task-reviewer | request.md, design.md, investigation.md, tasks.md |
 | Checkpoint B (orchestrator) | tasks.md, review-tasks.md (to present summary to human) |
-| implementer | request.md, design.md (may be an orchestrator-written stub for `docs` task type), tasks.md (may be a single-task stub for `bugfix` task type), review-{dep}.md (+review-{N}.md on retry) — plus `## Similar Past Implementations` block injected by orchestrator via `mcp__forge-state__search_patterns` (BM25) |
+| implementer | request.md, design.md (may be an orchestrator-written stub for docs flows), tasks.md (may be a single-task stub for bugfix flows), review-{dep}.md (+review-{N}.md on retry) — plus `## Similar Past Implementations` block injected by orchestrator via `mcp__forge-state__search_patterns` (BM25) |
 | impl-reviewer | request.md, tasks.md, design.md, impl-{N}.md, git diff (file-scoped, main...HEAD) |
 | comprehensive-reviewer | request.md, design.md, tasks.md, all impl-{N}.md, all review-{N}.md, git diff + selective structural reads |
 | verifier | (reads code on feature branch directly) |
 | PR Creation (orchestrator) | request.md, design.md, tasks.md (for PR title and body) |
-| Final Summary (orchestrator) | artifacts vary by task_type (see Final Summary section); also reads analysis.md and investigation.md (where present) for the Improvement Report epilogue |
+| Final Summary (orchestrator) | reads analysis.md and investigation.md (where present) for the Improvement Report epilogue; fixed input file list regardless of effort level |
 | Post to Source (orchestrator) | summary.md, request.md (source metadata for comment target) |
 
 ### File-Writing Responsibility
@@ -410,8 +410,8 @@ The specs index provides cross-pipeline learning — surfacing patterns from pas
 
 | Component | Role |
 |--------|------|
-| `indexer.BuildSpecsIndex` | Go function in `mcp-server/indexer/specs_index.go`. Scans all workspace subdirectories within `.specs/` and writes `.specs/index.json`. Extracts `requestSummary`, `taskType`, `reviewFeedback` (from `review-*.md` REVISE verdicts), `implOutcomes`, `implPatterns` (from `impl-*.md` file-modification sections), and `outcome`. Invoked by `mcp__forge-state__refresh_index` after each completed pipeline. |
-| `mcp__forge-state__search_patterns` | **Primary scoring path.** BM25 scorer exposed as an MCP tool. Reads `.specs/index.json` and `{workspace}/request.md`, scores past entries using BM25 (IDF-weighted term frequency with length normalisation; `k1=1.5`, `b=0.75`), applies a multiplicative `taskType` boost, and emits formatted markdown. Supports two modes: **review-feedback** (default) emits a `## Past Review Feedback` block; **impl** mode emits a `## Similar Past Implementations` block. MCP-only — no shell fallback exists. |
+| `indexer.BuildSpecsIndex` | Go function in `mcp-server/indexer/specs_index.go`. Scans all workspace subdirectories within `.specs/` and writes `.specs/index.json`. Extracts `requestSummary`, `reviewFeedback` (from `review-*.md` REVISE verdicts), `implOutcomes`, `implPatterns` (from `impl-*.md` file-modification sections), and `outcome`. Invoked by `mcp__forge-state__refresh_index` after each completed pipeline. |
+| `mcp__forge-state__search_patterns` | **Primary scoring path.** BM25 scorer exposed as an MCP tool. Reads `.specs/index.json` and `{workspace}/request.md`, scores past entries using BM25 (IDF-weighted term frequency with length normalisation; `k1=1.5`, `b=0.75`), and emits formatted markdown. Supports two modes: **review-feedback** (default) emits a `## Past Review Feedback` block; **impl** mode emits a `## Similar Past Implementations` block. MCP-only — no shell fallback exists. |
 
 **Data flow:**
 
@@ -421,15 +421,15 @@ Completed pipeline
         └─► indexer.BuildSpecsIndex → .specs/index.json
 
 Next pipeline, Phase 3:
-  orchestrator → mcp__forge-state__search_patterns(workspace, task_type, top_k=3, mode="review-feedback")
+  orchestrator → mcp__forge-state__search_patterns(workspace, top_k=3, mode="review-feedback")
     → injects "## Past Review Feedback" into architect prompt
 
 Next pipeline, Phase 4:
-  orchestrator → mcp__forge-state__search_patterns(workspace, task_type, top_k=3, mode="review-feedback")
+  orchestrator → mcp__forge-state__search_patterns(workspace, top_k=3, mode="review-feedback")
     → injects "## Past Review Feedback" into task-decomposer prompt
 
 Next pipeline, Phase 5 (before each task):
-  orchestrator → mcp__forge-state__search_patterns(workspace, task_type, top_k=2, mode="impl")
+  orchestrator → mcp__forge-state__search_patterns(workspace, top_k=2, mode="impl")
     → injects "## Similar Past Implementations" into implementer prompt
 ```
 
@@ -475,28 +475,25 @@ State transitions are managed by Go MCP server commands (`mcp__forge-state__*`):
 - `phase_fail` → sets `failed`, records error
 - `checkpoint` → sets `awaiting_human`
 
-## Task-type-aware Flow
+## Effort-driven Flow
 
-The pipeline adapts its execution based on the detected task type. The orchestrator skips non-applicable phases upfront during Workspace Setup using the `skip-phase` command, so `currentPhase` already points past all skipped phases before the first real phase begins.
+The pipeline adapts its execution based on the effort level. The orchestrator skips non-applicable phases upfront during Workspace Setup using the `skip-phase` command, so `currentPhase` already points past all skipped phases before the first real phase begins.
 
-### Task Types and Phase Skip Tables
+### Effort Levels and Phase Skip Tables
 
-Five task types are supported. The `feature` type runs the full pipeline. All other types skip one or more phases:
+Three effort levels are supported. `L` runs the full pipeline. Lower levels skip phases:
 
-| Task type | Phases to skip |
-|-----------|----------------|
-| `feature` | (none) |
-| `bugfix` | `phase-4`, `phase-4b`, `checkpoint-b`, `phase-7` |
-| `investigation` | `phase-3`, `phase-3b`, `checkpoint-a`, `phase-4`, `phase-4b`, `checkpoint-b`, `phase-5`, `phase-6`, `phase-7`, `final-verification`, `pr-creation` |
-| `docs` | `phase-2`, `phase-3`, `phase-4`, `phase-4b`, `checkpoint-b`, `phase-7` |
-| `refactor` | (none) |
+| Effort | Template | Phases to skip |
+|--------|----------|----------------|
+| `S` | `light` | `phase-4b`, `checkpoint-b`, `phase-7` |
+| `M` | `standard` | `phase-4b`, `checkpoint-b` |
+| `L` | `full` | (none) |
 
-**Rationale by task type:**
+**Rationale by effort level:**
 
-- **`bugfix`**: Phase 2 (root-cause investigation) and Phase 3 (fix strategy design) are mandatory. Phase 3b (AI design review) and Checkpoint A (human design review) also run — the fix strategy is reviewed before implementation. The task decomposition loop is skipped; the orchestrator synthesises a single-task `tasks.md` stub after Phase 3. Phase 7 (comprehensive review) is skipped for single-fix bugs.
-- **`investigation`**: Ends at Final Summary — no implementation, no PR. Phase 3 produces recommendations if the template is high enough effort; low-effort cells skip it. `post-to-source` still runs so findings are posted back to the source issue.
-- **`docs`**: Skips Phase 2 (investigation) and Phase 3 (design by architect). Phase 3b (AI design review) and Checkpoint A (human review) still run on orchestrator-written stubs. Phase 7 is skipped because docs changes carry lower regression risk. The orchestrator synthesises `design.md` and `tasks.md` stubs after Phase 1 completes (see Stub Synthesis below).
-- **`refactor`**: Full design loop including Phase 3b and Checkpoint A. Keeps Phase 7 because refactoring carries higher regression risk.
+- **`S` (light)**: Skips the task-review quality gate (`phase-4b`, `checkpoint-b`) and Comprehensive Review (`phase-7`). Suitable for small, focused tasks where task decomposition is straightforward and comprehensive post-implementation review is not warranted.
+- **`M` (standard)**: Skips the task-review quality gate only. Phase 7 (Comprehensive Review) runs. Suitable for medium-sized features where implementation review is valuable but the task breakdown is simple enough not to require a separate quality gate.
+- **`L` (full)**: All phases run including both checkpoints and Comprehensive Review. Suitable for large, complex tasks where every quality gate adds value.
 
 ### `state.json` Schema Additions
 
@@ -558,7 +555,7 @@ Because `docs` and `bugfix` flows skip the agent phases that normally produce `d
 
 **`docs` flow** — after Phase 1 completes, before proceeding to Phase 5:
 
-The orchestrator writes a stub `design.md` with front matter `task_type: docs` and `stub: true`, describing the direct documentation edits approach. It also writes a stub `tasks.md` with a single "Apply documentation edits" task. Because all intermediate phases (`phase-2` through `checkpoint-b`) were already skipped during Workspace Setup, `currentPhase` is already `phase-5` at this point.
+The orchestrator writes a stub `design.md` with front matter `stub: true`, describing the direct documentation edits approach. It also writes a stub `tasks.md` with a single "Apply documentation edits" task. Because all intermediate phases (`phase-2` through `checkpoint-b`) were already skipped during Workspace Setup, `currentPhase` is already `phase-5` at this point.
 
 **`bugfix` flow** — after Phase 3 completes, before proceeding to Phase 5:
 
@@ -568,12 +565,12 @@ The orchestrator writes a stub `tasks.md` with a single "Implement bug fix" task
 
 ### Effort Detection Priority
 
-The orchestrator detects `{effort}` using this priority order during Workspace Setup (immediately after task-type detection):
+The orchestrator detects `{effort}` using this priority order during Workspace Setup:
 
-1. **Explicit flag**: `--effort=<value>` in `$ARGUMENTS` (strip from args before writing `request.md`; valid values: `XS`, `S`, `M`, `L`)
-2. **Jira story points**: read `customfield_10016` from the fetched Jira issue. If absent, None, non-numeric, or zero, fall through. Mapping: SP ≤ 1 → XS, 2–3 → S, 5 → M, 8+ → L.
-3. **Heuristic**: infer from task description complexity. When both task-type and effort are heuristic, combine into a single confirmation prompt to avoid two sequential prompts.
-4. **Default**: `M` (safe fallback — matches current behavior for pipelines started before F13)
+1. **Explicit flag**: `--effort=<value>` in `$ARGUMENTS` (strip from args before writing `request.md`; valid values: `S`, `M`, `L`; `XS` is rejected at input validation time)
+2. **Jira story points**: read `customfield_10016` from the fetched Jira issue. If absent, None, non-numeric, or zero, fall through. Mapping: SP ≤ 4 → S, SP ≤ 12 → M, SP > 12 → L.
+3. **Heuristic**: infer from task description complexity.
+4. **Default**: `M` (safe fallback — matches current behavior for pipelines started before this feature was deployed)
 
 After detection, call: `$SM set-effort {workspace} {effort}`
 
@@ -780,7 +777,7 @@ Four additional reasons the split is load-bearing:
 1. **Resume semantics** — each file is a separate phase checkpoint. If Phase 2 fails, Phase 1's analysis.md is already on disk and the investigator can retry without re-running the situation analyst.
 2. **Consumer granularity** — `task-decomposer` (Phase 4) reads only `investigation.md`; `architect` and `design-reviewer` read both. Separate files let each consumer load exactly what it needs.
 3. **Artifact guards** — `pipeline_report_result` validates `analysis.md` on Phase 1 completion and `investigation.md` on Phase 2 completion independently. A single merged file would require one guard to validate two distinct sections, coupling the guard logic to content structure.
-4. **Investigation task type** — when `task_type=investigation`, the pipeline ends after Phase 2 and presents both files as the final deliverable to the user. Keeping them separate makes the output navigable as two named documents.
+4. **Investigation flow** — when the pipeline is run as an investigation (no implementation phases), it ends after Phase 2 and presents both files as the final deliverable to the user. Keeping them separate makes the output navigable as two named documents.
 
 The two-file split is maintained regardless of effort level. Even though both files are produced in the same pipeline run, they serve distinct roles and are consumed by different downstream agents.
 
