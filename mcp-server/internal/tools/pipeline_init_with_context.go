@@ -34,9 +34,9 @@ type PipelineInitWithContextResult struct {
 
 // UserConfirmationPrompt holds the detected values to present to the user.
 type UserConfirmationPrompt struct {
-	DetectedEffort string                                  `json:"detected_effort"`
-	EffortOptions  map[string][]orchestrator.SkipLabel     `json:"effort_options"`
-	Message        string                                  `json:"message"`
+	DetectedEffort string                              `json:"detected_effort"`
+	EffortOptions  map[string][]orchestrator.SkipLabel `json:"effort_options"`
+	Message        string                              `json:"message"`
 }
 
 // externalContext holds parsed GitHub/Jira context fields.

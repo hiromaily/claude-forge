@@ -95,6 +95,7 @@ update-git-tag:
 update-all: update-tag
 	@git add .claude-plugin/marketplace.json .claude-plugin/plugin.json
 	@git commit -m "chore: bump version to v${new}"
+	@git push origin main
 	@$(MAKE) update-git-tag new=${new}
 	@echo "Version updated to v${new}, committed, tagged, and pushed"
 
