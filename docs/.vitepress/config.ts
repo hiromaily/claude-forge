@@ -1,4 +1,4 @@
-import { defineConfig, withBase } from "vitepress";
+import { defineConfig } from "vitepress";
 import { withMermaid } from "vitepress-plugin-mermaid";
 
 export default withMermaid(
@@ -11,7 +11,7 @@ export default withMermaid(
     lastUpdated: true,
     cleanUrls: true,
 
-    head: [["link", { rel: "icon", type: "image/svg+xml", href: withBase("/logo.svg") }]],
+    head: [["link", { rel: "icon", type: "image/svg+xml", href: "/claude-forge/logo.svg" }]],
 
     locales: {
       root: {
