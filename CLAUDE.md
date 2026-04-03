@@ -36,7 +36,7 @@ claude-forge/
 │   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md after phase-complete post-to-source
 │   ├── setup.sh           ← downloads forge-state-mcp binary from GitHub Releases (called by Setup hook and launch-mcp.sh)
 │   ├── stop-hook.sh       ← pipeline completion guard
-│   └── test-hooks.sh      ← automated test suite (58 tests; run bash scripts/test-hooks.sh to verify)
+│   └── test-hooks.sh      ← automated test suite (62 tests; run bash scripts/test-hooks.sh to verify)
 └── skills/
     └── forge/
         └── SKILL.md       ← orchestrator instructions (the main skill)
@@ -75,7 +75,7 @@ SKILL.md (orchestrator)
   ```
 - **Full hook test suite** (run after any change):
   ```bash
-  bash scripts/test-hooks.sh   # run to see current test count (58 tests)
+  bash scripts/test-hooks.sh   # run to see current test count (62 tests)
   ```
 - **Go MCP server tests** (run after any change to mcp-server/):
   ```bash
@@ -91,7 +91,7 @@ SKILL.md (orchestrator)
 
 ### Script structure conventions
 
-**pre-tool-hook.sh** — Enforces three rules: Rule 1 (read-only guard in phase-1/2 with workspace carve-out for artifact writes), Rule 2 (parallel phase-5 git commit block), Rule 5 (main/master checkout block). Sources `scripts/common.sh` for `find_active_workspace`.
+**pre-tool-hook.sh** — Enforces four rules: Rule 1 (read-only guard in phase-1/2 with workspace carve-out for artifact writes), Rule 2 (parallel phase-5 git commit block), Rule 3f (effort null warning on phase-start phase-1, non-blocking), Rule 5 (main/master checkout block). Sources `scripts/common.sh` for `find_active_workspace`.
 
 **find_active_workspace** — `pre-tool-hook.sh` and `stop-hook.sh` share the same predicate and both source `scripts/common.sh`. `post-agent-hook.sh` uses a different filter (`status == "in_progress"` only) and does NOT source `common.sh`. Do not unify post-agent-hook.sh's copy into common.sh.
 

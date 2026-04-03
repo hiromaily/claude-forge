@@ -511,7 +511,7 @@ claude-forge/
     pre-tool-hook.sh          Read-only, commit blocking, main/master checkout block
     post-agent-hook.sh        Agent output quality validation
     stop-hook.sh              Pipeline completion guard
-    test-hooks.sh             Automated hook test suite (58 tests; run to verify)
+    test-hooks.sh             Automated hook test suite (62 tests; run to verify)
   skills/
     forge/
       SKILL.md        Orchestrator instructions (the main skill)
@@ -537,7 +537,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for full rationale on these and other dec
 ## Running tests
 
 ```bash
-# Hook script tests (58 tests)
+# Hook script tests (62 tests)
 cd claude-forge
 bash scripts/test-hooks.sh
 

@@ -68,7 +68,7 @@ In v1 (shell-based), this was handled by `post-bash-hook.sh` auto-committing aft
 ## Testing
 
 ```bash
-# Run the full hook test suite (58 tests)
+# Run the full hook test suite (62 tests)
 bash scripts/test-hooks.sh
 
 # Manual testing with sample input

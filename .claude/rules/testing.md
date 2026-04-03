@@ -1,0 +1,103 @@
+# Testing Checklist
+
+When making changes to this plugin, verify the items relevant to the area you changed.
+
+## Go MCP Server (`cd mcp-server && go test -race ./...`)
+
+### State management commands (26 commands)
+
+All commands are tested in `mcp-server/internal/state/`:
+
+- init, get, phase-start, phase-complete, phase-fail, checkpoint, abandon, skip-phase
+- task-init, task-update
+- revision-bump, inline-revision-bump, set-revision-pending, clear-revision-pending
+- set-branch, set-effort, set-flow-template, set-auto-approve, set-skip-pr, set-debug, set-use-current-branch
+- phase-log, phase-stats, resume-info, refresh-index
+
+Key behaviors to preserve:
+- [ ] numeric fields (`implRetries`, `reviewRetries`) stay as numbers after `task-update`
+- [ ] special characters in spec-name don't break JSON
+- [ ] `set_effort` — S/M/L accepted; XS and invalid values rejected
+- [ ] `set_flow_template` — light/standard/full accepted; invalid value rejected
+- [ ] `resume_info` projects `autoApprove`, `skipPr`, `effort`, `flowTemplate` with null-safe defaults
+
+### Phases (18 phases)
+
+ValidPhases and AllPhases must remain in sync and include all phases in this order:
+
+```
+setup → phase-1 → phase-2 → phase-3 → phase-3b → checkpoint-a →
+phase-4 → phase-4b → checkpoint-b → phase-5 → phase-6 → phase-7 →
+final-verification → pr-creation → final-summary → final-commit →
+post-to-source → completed
+```
+
+- [ ] `TestAllPhasesCount` expects 18
+- [ ] `TestAllPhasesOrder` matches the order above
+- [ ] `TestIsSkippable` includes all phases (only `setup` and `completed` are non-skippable)
+
+### MCP-only tools (18 tools)
+
+All have dedicated test files in `mcp-server/internal/tools/`:
+
+- Pipeline: `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`
+- Code analysis: `ast_summary`, `ast_find_definition`, `dependency_graph`, `impact_scope`
+- Validation: `validate_input`, `validate_artifact`
+- History: `search_patterns`, `history_search`, `history_get_patterns`, `history_get_friction_map`
+- Analytics: `analytics_pipeline_summary`, `analytics_repo_dashboard`, `analytics_estimate`
+- Events: `subscribe_events`
+
+Key behaviors to preserve:
+- [ ] `pipeline_next_action` returns file paths (not contents) in the artifacts section
+- [ ] `pipeline_next_action` sets `currentPhaseStatus = "awaiting_human"` for checkpoint actions
+- [ ] `pipeline_report_result` validates artifacts and parses review verdicts
+- [ ] Fail-open: missing agent .md files return a warning, not an error
+
+## Hook Scripts (`bash scripts/test-hooks.sh`)
+
+Run `bash scripts/test-hooks.sh` after any change to scripts (also runs automatically on `git push` via lefthook when `scripts/*.sh` files are staged).
+
+### `pre-tool-hook.sh` (Rules 1, 2, 3f, 5)
+
+- [ ] Rule 1: Edit/Write blocked during Phase 1-2 (exit 2), allowed for workspace files (exit 0)
+- [ ] Rule 2: git commit blocked during parallel Phase 5 (exit 2), allowed during sequential (exit 0)
+- [ ] Rule 3f: `phase_start phase-1` when effort is null emits warning to stderr, exits 0 (non-blocking)
+- [ ] Rule 3f: `phase_start phase-1` when effort is set emits no warning, exits 0
+- [ ] Rule 5: git checkout/switch to main/master blocked during active pipeline (exit 2)
+- [ ] No-op when no active pipeline (exit 0)
+- [ ] No-op when pipeline is abandoned (exit 0)
+
+### `post-agent-hook.sh`
+
+- [ ] Warns on empty/short agent output (< 50 chars)
+- [ ] Warns on missing verdict keyword in review phases (phase-3b, phase-4b: APPROVE/APPROVE_WITH_NOTES/REVISE; phase-6: PASS/FAIL)
+
+### `stop-hook.sh`
+
+- [ ] Blocks stop when pipeline active (exit 2)
+- [ ] Allows stop at checkpoints (`awaiting_human`), completed, abandoned (exit 0)
+
+### `post-bash-hook.sh` (v1 legacy only)
+
+- [ ] Only fires for legacy Bash-based `phase-complete post-to-source` calls
+- [ ] Not used in MCP-driven (v2) flows
+
+## SKILL.md Consistency
+
+After modifying `skills/forge/SKILL.md`:
+
+- [ ] Agent Roster matches each agent's actual Input section (10 agents)
+- [ ] All phase IDs exist in the Go MCP server's ValidPhases list
+- [ ] `comprehensive-reviewer.md` frontmatter has correct name, description, model
+- [ ] `source_type` detection logic covers `github_issue`, `jira_issue`, `text`
+- [ ] PR creation step includes `gh pr create` + PR number capture
+- [ ] Final Summary includes PR number in `summary.md` template
+- [ ] Post to Source correctly dispatches on `source_type`
+- [ ] `--auto` flag detection in Workspace Setup
+- [ ] `--nopr` flag detection in Workspace Setup
+- [ ] Resume Check restores `{auto_approve}` from `resume_info.autoApprove`
+- [ ] Resume Check restores `{skip_pr}` from `resume_info.skipPr`
+- [ ] PR Creation has two-gate skip structure (task-type + `--nopr`)
+- [ ] Final Summary omits PR line when `{pr-number}` is `none`
+- [ ] Checkpoint A and B have two-gate skip structure (task-type + auto-approve)
+- [ ] `full` template + `--auto` flag — `autoApprove` stays `false` when conflict prompt is accepted

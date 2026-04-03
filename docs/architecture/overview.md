@@ -63,7 +63,7 @@ claude-forge/
 │   ├── post-agent-hook.sh Agent output validation
 │   ├── post-bash-hook.sh Auto-commit after post-to-source
 │   ├── stop-hook.sh     Pipeline completion guard
-│   └── test-hooks.sh    Automated test suite (58 tests)
+│   └── test-hooks.sh    Automated test suite (62 tests)
 ├── skills/
 │   └── forge/
 │       └── SKILL.md     Orchestrator instructions
