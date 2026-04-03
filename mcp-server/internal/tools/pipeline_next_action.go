@@ -22,6 +22,8 @@ import (
 
 const similarPipelinesSearchLimit = 3
 
+const verdictHintApproveRevise = "The file MUST contain exactly one verdict line: `## Verdict: APPROVE`, `APPROVE_WITH_NOTES`, or `REVISE`."
+
 // outputVerdictHints maps output artifact filenames to a validation hint that
 // tells the agent which verdict token(s) must appear in the file. These hints
 // mirror the verdictSet requirements in validation/artifact.go so agents
@@ -29,8 +31,8 @@ const similarPipelinesSearchLimit = 3
 //
 //nolint:gochecknoglobals // package-level lookup table for verdict hints
 var outputVerdictHints = map[string]string{
-	state.ArtifactReviewDesign: "The file MUST contain exactly one verdict line: `## Verdict: APPROVE`, `APPROVE_WITH_NOTES`, or `REVISE`.",
-	state.ArtifactReviewTasks:  "The file MUST contain exactly one verdict line: `## Verdict: APPROVE`, `APPROVE_WITH_NOTES`, or `REVISE`.",
+	state.ArtifactReviewDesign: verdictHintApproveRevise,
+	state.ArtifactReviewTasks:  verdictHintApproveRevise,
 }
 
 // nextActionResponse wraps orchestrator.Action to add an optional Warning field.

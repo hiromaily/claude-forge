@@ -241,7 +241,7 @@ func readImprovementContent(specDir string) string {
 // given heading, up to (but not including) the next heading of equal or higher
 // level or end of file. Returns "" if the heading is not found.
 func extractSection(text, heading string) string {
-	headingLevel := strings.Count(strings.TrimRight(heading, " "), "#")
+	headingLevel := countLeadingHashes(heading)
 	idx := strings.Index(text, heading)
 	if idx < 0 {
 		return ""
@@ -253,7 +253,7 @@ func extractSection(text, heading string) string {
 		start += nlIdx + 1
 	}
 
-	// Find the next heading of equal or higher level.
+	// Collect lines until a heading of equal or higher level is found.
 	rest := text[start:]
 	scanner := bufio.NewScanner(strings.NewReader(rest))
 	var sb strings.Builder
@@ -261,7 +261,7 @@ func extractSection(text, heading string) string {
 		line := scanner.Text()
 		trimmed := strings.TrimLeft(line, " ")
 		if strings.HasPrefix(trimmed, "#") {
-			level := strings.Count(strings.TrimRight(strings.SplitN(trimmed, " ", 2)[0], ""), "#")
+			level := countLeadingHashes(trimmed)
 			if level > 0 && level <= headingLevel {
 				break
 			}
@@ -271,6 +271,19 @@ func extractSection(text, heading string) string {
 	}
 
 	return sb.String()
+}
+
+// countLeadingHashes returns the number of leading '#' characters in s.
+func countLeadingHashes(s string) int {
+	n := 0
+	for _, c := range s {
+		if c == '#' {
+			n++
+		} else {
+			break
+		}
+	}
+	return n
 }
 
 // extractFrictionPoints scans the text of an improvement report and adds
