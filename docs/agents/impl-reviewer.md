@@ -16,7 +16,7 @@ Diff-based code reviewer. Evaluates implementation against acceptance criteria, 
 
 ## Constraints
 
-- Skipped for `investigation` task type
+- Runs for all effort levels
 - Up to 2 retries per task on FAIL
 
 ## Review Approach

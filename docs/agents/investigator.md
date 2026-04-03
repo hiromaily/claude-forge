@@ -17,7 +17,7 @@ Deep-dive researcher. Builds on the situation analysis to uncover root causes, e
 ## Constraints
 
 - **Read-only** — cannot edit or write source files (enforced by hook)
-- Skipped for `docs` task type
+- Runs for all effort levels
 
 ## What It Does
 

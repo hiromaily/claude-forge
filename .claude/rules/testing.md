@@ -97,7 +97,7 @@ After modifying `skills/forge/SKILL.md`:
 - [ ] `--nopr` flag detection in Workspace Setup
 - [ ] Resume Check restores `{auto_approve}` from `resume_info.autoApprove`
 - [ ] Resume Check restores `{skip_pr}` from `resume_info.skipPr`
-- [ ] PR Creation has two-gate skip structure (task-type + `--nopr`)
+- [ ] PR Creation has skip structure (`--nopr` flag)
 - [ ] Final Summary omits PR line when `{pr-number}` is `none`
-- [ ] Checkpoint A and B have two-gate skip structure (task-type + auto-approve)
+- [ ] Checkpoint A and B have skip structure (effort-level + auto-approve)
 - [ ] `full` template + `--auto` flag — `autoApprove` stays `false` when conflict prompt is accepted

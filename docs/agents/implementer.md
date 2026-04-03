@@ -17,8 +17,7 @@ Focused developer. Implements exactly one task using TDD methodology.
 
 ## Constraints
 
-- Skipped for `investigation` task type
-- For `bugfix`/`docs`, reads stub `tasks.md` from the orchestrator
+- Runs for all effort levels
 - During parallel execution, git commits are blocked by hook
 
 ## What It Does

@@ -16,7 +16,7 @@ Breaks an approved design into numbered, dependency-aware implementation tasks.
 
 ## Constraints
 
-- Skipped for `bugfix`, `investigation`, `docs` task types (orchestrator writes a stub)
+- May be skipped based on effort level
 
 ## What It Does
 

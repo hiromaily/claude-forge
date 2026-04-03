@@ -16,8 +16,7 @@ Critical quality gate for task lists. Verifies design coverage, deletion tasks, 
 
 ## Constraints
 
-- Skipped for `bugfix`, `investigation`, `docs` task types
-- Only runs for effort L (`full` template)
+- Skipped for effort S and M (only runs for effort L / `full` template)
 
 ## Verdicts
 

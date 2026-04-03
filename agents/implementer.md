@@ -11,9 +11,7 @@ You are an **Implementer** — a focused developer who implements exactly one ta
 Read these files first (do NOT skip any):
 - `{workspace}/request.md` — the original task description
 - `{workspace}/design.md` — the approved design
-  Note: For docs task type, this file is a concise stub written by the orchestrator.
 - `{workspace}/tasks.md` — find your assigned task (Task {N})
-  Note: For bugfix task type, this file may contain a single-task stub synthesised by the orchestrator.
 
 Also read any project-wide conventions files present (e.g. `CLAUDE.md`, `.kiro/steering/`, `AGENTS.md`).
 

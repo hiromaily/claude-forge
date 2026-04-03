@@ -172,7 +172,7 @@ flowchart TD
     BC -->|no| BCASK["👤 Use current branch<br>or create new?"]
     BCASK --> TE
 
-    TE["🔍 Detect task type & effort<br>(👤 confirm if heuristic)"]
+    TE["🔍 Detect effort level<br>(👤 confirm)"]
     TE --> P1
 
     REJOIN -.-> P1
@@ -229,7 +229,7 @@ flowchart TD
     JIRA --> DONE
 ```
 
-> The diagram above shows the full `feature` flow. Other task types skip phases — see [Task types](#task-types) below.
+> The diagram above shows the full pipeline flow. Effort level determines which phases are skipped — see [Effort Levels](#effort-levels-and-skipped-phases) in the pipeline flow guide.
 
 ---
 
@@ -239,7 +239,7 @@ flowchart TD
 | ----- | ------------------------- | ---------------------- | --------------------------- | ------------------------------- | ----------------- |
 | 0     | Input Validation          | validate-input + LLM   | User input                  | validation result               | No                |
 | 1     | Workspace Setup           | orchestrator           | validated input             | request.md, state.json          | Yes               |
-| 2     | Detect Task Type & Effort | orchestrator           | request.md                  | task type, effort in state.json | Yes               |
+| 2     | Detect Effort Level       | orchestrator           | request.md                  | effort in state.json            | Yes               |
 | 3     | Situation Analysis        | situation-analyst      | request.md                  | analysis.md                     | No                |
 | 4     | Investigation             | investigator           | analysis.md                 | investigation.md                | No                |
 | 5     | Design                    | architect              | investigation.md            | design.md                       | No                |
@@ -309,7 +309,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
 | 4 | Current git branch is not `main`/`master` | Branch name shown; choice to use the current branch or create a new one | Yes — waits for choice |
-| 5 | Always — effort level selection is required on every run | Detected task type shown for context; user selects effort level (S / M / L) and sees which phases will execute for that choice | Yes — waits for selection |
+| 5 | Always — effort level selection is required on every run | User selects effort level (S / M / L) and sees which phases will execute for that choice | Yes — waits for selection |
 
 ### Checkpoint A — Design Review
 

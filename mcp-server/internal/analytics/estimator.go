@@ -11,7 +11,7 @@ import (
 )
 
 // Estimator loads completed pipeline state.json files from specsDir and
-// computes P50/P90 percentile predictions for a given (taskType, effort) pair.
+// computes P50/P90 percentile predictions for a given effort level.
 type Estimator struct {
 	specsDir string
 }
@@ -22,7 +22,7 @@ func NewEstimator(specsDir string) *Estimator {
 	return &Estimator{specsDir: specsDir}
 }
 
-// EstimateResult holds the P50/P90 predictions for a given (taskType, effort) pair.
+// EstimateResult holds the P50/P90 predictions for a given effort level.
 type EstimateResult struct {
 	SampleSize  int         `json:"sample_size"`
 	Tokens      Percentiles `json:"tokens"`

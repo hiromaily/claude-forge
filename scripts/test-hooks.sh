@@ -477,10 +477,10 @@ run_hook "post-bash-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"bash 
 assert_exit 0 "phase-complete final-summary exits 0 (not post-to-source)"
 
 echo ""
-echo "--- Bash tool, phase-complete post-to-source, investigation type: skipped ---"
+echo "--- Bash tool, phase-complete post-to-source, legacy investigation type: skipped ---"
 reset_workspace
 WS="$(setup_workspace "post-to-source" "completed")"
-# Patch taskType to investigation
+# Patch taskType to investigation (legacy field — no longer set by new pipelines)
 jq '.taskType = "investigation"' "${WS}/state.json" > "${WS}/state.json.tmp" && mv "${WS}/state.json.tmp" "${WS}/state.json"
 touch "${WS}/summary.md"
 # NOTE: The command string below is a legacy fixture string used to simulate a post-bash-hook.sh
@@ -489,7 +489,7 @@ touch "${WS}/summary.md"
 run_hook "post-bash-hook.sh" \
   "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} post-to-source\"},\"tool_response\":\"\"}" \
   "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
-assert_exit 0 "investigation type skipped (no feature branch)"
+assert_exit 0 "legacy investigation type skipped (no feature branch)"
 reset_workspace
 
 echo ""

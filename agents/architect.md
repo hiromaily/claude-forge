@@ -12,10 +12,7 @@ Read these files:
 - `{workspace}/request.md` — the original task description
 - `{workspace}/analysis.md` — situation analysis
 - `{workspace}/investigation.md` — deep-dive findings and open questions
-  Note: This file will not exist for docs task type (Phase 2 is skipped for docs).
-  The architect agent is not invoked for docs flows — the orchestrator writes a
-  stub design.md directly. If investigation.md is absent for any other task type,
-  proceed without it.
+  Note: This file may be absent if Phase 2 was skipped. Proceed without it.
 
 Also read any project-wide conventions files present (e.g. `CLAUDE.md`, `.kiro/steering/`, `AGENTS.md`).
 
