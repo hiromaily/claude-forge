@@ -160,31 +160,31 @@ In v1, if the LLM misinterpreted a skip condition or forgot to call `phase-compl
 
 ```mermaid
 flowchart TD
-    START(["▶ /forge"])
-    START --> RC{state.json<br>exists?}
-    RC -->|yes| RESUME[Load state.json<br>restore variables]
-    RC -->|no| IV["🛡️ Input Validation<br>validate_input MCP tool + LLM check"]
-    IV -->|invalid| REJECT(["❌ Reject — show error"])
-    IV -->|valid| WS[Workspace Setup<br>request.md + state.json]
-    RESUME --> REJOIN(("resume at<br>current phase"))
-    WS --> BC{"On main<br>branch?"}
-    BC -->|"yes (new branch<br>created before Phase 5)"| TE
-    BC -->|no| BCASK["👤 Use current branch<br>or create new?"]
-    BCASK --> TE
+    START(["▶ /forge &lt;input&gt;"])
 
-    TE["🔍 Detect effort level<br>(👤 confirm)"]
-    TE --> P1
+    %% ── Initialisation ──
+    START --> PARSE["🛡️ Input parsing &<br>resume detection"]
+    PARSE --> ISRESUME{Resume?}
+    ISRESUME -->|yes| RESUME(("Resume at<br>current phase"))
+    ISRESUME -->|no| VALID{Input valid?}
+    VALID -->|no| REJECT(["❌ Reject — show error"])
+    VALID -->|yes| DETECT["🔍 Effort auto-detection<br>& branch state check"]
+    DETECT --> ASK{{"👤 Confirm all at once:<br>1. Effort S / M / L<br>2. Branch: new or current<br>3. Workspace slug"}}
+    ASK --> INIT["📂 Workspace init<br>state.json + request.md"]
+    INIT --> BRANCH["🌿 Create feature branch"]
 
-    REJOIN -.-> P1
-    P1["🔍 Phase 1 — Situation Analysis<br><i>situation-analyst</i>"]
-    P1 -->|analysis.md| P2
-    P2["🔍 Phase 2 — Investigation<br><i>investigator</i>"]
+    %% ── Analysis & Design ──
+    BRANCH --> P1
+    RESUME -.-> P1
+    P1["🔍 Phase 1 — Situation Analysis<br><i>situation-analyst → analysis.md</i>"]
+    P1 --> P2
+    P2["🔍 Phase 2 — Investigation<br><i>investigator → investigation.md</i>"]
+    P2 --> P3
 
-    P2 -->|investigation.md| P3
-    P3["📐 Phase 3 — Design<br><i>architect</i>"]
-    P3 -->|design.md| P3R
-    P3R["🔎 Phase 3b — Design Review<br><i>design-reviewer</i>"]
-    P3R -->|review-design.md| DREV{APPROVE?}
+    P3["📐 Phase 3 — Design<br><i>architect → design.md</i>"]
+    P3 --> P3R
+    P3R["🔎 Phase 3b — Design Review<br><i>design-reviewer → review-design.md</i>"]
+    P3R --> DREV{APPROVE?}
     DREV -->|REVISE| P3
     DREV -->|APPROVE| CPA
 
@@ -192,34 +192,35 @@ flowchart TD
     CPA -->|approved| P4
     CPA -->|rejected| P3
 
-    P4["📋 Phase 4 — Task Decomposition<br><i>task-decomposer</i>"]
-    P4 -->|tasks.md| P4R
-    P4R["🔎 Phase 4b — Tasks Review<br><i>task-reviewer</i>"]
-    P4R -->|review-tasks.md| TREV{APPROVE?}
+    %% ── Task Planning ──
+    P4["📋 Phase 4 — Task Decomposition<br><i>task-decomposer → tasks.md</i>"]
+    P4 --> P4R
+    P4R["🔎 Phase 4b — Tasks Review<br><i>task-reviewer → review-tasks.md</i>"]
+    P4R --> TREV{APPROVE?}
     TREV -->|REVISE| P4
     TREV -->|APPROVE| CPB
 
     CPB{{"👤🔊 Checkpoint B<br>Human reviews tasks"}}
-    CPB -->|approved| GITBR["🌿 Create/use<br>feature branch"]
+    CPB -->|approved| P5
     CPB -->|rejected| P4
 
-    GITBR --> P5
-
+    %% ── Implementation ──
     subgraph loop ["🔄 Repeat for each task"]
-        P5["⚙️ Phase 5 — Implementation<br><i>implementer</i>"]
-        P5 -->|"impl-N.md"| P6
-        P6["🔎 Phase 6 — Code Review<br><i>impl-reviewer</i>"]
-        P6 -->|"review-N.md"| RESULT{PASS?}
+        P5["⚙️ Phase 5 — Implementation<br><i>implementer → impl-N.md</i>"]
+        P5 --> P6
+        P6["🔎 Phase 6 — Code Review<br><i>impl-reviewer → review-N.md</i>"]
+        P6 --> RESULT{PASS?}
         RESULT -->|"FAIL (≤2 retries)"| P5
     end
     RESULT -->|all PASS| P7
 
-    P7["🔬 Phase 7 — Comprehensive Review<br><i>comprehensive-reviewer</i>"]
-    P7 -->|comprehensive-review.md| FV
+    %% ── Finalisation ──
+    P7["🔬 Phase 7 — Comprehensive Review<br><i>comprehensive-reviewer → comprehensive-review.md</i>"]
+    P7 --> FV
 
-    FV["✅ Final Verification<br><i>verifier</i>"]
-    FV --> PR["🚀 PR Creation<br>commit · push · gh pr create"]
-    PR --> FS["📝 Final Summary<br>summary.md + Improvement Report<br>(includes PR #)"]
+    FV["✅ Final Verification<br><i>verifier → final-verification.md</i>"]
+    FV --> PR["🚀 PR Creation<br>git push · gh pr create"]
+    PR --> FS["📝 Final Summary<br><i>verifier → summary.md<br>(includes PR # + Improvement Report)</i>"]
     FS --> FC["🔒 Final Commit<br>amend + force-push<br>(summary.md → PR branch)"]
     FC --> POST{"Source type?"}
     POST -->|GitHub Issue| GH["💬 Post to GitHub Issue"]
@@ -229,7 +230,9 @@ flowchart TD
     JIRA --> DONE
 ```
 
-> The diagram above shows the full pipeline flow. Effort level determines which phases are skipped — see [Effort Levels](#effort-levels-and-skipped-phases) in the pipeline flow guide.
+> **Effort level** determines which phases are skipped: Phase 4b and Checkpoint B are skipped for S and M; Phase 7 is additionally skipped for S. See [Effort Levels](#effort-levels-and-skipped-phases) for details.
+>
+> **Branch creation** happens immediately after workspace init — before any analysis phase begins. The branch name is derived from the workspace slug confirmed by the user.
 
 ---
 
