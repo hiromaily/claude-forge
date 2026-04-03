@@ -8,8 +8,12 @@ pre-commit:
       stage_fixed: true
 
 pre-push:
+  parallel: true
   commands:
     go-lint:
       root: "mcp-server"
       glob: "**/*.go"
       run: make go-lint
+    hook-tests:
+      glob: "scripts/*.sh"
+      run: bash scripts/test-hooks.sh

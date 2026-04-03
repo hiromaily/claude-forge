@@ -172,12 +172,12 @@ func TestNewActions(t *testing.T) {
 		{
 			name: "Done",
 			build: func() Action {
-				return NewDoneAction("Pipeline complete", "/workspace/final-summary.md")
+				return NewDoneAction("Pipeline complete", "/workspace/summary.md")
 			},
 			want: Action{
 				Type:        ActionDone,
 				Summary:     "Pipeline complete",
-				SummaryPath: "/workspace/final-summary.md",
+				SummaryPath: "/workspace/summary.md",
 			},
 		},
 	}

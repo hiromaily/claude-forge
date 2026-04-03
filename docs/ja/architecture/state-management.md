@@ -47,7 +47,6 @@ stateDiagram-v2
 | `currentPhase` | アクティブなフェーズID（例：`phase-3`、`checkpoint-a`） |
 | `effort` | 工数レベル：`S`、`M`、`L`（XSはサポート外） |
 | `flowTemplate` | 選択されたテンプレート：`light`、`standard`、`full` |
-| `taskType` | 検出されたタイプ：`feature`、`bugfix`、`refactor`、`docs`、`investigation` |
 | `branch` | Gitブランチ名 |
 | `autoApprove` | ブーリアン、`--auto` フラグで設定（デフォルト：`false`） |
 | `phases` | フェーズレコードの配列（ステータス、タイムスタンプ、ログ） |

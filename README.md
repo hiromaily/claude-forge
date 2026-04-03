@@ -92,6 +92,53 @@ These aren't instructions the agent can misinterpret. They're hard stops.
 
 ---
 
+## Why MCP-driven pipeline control (v2 vs v1)
+
+claude-forge v1 used shell scripts (`state-manager.sh`) for state management and relied on SKILL.md prompt instructions for all orchestration decisions — which phase to run next, whether to retry, when to skip. The LLM was both the executor *and* the decision-maker.
+
+v2 replaced this with a Go MCP server (`forge-state-mcp`) that owns all pipeline logic. The LLM orchestrator now follows a strict **ask → execute → report** loop: it calls `pipeline_next_action` to get the next action, executes it, and calls `pipeline_report_result` to advance state. It never decides what to do next.
+
+### The shift: LLM as executor, not decision-maker
+
+```
+v1: User → SKILL.md (LLM decides next phase) → shell scripts (state I/O)
+v2: User → SKILL.md (LLM executes actions)  → Go Engine (decides next phase) → MCP tools (state + guards)
+```
+
+In v1, if the LLM misinterpreted a skip condition or forgot to call `phase-complete`, the pipeline broke silently. In v2, the Engine returns a typed action (`spawn_agent`, `checkpoint`, `exec`, `write_file`, `done`) — the LLM cannot invent steps or skip them.
+
+### Comparison
+
+| Aspect | v1 (Skill + shell scripts) | v2 (MCP Engine) |
+| --- | --- | --- |
+| **Who decides the next phase** | LLM interprets SKILL.md instructions | `Engine.NextAction()` in Go — deterministic |
+| **State management** | Shell script (`state-manager.sh`) with `jq` | Go `StateManager` with typed fields and mutex locking |
+| **Guard enforcement** | Shell hooks only (exit 2) | Two-layer: Go MCP handler guards + shell hooks |
+| **Phase transition reliability** | Probabilistic — LLM may skip or misordering | Deterministic — Engine enforces canonical PHASES order |
+| **Retry / revision logic** | SKILL.md prose ("if REVISE, re-run Phase 3") | Engine tracks `designRevisions`, `taskRevisions`, `implRetries` with hard limits |
+| **Artifact validation** | None — LLM checks file existence ad-hoc | `validation/artifact.go` — content rules per phase, blocking |
+| **Parallel task dispatch** | SKILL.md instructions + hook blocking | Engine returns `parallel_task_ids`; hook blocks git commit |
+| **Auto-approve logic** | SKILL.md conditional ("if --auto and APPROVE…") | Engine evaluates `autoApprove` + verdict + findings deterministically |
+| **Skip-phase computation** | LLM reads effort table and calls skip-phase | `SkipsForEffort()` returns canonical skip list |
+| **Resume** | LLM reads state.json and figures out where it was | `pipeline_next_action` reads state and returns the exact next step |
+| **Analytics** | None | `analytics.Collector`, `Estimator`, `Reporter` — token/cost/duration tracking |
+| **Cross-pipeline learning** | None | `history.HistoryIndex` (BM25), `KnowledgeBase` (patterns, friction) |
+| **Repo profiling** | None | `profile.RepoProfiler` — language, CI, linter detection for prompt enrichment |
+| **Tool count** | ~10 shell commands | 44 typed MCP tools |
+| **Error handling** | Shell exit codes, often swallowed | Go errors with typed responses (`IsError=true`) |
+
+### What this means in practice
+
+**Fewer pipeline failures.** v1's most common failure mode was the LLM misinterpreting a phase transition — skipping a checkpoint, forgetting to call `phase-complete`, or miscounting retry attempts. v2 eliminates this entire class of errors because the Engine makes all transition decisions.
+
+**Cheaper retries.** When a v1 pipeline stalled, resuming required the LLM to re-read state.json and reconstruct its understanding of where it was. v2's `pipeline_next_action` returns the exact next step — no interpretation needed.
+
+**Richer context for agents.** v2 injects historical data (past review patterns, similar implementations, repo profile) into agent prompts via MCP tools. v1 agents worked in isolation with no cross-pipeline knowledge.
+
+**Auditable decisions.** Every Engine decision is a deterministic function of `state.json`. You can reproduce any pipeline's control flow by replaying `NextAction()` calls against the saved state — something impossible with v1's LLM-driven decisions.
+
+---
+
 ## Overview
 
 | Dimension | SDD / Single-conversation | claude-forge |
@@ -125,7 +172,7 @@ flowchart TD
     BC -->|no| BCASK["👤 Use current branch<br>or create new?"]
     BCASK --> TE
 
-    TE["🔍 Detect task type & effort<br>(👤 confirm if heuristic)"]
+    TE["🔍 Detect effort level<br>(👤 confirm)"]
     TE --> P1
 
     REJOIN -.-> P1
@@ -172,8 +219,9 @@ flowchart TD
 
     FV["✅ Final Verification<br><i>verifier</i>"]
     FV --> PR["🚀 PR Creation<br>commit · push · gh pr create"]
-    PR --> FS["📝 Final Summary<br>summary.md + Improvement Report"]
-    FS --> POST{"Source type?"}
+    PR --> FS["📝 Final Summary<br>summary.md + Improvement Report<br>(includes PR #)"]
+    FS --> FC["🔒 Final Commit<br>amend + force-push<br>(summary.md → PR branch)"]
+    FC --> POST{"Source type?"}
     POST -->|GitHub Issue| GH["💬 Post to GitHub Issue"]
     POST -->|Jira Issue| JIRA["💬 Post to Jira Issue"]
     POST -->|Plain text| DONE(["✔🔊 Done"])
@@ -181,7 +229,7 @@ flowchart TD
     JIRA --> DONE
 ```
 
-> The diagram above shows the full `feature` flow. Other task types skip phases — see [Task types](#task-types) below.
+> The diagram above shows the full pipeline flow. Effort level determines which phases are skipped — see [Effort Levels](#effort-levels-and-skipped-phases) in the pipeline flow guide.
 
 ---
 
@@ -191,7 +239,7 @@ flowchart TD
 | ----- | ------------------------- | ---------------------- | --------------------------- | ------------------------------- | ----------------- |
 | 0     | Input Validation          | validate-input + LLM   | User input                  | validation result               | No                |
 | 1     | Workspace Setup           | orchestrator           | validated input             | request.md, state.json          | Yes               |
-| 2     | Detect Task Type & Effort | orchestrator           | request.md                  | task type, effort in state.json | Yes               |
+| 2     | Detect Effort Level       | orchestrator           | request.md                  | effort in state.json            | Yes               |
 | 3     | Situation Analysis        | situation-analyst      | request.md                  | analysis.md                     | No                |
 | 4     | Investigation             | investigator           | analysis.md                 | investigation.md                | No                |
 | 5     | Design                    | architect              | investigation.md            | design.md                       | No                |
@@ -204,10 +252,11 @@ flowchart TD
 | 12    | Code Review               | impl-reviewer          | impl-N.md                   | review-N.md                     | No                |
 | 13    | Comprehensive Review      | comprehensive-reviewer | all impl + reviews          | comprehensive-review.md         | No                |
 | 14    | Final Verification        | verifier               | comprehensive-review.md     | verification result             | No                |
-| 15    | PR Creation               | orchestrator           | commits                     | PR                              | No                |
-| 16    | Final Summary             | orchestrator           | all artifacts               | summary.md                      | No                |
-| 17    | Post to Issue             | orchestrator           | summary.md                  | issue comment                   | No                |
-| 18    | Done                      | system                 | summary.md                  | —                               | No                |
+| 15    | PR Creation               | orchestrator           | commits                     | PR (PR # confirmed)             | No                |
+| 16    | Final Summary             | orchestrator           | all artifacts + PR #        | summary.md (includes PR #)      | No                |
+| 17    | Final Commit              | orchestrator           | summary.md, state.json      | amend last commit + force-push  | No                |
+| 18    | Post to Issue             | orchestrator           | summary.md                  | issue comment                   | No                |
+| 19    | Done                      | system                 | summary.md                  | —                               | No                |
 
 ---
 
@@ -234,8 +283,9 @@ Which phases run is primarily determined by effort level. ✅ = phase runs; blan
 | 14 | Final Verification | ✅ | ✅ | ✅ |
 | 15 | PR Creation | ✅ | ✅ | ✅ |
 | 16 | Final Summary | ✅ | ✅ | ✅ |
-| 17 | Post to Source | ✅ | ✅ | ✅ |
-| 18 | Done | ✅ | ✅ | ✅ |
+| 17 | Final Commit | ✅ | ✅ | ✅ |
+| 18 | Post to Source | ✅ | ✅ | ✅ |
+| 19 | Done | ✅ | ✅ | ✅ |
 
 > XS effort is not supported; use S for small tasks.
 > Checkpoint A is always blocking when design ran. Checkpoint B runs only for effort L. Use `--auto` to allow AI reviewer verdict to auto-approve Checkpoint A.
@@ -259,7 +309,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
 | 4 | Current git branch is not `main`/`master` | Branch name shown; choice to use the current branch or create a new one | Yes — waits for choice |
-| 5 | Always — effort level selection is required on every run | Detected task type shown for context; user selects effort level (S / M / L) and sees which phases will execute for that choice | Yes — waits for selection |
+| 5 | Always — effort level selection is required on every run | User selects effort level (S / M / L) and sees which phases will execute for that choice | Yes — waits for selection |
 
 ### Checkpoint A — Design Review
 
@@ -392,7 +442,7 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as
 | `--auto` | Skip human checkpoints when the AI reviewer verdict is APPROVE. REVISE verdicts still pause for human input. |
 | `--nopr` | Skip PR creation. Changes are committed and pushed to the feature branch, but no pull request is opened. |
 | `--debug` | Append a `## Debug Report` section to `summary.md` with execution flow diagnostics (token outliers, retries, revision cycles, missing phase-log entries). Note: `## Improvement Report` is always appended regardless of this flag. |
-| `--resume` | Resume an interrupted pipeline. Provide the spec directory name as the input (e.g. `/forge 20260320-fix-auth-timeout --resume`). Skips the confirmation prompt and enters the pipeline loop immediately. |
+| _(auto-detected)_ | Resume an interrupted pipeline by providing the spec directory name (e.g. `/forge 20260320-fix-auth-timeout`). If the directory exists under `.specs/`, resume is auto-detected. `--resume` is accepted for backward compatibility but has no effect. |
 
 ```text
 /forge --effort=S --auto Fix the null pointer crash in auth middleware
@@ -402,10 +452,10 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as
 
 ### Resume an interrupted pipeline
 
-Pass the spec directory name (the folder under `.specs/`) and the `--resume` flag:
+Pass the spec directory name (the folder under `.specs/`). Resume is auto-detected:
 
 ```text
-/forge 20260320-fix-auth-timeout --resume
+/forge 20260320-fix-auth-timeout
 ```
 
 ### Abandon a pipeline
@@ -461,7 +511,7 @@ claude-forge/
     pre-tool-hook.sh          Read-only, commit blocking, main/master checkout block
     post-agent-hook.sh        Agent output quality validation
     stop-hook.sh              Pipeline completion guard
-    test-hooks.sh             Automated hook test suite (58 tests; run to verify)
+    test-hooks.sh             Automated hook test suite (62 tests; run to verify)
   skills/
     forge/
       SKILL.md        Orchestrator instructions (the main skill)
@@ -487,7 +537,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for full rationale on these and other dec
 ## Running tests
 
 ```bash
-# Hook script tests (58 tests)
+# Hook script tests (62 tests)
 cd claude-forge
 bash scripts/test-hooks.sh
 

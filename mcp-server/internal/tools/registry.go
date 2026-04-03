@@ -341,7 +341,8 @@ func RegisterAll(
 	srv.AddTool(
 		mcp.NewTool("pipeline_init",
 			mcp.WithDescription("Parse pipeline arguments and detect resume/new path, source type, flags, and workspace path. "+
-				"Pure detection — no state side effects. On resume: returns {resume:true, workspace, instruction}. "+
+				"Pure detection — no state side effects. Resume is auto-detected: if .specs/<input>/state.json exists, "+
+				"returns {resume_mode:'auto', workspace, instruction}. "+
 				"On new pipeline: returns workspace, spec_name, source_type, flags (including current_branch), fetch_needed, errors."),
 			mcp.WithString("arguments", mcp.Required(), mcp.Description("Raw $ARGUMENTS string passed to the forge skill")),
 			mcp.WithString("current_branch", mcp.Description("Output of git branch --show-current")),
@@ -362,7 +363,7 @@ func RegisterAll(
 			// mcp.WithObject is the correct mechanism for complex nested parameters.
 			// It allows the orchestrator to pass structured JSON objects rather than
 			// encoding them as strings. See existing usage in task_init.go for reference.
-			mcp.WithObject("user_confirmation", mcp.Description("Confirmed task_type and effort. Absent on first call; present on second call.")),
+			mcp.WithObject("user_confirmation", mcp.Description("Confirmed effort and workspace slug. Absent on first call; present on second call.")),
 		),
 		PipelineInitWithContextHandler(sm),
 	)

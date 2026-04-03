@@ -51,9 +51,11 @@ After each agent returns, `post-agent-hook.sh` checks output quality:
 - Warns if output is empty or incoherent
 - Uses `status == "in_progress"` filter (different from other hooks)
 
-## PostToolUse: Auto-Commit
+## Final Commit Step
 
-`post-bash-hook.sh` auto-commits `state.json` and `summary.md` after the post-to-source phase completes.
+After PR creation and summary.md generation, the pipeline amends the last commit to include `summary.md` and `state.json`, then force-pushes so the PR branch contains the final summary with the PR number.
+
+In v1 (shell-based), this was handled by `post-bash-hook.sh` auto-committing after the `post-to-source` phase. In v2 (MCP-driven), the Engine issues an explicit `exec` action for the amend + force-push.
 
 ## Stop Hook: Completion Guard
 
@@ -66,7 +68,7 @@ After each agent returns, `post-agent-hook.sh` checks output quality:
 ## Testing
 
 ```bash
-# Run the full hook test suite (58 tests)
+# Run the full hook test suite (62 tests)
 bash scripts/test-hooks.sh
 
 # Manual testing with sample input

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # pre-tool-hook.sh — PreToolUse hook for claude-forge
-# Rules: 1 (read-only phase-1/2), 2 (no git commit parallel phase-5), 5 (no checkout main/master)
+# Rules: 1 (read-only phase-1/2), 2 (no git commit parallel phase-5), 3f (effort null warning), 5 (no checkout main/master)
 # Exit 0 = allow, Exit 2 + stderr = block. Fail-open on missing jq or parse errors.
 set -uo pipefail
 command -v jq >/dev/null 2>&1 || exit 0
@@ -30,6 +30,16 @@ if [ "$CURRENT_PHASE" = "phase-1" ] || [ "$CURRENT_PHASE" = "phase-2" ]; then
           esac
         fi ;;
     esac
+  fi
+fi
+# Rule 3f: Warn when phase_start phase-1 is called without effort set (non-blocking)
+if [ "$TOOL_NAME" = "mcp__forge-state__phase_start" ]; then
+  PHASE_ARG="$(echo "$INPUT" | jq -r '.tool_input.phase // empty' 2>/dev/null || true)"
+  if [ "$PHASE_ARG" = "phase-1" ]; then
+    EFFORT="$(jq -r '.effort // empty' "$STATE_FILE" 2>/dev/null || true)"
+    if [ -z "$EFFORT" ] || [ "$EFFORT" = "null" ]; then
+      echo "WARNING: effort is not set. Call set_effort before starting phase-1 to enable flow template selection." >&2
+    fi
   fi
 fi
 # Rules 2 and 5: Bash command checks

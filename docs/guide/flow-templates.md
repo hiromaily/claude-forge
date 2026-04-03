@@ -42,8 +42,9 @@ Effort is determined in this priority order:
 | 14 | Final Verification | ✅ | ✅ | ✅ |
 | 15 | PR Creation | ✅ | ✅ | ✅ |
 | 16 | Final Summary | ✅ | ✅ | ✅ |
-| 17 | Post to Source | ✅ | ✅ | ✅ |
-| 18 | Done | ✅ | ✅ | ✅ |
+| 17 | Final Commit | ✅ | ✅ | ✅ |
+| 18 | Post to Source | ✅ | ✅ | ✅ |
+| 19 | Done | ✅ | ✅ | ✅ |
 
 ## Checkpoint Behavior
 

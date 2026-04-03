@@ -16,7 +16,7 @@ Critical quality gate for designs. Reviews coverage, completeness, consistency, 
 
 ## Constraints
 
-- Skipped for `bugfix`, `docs`, `refactor` task types
+- May be skipped based on effort level
 
 ## Verdicts
 

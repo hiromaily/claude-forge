@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
 // ArtifactResult is the structured result returned by ValidateArtifacts for a
@@ -41,13 +43,13 @@ type artifactRule struct {
 //
 //nolint:gochecknoglobals // package-level lookup table for phase rules
 var artifactRules = map[string]artifactRule{
-	"phase-3":            {filename: "design.md", requiredHeading: "## "},
-	"phase-3b":           {filename: "review-design.md", verdictSet: []string{"APPROVE_WITH_NOTES", "APPROVE", "REVISE"}},
-	"phase-4":            {filename: "tasks.md", requiredHeading: "## Task"},
-	"phase-4b":           {filename: "review-tasks.md", verdictSet: []string{"APPROVE_WITH_NOTES", "APPROVE", "REVISE"}},
-	"phase-7":            {filename: "comprehensive-review.md", requireNonEmpty: true},
-	"final-summary":      {filename: "final-summary.md", requireNonEmpty: true},
-	"final-verification": {filename: "final-verification.md", requireNonEmpty: true},
+	state.PhaseThree:             {filename: state.ArtifactDesign, requiredHeading: "## "},
+	state.PhaseThreeB:            {filename: state.ArtifactReviewDesign, verdictSet: []string{state.VerdictApproveWithNotes, state.VerdictApprove, state.VerdictRevise}},
+	state.PhaseFour:              {filename: state.ArtifactTasks, requiredHeading: "## Task"},
+	state.PhaseFourB:             {filename: state.ArtifactReviewTasks, verdictSet: []string{state.VerdictApproveWithNotes, state.VerdictApprove, state.VerdictRevise}},
+	state.PhaseSeven:             {filename: state.ArtifactComprehensiveReview, requireNonEmpty: true},
+	state.PhaseFinalSummary:      {filename: state.ArtifactSummary, requireNonEmpty: true},
+	state.PhaseFinalVerification: {filename: state.ArtifactFinalVerification, requireNonEmpty: true},
 }
 
 // ValidateArtifacts checks that the expected artifact file exists in workspace
@@ -58,7 +60,7 @@ var artifactRules = map[string]artifactRule{
 // workspace (or impl-*.md as fallback), or one element with valid=false if
 // neither review nor impl files exist.
 func ValidateArtifacts(workspace, phase string) []ArtifactResult {
-	if phase == "phase-6" {
+	if phase == state.PhaseSix {
 		return validateArtifactPhase6(workspace)
 	}
 
@@ -165,8 +167,8 @@ func findVerdict(content string, verdictSet []string) string {
 // countFindings counts occurrences of [CRITICAL] and [MINOR] patterns in content.
 func countFindings(content string) *FindingsCount {
 	return &FindingsCount{
-		Critical: strings.Count(content, "[CRITICAL]"),
-		Minor:    strings.Count(content, "[MINOR]"),
+		Critical: strings.Count(content, state.SeverityCriticalTag),
+		Minor:    strings.Count(content, state.SeverityMinorTag),
 	}
 }
 
@@ -191,7 +193,7 @@ func validateArtifactPhase6(workspace string) []ArtifactResult {
 	filtered := make([]string, 0, len(matches))
 	for _, m := range matches {
 		base := filepath.Base(m)
-		if base == "review-design.md" || base == "review-tasks.md" {
+		if base == state.ArtifactReviewDesign || base == state.ArtifactReviewTasks {
 			continue
 		}
 		filtered = append(filtered, m)
@@ -218,7 +220,7 @@ func validateArtifactPhase6(workspace string) []ArtifactResult {
 	}
 	sort.Strings(matches)
 
-	verdictSet := []string{"PASS_WITH_NOTES", "PASS", "FAIL"}
+	verdictSet := []string{state.VerdictPassWithNotes, state.VerdictPass, state.VerdictFail}
 	results := make([]ArtifactResult, 0, len(matches))
 
 	for _, match := range matches {
@@ -250,7 +252,7 @@ func validateArtifactPhase6(workspace string) []ArtifactResult {
 
 		// FAIL verdict means structurally valid but review result is a failure.
 		results = append(results, ArtifactResult{
-			Valid:        verdict != "FAIL",
+			Valid:        verdict != state.VerdictFail,
 			File:         filename,
 			VerdictFound: verdict,
 		})

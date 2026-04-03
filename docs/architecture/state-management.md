@@ -47,7 +47,6 @@ Key fields in `state.json`:
 | `currentPhase` | Active phase ID (e.g., `phase-3`, `checkpoint-a`) |
 | `effort` | Effort level: `S`, `M`, `L` (XS is not supported) |
 | `flowTemplate` | Selected template: `light`, `standard`, `full` |
-| `taskType` | Detected type: `feature`, `bugfix`, `refactor`, `docs`, `investigation` |
 | `branch` | Git branch name |
 | `autoApprove` | Boolean; set via `--auto` flag (defaults to `false`) |
 | `phases` | Array of phase records (status, timestamps, logs) |

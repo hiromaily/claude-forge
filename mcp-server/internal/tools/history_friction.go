@@ -33,13 +33,8 @@ func historyGetFrictionMapWithKB(
 		FrictionPoints       []history.FrictionPoint `json:"friction_points"`
 		TotalReportsAnalyzed int                     `json:"total_reports_analyzed"`
 	}{
-		FrictionPoints:       points,
+		FrictionPoints:       nonNilSlice(points),
 		TotalReportsAnalyzed: totalReportsAnalyzed,
-	}
-
-	// Ensure friction_points is never null in JSON output.
-	if response.FrictionPoints == nil {
-		response.FrictionPoints = []history.FrictionPoint{}
 	}
 
 	return okJSON(response)

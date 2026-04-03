@@ -8,7 +8,7 @@ Software designer. Synthesizes analysis and investigation into a concrete design
 
 ## Input
 
-- `investigation.md` — findings from Phase 2 (may be absent for some task types)
+- `investigation.md` — findings from Phase 2 (may be absent if Phase 2 was skipped)
 
 ## Output
 
@@ -16,7 +16,7 @@ Software designer. Synthesizes analysis and investigation into a concrete design
 
 ## Constraints
 
-- Skipped for `docs` task type (orchestrator writes a stub `design.md`)
+- May be skipped based on effort level
 
 ## What It Does
 

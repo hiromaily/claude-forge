@@ -43,7 +43,7 @@ func (m *StateManager) Version() string {
 // ---------- helpers ----------
 
 func statePath(workspace string) string {
-	return filepath.Join(workspace, "state.json")
+	return filepath.Join(workspace, StateFileName)
 }
 
 func nowISO() string {
@@ -79,8 +79,8 @@ func writeState(workspace string, s *State) error {
 	if err != nil {
 		return fmt.Errorf("writeState marshal: %w", err)
 	}
-	tmp := statePath(workspace) + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	tmp := statePath(workspace) + TempSuffix
+	if err := os.WriteFile(tmp, data, FilePermRW); err != nil {
 		return fmt.Errorf("writeState write tmp: %w", err)
 	}
 	if err := os.Rename(tmp, statePath(workspace)); err != nil {
@@ -106,13 +106,15 @@ func nextPhase(current string) string {
 			found = true
 		}
 	}
-	return "completed"
+	return PhaseCompleted
 }
 
 // ---------- allowed Get fields ----------
 
 // allowedGetFields is the set of top-level and dot-notation sub-fields that
 // Get supports.  This mirrors what cmd_get does via `jq -r ".${field}"`.
+// These are intentionally kept as string literals matching the JSON struct tags
+// in State, so that the mapping stays visually aligned with the JSON schema.
 var allowedGetFields = map[string]bool{
 	"version":                 true,
 	"forge-state-mcp-version": true,
@@ -169,9 +171,9 @@ func (m *StateManager) Init(workspace, specName string) error {
 		UseCurrentBranch:   false,
 		Debug:              false,
 		SkippedPhases:      []string{},
-		CurrentPhase:       "phase-1",
-		CurrentPhaseStatus: "pending",
-		CompletedPhases:    []string{"setup"},
+		CurrentPhase:       PhaseOne,
+		CurrentPhaseStatus: StatusPending,
+		CompletedPhases:    []string{PhaseSetup},
 		Revisions: Revisions{
 			DesignRevisions:       0,
 			TaskRevisions:         0,
@@ -179,8 +181,8 @@ func (m *StateManager) Init(workspace, specName string) error {
 			TaskInlineRevisions:   0,
 		},
 		CheckpointRevisionPending: map[string]bool{
-			"checkpoint-a": false,
-			"checkpoint-b": false,
+			PhaseCheckpointA: false,
+			PhaseCheckpointB: false,
 		},
 		Tasks:    map[string]Task{},
 		PhaseLog: []PhaseLogEntry{},
@@ -455,7 +457,7 @@ func (m *StateManager) PhaseStart(workspace, phase string) error {
 	return m.Update(func(s *State) error {
 		ts := nowISO()
 		s.CurrentPhase = phase
-		s.CurrentPhaseStatus = "in_progress"
+		s.CurrentPhaseStatus = StatusInProgress
 		s.Timestamps.PhaseStarted = &ts
 		s.Error = nil
 		return nil
@@ -480,10 +482,10 @@ func (m *StateManager) PhaseComplete(workspace, phase string) error {
 		// Add to completedPhases (deduplicated).
 		s.CompletedPhases = appendUnique(s.CompletedPhases, phase)
 		s.CurrentPhase = next
-		if next == "completed" {
-			s.CurrentPhaseStatus = "completed"
+		if next == PhaseCompleted {
+			s.CurrentPhaseStatus = StatusCompleted
 		} else {
-			s.CurrentPhaseStatus = "pending"
+			s.CurrentPhaseStatus = StatusPending
 		}
 		s.Timestamps.PhaseStarted = nil
 		return nil
@@ -503,7 +505,7 @@ func (m *StateManager) PhaseFail(workspace, phase, message string) error {
 
 	return m.Update(func(s *State) error {
 		ts := nowISO()
-		s.CurrentPhaseStatus = "failed"
+		s.CurrentPhaseStatus = StatusFailed
 		s.Error = &PhaseError{
 			Phase:     phase,
 			Message:   message,
@@ -523,7 +525,7 @@ func (m *StateManager) Checkpoint(workspace, phase string) error {
 		return err
 	}
 
-	if phase != "checkpoint-a" && phase != "checkpoint-b" {
+	if phase != PhaseCheckpointA && phase != PhaseCheckpointB {
 		s, err := readState(workspace)
 		if err != nil {
 			return fmt.Errorf("Checkpoint: read state: %w", err)
@@ -535,7 +537,7 @@ func (m *StateManager) Checkpoint(workspace, phase string) error {
 
 	return m.Update(func(s *State) error {
 		s.CurrentPhase = phase
-		s.CurrentPhaseStatus = "awaiting_human"
+		s.CurrentPhaseStatus = StatusAwaitingHuman
 		return nil
 	})
 }
@@ -548,7 +550,7 @@ func (m *StateManager) Abandon(workspace string) error {
 	}
 
 	return m.Update(func(s *State) error {
-		s.CurrentPhaseStatus = "abandoned"
+		s.CurrentPhaseStatus = StatusAbandoned
 		return nil
 	})
 }
@@ -569,7 +571,7 @@ func (m *StateManager) SkipPhase(workspace, phase string) error {
 		next := nextPhase(phase)
 		s.SkippedPhases = appendUnique(s.SkippedPhases, phase)
 		s.CurrentPhase = next
-		s.CurrentPhaseStatus = "pending"
+		s.CurrentPhaseStatus = StatusPending
 		return nil
 	})
 }
@@ -589,9 +591,9 @@ func (m *StateManager) RevisionBump(workspace, revType string) error {
 
 	return m.Update(func(s *State) error {
 		switch revType {
-		case "design":
+		case RevTypeDesign:
 			s.Revisions.DesignRevisions++
-		case "tasks":
+		case RevTypeTasks:
 			s.Revisions.TaskRevisions++
 		}
 		return nil
@@ -613,9 +615,9 @@ func (m *StateManager) InlineRevisionBump(workspace, revType string) error {
 
 	return m.Update(func(s *State) error {
 		switch revType {
-		case "design":
+		case RevTypeDesign:
 			s.Revisions.DesignInlineRevisions++
-		case "tasks":
+		case RevTypeTasks:
 			s.Revisions.TaskInlineRevisions++
 		}
 		return nil
@@ -678,12 +680,12 @@ func (m *StateManager) Configure(workspace string, cfg PipelineConfig) error {
 			s.SkippedPhases = appendUnique(s.SkippedPhases, phase)
 		}
 		// Advance currentPhase only if it lands on a skipped phase.
-		for s.CurrentPhase != "completed" && slices.Contains(s.SkippedPhases, s.CurrentPhase) {
+		for s.CurrentPhase != PhaseCompleted && slices.Contains(s.SkippedPhases, s.CurrentPhase) {
 			s.CurrentPhase = nextPhase(s.CurrentPhase)
-			if s.CurrentPhase == "completed" {
-				s.CurrentPhaseStatus = "completed"
+			if s.CurrentPhase == PhaseCompleted {
+				s.CurrentPhaseStatus = StatusCompleted
 			} else {
-				s.CurrentPhaseStatus = "pending"
+				s.CurrentPhaseStatus = StatusPending
 			}
 		}
 		return nil
@@ -826,8 +828,8 @@ func (m *StateManager) ClearRevisionPending(workspace, checkpoint string) error 
 // Update closure to handle persistence. The body contains no calls to
 // readState or writeState.
 func applyRevisionPending(s *State, checkpoint string, value bool) error {
-	if checkpoint != "checkpoint-a" && checkpoint != "checkpoint-b" {
-		return fmt.Errorf("invalid checkpoint %q (expected: checkpoint-a, checkpoint-b)", checkpoint)
+	if checkpoint != PhaseCheckpointA && checkpoint != PhaseCheckpointB {
+		return fmt.Errorf("invalid checkpoint %q (expected: %s, %s)", checkpoint, PhaseCheckpointA, PhaseCheckpointB)
 	}
 
 	if s.CheckpointRevisionPending == nil {
@@ -866,24 +868,24 @@ func (m *StateManager) TaskUpdate(workspace, taskNum, field, value string) error
 		}
 
 		switch field {
-		case "implStatus":
+		case TaskFieldImplStatus:
 			task.ImplStatus = value
-		case "reviewStatus":
+		case TaskFieldReviewStatus:
 			task.ReviewStatus = value
-		case "executionMode":
+		case TaskFieldExecutionMode:
 			task.ExecutionMode = value
-		case "title":
+		case TaskFieldTitle:
 			task.Title = value
-		case "implRetries":
+		case TaskFieldImplRetries:
 			n, err := strconv.Atoi(value)
 			if err != nil {
-				return fmt.Errorf("TaskUpdate: implRetries value %q is not an integer: %w", value, err)
+				return fmt.Errorf("TaskUpdate: %s value %q is not an integer: %w", TaskFieldImplRetries, value, err)
 			}
 			task.ImplRetries = n
-		case "reviewRetries":
+		case TaskFieldReviewRetries:
 			n, err := strconv.Atoi(value)
 			if err != nil {
-				return fmt.Errorf("TaskUpdate: reviewRetries value %q is not an integer: %w", value, err)
+				return fmt.Errorf("TaskUpdate: %s value %q is not an integer: %w", TaskFieldReviewRetries, value, err)
 			}
 			task.ReviewRetries = n
 		default:
@@ -1004,10 +1006,10 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 	tasksWithRetries := []TaskRetryInfo{}
 
 	for k, t := range s.Tasks {
-		if t.ImplStatus != "completed" || t.ReviewStatus == "completed_fail" {
+		if t.ImplStatus != TaskStatusCompleted || t.ReviewStatus == TaskStatusCompletedFail {
 			pendingTasks = append(pendingTasks, k)
 		}
-		if t.ReviewStatus == "completed_pass" || t.ReviewStatus == "completed_pass_with_notes" {
+		if t.ReviewStatus == TaskStatusCompletedPass || t.ReviewStatus == TaskStatusCompletedPassNote {
 			completedTasks = append(completedTasks, k)
 		}
 		if t.ImplRetries > 0 || t.ReviewRetries > 0 {
@@ -1029,8 +1031,8 @@ func (m *StateManager) ResumeInfo(workspace string) (*ResumeInfoResult, error) {
 	crp := s.CheckpointRevisionPending
 	if crp == nil {
 		crp = map[string]bool{
-			"checkpoint-a": false,
-			"checkpoint-b": false,
+			PhaseCheckpointA: false,
+			PhaseCheckpointB: false,
 		}
 	}
 

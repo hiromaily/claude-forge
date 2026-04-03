@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -28,18 +27,14 @@ type ResumeMode = string
 const (
 	// ResumeModeNone is the zero value; indicates a new pipeline (not a resume).
 	ResumeModeNone ResumeMode = ""
-	// ResumeModeLegacy is set when the workspace was auto-detected via a .specs/ prefix.
-	// The orchestrator must confirm with the user before proceeding.
-	ResumeModeLegacy ResumeMode = "legacy"
-	// ResumeModeExplicit is set when the user passed --resume explicitly.
-	// The orchestrator skips confirmation and goes directly to the main loop.
-	ResumeModeExplicit ResumeMode = "explicit"
+	// ResumeModeAuto is set when the input matches an existing spec directory
+	// in .specs/. The orchestrator proceeds directly without confirmation.
+	ResumeModeAuto ResumeMode = "auto"
 )
 
 // PipelineInitResult is the structured result returned by PipelineInitHandler.
-// On resume path: ResumeMode is "legacy" or "explicit", Workspace and Instruction are set.
-//   - "legacy": orchestrator must confirm with user before proceeding.
-//   - "explicit": user already stated intent; orchestrator skips confirmation.
+// On resume path: ResumeMode is "auto", Workspace and Instruction are set.
+//   The orchestrator proceeds directly without confirmation.
 //
 // On new pipeline path: ResumeMode is absent, all detection fields are populated.
 // On error (invalid input or resume with missing state.json): Errors is non-empty.
@@ -58,8 +53,6 @@ type PipelineInitResult struct {
 
 // PipelineInitFlags holds the parsed flag values from the arguments string.
 // All fields are always present in the Flags object (even if zero/nil).
-// Note: "resume" is a bare flag handled at the pipeline_init level (Decision 1b);
-// it is not forwarded into PipelineInitFlags because it short-circuits to handleResumePath.
 type PipelineInitFlags struct {
 	Auto           bool    `json:"auto"`
 	SkipPR         bool    `json:"skip_pr"`
@@ -99,23 +92,19 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 			})
 		}
 
-		// Decision 1: Resume detection — unified after validation.
-		// 1a (legacy): CoreText starts with ".specs/" (user typed the full path).
-		//              ResumeModeLegacy: orchestrator must confirm with user.
-		// 1b (explicit): --resume flag present; CoreText is the spec dirname.
-		//              ResumeModeExplicit: orchestrator skips confirmation.
-		isLegacyResume := strings.HasPrefix(result.Parsed.CoreText, ".specs/")
-		isExplicitResume := hasFlag(result.Parsed.BareFlags, "resume")
-		if isLegacyResume || isExplicitResume {
-			workspace := result.Parsed.CoreText
-			if !strings.HasPrefix(workspace, ".specs/") {
-				workspace = path.Join(".specs", workspace)
-			}
-			mode := ResumeModeLegacy
-			if isExplicitResume {
-				mode = ResumeModeExplicit
-			}
-			return handleResumePath(workspace, mode)
+		// Decision 1: Resume detection — auto-detect from .specs/ directory.
+		// 1a: CoreText starts with ".specs/" (user typed the full path).
+		// 1b: CoreText matches a dirname under .specs/ (e.g. "20260320-fix-auth-timeout").
+		// In both cases, if state.json exists, it's a resume.
+		coreText := result.Parsed.CoreText
+		if strings.HasPrefix(coreText, ".specs/") {
+			return handleResumePath(coreText, ResumeModeAuto)
+		}
+		// Check if .specs/<coreText>/state.json exists — auto-resume detection.
+		candidateWorkspace := path.Join(".specs", coreText)
+		candidateStateJSON := filepath.Join(candidateWorkspace, "state.json")
+		if _, err := os.Stat(candidateStateJSON); err == nil {
+			return handleResumePath(candidateWorkspace, ResumeModeAuto)
 		}
 
 		// Build flags from parsed validation result.
@@ -123,7 +112,6 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 		// Decision 5: Source type and workspace path.
 		sourceType := result.Parsed.SourceType
-		coreText := result.Parsed.CoreText
 
 		// Extract source_id for GitHub/Jira.
 		sourceID := extractSourceID(sourceType, coreText)
@@ -156,9 +144,6 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 }
 
 // handleResumePath handles the resume detection path.
-// mode is ResumeModeExplicit when the user passed --resume explicitly (orchestrator
-// skips confirmation) or ResumeModeLegacy for the auto-detected .specs/ prefix path
-// (orchestrator must confirm with the user first).
 // Returns a result with ResumeMode set if state.json exists, or an error result if not.
 func handleResumePath(workspace string, mode ResumeMode) (*mcp.CallToolResult, error) {
 	stateJSONPath := filepath.Join(workspace, "state.json")
@@ -173,11 +158,6 @@ func handleResumePath(workspace string, mode ResumeMode) (*mcp.CallToolResult, e
 		Workspace:   workspace,
 		Instruction: "call state_resume_info",
 	})
-}
-
-// hasFlag reports whether flag is present in the bare flags slice.
-func hasFlag(bareFlags []string, flag string) bool {
-	return slices.Contains(bareFlags, flag)
 }
 
 // buildFlags constructs PipelineInitFlags from the parsed validation result.

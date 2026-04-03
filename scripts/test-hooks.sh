@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-hooks.sh — Automated tests for claude-forge hook scripts (58 tests)
+# test-hooks.sh — Automated tests for claude-forge hook scripts (62 tests)
 #
 # Usage: bash scripts/test-hooks.sh
 # Runs from the claude-forge directory.
@@ -244,6 +244,27 @@ WS="$(setup_workspace "phase-3" "in_progress")"
 run_hook "pre-tool-hook.sh" '{"tool_name":"Edit","tool_input":{"file_path":"/src/foo.go"}}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
 assert_exit 0 "Edit allowed in Phase 3"
 
+echo ""
+echo "--- Rule 3f: effort null warning on phase-start phase-1 ---"
+reset_workspace
+WS="$(setup_workspace "phase-1" "pending")"
+
+run_hook "pre-tool-hook.sh" '{"tool_name":"mcp__forge-state__phase_start","tool_input":{"workspace":"'"$WS"'","phase":"phase-1"}}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "phase-start phase-1 with effort null exits 0 (non-blocking)"
+assert_stderr_contains "effort is not set" "phase-start phase-1 with effort null emits warning"
+
+reset_workspace
+WS="$(setup_workspace "phase-1" "pending")"
+jq '.effort = "M"' "${WS}/state.json" > "${WS}/state.json.tmp" && mv "${WS}/state.json.tmp" "${WS}/state.json"
+
+run_hook "pre-tool-hook.sh" '{"tool_name":"mcp__forge-state__phase_start","tool_input":{"workspace":"'"$WS"'","phase":"phase-1"}}' "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
+assert_exit 0 "phase-start phase-1 with effort set exits 0"
+if echo "$HOOK_STDERR_CONTENT" | grep -qF "effort is not set"; then
+  fail "phase-start phase-1 with effort set should not emit warning"
+else
+  pass "phase-start phase-1 with effort set emits no warning"
+fi
+
 # ============================================================
 echo ""
 echo "=== post-agent-hook.sh tests ==="
@@ -456,10 +477,10 @@ run_hook "post-bash-hook.sh" '{"tool_name":"Bash","tool_input":{"command":"bash 
 assert_exit 0 "phase-complete final-summary exits 0 (not post-to-source)"
 
 echo ""
-echo "--- Bash tool, phase-complete post-to-source, investigation type: skipped ---"
+echo "--- Bash tool, phase-complete post-to-source, legacy investigation type: skipped ---"
 reset_workspace
 WS="$(setup_workspace "post-to-source" "completed")"
-# Patch taskType to investigation
+# Patch taskType to investigation (legacy field — no longer set by new pipelines)
 jq '.taskType = "investigation"' "${WS}/state.json" > "${WS}/state.json.tmp" && mv "${WS}/state.json.tmp" "${WS}/state.json"
 touch "${WS}/summary.md"
 # NOTE: The command string below is a legacy fixture string used to simulate a post-bash-hook.sh
@@ -468,7 +489,7 @@ touch "${WS}/summary.md"
 run_hook "post-bash-hook.sh" \
   "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash scripts/state-manager.sh phase-complete ${WS} post-to-source\"},\"tool_response\":\"\"}" \
   "CLAUDE_PROJECT_DIR=${TMPDIR_BASE}"
-assert_exit 0 "investigation type skipped (no feature branch)"
+assert_exit 0 "legacy investigation type skipped (no feature branch)"
 reset_workspace
 
 echo ""

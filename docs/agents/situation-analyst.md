@@ -18,7 +18,7 @@ Read-only codebase explorer. Maps relevant files, interfaces, types, data flows,
 
 - **Read-only** — cannot edit or write source files (enforced by hook)
 - Can write to the workspace directory (`.specs/`)
-- All task types
+- Runs for all effort levels
 
 ## What It Does
 

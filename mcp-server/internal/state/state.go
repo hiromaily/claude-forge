@@ -5,20 +5,20 @@ package state
 
 // ValidPhases enumerates all legal phase identifiers.
 var ValidPhases = []string{
-	"setup", "phase-1", "phase-2", "phase-3", "phase-3b",
-	"checkpoint-a", "phase-4", "phase-4b", "checkpoint-b",
-	"phase-5", "phase-6", "phase-7", "final-verification",
-	"final-summary", "pr-creation", "post-to-source", "completed",
+	PhaseSetup, PhaseOne, PhaseTwo, PhaseThree, PhaseThreeB,
+	PhaseCheckpointA, PhaseFour, PhaseFourB, PhaseCheckpointB,
+	PhaseFive, PhaseSix, PhaseSeven, PhaseFinalVerification,
+	PhasePRCreation, PhaseFinalSummary, PhaseFinalCommit, PhasePostToSource, PhaseCompleted,
 }
 
 // ValidEfforts enumerates legal effort labels.
-var ValidEfforts = []string{"S", "M", "L"}
+var ValidEfforts = []string{EffortS, EffortM, EffortL}
 
 // ValidTemplates enumerates legal flow template names.
-var ValidTemplates = []string{"light", "standard", "full"}
+var ValidTemplates = []string{TemplateLight, TemplateStandard, TemplateFull}
 
 // ValidRevTypes enumerates legal revision type identifiers.
-var ValidRevTypes = []string{"design", "tasks"}
+var ValidRevTypes = []string{RevTypeDesign, RevTypeTasks}
 
 // State mirrors the top-level state.json object written by the Go MCP server state package.
 type State struct {

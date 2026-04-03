@@ -40,15 +40,19 @@ Append a `## Debug Report` section to `summary.md` with execution flow diagnosti
 
 Note: `## Improvement Report` is always appended regardless of this flag.
 
-### `--resume`
+### Resume (auto-detected)
 
-Resume an interrupted pipeline from its current phase. Provide the spec directory name as the input:
+To resume an interrupted pipeline, supply the spec directory name as input.
+If the directory exists under `.specs/`, it is automatically detected as a resume:
 
 ```text
-/forge 20260320-fix-auth-timeout --resume
+/forge 20260320-fix-auth-timeout
 ```
 
-Skips the confirmation prompt and enters the pipeline loop immediately.
+No special flag is needed. The orchestrator proceeds directly without confirmation.
+
+> **Backward compatibility**: `--resume` is silently stripped from input if present,
+> but has no effect — resume is always auto-detected from directory existence.
 
 ## Examples
 
@@ -68,6 +72,6 @@ Skips the confirmation prompt and enters the pipeline loop immediately.
 # From Jira
 /forge https://myorg.atlassian.net/browse/PROJ-456
 
-# Resume interrupted pipeline
-/forge 20260320-fix-auth-timeout --resume
+# Resume interrupted pipeline (auto-detected from .specs/ directory)
+/forge 20260320-fix-auth-timeout
 ```

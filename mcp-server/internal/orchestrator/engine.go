@@ -106,6 +106,8 @@ func (e *Engine) NextAction(sm *state.StateManager, _ string) (Action, error) {
 		return e.handlePRCreation(st)
 	case PhaseFinalSummary:
 		return e.handleFinalSummary(st)
+	case PhaseFinalCommit:
+		return e.handleFinalCommit(st)
 	case PhasePostToSource:
 		return e.handlePostToSource(st)
 	case PhaseCompleted:
@@ -121,10 +123,10 @@ func (*Engine) handlePhaseOne(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentSituationAnalyst,
 		"Run Phase 1 situation analysis for the pipeline.",
-		"sonnet",
+		state.DefaultModel,
 		PhaseOne,
-		[]string{"request.md"},
-		"analysis.md",
+		[]string{state.ArtifactRequest},
+		state.ArtifactAnalysis,
 	), nil
 }
 
@@ -133,10 +135,10 @@ func (*Engine) handlePhaseTwo(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentInvestigator,
 		"Run Phase 2 deep-dive investigation.",
-		"sonnet",
+		state.DefaultModel,
 		PhaseTwo,
-		[]string{"request.md", "analysis.md"},
-		"investigation.md",
+		[]string{state.ArtifactRequest, state.ArtifactAnalysis},
+		state.ArtifactInvestigation,
 	), nil
 }
 
@@ -145,16 +147,16 @@ func (*Engine) handlePhaseThree(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentArchitect,
 		"Run Phase 3 architecture/design.",
-		"sonnet",
+		state.DefaultModel,
 		PhaseThree,
-		[]string{"request.md", "analysis.md", "investigation.md"},
-		"design.md",
+		[]string{state.ArtifactRequest, state.ArtifactAnalysis, state.ArtifactInvestigation},
+		state.ArtifactDesign,
 	), nil
 }
 
 // handlePhaseThreeB handles Phase 3b (design reviewer) — Decision 18.
 func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
-	reviewPath := filepath.Join(st.Workspace, "review-design.md")
+	reviewPath := filepath.Join(st.Workspace, state.ArtifactReviewDesign)
 
 	// If review file doesn't exist yet, spawn the design reviewer.
 	if _, err := os.Stat(reviewPath); err != nil {
@@ -164,10 +166,10 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 		return NewSpawnAgentAction(
 			agentDesignReviewer,
 			"Review the design document.",
-			"sonnet",
+			state.DefaultModel,
 			PhaseThreeB,
-			[]string{"design.md"},
-			"review-design.md",
+			[]string{state.ArtifactDesign},
+			state.ArtifactReviewDesign,
 		), nil
 	}
 
@@ -178,10 +180,10 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 	}
 
 	// Decision 21 — Retry limit
-	if st.Revisions.DesignRevisions >= 2 {
+	if st.Revisions.DesignRevisions >= state.MaxRevisionRetries {
 		return NewCheckpointAction(
 			"design-retry-limit",
-			"Design revision limit reached (2 retries). Human review required.",
+			fmt.Sprintf("Design revision limit reached (%d retries). Human review required.", state.MaxRevisionRetries),
 			[]string{"approve", "abandon"},
 		), nil
 	}
@@ -191,10 +193,10 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 		return NewSpawnAgentAction(
 			agentTaskDecomposer,
 			"Decompose the approved design into tasks.",
-			"sonnet",
+			state.DefaultModel,
 			PhaseFour,
-			[]string{"design.md"},
-			"tasks.md",
+			[]string{state.ArtifactDesign},
+			state.ArtifactTasks,
 		), nil
 	}
 
@@ -210,10 +212,10 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 		return NewSpawnAgentAction(
 			agentArchitect,
 			"Revise the design based on review feedback.",
-			"sonnet",
+			state.DefaultModel,
 			PhaseThree,
-			[]string{"request.md", "analysis.md", "review-design.md"},
-			"design.md",
+			[]string{state.ArtifactRequest, state.ArtifactAnalysis, state.ArtifactReviewDesign},
+			state.ArtifactDesign,
 		), nil
 	default:
 		return NewCheckpointAction(
@@ -227,7 +229,7 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 // handleCheckpointA handles checkpoint-a (between design review and task decomposition).
 func (*Engine) handleCheckpointA(_ *state.State) (Action, error) {
 	return NewCheckpointAction(
-		"checkpoint-a",
+		PhaseCheckpointA,
 		"Checkpoint A reached. Design approved. Proceed to Phase 4 (task decomposition)?",
 		[]string{"proceed", "revise", "abandon"},
 	), nil
@@ -238,16 +240,16 @@ func (*Engine) handlePhaseFour(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentTaskDecomposer,
 		"Decompose the design into implementation tasks.",
-		"sonnet",
+		state.DefaultModel,
 		PhaseFour,
-		[]string{"design.md"},
-		"tasks.md",
+		[]string{state.ArtifactDesign},
+		state.ArtifactTasks,
 	), nil
 }
 
 // handlePhaseFourB handles Phase 4b (task reviewer) — Decision 19.
 func (e *Engine) handlePhaseFourB(st *state.State) (Action, error) {
-	reviewPath := filepath.Join(st.Workspace, "review-tasks.md")
+	reviewPath := filepath.Join(st.Workspace, state.ArtifactReviewTasks)
 
 	// If review file doesn't exist yet, spawn the task reviewer.
 	if _, err := os.Stat(reviewPath); err != nil {
@@ -257,10 +259,10 @@ func (e *Engine) handlePhaseFourB(st *state.State) (Action, error) {
 		return NewSpawnAgentAction(
 			agentTaskReviewer,
 			"Review the task decomposition.",
-			"sonnet",
+			state.DefaultModel,
 			PhaseFourB,
-			[]string{"tasks.md"},
-			"review-tasks.md",
+			[]string{state.ArtifactTasks},
+			state.ArtifactReviewTasks,
 		), nil
 	}
 
@@ -271,10 +273,10 @@ func (e *Engine) handlePhaseFourB(st *state.State) (Action, error) {
 	}
 
 	// Decision 21 — Retry limit
-	if st.Revisions.TaskRevisions >= 2 {
+	if st.Revisions.TaskRevisions >= state.MaxRevisionRetries {
 		return NewCheckpointAction(
 			"task-retry-limit",
-			"Task revision limit reached (2 retries). Human review required.",
+			fmt.Sprintf("Task revision limit reached (%d retries). Human review required.", state.MaxRevisionRetries),
 			[]string{"approve", "abandon"},
 		), nil
 	}
@@ -284,9 +286,9 @@ func (e *Engine) handlePhaseFourB(st *state.State) (Action, error) {
 		return NewSpawnAgentAction(
 			agentImplementer,
 			"Implement the tasks as decomposed.",
-			"sonnet",
+			state.DefaultModel,
 			PhaseFive,
-			[]string{"tasks.md", "design.md"},
+			[]string{state.ArtifactTasks, state.ArtifactDesign},
 			"",
 		), nil
 	}
@@ -303,10 +305,10 @@ func (e *Engine) handlePhaseFourB(st *state.State) (Action, error) {
 		return NewSpawnAgentAction(
 			agentTaskDecomposer,
 			"Revise task decomposition based on review feedback.",
-			"sonnet",
+			state.DefaultModel,
 			PhaseFour,
-			[]string{"design.md", "review-tasks.md"},
-			"tasks.md",
+			[]string{state.ArtifactDesign, state.ArtifactReviewTasks},
+			state.ArtifactTasks,
 		), nil
 	default:
 		return NewCheckpointAction(
@@ -320,7 +322,7 @@ func (e *Engine) handlePhaseFourB(st *state.State) (Action, error) {
 // handleCheckpointB handles checkpoint-b (between task review and implementation).
 func (*Engine) handleCheckpointB(_ *state.State) (Action, error) {
 	return NewCheckpointAction(
-		"checkpoint-b",
+		PhaseCheckpointB,
 		"Checkpoint B reached. Tasks approved. Proceed to Phase 5 (implementation)?",
 		[]string{"proceed", "revise", "abandon"},
 	), nil
@@ -361,7 +363,7 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 	var pendingKeys []string
 	for _, k := range taskKeys {
 		task := st.Tasks[k]
-		if task.ImplStatus != "completed" {
+		if task.ImplStatus != state.TaskStatusCompleted {
 			pendingKeys = append(pendingKeys, k)
 		}
 	}
@@ -376,11 +378,11 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 	firstKey := pendingKeys[0]
 	firstTask := st.Tasks[firstKey]
 
-	if firstTask.ExecutionMode == "parallel" {
+	if firstTask.ExecutionMode == state.ExecModeParallel {
 		// Collect all consecutive parallel tasks from the start
 		var parallelKeys []string
 		for _, k := range pendingKeys {
-			if st.Tasks[k].ExecutionMode == "parallel" {
+			if st.Tasks[k].ExecutionMode == state.ExecModeParallel {
 				parallelKeys = append(parallelKeys, k)
 			} else {
 				break
@@ -389,9 +391,9 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		return NewParallelSpawnAction(
 			agentImplementer,
 			"Implement tasks in parallel.",
-			"sonnet",
+			state.DefaultModel,
 			PhaseFive,
-			[]string{"tasks.md", "design.md"},
+			[]string{state.ArtifactTasks, state.ArtifactDesign},
 			parallelKeys,
 		), nil
 	}
@@ -400,9 +402,9 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentImplementer,
 		"Implement task "+firstKey+".",
-		"sonnet",
+		state.DefaultModel,
 		PhaseFive,
-		[]string{"tasks.md", "design.md"},
+		[]string{state.ArtifactTasks, state.ArtifactDesign},
 		"impl-"+firstKey+".md",
 	), nil
 }
@@ -415,7 +417,7 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 	for _, k := range taskKeys {
 		task := st.Tasks[k]
 		// Find tasks that have been implemented but not reviewed
-		if task.ImplStatus == "completed" && task.ReviewStatus == "" {
+		if task.ImplStatus == state.TaskStatusCompleted && task.ReviewStatus == "" {
 			reviewFile := filepath.Join(st.Workspace, "review-"+k+".md")
 
 			// If review file doesn't exist, spawn reviewer
@@ -426,9 +428,9 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 				return NewSpawnAgentAction(
 					agentImplReviewer,
 					"Review implementation for task "+k+".",
-					"sonnet",
+					state.DefaultModel,
 					PhaseSix,
-					[]string{"impl-" + k + ".md", "tasks.md"},
+					[]string{"impl-" + k + ".md", state.ArtifactTasks},
 					"review-"+k+".md",
 				), nil
 			}
@@ -441,10 +443,10 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 
 			if verdict == VerdictFail {
 				// Check retry limit
-				if task.ImplRetries >= 2 {
+				if task.ImplRetries >= state.MaxRevisionRetries {
 					return NewCheckpointAction(
 						"impl-retry-limit-"+k,
-						"Implementation retry limit reached for task "+k+" (2 retries). Human review required.",
+						fmt.Sprintf("Implementation retry limit reached for task %s (%d retries). Human review required.", k, state.MaxRevisionRetries),
 						[]string{"approve", "abandon"},
 					), nil
 				}
@@ -452,9 +454,9 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 				return NewSpawnAgentAction(
 					agentImplementer,
 					"Retry implementation for task "+k+" after review failure.",
-					"sonnet",
+					state.DefaultModel,
 					PhaseFive,
-					[]string{"tasks.md", "design.md", "review-" + k + ".md"},
+					[]string{state.ArtifactTasks, state.ArtifactDesign, "review-" + k + ".md"},
 					"impl-"+k+".md",
 				), nil
 			}
@@ -467,9 +469,9 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentVerifier,
 		"Verify all implementations.",
-		"sonnet",
+		state.DefaultModel,
 		PhaseSeven,
-		[]string{"tasks.md"},
+		[]string{state.ArtifactTasks},
 		"verification.md",
 	), nil
 }
@@ -481,10 +483,10 @@ func (*Engine) handlePhaseSeven(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentComprehensiveReview,
 		"Run comprehensive cross-task review.",
-		"sonnet",
+		state.DefaultModel,
 		PhaseSeven,
-		[]string{"design.md", "tasks.md"},
-		"comprehensive-review.md",
+		[]string{state.ArtifactDesign, state.ArtifactTasks},
+		state.ArtifactComprehensiveReview,
 	), nil
 }
 
@@ -493,10 +495,10 @@ func (*Engine) handleFinalVerification(_ *state.State) (Action, error) {
 	return NewSpawnAgentAction(
 		agentVerifier,
 		"Run final verification of the complete pipeline output.",
-		"sonnet",
+		state.DefaultModel,
 		PhaseFinalVerification,
-		[]string{"tasks.md", "design.md"},
-		"final-verification.md",
+		[]string{state.ArtifactTasks, state.ArtifactDesign},
+		state.ArtifactFinalVerification,
 	), nil
 }
 
@@ -505,11 +507,11 @@ func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 	// Decision 24 — PR skip (runtime SkipPr flag)
 	// Note: Decision 14 already handles the case where pr-creation is in SkippedPhases.
 	if st.SkipPr {
-		return NewDoneAction(SkipSummaryPrefix+"pr-creation", ""), nil
+		return NewDoneAction(SkipSummaryPrefix+PhasePRCreation, ""), nil
 	}
 
 	title := derivePRTitle(st)
-	bodyFile := filepath.Join(st.Workspace, "final-summary.md")
+	bodyFile := filepath.Join(st.Workspace, state.ArtifactSummary)
 
 	return NewExecAction(PhasePRCreation, []string{
 		"gh", "pr", "create",
@@ -552,19 +554,35 @@ func derivePRTitle(st *state.State) string {
 // (i.e., the flow template is standard or full). For effort S (light template),
 // PhaseSeven is skipped and the file does not exist.
 func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
-	inputs := []string{"design.md", "tasks.md"}
+	inputs := []string{state.ArtifactDesign, state.ArtifactTasks}
 	if !slices.Contains(st.SkippedPhases, PhaseSeven) {
-		inputs = append([]string{"comprehensive-review.md"}, inputs...)
+		inputs = append([]string{state.ArtifactComprehensiveReview}, inputs...)
 	}
 
 	return NewSpawnAgentAction(
 		agentVerifier,
 		"Generate final summary with pipeline statistics.",
-		"sonnet",
+		state.DefaultModel,
 		PhaseFinalSummary,
 		inputs,
-		"final-summary.md",
+		state.ArtifactSummary,
 	), nil
+}
+
+// handleFinalCommit handles the final-commit phase — Decision 27.
+// After PR creation and final summary generation, summary.md and state.json
+// exist only locally. This step amends the last commit to include them
+// and force-pushes so the PR branch contains the final summary with the PR number.
+// Skipped when PR creation was skipped (--nopr or pr-creation in skippedPhases),
+// since there is no commit to amend.
+func (*Engine) handleFinalCommit(st *state.State) (Action, error) {
+	if st.SkipPr || slices.Contains(st.SkippedPhases, PhasePRCreation) {
+		return NewDoneAction(SkipSummaryPrefix+PhaseFinalCommit, ""), nil
+	}
+
+	return NewExecAction(PhaseFinalCommit, []string{
+		"final_commit",
+	}), nil
 }
 
 // handlePostToSource handles the post-to-source phase — Decision 26.
@@ -574,9 +592,9 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 
 	var checkpointName, label string
 	switch sourceType {
-	case "github_issue":
+	case state.SourceTypeGitHub:
 		checkpointName, label = "post-to-github", "GitHub issue"
-	case "jira_issue":
+	case state.SourceTypeJira:
 		checkpointName, label = "post-to-jira", "Jira issue"
 	default: // "text" and anything else — skip this phase
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
@@ -588,8 +606,8 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 	}
 
 	msg := fmt.Sprintf(
-		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/final-summary.md",
-		label, sourceURL, st.Workspace,
+		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/%s",
+		label, sourceURL, st.Workspace, state.ArtifactSummary,
 	)
 	return NewCheckpointAction(checkpointName, msg, []string{"post", "skip"}), nil
 }
@@ -597,7 +615,7 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 // readFrontMatterField reads a named field from {workspace}/request.md YAML front matter.
 // Returns fallback when the field is absent or the file is unreadable.
 func readFrontMatterField(workspace, field, fallback string) string {
-	path := filepath.Join(workspace, "request.md")
+	path := filepath.Join(workspace, state.ArtifactRequest)
 	f, err := os.Open(path)
 	if err != nil {
 		return fallback
@@ -633,7 +651,7 @@ func readFrontMatterField(workspace, field, fallback string) string {
 // readSourceType reads the source_type field from {workspace}/request.md front matter.
 // Returns "text" when the field is absent or the file is unreadable.
 func readSourceType(workspace string) string {
-	return readFrontMatterField(workspace, "source_type", "text")
+	return readFrontMatterField(workspace, "source_type", state.SourceTypeText)
 }
 
 // readSourceURL reads the source_url field from {workspace}/request.md front matter.

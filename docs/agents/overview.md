@@ -21,22 +21,15 @@ claude-forge uses 10 specialist agents, each handling a single phase of the pipe
 
 Agents are invoked by the orchestrator using the **Agent tool** with the agent's `name`. The orchestrator passes only runtime parameters (workspace path, task number) — agent instructions are self-contained.
 
-## Task Type Skipping
+## Phase Skipping by Effort Level
 
-Not all agents run for every task type:
+Which phases (and their agents) execute depends on the **effort level**, not task type:
 
-| Agent | feature | bugfix | refactor | docs | investigation |
-|-------|:-------:|:------:|:--------:|:----:|:-------------:|
-| situation-analyst | ✅ | ✅ | ✅ | ✅ | ✅ |
-| investigator | ✅ | ✅ | ✅ | — | ✅ |
-| architect | ✅ | ✅ | ✅ | — | ✅ |
-| design-reviewer | ✅ | — | — | — | ✅ |
-| task-decomposer | ✅ | — | ✅ | — | — |
-| task-reviewer | ✅ | — | — | — | — |
-| implementer | ✅ | ✅ | ✅ | ✅ | — |
-| impl-reviewer | ✅ | ✅ | ✅ | ✅ | — |
-| comprehensive-reviewer | ✅ | — | ✅ | — | — |
-| verifier | ✅ | ✅ | ✅ | ✅ | — |
+| Effort | Template | Skipped Phases |
+|--------|----------|----------------|
+| S | light | phase-4b (task-reviewer), checkpoint-b, phase-7 (comprehensive-reviewer) |
+| M | standard | phase-4b (task-reviewer), checkpoint-b |
+| L | full | _(none)_ |
 
 ## Model Configuration
 

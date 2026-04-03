@@ -68,13 +68,9 @@ type reportResultInput struct {
 func PipelineReportResultHandler(sm *state.StateManager, kb *history.KnowledgeBase) server.ToolHandlerFunc {
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Step 1: Parse required parameters.
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		phase, err := req.RequireString("phase")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
 		}
 
 		in := reportResultInput{
@@ -172,9 +168,7 @@ func determineTransition(
 			return reportResultResponse{}, err
 		}
 
-		if findings == nil {
-			findings = []orchestrator.Finding{}
-		}
+		findings = nonNilSlice(findings)
 
 		// Accumulate review findings into the pattern knowledge base (fail-open).
 		agentName := phaseAgentName[in.phase]

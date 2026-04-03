@@ -7,20 +7,25 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	// Aliased as stateconst to avoid shadowing orchestrator-local type names
+	// (e.g. SeverityCritical Severity vs state.SeverityCritical string).
+	stateconst "github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
 // Verdict represents the outcome token from a review file.
 type Verdict string
 
 // Known verdict constants matching the tokens written by review agents.
+// Values are derived from state.constants to ensure a single source of truth.
 const (
-	VerdictApprove          Verdict = "APPROVE"
-	VerdictApproveWithNotes Verdict = "APPROVE_WITH_NOTES"
-	VerdictRevise           Verdict = "REVISE"
-	VerdictFail             Verdict = "FAIL"
-	VerdictPass             Verdict = "PASS"
-	VerdictPassWithNotes    Verdict = "PASS_WITH_NOTES"
-	VerdictUnknown          Verdict = "UNKNOWN"
+	VerdictApprove          Verdict = Verdict(stateconst.VerdictApprove)
+	VerdictApproveWithNotes Verdict = Verdict(stateconst.VerdictApproveWithNotes)
+	VerdictRevise           Verdict = Verdict(stateconst.VerdictRevise)
+	VerdictFail             Verdict = Verdict(stateconst.VerdictFail)
+	VerdictPass             Verdict = Verdict(stateconst.VerdictPass)
+	VerdictPassWithNotes    Verdict = Verdict(stateconst.VerdictPassWithNotes)
+	VerdictUnknown          Verdict = Verdict(stateconst.VerdictUnknown)
 )
 
 // Severity classifies the urgency of a review finding.
@@ -28,8 +33,8 @@ type Severity string
 
 // Known severity constants.
 const (
-	SeverityCritical Severity = "CRITICAL"
-	SeverityMinor    Severity = "MINOR"
+	SeverityCritical Severity = Severity(stateconst.SeverityCritical)
+	SeverityMinor    Severity = Severity(stateconst.SeverityMinor)
 )
 
 // Finding represents a single labelled finding extracted from a review file.

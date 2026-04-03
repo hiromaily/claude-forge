@@ -7,20 +7,15 @@ description: Orchestrate a full development pipeline using MCP-driven subagents.
 
 ## Step 1: Initialize or Resume
 
-**To resume a suspended pipeline**, the user must supply two values:
-- The spec directory name from `.specs/` (e.g. `20260401-effort-only-flow`)
-- The `--resume` flag
+**To resume a suspended pipeline**, supply the spec directory name from `.specs/`:
 
-Example: `/forge 20260401-effort-only-flow --resume`
+Example: `/forge 20260401-effort-only-flow`
 
 1. Call `mcp__forge-state__pipeline_init(arguments=$ARGUMENTS)`.
 2. If `result.errors` is non-empty: surface the errors to the user and stop.
-3. If `result.resume_mode` is non-empty:
-   - `"explicit"` (user passed `--resume`): **do not ask for confirmation** — the user
-     has already stated their intent. Go directly to Step 2.
-   - `"legacy"` (auto-detected `.specs/` prefix): confirm resume from
-     `result.workspace` with the user, then go to Step 2.
-4. For all new pipelines (resume is false or absent):
+3. If `result.resume_mode` is `"auto"`: the input matched an existing spec directory.
+   **Do not ask for confirmation** — proceed directly to Step 2.
+4. For new pipelines (`resume_mode` is absent):
    a. If `result.fetch_needed` is non-null: fetch the external data described by `result.fetch_needed`
       (GitHub issue fields or Jira issue fields), then call
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, source_id=result.source_id, source_url=result.source_url, flags=result.flags, external_context=<fetched data>)`.
@@ -62,11 +57,11 @@ Repeat until done:
           a. Extract the source URL from `action.present_to_user` (the line starting with `URL:`).
           b. Post the comment based on `action.name`:
              - **`post-to-github`**: run
-               `gh issue comment <url> --body-file {workspace}/final-summary.md`
+               `gh issue comment <url> --body-file {workspace}/summary.md`
              - **`post-to-jira`**: Extract the domain and issue key from the URL
                (e.g. `example.atlassian.net` and `PROJ-123` from `https://example.atlassian.net/browse/PROJ-123`). Try in order:
                1. Atlassian MCP tools (if available)
-               2. Convert `{workspace}/final-summary.md` to Atlassian Document Format (ADF) and run:
+               2. Convert `{workspace}/summary.md` to Atlassian Document Format (ADF) and run:
                   `curl -s -X POST -H "Content-Type: application/json" -u "$JIRA_USER:$JIRA_TOKEN" "https://<domain>/rest/api/3/issue/<key>/comment" -d '<ADF JSON>'`
           c. Report success or failure to the user.
        3. If the user chooses **"skip"**: do nothing.
@@ -82,6 +77,12 @@ Repeat until done:
        only the files belonging to the parallel tasks (check each task's file list in
        `tasks.md`). Then `git commit` with a message summarising the parallel batch
        (e.g. "chore: batch commit parallel tasks N, M, ...").
+     - If `action.commands[0]` is `final_commit`: amend the last commit to include
+       `summary.md` and `state.json`, then force-push. Run:
+       `git add {workspace}/summary.md {workspace}/state.json &&
+        git commit --amend --no-edit &&
+        git push --force-with-lease`
+       This ensures the PR branch includes the final summary (with PR number).
      - Otherwise: run `action.commands` via Bash.
      Then call `pipeline_report_result` with `phase=action.phase`.
      If `action.setup_only` is true, pass `setup_only=true` to `pipeline_report_result`.

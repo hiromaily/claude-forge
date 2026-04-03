@@ -58,7 +58,7 @@ for _, tc := range tests {
 }
 ```
 
-For 2D matrix tests (e.g. `taskType × effort`), use `tc.taskType+"/"+tc.effort` as the subtest name — the `/` creates a hierarchy that makes `-run` filtering precise.
+For 2D matrix tests (e.g. `sourceType × effort`), use `tc.sourceType+"/"+tc.effort` as the subtest name — the `/` creates a hierarchy that makes `-run` filtering precise.
 
 ## Subtest naming
 

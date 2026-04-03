@@ -16,7 +16,7 @@ Final quality gate. Runs full typecheck and test suite on the feature branch.
 
 ## Constraints
 
-- Skipped for `investigation` task type
+- Runs for all effort levels
 
 ## What It Does
 

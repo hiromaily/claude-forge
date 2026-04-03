@@ -2,6 +2,45 @@
 
 The `forge-state` MCP server exposes 28 typed tool calls for managing pipeline state and subscribing to real-time phase transition events. The server communicates over stdio (MCP protocol) and optionally listens on an HTTP port for Server-Sent Events (SSE).
 
+## Pipeline Phases
+
+The pipeline progresses through 18 phases in a fixed canonical order. The Engine (`orchestrator/engine.go`) dispatches the next action based on the current phase in `state.json`. Phase IDs are defined in `orchestrator/phases.go` and `state/state.go`.
+
+| # | Phase ID | Description | Actor | Output |
+|---|----------|-------------|-------|--------|
+| 0 | `setup` | Initialize workspace, create `state.json` and `request.md` | Orchestrator | `state.json`, `request.md` |
+| 1 | `phase-1` | Situation analysis — read-only codebase survey | situation-analyst agent | `analysis.md` |
+| 2 | `phase-2` | Deep-dive investigation — root causes, edge cases, risks | investigator agent | `investigation.md` |
+| 3 | `phase-3` | Architecture and design | architect agent | `design.md` |
+| 4 | `phase-3b` | AI design review (APPROVE / APPROVE_WITH_NOTES / REVISE) | design-reviewer agent | `review-design.md` |
+| 5 | `checkpoint-a` | Human reviews and approves/rejects the design | Human | approval or feedback |
+| 6 | `phase-4` | Task decomposition from design | task-decomposer agent | `tasks.md` |
+| 7 | `phase-4b` | AI task review (APPROVE / APPROVE_WITH_NOTES / REVISE) | task-reviewer agent | `review-tasks.md` |
+| 8 | `checkpoint-b` | Human reviews and approves/rejects the task plan | Human | approval or feedback |
+| 9 | `phase-5` | Implementation — code changes per task (sequential or parallel) | implementer agent | code files, `impl-{N}.md` |
+| 10 | `phase-6` | Code review per task (PASS / PASS_WITH_NOTES / FAIL) | impl-reviewer agent | `review-{N}.md` |
+| 11 | `phase-7` | Comprehensive cross-cutting review of all changes | comprehensive-reviewer agent | `comprehensive-review.md` |
+| 12 | `final-verification` | Full typecheck + test suite run; fix failures if possible | verifier agent | _(fixes applied directly)_ |
+| 13 | `pr-creation` | `git push` + `gh pr create` — PR number is now known | Orchestrator | PR on GitHub |
+| 14 | `final-summary` | Generate `summary.md` with PR number, execution stats, improvement report | Orchestrator | `summary.md` |
+| 15 | `final-commit` | Amend last commit to include `summary.md` + `state.json`, then force-push | Orchestrator | PR branch updated |
+| 16 | `post-to-source` | Post summary comment to GitHub Issue or Jira Issue (if applicable) | Orchestrator | issue comment |
+| 17 | `completed` | Terminal state — pipeline finished | System | — |
+
+### Effort-based phase skipping
+
+Not all phases run on every pipeline. The effort level (S / M / L) determines which phases are skipped:
+
+| Effort | Skipped phases |
+|--------|---------------|
+| **S** (light) | `phase-4b`, `checkpoint-b`, `phase-7` |
+| **M** (standard) | `phase-4b`, `checkpoint-b` |
+| **L** (full) | _(none)_ |
+
+Skipped phases are recorded in `state.json.skippedPhases` during workspace setup. The Engine's skip gate (`Decision 14`) returns a `skip:` done action for any phase in this list, and the orchestrator calls `phase_complete` to advance past it.
+
+---
+
 ## SSE Event Streaming
 
 ### Event Schema

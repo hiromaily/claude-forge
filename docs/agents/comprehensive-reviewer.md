@@ -17,7 +17,6 @@ Holistic cross-task reviewer. Examines all implementation tasks together for cro
 
 ## Constraints
 
-- Skipped for `bugfix`, `investigation`, `docs` task types
 - Skipped for effort S (`light` template)
 
 ## What It Reviews

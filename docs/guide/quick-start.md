@@ -33,14 +33,14 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details an
 | `--auto` | Skip human checkpoints when AI verdict is APPROVE. REVISE still pauses. |
 | `--nopr` | Skip PR creation. Changes committed and pushed but no PR opened. |
 | `--debug` | Append Debug Report to `summary.md` with execution diagnostics. |
-| `--resume` | Resume an interrupted pipeline from its current phase. |
+| _(auto-detected)_ | Resume by providing the spec directory name. No flag needed. |
 
 ## Resume an Interrupted Pipeline
 
-Pass the spec directory name and `--resume`:
+Pass the spec directory name. Resume is auto-detected from `.specs/` directory existence:
 
 ```text
-/forge 20260320-fix-auth-timeout --resume
+/forge 20260320-fix-auth-timeout
 ```
 
 ## Abandon a Pipeline

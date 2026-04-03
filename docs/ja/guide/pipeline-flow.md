@@ -4,153 +4,208 @@
 
 ```mermaid
 flowchart TD
-    START(["▶ /forge"])
-    START --> RC{state.json<br>が存在?}
-    RC -->|はい| RESUME[state.jsonを読み込み<br>変数を復元]
-    RC -->|いいえ| IV["🛡️ 入力バリデーション"]
-    IV -->|無効| REJECT(["❌ 拒否"])
-    IV -->|有効| WS[ワークスペースセットアップ]
-    RESUME --> REJOIN(("再開"))
-    WS --> TE["🔍 タスクタイプ & 工数を検出"]
-    TE --> P1
+    START(["forge 開始"])
+    START --> PI["pipeline_init"]
+    PI --> RESUME{resume_mode<br>= auto?}
+    RESUME -->|はい| RI["resume_info"]
+    RESUME -->|いいえ| ERR{errors?}
+    ERR -->|あり| REJECT(["拒否"])
+    ERR -->|なし| FETCH{fetch_needed?}
+    FETCH -->|あり| EXT["外部コンテキスト取得<br>GitHub / Jira"]
+    FETCH -->|なし| PIC1["pipeline_init_with_context"]
+    EXT --> PIC1
+    PIC1 --> CONFIRM["ユーザーが effort + slug を確認"]
+    CONFIRM --> PIC2["pipeline_init_with_context<br>with user_confirmation"]
+    PIC2 --> SETUP["setup フェーズ:<br>init, request.md 作成,<br>effort/template 設定, task_init"]
+    RI --> LOOP
 
-    REJOIN -.-> P1
-    P1["Phase 1 — 状況分析"]
-    P1 -->|analysis.md| P2
-    P2["Phase 2 — 調査"]
+    SETUP --> LOOP
 
-    P2 -->|investigation.md| P3
-    P3["Phase 3 — 設計"]
-    P3 -->|design.md| P3R
-    P3R["Phase 3b — 設計レビュー"]
-    P3R -->|review-design.md| DREV{APPROVE?}
-    DREV -->|REVISE| P3
-    DREV -->|APPROVE| CPA
+    LOOP["pipeline_next_action"]
+    LOOP --> TYPE{action.type}
 
-    CPA{{"👤 チェックポイント A"}}
-    CPA -->|承認| P4
-    CPA -->|却下| P3
+    TYPE -->|spawn_agent| AGENT["エージェント実行"]
+    TYPE -->|checkpoint| CP["checkpoint + ユーザーに提示"]
+    TYPE -->|exec| EXEC["コマンド実行"]
+    TYPE -->|write_file| WF["ファイル書き込み"]
+    TYPE -->|done: skip| SKIP["スキップされたフェーズの phase_complete"]
+    TYPE -->|done| DONE(["完了"])
 
-    P4["Phase 4 — タスク分解"]
-    P4 -->|tasks.md| P4R
-    P4R["Phase 4b — タスクレビュー"]
-    P4R -->|review-tasks.md| TREV{APPROVE?}
-    TREV -->|REVISE| P4
-    TREV -->|APPROVE| CPB
+    AGENT --> RPT["pipeline_report_result"]
+    EXEC --> RPT
+    WF --> RPT
+    CP --> PC["phase_complete"]
+    SKIP --> LOOP
 
-    CPB{{"👤 チェックポイント B"}}
-    CPB -->|承認| GITBR["フィーチャーブランチ作成"]
-    CPB -->|却下| P4
-
-    GITBR --> P5
-
-    subgraph loop ["🔄 タスクごと"]
-        P5["Phase 5 — 実装"]
-        P5 -->|impl-N.md| P6
-        P6["Phase 6 — コードレビュー"]
-        P6 -->|review-N.md| RESULT{PASS?}
-        RESULT -->|"FAIL (最大2回リトライ)"| P5
-    end
-    RESULT -->|全てPASS| P7
-
-    P7["Phase 7 — 包括的レビュー"]
-    P7 --> FV["最終検証"]
-    FV --> PR["PR作成"]
-    PR --> FS["最終サマリー"]
-    FS --> DONE(["✔ 完了"])
+    RPT --> HINT{next_action_hint}
+    HINT -->|revision_required| USER["ユーザーに結果を提示"]
+    HINT -->|setup_continue| LOOP
+    HINT -->|normal| LOOP
+    PC --> LOOP
+    USER --> LOOP
 ```
 
 ## フェーズテーブル
 
-| フェーズ | タスク | エージェント | 入力 | 出力 | 人間の介入 |
-| ----- | ---- | ----- | ----- | ------ | ----- |
-| 0 | 入力バリデーション | validate-input + LLM | ユーザー入力 | バリデーション結果 | なし |
-| 1 | ワークスペースセットアップ | オーケストレーター | 検証済み入力 | request.md, state.json | あり |
-| 2 | タスクタイプ & 工数検出 | オーケストレーター | request.md | state.json | あり |
-| 3 | 状況分析 | situation-analyst | request.md | analysis.md | なし |
-| 4 | 調査 | investigator | analysis.md | investigation.md | なし |
-| 5 | 設計 | architect | investigation.md | design.md | なし |
-| 6 | 設計レビュー | design-reviewer | design.md | review-design.md | なし |
-| 7 | チェックポイント A | 人間 | design.md | 承認 / 修正 | あり |
-| 8 | タスク分解 | task-decomposer | design.md | tasks.md | なし |
-| 9 | タスクレビュー | task-reviewer | tasks.md | review-tasks.md | なし |
-| 10 | チェックポイント B | 人間 | tasks.md | 承認 / 修正 | あり |
-| 11 | 実装 | implementer | タスク仕様 | impl-N.md | なし |
-| 12 | コードレビュー | impl-reviewer | impl-N.md | review-N.md | なし |
-| 13 | 包括的レビュー | comprehensive-reviewer | 全impl + レビュー | comprehensive-review.md | なし |
-| 14 | 最終検証 | verifier | comprehensive-review.md | 検証結果 | なし |
-| 15 | PR作成 | オーケストレーター | コミット | PR | なし |
-| 16 | 最終サマリー | オーケストレーター | 全アーティファクト | summary.md | なし |
-| 17 | ソースへ投稿 | オーケストレーター | summary.md | Issueコメント | なし |
-| 18 | 完了 | システム | summary.md | — | なし |
+実行順の18フェーズ。effort レベル（フローテンプレート）に応じてスキップされるフェーズあり。
 
-## シーケンス図
+| # | フェーズ ID | 説明 | アクター | 成果物 |
+|---|----------|-------------|-------|----------|
+| 1 | `setup` | ワークスペース初期化、request.md 作成、effort 検出、テンプレート設定 | オーケストレーター | request.md, state.json |
+| 2 | `phase-1` | 状況分析 — 読み取り専用のコードベースマッピング | situation-analyst | analysis.md |
+| 3 | `phase-2` | 調査 — 詳細調査、エッジケース | investigator | investigation.md |
+| 4 | `phase-3` | 設計 — アーキテクチャとアプローチ | architect | design.md |
+| 5 | `phase-3b` | 設計レビュー — AI 品質ゲート | design-reviewer | review-design.md |
+| 6 | `checkpoint-a` | 設計の人間によるレビュー | ユーザー | 承認 / 修正 |
+| 7 | `phase-4` | タスク分解 — 番号付きタスクリスト | task-decomposer | tasks.md |
+| 8 | `phase-4b` | タスクレビュー — AI 品質ゲート | task-reviewer | review-tasks.md |
+| 9 | `checkpoint-b` | タスクの人間によるレビュー | ユーザー | 承認 / 修正 |
+| 10 | `phase-5` | 実装 — タスクごとの TDD（逐次または並列） | implementer | impl-N.md |
+| 11 | `phase-6` | コードレビュー — タスクごと、最大2回リトライ | impl-reviewer | review-N.md |
+| 12 | `phase-7` | 包括的レビュー — 横断的な懸念事項 | comprehensive-reviewer | comprehensive-review.md |
+| 13 | `final-verification` | フルビルド + テストスイート検証 | verifier | final-verification.md |
+| 14 | `pr-creation` | `gh pr create` による PR 作成 | オーケストレーター | PR URL |
+| 15 | `final-summary` | PR 番号を含む summary.md 生成 | オーケストレーター | summary.md |
+| 16 | `final-commit` | 最終コミットを summary.md で amend + force-push | オーケストレーター | — |
+| 17 | `post-to-source` | GitHub/Jira Issue にサマリーを投稿 | オーケストレーター | Issue コメント |
+| 18 | `completed` | パイプライン完了 | — | — |
+
+## Effort レベルとスキップされるフェーズ
+
+| Effort | フローテンプレート | スキップされるフェーズ |
+|--------|---------------|----------------|
+| S | light | phase-4b（タスクレビュー）、checkpoint-b（タスクチェックポイント）、phase-7（包括的レビュー） |
+| M | standard | phase-4b（タスクレビュー）、checkpoint-b（タスクチェックポイント） |
+| L | full | _（なし）_ |
+
+## シーケンス図 — オーケストレーター / MCP サーバー間のやり取り
 
 ```mermaid
 sequenceDiagram
     actor User as ユーザー
-    participant Orch as オーケストレーター
-    participant SM as MCPサーバー
-    participant Hook as フック
-    participant FS as ワークスペース (.specs/)
+    participant Orch as オーケストレーター<br>(SKILL.md)
+    participant MCP as MCP サーバー<br>(forge-state)
     participant Agent as サブエージェント
+    participant FS as .specs/
+
+    Note over User,FS: Step 1 — 初期化または再開
 
     User->>Orch: /forge <引数>
-    Orch->>Orch: validate_input + LLMチェック
+    Orch->>MCP: pipeline_init(arguments)
+    MCP-->>Orch: PipelineInitResult
 
-    Orch->>SM: init {workspace}
-    SM->>FS: state.json作成
-    Orch->>FS: request.md書き込み
-
-    rect rgb(230, 245, 255)
-    Note over Orch,Agent: Phase 1-2 — 分析（読み取り専用）
-    Orch->>SM: phase-start phase-1
-    Orch->>Agent: situation-analyst
-    Note over Hook: Edit/Writeをブロック
-    Agent-->>Orch: 分析出力
-    Orch->>FS: analysis.md書き込み
-    Orch->>SM: phase-complete phase-1
+    alt resume_mode = "auto"
+        Orch->>MCP: resume_info(workspace)
+        MCP-->>Orch: ResumeInfoResult
+        Note over Orch: Step 2 へスキップ
+    else 新規パイプライン
+        opt fetch_needed（GitHub/Jira）
+            Orch->>Orch: 外部コンテキスト取得
+        end
+        Orch->>MCP: pipeline_init_with_context(workspace, flags)
+        MCP-->>Orch: needs_user_confirmation
+        Orch->>User: effort オプションを提示
+        User-->>Orch: effort + slug を確認
+        Orch->>MCP: pipeline_init_with_context(+ user_confirmation)
+        MCP->>FS: state.json, request.md 作成
+        MCP-->>Orch: 確定された workspace
     end
 
-    rect rgb(255, 245, 230)
-    Note over Orch,Agent: Phase 3/3b — 設計 + レビューループ
-    loop 最大2回の修正
-        Orch->>Agent: architect → design.md
-        Orch->>Agent: design-reviewer → review-design.md
-        break APPROVE
+    Note over User,FS: Step 2 — メインループ
+
+    loop 完了まで繰り返し
+        Orch->>MCP: pipeline_next_action(workspace)
+        MCP-->>Orch: Action{type, phase, prompt, ...}
+
+        alt type = spawn_agent
+            Orch->>Agent: Agent(prompt)
+            Agent->>FS: 成果物書き込み
+            Agent-->>Orch: 結果
+            Orch->>MCP: pipeline_report_result(phase, tokens, duration)
+            MCP->>FS: state.json 更新、成果物検証
+            MCP-->>Orch: next_action_hint
+
+        else type = checkpoint
+            Orch->>MCP: checkpoint(workspace, phase)
+            MCP->>FS: status = awaiting_human 設定
+            Orch->>User: レビュー依頼
+            User-->>Orch: 承認 / フィードバック
+            Orch->>MCP: phase_complete(phase)
+
+        else type = exec
+            Orch->>Orch: コマンド実行（git, task_init 等）
+            Orch->>MCP: pipeline_report_result(phase, tokens, duration)
+            MCP-->>Orch: next_action_hint
+
+        else type = done（skip）
+            Orch->>MCP: phase_complete(スキップされたフェーズ)
+
+        else type = done
+            Note over Orch: パイプライン完了
         end
     end
-    end
-
-    rect rgb(255, 230, 230)
-    Note over Orch,User: チェックポイント A — 人間のレビュー
-    Orch->>User: 設計を提示
-    User-->>Orch: 承認 / フィードバック
-    end
-
-    rect rgb(230, 255, 230)
-    Note over Orch,Agent: Phase 5/6 — タスクごとの実装
-    loop 各タスク
-        Orch->>Agent: implementer → impl-N.md
-        Orch->>Agent: impl-reviewer → review-N.md
-    end
-    end
-
-    Orch->>Agent: comprehensive-reviewer
-    Orch->>Agent: verifier
-    Orch->>Orch: PR作成
-    Orch->>FS: summary.md書き込み
-    Orch->>User: 完了
 ```
 
-## タスクタイプ
+## リビジョンループの詳細
 
-タスクタイプによって特定のフェーズがスキップされます：
+設計（phase-3/3b）とタスク（phase-4/4b）フェーズでは、AI レビュワーが REVISE 判定を返した場合にリビジョンループが発生します。ループあたり最大2回のリビジョン。
 
-| タスクタイプ | 説明 | スキップされるフェーズ |
-| --- | --- | --- |
-| `feature` | 新機能や動作の追加 | _（なし — フルパイプライン）_ |
-| `bugfix` | 再現手順が明確なバグ修正 | 設計レビュー (3b)、タスク分解 (4)、タスクレビュー (4b)、包括的レビュー (7) |
-| `refactor` | 動作変更を伴わないコード再構成 | 設計レビュー (3b)、包括的レビューは異なる基準を使用 |
-| `docs` | ドキュメントのみの変更 | 調査 (2)、設計 (3)、設計レビュー (3b)、タスク分解 (4)、タスクレビュー (4b) |
-| `investigation` | 分析のみ — コード変更なし | 全実装フェーズ (5-7, 14-15) — 分析のみ出力 |
+```mermaid
+sequenceDiagram
+    participant Orch as オーケストレーター
+    participant MCP as MCP サーバー
+    participant A as Architect / Decomposer
+    participant R as Design / Tasks Reviewer
+
+    Orch->>MCP: pipeline_next_action
+    MCP-->>Orch: spawn_agent (architect)
+    Orch->>A: 設計タスク
+    A-->>Orch: design.md
+    Orch->>MCP: pipeline_report_result
+
+    Orch->>MCP: pipeline_next_action
+    MCP-->>Orch: spawn_agent (design-reviewer)
+    Orch->>R: design.md レビュー
+    R-->>Orch: review-design.md (REVISE)
+    Orch->>MCP: pipeline_report_result
+    MCP-->>Orch: next_action_hint = revision_required
+
+    Note over Orch: 結果を提示、リビジョンカウンター増加
+    Orch->>MCP: pipeline_next_action
+    MCP-->>Orch: spawn_agent (architect, revision 2)
+    Note over Orch: ループ繰り返し（最大2回）
+```
+
+## 実装ループの詳細
+
+各タスクは実装（phase-5）とコードレビュー（phase-6）を経ます。
+レビュー失敗時は最大2回リトライ。
+
+```mermaid
+sequenceDiagram
+    participant Orch as オーケストレーター
+    participant MCP as MCP サーバー
+    participant Impl as Implementer
+    participant Rev as Impl Reviewer
+
+    loop 各タスク
+        Orch->>MCP: pipeline_next_action
+        MCP-->>Orch: spawn_agent (implementer, task N)
+        Orch->>Impl: タスク N 実装
+        Impl-->>Orch: impl-N.md
+        Orch->>MCP: pipeline_report_result
+
+        Orch->>MCP: pipeline_next_action
+        MCP-->>Orch: spawn_agent (impl-reviewer, task N)
+        Orch->>Rev: impl-N.md レビュー
+        Rev-->>Orch: review-N.md
+
+        alt PASS / PASS_WITH_NOTES
+            Orch->>MCP: pipeline_report_result
+            Note over Orch: 次のタスクへ
+        else FAIL（リトライ < 2）
+            Orch->>MCP: pipeline_report_result
+            Note over Orch: タスク N をリトライ
+        end
+    end
+```

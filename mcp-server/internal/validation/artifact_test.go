@@ -352,7 +352,7 @@ func TestValidateArtifacts_FinalSummary(t *testing.T) {
 	t.Run("non-empty file", func(t *testing.T) {
 		t.Parallel()
 		workspace := t.TempDir()
-		writeFile(t, workspace, "final-summary.md", "Summary content.\n")
+		writeFile(t, workspace, "summary.md", "Summary content.\n")
 		results := validation.ValidateArtifacts(workspace, "final-summary")
 		if len(results) != 1 {
 			t.Fatalf("expected 1 result, got %d", len(results))

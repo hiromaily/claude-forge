@@ -87,8 +87,10 @@ func TestValidateInput(t *testing.T) {
 			wantValid:      true,
 			wantSourceType: "text",
 		},
+		// --resume is stripped from input for backward compatibility but not
+		// added to BareFlags. CoreText becomes the dirname only.
 		{
-			name:           "strip --resume flag leaving dirname as core",
+			name:           "resume_flag_stripped_for_compat",
 			input:          "20260401-effort-only-flow --resume",
 			wantValid:      true,
 			wantSourceType: "text",
@@ -282,22 +284,19 @@ func TestValidateInputParsedFlags(t *testing.T) {
 	}
 }
 
-func TestValidateInputResumeFlagInBareFlags(t *testing.T) {
+func TestValidateInputResumeFlagStrippedButNotInBareFlags(t *testing.T) {
 	t.Parallel()
 
-	// --resume must appear in BareFlags and be stripped from CoreText.
+	// --resume is stripped from CoreText for backward compatibility but
+	// NOT added to BareFlags (resume is now auto-detected from directory existence).
 	result := validation.ValidateInput("20260401-effort-only-flow --resume")
 	if !result.Valid {
 		t.Fatalf("expected valid, got errors: %v", result.Errors)
 	}
-	foundResume := false
 	for _, f := range result.Parsed.BareFlags {
 		if f == "resume" {
-			foundResume = true
+			t.Errorf("BareFlags should NOT contain 'resume', got %v", result.Parsed.BareFlags)
 		}
-	}
-	if !foundResume {
-		t.Errorf("BareFlags should contain 'resume', got %v", result.Parsed.BareFlags)
 	}
 	if strings.Contains(result.Parsed.CoreText, "--resume") {
 		t.Errorf("CoreText %q should not contain --resume after stripping", result.Parsed.CoreText)

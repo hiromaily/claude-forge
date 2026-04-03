@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # post-bash-hook.sh — PostToolUse hook for Bash tool calls
 #
+# v1 LEGACY ONLY — This hook fires only for v1 shell-based flows that call
+# `phase-complete {workspace} post-to-source` via Bash. In v2 (MCP-driven flows),
+# the final-commit step is handled by the Engine via a dedicated `final_commit`
+# exec action dispatched by `pipeline_next_action`. MCP-driven flows use
+# `pipeline_report_result` and never trigger this hook.
+#
 # When `phase-complete {workspace} post-to-source` is detected, automatically
 # amends the branch's last commit to include state.json and summary.md.
 #
@@ -16,7 +22,7 @@
 #   - jq not installed
 #   - Not a Bash tool call
 #   - Command does not contain phase-complete ... post-to-source
-#   - taskType is "investigation" (no feature branch exists)
+#   - (legacy) taskType is "investigation" in old state.json files
 #   - summary.md does not exist
 #   - state.json and summary.md are already committed (nothing to do)
 #   - git command fails (fail-open)
@@ -49,7 +55,8 @@ fi
 STATE_FILE="${PC_WS}/state.json"
 [ -f "$STATE_FILE" ] || exit 0
 
-# investigation tasks have no feature branch — nothing to commit
+# Legacy guard: old state.json files may have taskType = "investigation" (no feature branch).
+# Task type no longer exists; kept for backward compatibility with old pipelines.
 TASK_TYPE="$(jq -r '.taskType // empty' "$STATE_FILE" 2>/dev/null || true)"
 [ "$TASK_TYPE" = "investigation" ] && exit 0
 
