@@ -246,6 +246,120 @@ func TestFrictionBuild_frictionJSONShape(t *testing.T) {
 	}
 }
 
+func TestFrictionBuild_summaryFallback(t *testing.T) {
+	t.Parallel()
+
+	// Verify that Build falls back to summary.md when improvement.md is absent.
+	specsDir := t.TempDir()
+
+	specDir := filepath.Join(specsDir, "spec-summary-only")
+	if err := os.MkdirAll(specDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Write a summary.md with an embedded Improvement Report section.
+	summaryContent := `## Summary
+Task completed.
+
+## Improvement Report
+
+_Retrospective on what would have made this work easier._
+
+### Documentation
+
+The function was missing godoc comments for exported symbols.
+
+### Code Readability
+
+No friction observed.
+
+### AI Agent Support (Skills / Rules)
+
+No friction observed.
+
+## Pipeline Statistics
+- Total tokens: 100000
+`
+	if err := os.WriteFile(filepath.Join(specDir, "summary.md"), []byte(summaryContent), 0o600); err != nil {
+		t.Fatalf("write summary.md: %v", err)
+	}
+
+	fm := history.NewFrictionMap(specsDir)
+	if err := fm.Build(); err != nil {
+		t.Fatalf("Build() error: %v", err)
+	}
+
+	if fm.TotalReportsAnalyzed() != 1 {
+		t.Errorf("TotalReportsAnalyzed = %d, want 1", fm.TotalReportsAnalyzed())
+	}
+
+	points := fm.Points()
+	if len(points) == 0 {
+		t.Fatal("expected at least one FrictionPoint from summary.md fallback, got none")
+	}
+
+	// Should extract "documentation" category from the godoc line.
+	found := false
+	for _, p := range points {
+		if p.Category == "documentation" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected documentation category from summary.md, got points: %+v", points)
+	}
+}
+
+func TestFrictionBuild_improvementTakesPrecedence(t *testing.T) {
+	t.Parallel()
+
+	// When both improvement.md and summary.md exist, improvement.md takes precedence.
+	specsDir := t.TempDir()
+
+	specDir := filepath.Join(specsDir, "spec-both")
+	if err := os.MkdirAll(specDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Write improvement.md with error handling content.
+	improvementContent := "### Error Handling\n- Missing error check on file open.\n"
+	if err := os.WriteFile(filepath.Join(specDir, "improvement.md"), []byte(improvementContent), 0o600); err != nil {
+		t.Fatalf("write improvement.md: %v", err)
+	}
+
+	// Write summary.md with test coverage content.
+	summaryContent := "## Improvement Report\n### Test Coverage\n- Missing unit tests for parser.\n"
+	if err := os.WriteFile(filepath.Join(specDir, "summary.md"), []byte(summaryContent), 0o600); err != nil {
+		t.Fatalf("write summary.md: %v", err)
+	}
+
+	fm := history.NewFrictionMap(specsDir)
+	if err := fm.Build(); err != nil {
+		t.Fatalf("Build() error: %v", err)
+	}
+
+	points := fm.Points()
+	// Should have error_handling from improvement.md, NOT test_coverage from summary.md.
+	hasError := false
+	hasTestCoverage := false
+	for _, p := range points {
+		if p.Category == "error_handling" {
+			hasError = true
+		}
+		if p.Category == "test_coverage" {
+			hasTestCoverage = true
+		}
+	}
+
+	if !hasError {
+		t.Error("expected error_handling from improvement.md, not found")
+	}
+	if hasTestCoverage {
+		t.Error("should not have test_coverage from summary.md when improvement.md exists")
+	}
+}
+
 func TestFrictionBuild_multipleSpecDirs(t *testing.T) {
 	t.Parallel()
 

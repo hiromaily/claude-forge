@@ -553,15 +553,22 @@ func derivePRTitle(st *state.State) string {
 // comprehensive-review.md is included only when PhaseSeven was not skipped
 // (i.e., the flow template is standard or full). For effort S (light template),
 // PhaseSeven is skipped and the file does not exist.
+// analysis.md and investigation.md are included (when present) to provide
+// context for the Improvement Report epilogue.
 func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
 	inputs := []string{state.ArtifactDesign, state.ArtifactTasks}
 	if !slices.Contains(st.SkippedPhases, PhaseSeven) {
 		inputs = append([]string{state.ArtifactComprehensiveReview}, inputs...)
 	}
 
+	// Include analysis.md and investigation.md for the Improvement Report.
+	// These files document what information was hard to find and what
+	// documentation gaps were encountered — essential for improvement proposals.
+	inputs = append(inputs, state.ArtifactAnalysis, state.ArtifactInvestigation)
+
 	return NewSpawnAgentAction(
 		agentVerifier,
-		"Generate final summary with pipeline statistics.",
+		"Generate final summary with pipeline statistics and improvement report.",
 		state.DefaultModel,
 		PhaseFinalSummary,
 		inputs,
