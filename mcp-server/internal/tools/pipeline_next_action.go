@@ -22,6 +22,17 @@ import (
 
 const similarPipelinesSearchLimit = 3
 
+// outputVerdictHints maps output artifact filenames to a validation hint that
+// tells the agent which verdict token(s) must appear in the file. These hints
+// mirror the verdictSet requirements in validation/artifact.go so agents
+// produce structurally valid artifacts on the first attempt.
+//
+//nolint:gochecknoglobals // package-level lookup table for verdict hints
+var outputVerdictHints = map[string]string{
+	state.ArtifactReviewDesign: "The file MUST contain exactly one verdict line: `## Verdict: APPROVE`, `APPROVE_WITH_NOTES`, or `REVISE`.",
+	state.ArtifactReviewTasks:  "The file MUST contain exactly one verdict line: `## Verdict: APPROVE`, `APPROVE_WITH_NOTES`, or `REVISE`.",
+}
+
 // nextActionResponse wraps orchestrator.Action to add an optional Warning field.
 // The warning is set fail-open when enrichPrompt cannot find the agent .md file.
 type nextActionResponse struct {
@@ -151,6 +162,14 @@ func enrichPrompt(
 		artifactSB.WriteString(outputPath)
 		artifactSB.WriteString("`\n\n")
 		artifactSB.WriteString("Do NOT return the output as response text only — the pipeline requires the file to exist on disk.\n")
+
+		// Add verdict requirement hints for review-phase agents so they
+		// include the required verdict token in their output file.
+		if hint, ok := outputVerdictHints[action.OutputFile]; ok {
+			artifactSB.WriteString("\n")
+			artifactSB.WriteString(hint)
+			artifactSB.WriteString("\n")
+		}
 	}
 
 	artifactsSection := artifactSB.String()
