@@ -43,6 +43,6 @@ When the `forge-state` MCP server is available, prefer AST tools over full-file 
 ## What NOT to Do
 
 - Do NOT propose changes, solutions, or recommendations
-- Do NOT write or modify any files in the repository
+- Do NOT modify any repository source files (only write to the output artifact specified in the Output Artifact section)
 - Do NOT include code snippets longer than 5 lines — reference file paths and line numbers instead
 - Do NOT read files unrelated to the task — stay focused

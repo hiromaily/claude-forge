@@ -45,11 +45,17 @@ var phaseLogRequired = map[string]bool{
 
 // Guard3aArtifactExists enforces Rule 3a: the artifact file for the given phase
 // must exist in workspace before phase-complete is accepted.
-// Returns nil when no artifact is required for the phase, or when the artifact exists.
+// Returns nil when no artifact is required for the phase, when the phase is in
+// the skipped set, or when the artifact exists.
 // Returns a non-nil error when the required artifact is absent.
-func Guard3aArtifactExists(workspace, phase string, _ *state.State) error {
+func Guard3aArtifactExists(workspace, phase string, s *state.State) error {
 	artifact, required := phaseArtifacts[phase]
 	if !required {
+		return nil
+	}
+	// Skipped phases do not require artifacts — the orchestrator calls
+	// phase_complete directly without spawning an agent.
+	if slices.Contains(s.SkippedPhases, phase) {
 		return nil
 	}
 	path := filepath.Join(workspace, artifact)

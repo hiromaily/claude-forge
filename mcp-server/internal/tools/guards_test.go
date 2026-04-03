@@ -101,6 +101,30 @@ func TestGuard3a_PhasesWithNoArtifact_ReturnsNil(t *testing.T) {
 	}
 }
 
+func TestGuard3a_SkippedPhase_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	// When a phase is in SkippedPhases, the artifact guard should not block.
+	dir := t.TempDir()
+	s := buildTestState()
+	s.SkippedPhases = []string{"phase-4b"}
+	// No review-tasks.md exists, but phase-4b is skipped → no error.
+	if err := Guard3aArtifactExists(dir, "phase-4b", s); err != nil {
+		t.Errorf("expected nil error for skipped phase, got: %v", err)
+	}
+}
+
+func TestGuard3a_NotSkippedPhase_StillBlocks(t *testing.T) {
+	t.Parallel()
+	// When a phase is NOT in SkippedPhases, the artifact guard should still block.
+	dir := t.TempDir()
+	s := buildTestState()
+	s.SkippedPhases = []string{"phase-3b"} // different phase is skipped
+	// No review-tasks.md exists, phase-4b is NOT skipped → error.
+	if err := Guard3aArtifactExists(dir, "phase-4b", s); err == nil {
+		t.Error("expected non-nil error when phase is not skipped and artifact missing")
+	}
+}
+
 // ------- Guard 3b: review file existence (blocking) -------
 
 func TestGuard3b_ReviewFileExists_NoError(t *testing.T) {

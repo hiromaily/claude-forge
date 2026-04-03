@@ -136,6 +136,23 @@ func enrichPrompt(
 		}
 	}
 
+	// Output artifact instruction — deterministic enforcement that agents write
+	// their output file. Without this, agents non-deterministically return results
+	// as text without writing the file, causing pipeline_report_result to fail
+	// artifact validation.
+	if action.OutputFile != "" {
+		if artifactSB.Len() > 0 {
+			artifactSB.WriteString("\n")
+		}
+		outputPath := filepath.Join(workspace, action.OutputFile)
+		artifactSB.WriteString("## Output Artifact\n\n")
+		artifactSB.WriteString("**MANDATORY**: When you have finished your work, write your complete output to this file using the Write tool:\n")
+		artifactSB.WriteString("- `")
+		artifactSB.WriteString(outputPath)
+		artifactSB.WriteString("`\n\n")
+		artifactSB.WriteString("Do NOT return the output as response text only — the pipeline requires the file to exist on disk.\n")
+	}
+
 	artifactsSection := artifactSB.String()
 
 	// Determine history search query from state.SpecName, falling back to workspace base.

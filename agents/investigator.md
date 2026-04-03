@@ -49,5 +49,5 @@ Return a structured markdown report with:
 ## What NOT to Do
 
 - Do NOT propose a design or implementation plan — that is the architect's job
-- Do NOT write or modify any files in the repository
+- Do NOT modify any repository source files (only write to the output artifact specified in the Output Artifact section)
 - Do NOT skip the deletion/rename impact search — missing callers cause broken builds

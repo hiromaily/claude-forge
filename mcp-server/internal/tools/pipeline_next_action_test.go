@@ -247,6 +247,44 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 	})
 
+	t.Run("output_artifact_section", func(t *testing.T) {
+		t.Parallel()
+		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
+
+		agentDir := t.TempDir()
+		agentContent := "# Situation Analyst\nYou are a situation analyst agent."
+		if err := os.WriteFile(filepath.Join(agentDir, "situation-analyst.md"), []byte(agentContent), 0o600); err != nil {
+			t.Fatalf("write agent file: %v", err)
+		}
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, agentDir, nil, nil, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var action orchestrator.Action
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
+			t.Fatalf("unmarshal action: %v", err)
+		}
+		// Output Artifact section must be present since phase-1 has output_file = "analysis.md".
+		if !strings.Contains(action.Prompt, "## Output Artifact") {
+			t.Errorf("Prompt does not contain '## Output Artifact'\nPrompt: %s", action.Prompt)
+		}
+		expectedOutputPath := filepath.Join(workspace, "analysis.md")
+		if !strings.Contains(action.Prompt, expectedOutputPath) {
+			t.Errorf("Prompt does not contain output file path %q\nPrompt: %s", expectedOutputPath, action.Prompt)
+		}
+		if !strings.Contains(action.Prompt, "MANDATORY") {
+			t.Errorf("Prompt does not contain 'MANDATORY' instruction\nPrompt: %s", action.Prompt)
+		}
+	})
+
 	t.Run("missing_agent_file", func(t *testing.T) {
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
