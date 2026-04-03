@@ -92,13 +92,9 @@ func InitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), field (string).
 func GetHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		field, err := req.RequireString("field")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, field, result, err := requireWorkspaceAndString(req, "field")
+		if result != nil {
+			return result, err
 		}
 		val, err := sm.Get(workspace, field)
 		if err != nil {
@@ -115,18 +111,14 @@ func GetHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Guard 3c: phase-5 requires non-empty tasks.
 func PhaseStartHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		phase, err := req.RequireString("phase")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
 		}
 		// Guard 3c: blocking
-		s, serr := loadState(workspace)
-		if serr != nil {
-			return errorf("load state: %v", serr)
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
 		}
 		if gerr := Guard3cTasksNonEmpty(phase, s); gerr != nil {
 			return blockGuard(gerr)
@@ -147,17 +139,13 @@ func PhaseStartHandler(sm *state.StateManager, bus *events.EventBus) server.Tool
 // Warnings: 3f (phase-log missing), 3i (not in_progress).
 func PhaseCompleteHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
 		}
-		phase, err := req.RequireString("phase")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		s, serr := loadState(workspace)
-		if serr != nil {
-			return errorf("load state: %v", serr)
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
 		}
 		// Blocking guards.
 		if gerr := Guard3aArtifactExists(workspace, phase, s); gerr != nil {
@@ -194,21 +182,12 @@ func PhaseCompleteHandler(sm *state.StateManager, bus *events.EventBus, slack *e
 // Accepts: workspace (string), phase (string), message (string).
 func PhaseFailHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		phase, err := req.RequireString("phase")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
 		}
 		message := req.GetString("message", "")
-		// Load state for event specName before mutation.
-		s, serr := loadState(workspace)
-		specName := ""
-		if serr == nil {
-			specName = s.SpecName
-		}
+		specName, _ := stateForEvent(workspace)
 		if err := sm.PhaseFail(workspace, phase, message); err != nil {
 			return errorf("phase_fail: %v", err)
 		}
@@ -223,20 +202,11 @@ func PhaseFailHandler(sm *state.StateManager, bus *events.EventBus, slack *event
 // Accepts: workspace (string), phase (string).
 func CheckpointHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
 		}
-		phase, err := req.RequireString("phase")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		// Load state for event specName before mutation.
-		s, serr := loadState(workspace)
-		specName := ""
-		if serr == nil {
-			specName = s.SpecName
-		}
+		specName, _ := stateForEvent(workspace)
 		if err := sm.Checkpoint(workspace, phase); err != nil {
 			return errorf("checkpoint: %v", err)
 		}
@@ -252,13 +222,13 @@ func CheckpointHandler(sm *state.StateManager, bus *events.EventBus) server.Tool
 // Guard 3g: checkpoint-b must be completed or skipped.
 func TaskInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
-		s, serr := loadState(workspace)
-		if serr != nil {
-			return errorf("load state: %v", serr)
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
 		}
 		// Guard 3g: blocking.
 		if gerr := Guard3gCheckpointBDoneOrSkipped(s); gerr != nil {
@@ -304,9 +274,9 @@ func TaskInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Warning 3h: task not found in state.Tasks.
 func TaskUpdateHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
 		taskNum, err := req.RequireString("task_num")
 		if err != nil {
@@ -320,9 +290,9 @@ func TaskUpdateHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		if err != nil {
 			return errorf("%v", err)
 		}
-		s, serr := loadState(workspace)
-		if serr != nil {
-			return errorf("load state: %v", serr)
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
 		}
 		// Guard 3b: blocking.
 		if gerr := Guard3bReviewFileExists(workspace, taskNum, value, s); gerr != nil {
@@ -351,13 +321,9 @@ func TaskUpdateHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), rev_type (string).
 func RevisionBumpHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		revType, err := req.RequireString("rev_type")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, revType, result, err := requireWorkspaceAndString(req, "rev_type")
+		if result != nil {
+			return result, err
 		}
 		if err := sm.RevisionBump(workspace, revType); err != nil {
 			return errorf("revision_bump: %v", err)
@@ -372,13 +338,9 @@ func RevisionBumpHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), rev_type (string).
 func InlineRevisionBumpHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		revType, err := req.RequireString("rev_type")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, revType, result, err := requireWorkspaceAndString(req, "rev_type")
+		if result != nil {
+			return result, err
 		}
 		if err := sm.InlineRevisionBump(workspace, revType); err != nil {
 			return errorf("inline_revision_bump: %v", err)
@@ -393,13 +355,9 @@ func InlineRevisionBumpHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), branch (string).
 func SetBranchHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		branch, err := req.RequireString("branch")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, branch, result, err := requireWorkspaceAndString(req, "branch")
+		if result != nil {
+			return result, err
 		}
 		if err := sm.SetBranch(workspace, branch); err != nil {
 			return errorf("set_branch: %v", err)
@@ -414,13 +372,9 @@ func SetBranchHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), effort (string).
 func SetEffortHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		effort, err := req.RequireString("effort")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, effort, result, err := requireWorkspaceAndString(req, "effort")
+		if result != nil {
+			return result, err
 		}
 		if err := sm.SetEffort(workspace, effort); err != nil {
 			return errorf("set_effort: %v", err)
@@ -435,13 +389,9 @@ func SetEffortHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), flow_template (string).
 func SetFlowTemplateHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		tmpl, err := req.RequireString("flow_template")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, tmpl, result, err := requireWorkspaceAndString(req, "flow_template")
+		if result != nil {
+			return result, err
 		}
 		if err := sm.SetFlowTemplate(workspace, tmpl); err != nil {
 			return errorf("set_flow_template: %v", err)
@@ -456,9 +406,9 @@ func SetFlowTemplateHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string).
 func SetAutoApproveHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
 		if err := sm.SetAutoApprove(workspace); err != nil {
 			return errorf("set_auto_approve: %v", err)
@@ -473,9 +423,9 @@ func SetAutoApproveHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string).
 func SetSkipPrHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
 		if err := sm.SetSkipPr(workspace); err != nil {
 			return errorf("set_skip_pr: %v", err)
@@ -490,9 +440,9 @@ func SetSkipPrHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string).
 func SetDebugHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
 		if err := sm.SetDebug(workspace); err != nil {
 			return errorf("set_debug: %v", err)
@@ -507,13 +457,9 @@ func SetDebugHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), branch (string).
 func SetUseCurrentBranchHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		branch, err := req.RequireString("branch")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, branch, result, err := requireWorkspaceAndString(req, "branch")
+		if result != nil {
+			return result, err
 		}
 		if err := sm.SetUseCurrentBranch(workspace, branch); err != nil {
 			return errorf("set_use_current_branch: %v", err)
@@ -528,13 +474,9 @@ func SetUseCurrentBranchHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), checkpoint (string).
 func SetRevisionPendingHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		checkpoint, err := req.RequireString("checkpoint")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, checkpoint, result, err := requireWorkspaceAndString(req, "checkpoint")
+		if result != nil {
+			return result, err
 		}
 		if err := sm.SetRevisionPending(workspace, checkpoint); err != nil {
 			return errorf("set_revision_pending: %v", err)
@@ -549,13 +491,9 @@ func SetRevisionPendingHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string), checkpoint (string).
 func ClearRevisionPendingHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		checkpoint, err := req.RequireString("checkpoint")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, checkpoint, result, err := requireWorkspaceAndString(req, "checkpoint")
+		if result != nil {
+			return result, err
 		}
 		if err := sm.ClearRevisionPending(workspace, checkpoint); err != nil {
 			return errorf("clear_revision_pending: %v", err)
@@ -570,13 +508,9 @@ func ClearRevisionPendingHandler(sm *state.StateManager) server.ToolHandlerFunc 
 // Accepts: workspace (string), phase (string).
 func SkipPhaseHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		phase, err := req.RequireString("phase")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
 		}
 		if err := sm.SkipPhase(workspace, phase); err != nil {
 			return errorf("skip_phase: %v", err)
@@ -595,21 +529,17 @@ func SkipPhaseHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Warning 3d: duplicate phase-log entry.
 func PhaseLogHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
-		}
-		phase, err := req.RequireString("phase")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
 		}
 		tokens := req.GetInt("tokens", 0)
 		durationMs := req.GetInt("duration_ms", 0)
 		model := req.GetString("model", "")
 
-		s, serr := loadState(workspace)
-		if serr != nil {
-			return errorf("load state: %v", serr)
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
 		}
 		// Warning 3d: non-blocking.
 		warning := Warn3dPhaseLogDuplicate(phase, s)
@@ -630,15 +560,15 @@ func PhaseLogHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string).
 func PhaseStatsHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
-		result, err := sm.PhaseStats(workspace)
+		stats, err := sm.PhaseStats(workspace)
 		if err != nil {
 			return errorf("phase_stats: %v", err)
 		}
-		return okJSON(result)
+		return okJSON(stats)
 	}
 }
 
@@ -648,18 +578,11 @@ func PhaseStatsHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // Accepts: workspace (string).
 func AbandonHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
-		// Load state for event specName and phase before mutation.
-		s, serr := loadState(workspace)
-		specName := ""
-		phase := ""
-		if serr == nil {
-			specName = s.SpecName
-			phase = s.CurrentPhase
-		}
+		specName, phase := stateForEvent(workspace)
 		if err := sm.Abandon(workspace); err != nil {
 			return errorf("abandon: %v", err)
 		}
@@ -674,15 +597,15 @@ func AbandonHandler(sm *state.StateManager, bus *events.EventBus, slack *events.
 // Accepts: workspace (string).
 func ResumeInfoHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
-		result, err := sm.ResumeInfo(workspace)
+		info, err := sm.ResumeInfo(workspace)
 		if err != nil {
 			return errorf("resume_info: %v", err)
 		}
-		return okJSON(result)
+		return okJSON(info)
 	}
 }
 
@@ -692,9 +615,9 @@ func ResumeInfoHandler(sm *state.StateManager) server.ToolHandlerFunc {
 // specsDir from the workspace parameter and delegates to refreshIndexWithSpecsDir.
 func RefreshIndexHandler(_ *state.StateManager) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
 		specsDir := filepath.Dir(workspace)
 		return refreshIndexWithSpecsDir(specsDir)(ctx, req)

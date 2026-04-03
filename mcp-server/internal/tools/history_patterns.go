@@ -44,13 +44,8 @@ func historyGetPatternsWithKB(
 		Patterns             []history.PatternEntry `json:"patterns"`
 		TotalReviewsAnalyzed int                    `json:"total_reviews_analyzed"`
 	}{
-		Patterns:             patterns,
+		Patterns:             nonNilSlice(patterns),
 		TotalReviewsAnalyzed: totalReviewsAnalyzed,
-	}
-
-	// Ensure patterns is never null in JSON output.
-	if response.Patterns == nil {
-		response.Patterns = []history.PatternEntry{}
 	}
 
 	return okJSON(response)

@@ -48,9 +48,9 @@ func PipelineNextActionHandler(
 	profiler *profile.RepoProfiler,
 ) server.ToolHandlerFunc {
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		workspace, err := req.RequireString("workspace")
-		if err != nil {
-			return errorf("%v", err)
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
 		}
 		userResponse := req.GetString("user_response", "")
 
