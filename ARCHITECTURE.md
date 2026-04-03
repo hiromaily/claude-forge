@@ -215,17 +215,20 @@ pipeline_init_with_context (1st) ─── External data fetch & effort detectio
     ▼
 pipeline_init_with_context (2nd) ─── Workspace finalisation & state init
     │                                  (write state.json + request.md,
-    │                                   create branch immediately)
+    │                                   return branch name + create_branch flag)
+    │
+    ▼
+Orchestrator: git checkout -b <branch>  (if create_branch is true)
     │
     ▼
 pipeline_next_action loop begins (Phase 1)
 ```
 
-**Branch creation timing:** The branch is created immediately after workspace
-finalisation — not deferred to Phase 5. Since the branch name is derived from
-the workspace slug (decided during user confirmation), there is no reason to
-delay branch creation. Early creation ensures all subsequent phases operate on
-the feature branch from the start.
+**Branch creation timing:** `pipeline_init_with_context` (2nd call) derives the
+branch name deterministically and returns it with `create_branch: true`. The
+orchestrator (SKILL.md) then runs `git checkout -b` immediately — not deferred
+to Phase 5. This ensures all subsequent phases operate on the feature branch
+from the start.
 
 ## Sequence Diagram
 

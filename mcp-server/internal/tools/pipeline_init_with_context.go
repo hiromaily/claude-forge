@@ -192,39 +192,34 @@ func handleSecondCall(
 	}
 	specName := deriveSpecName(workspace)
 
+	// Derive branch name before initWorkspace so it can be set in Configure
+	// (single state.json write instead of Configure + SetBranch).
+	var branchName string
+	createBranch := false
+	if uc.UseCurrentBranch {
+		branchName = flags.CurrentBranch
+	} else {
+		st := &state.State{SpecName: specName}
+		branchName = orchestrator.DeriveBranchName(st)
+		createBranch = true
+	}
+
 	// Create directory, initialise state, write request.md.
-	requestMD, err := initWorkspace(sm, workspace, specName, flags, uc, flowTemplate, skippedPhases, extCtx)
+	requestMD, err := initWorkspace(sm, workspace, specName, flags, uc, branchName, flowTemplate, skippedPhases, extCtx)
 	if err != nil {
 		return errorf("%v", err)
 	}
 
-	// Derive branch name and determine if branch creation is needed.
-	result := PipelineInitWithContextResult{
+	return okJSON(PipelineInitWithContextResult{
 		Ready:            true,
 		Workspace:        workspace,
 		Effort:           uc.Effort,
 		FlowTemplate:     flowTemplate,
 		SkippedPhases:    skippedPhases,
 		RequestMDContent: requestMD,
-	}
-
-	if uc.UseCurrentBranch {
-		// User chose to stay on current branch — no creation needed.
-		result.Branch = flags.CurrentBranch
-	} else {
-		// Derive branch name from spec name (deterministic).
-		st := &state.State{SpecName: specName}
-		branchName := orchestrator.DeriveBranchName(st)
-		result.Branch = branchName
-		result.CreateBranch = true
-
-		// Record branch in state so Phase 5 doesn't try to create it again.
-		if setErr := sm.SetBranch(workspace, branchName); setErr != nil {
-			result.Warning = fmt.Sprintf("set_branch: %v", setErr)
-		}
-	}
-
-	return okJSON(result)
+		Branch:           branchName,
+		CreateBranch:     createBranch,
+	})
 }
 
 // initWorkspace executes the 8-step I/O sequence for the second call.
@@ -236,6 +231,7 @@ func initWorkspace(
 	workspace, specName string,
 	flags pipelineFlags,
 	uc userConfirmation,
+	branchName string,
 	flowTemplate string,
 	skippedPhases []string,
 	extCtx externalContext,
@@ -263,6 +259,8 @@ func initWorkspace(
 	}
 
 	// Apply all configuration in a single write to state.json.
+	// Branch name is pre-derived by the caller (either current branch or
+	// DeriveBranchName), avoiding a separate SetBranch call.
 	cfg := state.PipelineConfig{
 		Effort:           uc.Effort,
 		FlowTemplate:     flowTemplate,
@@ -271,9 +269,7 @@ func initWorkspace(
 		Debug:            flags.Debug,
 		SkippedPhases:    skippedPhases,
 		UseCurrentBranch: uc.UseCurrentBranch,
-	}
-	if uc.UseCurrentBranch && flags.CurrentBranch != "" {
-		cfg.Branch = flags.CurrentBranch
+		Branch:           branchName,
 	}
 	if err := sm.Configure(workspace, cfg); err != nil {
 		return "", fmt.Errorf("configure: %w", err)
