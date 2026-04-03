@@ -7,20 +7,15 @@ description: Orchestrate a full development pipeline using MCP-driven subagents.
 
 ## Step 1: Initialize or Resume
 
-**To resume a suspended pipeline**, the user must supply two values:
-- The spec directory name from `.specs/` (e.g. `20260401-effort-only-flow`)
-- The `--resume` flag
+**To resume a suspended pipeline**, supply the spec directory name from `.specs/`:
 
-Example: `/forge 20260401-effort-only-flow --resume`
+Example: `/forge 20260401-effort-only-flow`
 
 1. Call `mcp__forge-state__pipeline_init(arguments=$ARGUMENTS)`.
 2. If `result.errors` is non-empty: surface the errors to the user and stop.
-3. If `result.resume_mode` is non-empty:
-   - `"explicit"` (user passed `--resume`): **do not ask for confirmation** — the user
-     has already stated their intent. Go directly to Step 2.
-   - `"legacy"` (auto-detected `.specs/` prefix): confirm resume from
-     `result.workspace` with the user, then go to Step 2.
-4. For all new pipelines (resume is false or absent):
+3. If `result.resume_mode` is `"auto"`: the input matched an existing spec directory.
+   **Do not ask for confirmation** — proceed directly to Step 2.
+4. For new pipelines (`resume_mode` is absent):
    a. If `result.fetch_needed` is non-null: fetch the external data described by `result.fetch_needed`
       (GitHub issue fields or Jira issue fields), then call
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, source_id=result.source_id, source_url=result.source_url, flags=result.flags, external_context=<fetched data>)`.

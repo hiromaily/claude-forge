@@ -35,7 +35,7 @@ func TestHandleResumePath(t *testing.T) {
 
 	sm := state.NewStateManager("dev")
 
-	t.Run("state_json_exists_legacy_mode", func(t *testing.T) {
+	t.Run("state_json_exists_auto_mode", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
@@ -43,13 +43,13 @@ func TestHandleResumePath(t *testing.T) {
 			t.Fatalf("Init: %v", err)
 		}
 
-		res, err := handleResumePath(dir, ResumeModeLegacy)
+		res, err := handleResumePath(dir, ResumeModeAuto)
 		if err != nil {
 			t.Fatalf("handleResumePath returned go error: %v", err)
 		}
 		r := parsePipelineInitResult(t, textContent(res))
-		if r.ResumeMode != ResumeModeLegacy {
-			t.Errorf("resume_mode: got %q, want %q", r.ResumeMode, ResumeModeLegacy)
+		if r.ResumeMode != ResumeModeAuto {
+			t.Errorf("resume_mode: got %q, want %q", r.ResumeMode, ResumeModeAuto)
 		}
 		if r.Workspace != dir {
 			t.Errorf("workspace: got %q, want %q", r.Workspace, dir)
@@ -62,31 +62,13 @@ func TestHandleResumePath(t *testing.T) {
 		}
 	})
 
-	t.Run("state_json_exists_explicit_mode", func(t *testing.T) {
-		t.Parallel()
-
-		dir := t.TempDir()
-		if err := sm.Init(dir, "test-spec"); err != nil {
-			t.Fatalf("Init: %v", err)
-		}
-
-		res, err := handleResumePath(dir, ResumeModeExplicit)
-		if err != nil {
-			t.Fatalf("handleResumePath returned go error: %v", err)
-		}
-		r := parsePipelineInitResult(t, textContent(res))
-		if r.ResumeMode != ResumeModeExplicit {
-			t.Errorf("resume_mode: got %q, want %q", r.ResumeMode, ResumeModeExplicit)
-		}
-	})
-
 	t.Run("state_json_absent_returns_error_result", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
 		// Do NOT create state.json.
 
-		res, err := handleResumePath(dir, ResumeModeLegacy)
+		res, err := handleResumePath(dir, ResumeModeAuto)
 		if err != nil {
 			t.Fatalf("handleResumePath returned go error: %v", err)
 		}
@@ -209,73 +191,68 @@ func TestPipelineInitResumeDetection(t *testing.T) {
 	})
 }
 
-// ---------- TestPipelineInitExplicitResume ----------
-// Tests the new explicit resume path: dirname + --resume flag.
+// ---------- TestPipelineInitAutoResume ----------
+// Tests the auto-resume path: dirname matches an existing .specs/ directory.
 
-func TestPipelineInitExplicitResume(t *testing.T) {
+func TestPipelineInitAutoResume(t *testing.T) {
 	t.Parallel()
 
 	sm := state.NewStateManager("dev")
-	h := PipelineInitHandler(sm)
 
-	t.Run("resume_flag_with_dirname_state_json_absent", func(t *testing.T) {
-		t.Parallel()
+	t.Run("dirname_matches_existing_spec_dir", func(t *testing.T) {
+		// NOT parallel: uses os.Chdir which mutates global process state.
 
-		// The handler constructs ".specs/" + core_text and checks for state.json.
-		// When state.json is absent, it must return an error result (not a new pipeline).
+		// Create a temp .specs/ directory with state.json to simulate an existing spec.
+		dir := t.TempDir()
+		specsDir := filepath.Join(dir, ".specs", "20260401-my-feature")
+		if err := os.MkdirAll(specsDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		if err := sm.Init(specsDir, "my-feature"); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+
+		// Change to the temp dir so .specs/ resolves correctly.
+		origDir, _ := os.Getwd()
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("Chdir: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+		h := PipelineInitHandler(sm)
 		res := callTool(t, h, map[string]any{
-			"arguments": "20260101-nonexistent-spec-dir --resume",
+			"arguments": "20260401-my-feature",
 		})
 		if res.IsError {
-			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
+			t.Fatalf("handler returned MCP error: %v", textContent(res))
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		if r.ResumeMode != ResumeModeAuto {
+			t.Errorf("resume_mode: got %q, want %q", r.ResumeMode, ResumeModeAuto)
+		}
+		if r.Workspace != ".specs/20260401-my-feature" {
+			t.Errorf("workspace: got %q, want %q", r.Workspace, ".specs/20260401-my-feature")
+		}
+	})
+
+	t.Run("dirname_no_matching_spec_dir_becomes_new_pipeline", func(t *testing.T) {
+		t.Parallel()
+
+		// When no .specs/<dirname>/state.json exists, treat as new pipeline text.
+		h := PipelineInitHandler(sm)
+		res := callTool(t, h, map[string]any{
+			"arguments": "20260401-nonexistent-feature",
+		})
+		if res.IsError {
+			t.Fatalf("handler returned MCP error: %v", textContent(res))
 		}
 		r := parsePipelineInitResult(t, textContent(res))
 		if r.ResumeMode != ResumeModeNone {
-			t.Errorf("resume_mode should be absent when state.json is absent, got %q", r.ResumeMode)
+			t.Errorf("resume_mode should be absent for non-matching dirname, got %q", r.ResumeMode)
 		}
-		if len(r.Errors) == 0 {
-			t.Errorf("expected errors when state.json is absent for --resume path, got none")
-		}
-		// source_type must be empty — this is NOT a new pipeline.
-		if r.SourceType != "" {
-			t.Errorf("source_type should be empty for --resume path, got %q", r.SourceType)
-		}
-	})
-
-	t.Run("resume_flag_without_dirname_returns_error", func(t *testing.T) {
-		t.Parallel()
-
-		// --resume with no core text should fail validation (only flags, no task).
-		res := callTool(t, h, map[string]any{
-			"arguments": "--resume",
-		})
-		if res.IsError {
-			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
-		}
-		r := parsePipelineInitResult(t, textContent(res))
-		if len(r.Errors) == 0 {
-			t.Errorf("expected validation errors for --resume with no dirname, got none")
-		}
-	})
-
-	t.Run("resume_flag_constructs_specs_prefix", func(t *testing.T) {
-		t.Parallel()
-
-		// Verify the workspace path is ".specs/<dirname>" by checking the error message.
-		res := callTool(t, h, map[string]any{
-			"arguments": "my-feature-branch --resume",
-		})
-		if res.IsError {
-			t.Fatalf("handler should not return MCP error, got: %v", textContent(res))
-		}
-		r := parsePipelineInitResult(t, textContent(res))
-		// state.json absent → error path, but error must mention the constructed path.
-		if len(r.Errors) == 0 {
-			t.Fatalf("expected errors (no state.json), got none")
-		}
-		wantPath := ".specs/my-feature-branch"
-		if !strings.Contains(r.Errors[0], wantPath) {
-			t.Errorf("error should mention constructed path %q, got: %q", wantPath, r.Errors[0])
+		// Should be treated as a new pipeline with source_type "text".
+		if r.SourceType != "text" {
+			t.Errorf("source_type: got %q, want %q", r.SourceType, "text")
 		}
 	})
 }

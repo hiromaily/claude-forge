@@ -442,7 +442,7 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as
 | `--auto` | Skip human checkpoints when the AI reviewer verdict is APPROVE. REVISE verdicts still pause for human input. |
 | `--nopr` | Skip PR creation. Changes are committed and pushed to the feature branch, but no pull request is opened. |
 | `--debug` | Append a `## Debug Report` section to `summary.md` with execution flow diagnostics (token outliers, retries, revision cycles, missing phase-log entries). Note: `## Improvement Report` is always appended regardless of this flag. |
-| `--resume` | Resume an interrupted pipeline. Provide the spec directory name as the input (e.g. `/forge 20260320-fix-auth-timeout --resume`). Skips the confirmation prompt and enters the pipeline loop immediately. |
+| _(auto-detected)_ | Resume an interrupted pipeline by providing the spec directory name (e.g. `/forge 20260320-fix-auth-timeout`). If the directory exists under `.specs/`, resume is auto-detected. `--resume` is accepted for backward compatibility but has no effect. |
 
 ```text
 /forge --effort=S --auto Fix the null pointer crash in auth middleware
@@ -452,10 +452,10 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as
 
 ### Resume an interrupted pipeline
 
-Pass the spec directory name (the folder under `.specs/`) and the `--resume` flag:
+Pass the spec directory name (the folder under `.specs/`). Resume is auto-detected:
 
 ```text
-/forge 20260320-fix-auth-timeout --resume
+/forge 20260320-fix-auth-timeout
 ```
 
 ### Abandon a pipeline
