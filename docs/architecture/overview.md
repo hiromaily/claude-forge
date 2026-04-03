@@ -37,7 +37,7 @@ SKILL.md (orchestrator)
        │                        blocks git commit in parallel Phase 5,
        │                        blocks checkout to main/master
        ├── post-agent-hook.sh → warns on bad agent output
-       ├── post-bash-hook.sh  → auto-commits after post-to-source
+       ├── post-bash-hook.sh  → auto-commits summary.md + state.json (v1 legacy; v2 uses Engine exec action)
        └── stop-hook.sh       → blocks premature stop
 ```
 

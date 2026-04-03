@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # post-bash-hook.sh — PostToolUse hook for Bash tool calls
 #
+# v1 LEGACY ONLY — This hook fires only for v1 shell-based flows that call
+# `phase-complete {workspace} post-to-source` via Bash. In v2 (MCP-driven flows),
+# the final-commit step is handled by the Engine via a dedicated `final_commit`
+# exec action dispatched by `pipeline_next_action`. MCP-driven flows use
+# `pipeline_report_result` and never trigger this hook.
+#
 # When `phase-complete {workspace} post-to-source` is detected, automatically
 # amends the branch's last commit to include state.json and summary.md.
 #

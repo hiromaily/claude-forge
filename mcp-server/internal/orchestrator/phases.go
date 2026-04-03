@@ -19,6 +19,7 @@ const (
 	PhaseFinalVerification = "final-verification"
 	PhasePRCreation        = "pr-creation"
 	PhaseFinalSummary      = "final-summary"
+	PhaseFinalCommit       = "final-commit"
 	PhasePostToSource      = "post-to-source"
 	PhaseCompleted         = "completed"
 )
@@ -29,7 +30,7 @@ var AllPhases = []string{
 	PhaseSetup, PhaseOne, PhaseTwo, PhaseThree, PhaseThreeB,
 	PhaseCheckpointA, PhaseFour, PhaseFourB, PhaseCheckpointB,
 	PhaseFive, PhaseSix, PhaseSeven, PhaseFinalVerification,
-	PhaseFinalSummary, PhasePRCreation, PhasePostToSource, PhaseCompleted,
+	PhasePRCreation, PhaseFinalSummary, PhaseFinalCommit, PhasePostToSource, PhaseCompleted,
 }
 
 // nonSkippable is the set of phases that can never be passed to skip-phase.

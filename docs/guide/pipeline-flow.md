@@ -56,8 +56,9 @@ flowchart TD
     P7["Phase 7 — Comprehensive Review"]
     P7 --> FV["Final Verification"]
     FV --> PR["PR Creation"]
-    PR --> FS["Final Summary"]
-    FS --> DONE(["✔ Done"])
+    PR --> FS["Final Summary<br>(includes PR #)"]
+    FS --> FC["Final Commit<br>amend + force-push"]
+    FC --> DONE(["✔ Done"])
 ```
 
 ## Phase Table
@@ -79,10 +80,11 @@ flowchart TD
 | 12 | Code Review | impl-reviewer | impl-N.md | review-N.md | No |
 | 13 | Comprehensive Review | comprehensive-reviewer | all impl + reviews | comprehensive-review.md | No |
 | 14 | Final Verification | verifier | comprehensive-review.md | verification result | No |
-| 15 | PR Creation | orchestrator | commits | PR | No |
-| 16 | Final Summary | orchestrator | all artifacts | summary.md | No |
-| 17 | Post to Issue | orchestrator | summary.md | issue comment | No |
-| 18 | Done | system | summary.md | — | No |
+| 15 | PR Creation | orchestrator | commits | PR (PR # confirmed) | No |
+| 16 | Final Summary | orchestrator | all artifacts + PR # | summary.md (includes PR #) | No |
+| 17 | Final Commit | orchestrator | summary.md, state.json | amend last commit + force-push | No |
+| 18 | Post to Issue | orchestrator | summary.md | issue comment | No |
+| 19 | Done | system | summary.md | — | No |
 
 ## Sequence Diagram
 
@@ -138,8 +140,12 @@ sequenceDiagram
 
     Orch->>Agent: comprehensive-reviewer
     Orch->>Agent: verifier
-    Orch->>Orch: PR creation
-    Orch->>FS: write summary.md
+    Orch->>Orch: git push + gh pr create
+    Note over Orch: PR # is now known
+    Orch->>FS: write summary.md (includes PR #)
+    Orch->>Orch: git commit --amend --no-edit
+    Orch->>Orch: git push --force-with-lease
+    Note over Orch: PR branch now includes summary.md
     Orch->>User: Done
 ```
 

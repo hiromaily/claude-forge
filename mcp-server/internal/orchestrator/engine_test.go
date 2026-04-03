@@ -764,6 +764,45 @@ func TestNextAction(t *testing.T) {
 			wantInputContains: "comprehensive-review.md",
 		},
 
+		// ── Decision 27: final-commit exec action ───────────────────────────
+		{
+			name: "final_commit_exec",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "final-commit", nil)
+			},
+			wantType:  ActionExec,
+			wantPhase: PhaseFinalCommit,
+		},
+
+		// ── Decision 27: final-commit skipped when SkipPr ────────────────
+		{
+			name: "final_commit_skip_when_nopr",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "final-commit", func(s *state.State) error {
+					s.SkipPr = true
+					return nil
+				})
+			},
+			wantType:    ActionDone,
+			wantSummary: SkipSummaryPrefix + PhaseFinalCommit,
+		},
+
+		// ── Decision 27: final-commit skipped when pr-creation in skippedPhases ──
+		{
+			name: "final_commit_skip_when_pr_skipped",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "final-commit", func(s *state.State) error {
+					s.SkippedPhases = append(s.SkippedPhases, PhasePRCreation)
+					return nil
+				})
+			},
+			wantType:    ActionDone,
+			wantSummary: SkipSummaryPrefix + PhaseFinalCommit,
+		},
+
 		// ── Decision 26: post-to-source github_issue → checkpoint with post/skip ──
 		{
 			name: "post_to_source_github_issue",

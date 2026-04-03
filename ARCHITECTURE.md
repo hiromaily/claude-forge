@@ -46,6 +46,137 @@ Hooks and MCP handler guards enforce invariants that LLM instructions alone cann
 
 All hooks are **fail-open**: if jq is missing or state.json can't be read, the action is allowed. This prevents hooks from breaking non-pipeline work.
 
+## Component Interaction — Runtime Processing Flow
+
+The following diagram shows how the seven runtime components interact during a single pipeline phase. This is the lower-level view that complements the phase-level Sequence Diagram below.
+
+### Components
+
+| Component | Runtime form | Role |
+|-----------|-------------|------|
+| **User** | Human at terminal | Invokes `/forge`, reviews checkpoints |
+| **Claude Code** | CLI process (`claude`) | Hosts the conversation, dispatches hooks, manages tool permissions |
+| **Orchestrator (LLM)** | Claude LLM loaded with `SKILL.md` as system prompt | Thin control loop: calls MCP tools, spawns agents, presents results |
+| **forge-state (MCP)** | Go binary (`forge-state-mcp`) running as stdio child process | State machine + orchestration engine. All 44 tools registered here |
+| **Agent (LLM)** | Subagent spawned via `Agent` tool (separate LLM context) | Domain expert (analysis, design, implementation, review) |
+| **Hooks** | Bash scripts triggered by Claude Code hook system | Deterministic guardrails (pre-tool, post-tool, stop) |
+| **Workspace (.specs/)** | Files on disk | Artifact storage, `state.json`, all pipeline outputs |
+
+### Processing Flow — Single Phase
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant CC as Claude Code<br>(CLI process)
+    participant Orch as Orchestrator<br>(LLM + SKILL.md)
+    participant MCP as forge-state<br>(Go MCP server)
+    participant Agent as Agent<br>(LLM subprocess)
+    participant Hook as Hooks<br>(Bash scripts)
+    participant FS as Workspace<br>(.specs/)
+
+    %% ── Skill Invocation ──
+    User->>CC: /forge "add user auth endpoint"
+    CC->>CC: Load skills/forge/SKILL.md<br>as orchestrator system prompt
+    CC->>Orch: Start conversation with<br>SKILL.md + user input
+
+    %% ── Pipeline Init (Step 1) ──
+    rect rgb(245, 245, 255)
+    Note over Orch,MCP: Pipeline Initialization
+    Orch->>CC: Tool call: mcp__forge-state__pipeline_init(arguments=...)
+    CC->>MCP: stdio JSON-RPC → pipeline_init
+    MCP->>MCP: Validate input, detect effort,<br>resolve workspace path
+    MCP->>FS: Create workspace dir + state.json
+    MCP-->>CC: JSON response (workspace, effort_options)
+    CC-->>Orch: Tool result
+    Orch-->>User: Present effort options (S/M/L)
+    User-->>Orch: Confirm effort=M
+    Orch->>CC: Tool call: mcp__forge-state__pipeline_init_with_context(...)
+    CC->>MCP: stdio JSON-RPC → pipeline_init_with_context
+    MCP->>FS: Write request.md, update state.json
+    MCP-->>CC: JSON response (workspace confirmed)
+    CC-->>Orch: Tool result
+    end
+
+    %% ── Main Loop — One Phase (Step 2) ──
+    rect rgb(230, 245, 255)
+    Note over Orch,Agent: Main Loop — pipeline_next_action → spawn_agent → report_result
+    Orch->>CC: Tool call: mcp__forge-state__pipeline_next_action(workspace)
+    CC->>MCP: stdio JSON-RPC → pipeline_next_action
+    MCP->>FS: Read state.json
+    MCP->>MCP: Engine.NextAction() — deterministic dispatch
+    Note over MCP: Returns action:<br>type=spawn_agent<br>agent=situation-analyst<br>prompt=...
+    MCP-->>CC: JSON response (action)
+    CC-->>Orch: Tool result with action
+
+    %% ── Agent Spawn ──
+    Orch->>CC: Tool call: Agent(prompt=action.prompt,<br>subagent_type=situation-analyst)
+    CC->>CC: Load agents/situation-analyst.md<br>as agent system prompt
+    CC->>Agent: New LLM context<br>(agent .md + prompt)
+
+    %% ── Agent Execution (with Hook enforcement) ──
+    Agent->>CC: Tool call: Read(file_path=.specs/.../request.md)
+    CC->>FS: Read file
+    FS-->>CC: File content
+    CC-->>Agent: Tool result
+
+    Agent->>CC: Tool call: Grep(pattern=..., path=src/)
+    CC->>FS: Search files
+    FS-->>CC: Search results
+    CC-->>Agent: Tool result
+
+    Agent->>CC: Tool call: Edit(file_path=src/foo.go, ...)
+    CC->>Hook: PreToolUse hook fires
+    Hook->>FS: Read state.json (jq)
+    Hook->>Hook: Phase 1 → read-only guard
+    Hook-->>CC: exit 2 (BLOCKED)
+    CC-->>Agent: Tool call rejected
+
+    Agent-->>CC: Final output (analysis text)
+    CC->>Hook: PostToolUse (Agent) hook fires
+    Hook->>FS: Read state.json
+    Hook->>Hook: Check output length ≥ 50 chars
+    Hook-->>CC: exit 0 (OK)
+    CC-->>Orch: Agent result (analysis text)
+    end
+
+    %% ── Report Result ──
+    rect rgb(255, 245, 230)
+    Note over Orch,MCP: Artifact Write + Report
+    Orch->>CC: Tool call: Write(.specs/.../analysis.md)
+    CC->>FS: Write artifact file
+    CC-->>Orch: OK
+
+    Orch->>CC: Tool call: mcp__forge-state__pipeline_report_result(<br>workspace, phase, tokens, duration, model)
+    CC->>MCP: stdio JSON-RPC → pipeline_report_result
+    MCP->>FS: Read state.json
+    MCP->>MCP: Guard 3a: artifact exists?
+    MCP->>MCP: Validate artifact content
+    MCP->>MCP: Record phase-log entry
+    MCP->>MCP: Advance state (phase-complete)
+    MCP->>FS: Write updated state.json
+    MCP-->>CC: JSON response (next_action_hint)
+    CC-->>Orch: Tool result
+    Note over Orch: Loop back to pipeline_next_action
+    end
+```
+
+### Key Observations
+
+1. **SKILL.md is not code — it is an LLM system prompt.** Claude Code loads it as the orchestrator's instructions. The LLM follows it non-deterministically (hence the need for hook/guard enforcement).
+
+2. **MCP server communicates via stdio JSON-RPC.** Claude Code spawns `forge-state-mcp` as a child process. All `mcp__forge-state__*` tool calls are routed through this channel.
+
+3. **Agents are separate LLM contexts.** Each `Agent` tool call creates a new Claude LLM subprocess with its own agent `.md` as the system prompt. The agent has no access to the orchestrator's conversation history.
+
+4. **Hooks fire synchronously on tool calls.** Claude Code invokes hook scripts before/after specific tool types. Hooks read `state.json` from disk — they share state with the MCP server but through the filesystem, not direct communication.
+
+5. **The Engine (`orchestrator/engine.go`) is the brain.** `pipeline_next_action` calls `Engine.NextAction()` which makes all dispatch decisions deterministically from `state.json`. The LLM orchestrator merely executes the returned action — it does not choose what to do next.
+
+6. **Three control planes coexist:**
+   - **MCP handlers + Engine** → state transitions, action dispatch (deterministic)
+   - **Hooks** → tool-call guardrails (deterministic, fail-open)
+   - **SKILL.md** → orchestration protocol (non-deterministic, LLM-interpreted)
+
 ## Sequence Diagram
 
 > **Note:** Shows the full `L` (full) effort flow. Lower effort levels (S, M) skip labelled phases — see the [Effort-driven Flow](#effort-driven-flow) section.
@@ -271,18 +402,27 @@ sequenceDiagram
     Orch->>SM: phase-complete final-verification
     end
 
-    %% ── PR + Summary ──
+    %% ── PR + Summary + Final Commit ──
     rect rgb(245, 245, 245)
-    Note over Orch,User: PR Creation + Final Summary + Improvement Report
+    Note over Orch,User: PR Creation + Final Summary + Final Commit
     Orch->>SM: phase-start pr-creation
     Orch->>Orch: git push + gh pr create
+    Note over Orch: PR # is now known
     Orch->>SM: phase-complete pr-creation
 
     Orch->>SM: phase-start final-summary
     Orch->>SM: phase-stats (get metrics)
-    Orch->>FS: write summary.md
+    Orch->>FS: write summary.md (includes PR #)
     Orch->>FS: append ## Improvement Report to summary.md
     Orch->>SM: phase-complete final-summary
+
+    Orch->>SM: phase-start final-commit
+    Note over Orch,FS: summary.md + state.json are local-only at this point
+    Orch->>Orch: git add summary.md state.json
+    Orch->>Orch: git commit --amend --no-edit
+    Orch->>Orch: git push --force-with-lease
+    Note over Orch: PR branch now includes summary.md
+    Orch->>SM: phase-complete final-commit
 
     Orch->>SM: phase-start post-to-source
     opt source_type = github_issue or jira_issue
@@ -366,6 +506,14 @@ $ARGUMENTS
        │
        ▼
 ┌──────────────────┐
+│ Final Commit      │ git add summary.md state.json
+│                   │ git commit --amend --no-edit
+│                   │ git push --force-with-lease
+│                   │ (PR branch now includes summary.md)
+└──────┬───────────┘
+       │
+       ▼
+┌──────────────────┐
 │ Post to Source    │ → GitHub/Jira comment (if applicable)
 └──────────────────┘
 ```
@@ -398,7 +546,10 @@ The information flow is strictly forward — no agent reads output from a later 
 - **Phase 5**: Agent writes code files and impl-{N}.md directly (filesystem interaction required)
 - **Phase 7**: Agent writes code fixes directly and returns comprehensive-review.md content
 - **Final Verification**: Agent fixes issues directly, no artifact file
-- **PR Creation / Post to Source**: Orchestrator handles directly (no subagent)
+- **PR Creation**: Orchestrator handles directly (git push + gh pr create)
+- **Final Summary**: Orchestrator writes summary.md (includes PR # obtained from PR Creation)
+- **Final Commit**: Orchestrator amends last commit to include summary.md + state.json, then force-pushes (PR branch now includes summary.md)
+- **Post to Source**: Orchestrator handles directly (post comment to GitHub/Jira)
 
 ### Specs Index System
 
@@ -858,7 +1009,7 @@ Findings markers (`[CRITICAL]`, `[MINOR]`) are counted and accumulated into the 
 
 | Action | Layer | Code location | Trigger |
 |---|---|---|---|
-| Auto-commit `state.json` + `summary.md` | Shell hook | `post-bash-hook.sh` | `Bash` tool with `phase-complete ... post-to-source` |
+| Final commit: amend `summary.md` + `state.json` into last commit, then force-push | Shell hook (v1) / Engine exec action (v2) | `post-bash-hook.sh` (v1 legacy) / `engine.go` final-commit action (v2) | After `final-summary` phase completes; before `post-to-source` |
 | Revision counter increment | MCP handler | `pipeline_report_result.go` | `REVISE` verdict in review phases |
 | Pattern knowledge accumulation | MCP handler | `pipeline_report_result.go` | Any review phase completion with findings |
 

@@ -106,6 +106,8 @@ func (e *Engine) NextAction(sm *state.StateManager, _ string) (Action, error) {
 		return e.handlePRCreation(st)
 	case PhaseFinalSummary:
 		return e.handleFinalSummary(st)
+	case PhaseFinalCommit:
+		return e.handleFinalCommit(st)
 	case PhasePostToSource:
 		return e.handlePostToSource(st)
 	case PhaseCompleted:
@@ -509,7 +511,7 @@ func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 	}
 
 	title := derivePRTitle(st)
-	bodyFile := filepath.Join(st.Workspace, "final-summary.md")
+	bodyFile := filepath.Join(st.Workspace, "summary.md")
 
 	return NewExecAction(PhasePRCreation, []string{
 		"gh", "pr", "create",
@@ -563,8 +565,24 @@ func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
 		"sonnet",
 		PhaseFinalSummary,
 		inputs,
-		"final-summary.md",
+		"summary.md",
 	), nil
+}
+
+// handleFinalCommit handles the final-commit phase — Decision 27.
+// After PR creation and final summary generation, summary.md and state.json
+// exist only locally. This step amends the last commit to include them
+// and force-pushes so the PR branch contains the final summary with the PR number.
+// Skipped when PR creation was skipped (--nopr or pr-creation in skippedPhases),
+// since there is no commit to amend.
+func (*Engine) handleFinalCommit(st *state.State) (Action, error) {
+	if st.SkipPr || slices.Contains(st.SkippedPhases, PhasePRCreation) {
+		return NewDoneAction(SkipSummaryPrefix+PhaseFinalCommit, ""), nil
+	}
+
+	return NewExecAction(PhaseFinalCommit, []string{
+		"final_commit",
+	}), nil
 }
 
 // handlePostToSource handles the post-to-source phase — Decision 26.
@@ -588,7 +606,7 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 	}
 
 	msg := fmt.Sprintf(
-		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/final-summary.md",
+		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/summary.md",
 		label, sourceURL, st.Workspace,
 	)
 	return NewCheckpointAction(checkpointName, msg, []string{"post", "skip"}), nil

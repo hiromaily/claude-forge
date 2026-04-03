@@ -8,7 +8,7 @@ import (
 func TestAllPhasesCount(t *testing.T) {
 	t.Parallel()
 
-	const wantCount = 17
+	const wantCount = 18
 
 	if got := len(AllPhases); got != wantCount {
 		t.Errorf("AllPhases length = %d, want %d", got, wantCount)
@@ -22,7 +22,7 @@ func TestAllPhasesOrder(t *testing.T) {
 		"setup", "phase-1", "phase-2", "phase-3", "phase-3b",
 		"checkpoint-a", "phase-4", "phase-4b", "checkpoint-b",
 		"phase-5", "phase-6", "phase-7", "final-verification",
-		"final-summary", "pr-creation", "post-to-source", "completed",
+		"pr-creation", "final-summary", "final-commit", "post-to-source", "completed",
 	}
 
 	if len(AllPhases) != len(want) {
@@ -59,6 +59,7 @@ func TestIsSkippable(t *testing.T) {
 		{phase: "final-verification", want: true},
 		{phase: "pr-creation", want: true},
 		{phase: "final-summary", want: true},
+		{phase: "final-commit", want: true},
 		{phase: "post-to-source", want: true},
 		{phase: "unknown-phase", want: false},
 		{phase: "", want: false},

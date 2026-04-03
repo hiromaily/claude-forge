@@ -37,7 +37,7 @@ SKILL.md (オーケストレーター)
        │                        並列Phase 5でgit commitブロック、
        │                        main/masterへのcheckoutブロック
        ├── post-agent-hook.sh → 不正なエージェント出力を警告
-       ├── post-bash-hook.sh  → post-to-source後の自動コミット
+       ├── post-bash-hook.sh  → summary.md + state.jsonの自動コミット（v1レガシー; v2はEngine execアクションを使用）
        └── stop-hook.sh       → 途中終了を防止
 ```
 

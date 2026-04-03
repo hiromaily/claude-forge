@@ -51,9 +51,11 @@ Phase 1-2 アクティブ + .specs/ への Edit/Write → exit 0（許可）
 - 出力が空または支離滅裂な場合に警告
 - `status == "in_progress"` フィルターを使用（他のフックとは異なる）
 
-## PostToolUse：自動コミット
+## 最終コミットステップ
 
-`post-bash-hook.sh` は post-to-source フェーズ完了後に `state.json` と `summary.md` を自動コミットします。
+PR作成と summary.md 生成の後、パイプラインは最終コミットを amend して `summary.md` と `state.json` を含め、force-push します。これにより PR ブランチに PR 番号を含む最終サマリーが反映されます。
+
+v1（シェルベース）では `post-bash-hook.sh` が `post-to-source` フェーズ後に自動コミットしていました。v2（MCP駆動）では Engine が明示的な `exec` アクションとして amend + force-push を発行します。
 
 ## Stopフック：完了ガード
 

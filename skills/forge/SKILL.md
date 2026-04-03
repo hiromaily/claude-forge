@@ -62,11 +62,11 @@ Repeat until done:
           a. Extract the source URL from `action.present_to_user` (the line starting with `URL:`).
           b. Post the comment based on `action.name`:
              - **`post-to-github`**: run
-               `gh issue comment <url> --body-file {workspace}/final-summary.md`
+               `gh issue comment <url> --body-file {workspace}/summary.md`
              - **`post-to-jira`**: Extract the domain and issue key from the URL
                (e.g. `example.atlassian.net` and `PROJ-123` from `https://example.atlassian.net/browse/PROJ-123`). Try in order:
                1. Atlassian MCP tools (if available)
-               2. Convert `{workspace}/final-summary.md` to Atlassian Document Format (ADF) and run:
+               2. Convert `{workspace}/summary.md` to Atlassian Document Format (ADF) and run:
                   `curl -s -X POST -H "Content-Type: application/json" -u "$JIRA_USER:$JIRA_TOKEN" "https://<domain>/rest/api/3/issue/<key>/comment" -d '<ADF JSON>'`
           c. Report success or failure to the user.
        3. If the user chooses **"skip"**: do nothing.
@@ -82,6 +82,12 @@ Repeat until done:
        only the files belonging to the parallel tasks (check each task's file list in
        `tasks.md`). Then `git commit` with a message summarising the parallel batch
        (e.g. "chore: batch commit parallel tasks N, M, ...").
+     - If `action.commands[0]` is `final_commit`: amend the last commit to include
+       `summary.md` and `state.json`, then force-push. Run:
+       `git add {workspace}/summary.md {workspace}/state.json &&
+        git commit --amend --no-edit &&
+        git push --force-with-lease`
+       This ensures the PR branch includes the final summary (with PR number).
      - Otherwise: run `action.commands` via Bash.
      Then call `pipeline_report_result` with `phase=action.phase`.
      If `action.setup_only` is true, pass `setup_only=true` to `pipeline_report_result`.

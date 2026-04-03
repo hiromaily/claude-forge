@@ -5,7 +5,7 @@
 // Task 3 covers: SetEffort, SetFlowTemplate, TaskInit, TaskUpdate,
 // PhaseLog, PhaseStats.
 // Task 4 adds: golden-file test for Init schema, exhaustive nextPhase test
-// covering all 17 ValidPhases, and a concurrency test (10 goroutines, -race safe).
+// covering all 18 ValidPhases, and a concurrency test (10 goroutines, -race safe).
 package state_test
 
 import (
@@ -1192,7 +1192,7 @@ func TestInit_GoldenFile(t *testing.T) {
 // "completed" because the pipeline is terminal. For all other phases,
 // currentPhaseStatus is "pending" and currentPhase is the next entry.
 func TestNextPhase_ExhaustiveAllPhases(t *testing.T) {
-	phases := state.ValidPhases // 17 entries
+	phases := state.ValidPhases // 18 entries
 
 	for i, phase := range phases {
 		t.Run(phase, func(t *testing.T) {

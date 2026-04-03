@@ -56,8 +56,9 @@ flowchart TD
     P7["Phase 7 — 包括的レビュー"]
     P7 --> FV["最終検証"]
     FV --> PR["PR作成"]
-    PR --> FS["最終サマリー"]
-    FS --> DONE(["✔ 完了"])
+    PR --> FS["最終サマリー<br>(PR番号を含む)"]
+    FS --> FC["最終コミット<br>amend + force-push"]
+    FC --> DONE(["✔ 完了"])
 ```
 
 ## フェーズテーブル
@@ -79,10 +80,11 @@ flowchart TD
 | 12 | コードレビュー | impl-reviewer | impl-N.md | review-N.md | なし |
 | 13 | 包括的レビュー | comprehensive-reviewer | 全impl + レビュー | comprehensive-review.md | なし |
 | 14 | 最終検証 | verifier | comprehensive-review.md | 検証結果 | なし |
-| 15 | PR作成 | オーケストレーター | コミット | PR | なし |
-| 16 | 最終サマリー | オーケストレーター | 全アーティファクト | summary.md | なし |
-| 17 | ソースへ投稿 | オーケストレーター | summary.md | Issueコメント | なし |
-| 18 | 完了 | システム | summary.md | — | なし |
+| 15 | PR作成 | オーケストレーター | コミット | PR（PR番号確定） | なし |
+| 16 | 最終サマリー | オーケストレーター | 全アーティファクト + PR番号 | summary.md（PR番号を含む） | なし |
+| 17 | 最終コミット | オーケストレーター | summary.md, state.json | 最終commitをamend + force-push | なし |
+| 18 | ソースへ投稿 | オーケストレーター | summary.md | Issueコメント | なし |
+| 19 | 完了 | システム | summary.md | — | なし |
 
 ## シーケンス図
 
@@ -138,8 +140,12 @@ sequenceDiagram
 
     Orch->>Agent: comprehensive-reviewer
     Orch->>Agent: verifier
-    Orch->>Orch: PR作成
-    Orch->>FS: summary.md書き込み
+    Orch->>Orch: git push + gh pr create
+    Note over Orch: PR番号が確定
+    Orch->>FS: summary.md書き込み（PR番号を含む）
+    Orch->>Orch: git commit --amend --no-edit
+    Orch->>Orch: git push --force-with-lease
+    Note over Orch: PRブランチにsummary.mdが含まれる
     Orch->>User: 完了
 ```
 
