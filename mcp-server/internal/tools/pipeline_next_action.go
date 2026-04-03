@@ -1,6 +1,6 @@
 // Package tools — pipeline_next_action MCP handler.
 // Delegates to Engine.NextAction() and enriches spawn_agent prompts
-// with agent .md file contents and input artifact file contents.
+// with agent .md file contents and input artifact file paths (not contents).
 package tools
 
 import (
@@ -38,7 +38,7 @@ type nextActionResponse struct {
 //
 // The handler creates a per-call StateManager to avoid workspace-binding conflicts,
 // delegates to eng.NextAction, and — for spawn_agent actions — enriches the prompt
-// with the agent .md file contents and each input artifact's contents.
+// with the agent .md file contents and input artifact file paths.
 func PipelineNextActionHandler(
 	sm *state.StateManager,
 	eng *orchestrator.Engine,
@@ -94,7 +94,7 @@ func PipelineNextActionHandler(
 
 // enrichPrompt builds the 4-layer agent prompt by assembling:
 //   - Layer 1: agent .md file contents
-//   - Layer 2: workspace input artifact contents
+//   - Layer 2: input artifact file paths (agents read files themselves via Read tool)
 //   - Layer 3: repository profile (from profiler.FormatForPrompt(); empty when profiler is nil)
 //   - Layer 4: data flywheel history context (when histIdx is non-nil)
 //
@@ -103,7 +103,6 @@ func PipelineNextActionHandler(
 // and the empty HistoryContext is used (fail-open pattern).
 //
 // Returns an error if the agent .md file is missing (caller should treat as warning).
-// Missing input artifact files are noted inline; they do not cause an error.
 func enrichPrompt(
 	resp *nextActionResponse,
 	agentDir, workspace string,
@@ -122,22 +121,17 @@ func enrichPrompt(
 
 	agentInstructions := string(agentData)
 
-	// Build Layer 2 artifacts section.
+	// Build Layer 2 artifacts section — file paths only (no content inlining).
+	// Agents read artifacts themselves via the Read tool. This keeps the MCP
+	// response small (~1–2 KB) and avoids the "Large MCP response" error that
+	// occurs when tasks.md/design.md contents are embedded (~50 KB+).
 	var artifactSB strings.Builder
-	artifactSB.WriteString("## Input Artifacts\n")
-
-	for _, inputFile := range action.InputFiles {
-		absPath := filepath.Join(workspace, inputFile)
-		fileData, readErr := os.ReadFile(absPath)
-		artifactSB.WriteString("\n### ")
-		artifactSB.WriteString(filepath.Base(inputFile))
-		artifactSB.WriteString("\n")
-		if readErr != nil {
-			artifactSB.WriteString("(file not found: ")
-			artifactSB.WriteString(inputFile)
-			artifactSB.WriteString(")\n")
-		} else {
-			artifactSB.Write(fileData)
+	if len(action.InputFiles) > 0 {
+		artifactSB.WriteString("## Input Artifacts\n\n")
+		artifactSB.WriteString("Read the following files from the workspace before starting:\n")
+		for _, inputFile := range action.InputFiles {
+			artifactSB.WriteString("- ")
+			artifactSB.WriteString(filepath.Join(workspace, inputFile))
 			artifactSB.WriteString("\n")
 		}
 	}

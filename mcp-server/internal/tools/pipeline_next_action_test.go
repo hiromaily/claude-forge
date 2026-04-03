@@ -204,7 +204,7 @@ func TestPipelineNextAction(t *testing.T) {
 			t.Fatalf("write agent file: %v", err)
 		}
 
-		// Write input artifacts into the workspace
+		// Write input artifacts into the workspace (contents should NOT be inlined)
 		artifactContent := "# Request\nThis is the test request."
 		if err := os.WriteFile(filepath.Join(workspace, "request.md"), []byte(artifactContent), 0o600); err != nil {
 			t.Fatalf("write request.md: %v", err)
@@ -229,14 +229,21 @@ func TestPipelineNextAction(t *testing.T) {
 			t.Fatalf("action.Type = %q, want %q", action.Type, orchestrator.ActionSpawnAgent)
 		}
 
+		// Agent instructions (Layer 1) must still be present.
 		if !strings.Contains(action.Prompt, agentContent) {
 			t.Errorf("Prompt does not contain agent file contents\nPrompt: %s", action.Prompt)
 		}
+		// Artifacts section must contain file paths, not inlined content.
 		if !strings.Contains(action.Prompt, "## Input Artifacts") {
 			t.Errorf("Prompt does not contain '## Input Artifacts'\nPrompt: %s", action.Prompt)
 		}
-		if !strings.Contains(action.Prompt, artifactContent) {
-			t.Errorf("Prompt does not contain artifact content\nPrompt: %s", action.Prompt)
+		requestPath := filepath.Join(workspace, "request.md")
+		if !strings.Contains(action.Prompt, requestPath) {
+			t.Errorf("Prompt does not contain artifact path %q\nPrompt: %s", requestPath, action.Prompt)
+		}
+		// Artifact file content must NOT be inlined in the prompt.
+		if strings.Contains(action.Prompt, artifactContent) {
+			t.Errorf("Prompt should not inline artifact content, but found %q\nPrompt: %s", artifactContent, action.Prompt)
 		}
 	})
 
