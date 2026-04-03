@@ -18,27 +18,27 @@ import (
 // the workspace before phase-complete is accepted.  Phases absent from this map
 // have no required artifact (e.g. checkpoint-a, phase-5, pr-creation).
 var phaseArtifacts = map[string]string{
-	"phase-1":       "analysis.md",
-	"phase-2":       "investigation.md",
-	"phase-3":       "design.md",
-	"phase-3b":      "review-design.md",
-	"phase-4":       "tasks.md",
-	"phase-4b":      "review-tasks.md",
-	"phase-7":       "comprehensive-review.md",
-	"final-summary": "summary.md",
+	state.PhaseOne:          state.ArtifactAnalysis,
+	state.PhaseTwo:          state.ArtifactInvestigation,
+	state.PhaseThree:        state.ArtifactDesign,
+	state.PhaseThreeB:       state.ArtifactReviewDesign,
+	state.PhaseFour:         state.ArtifactTasks,
+	state.PhaseFourB:        state.ArtifactReviewTasks,
+	state.PhaseSeven:        state.ArtifactComprehensiveReview,
+	state.PhaseFinalSummary: state.ArtifactSummary,
 }
 
 // phaseLogRequired lists phases that are expected to emit a phase-log entry
 // before phase-complete.  Checkpoint and admin phases are excluded.
 var phaseLogRequired = map[string]bool{
-	"phase-1":            true,
-	"phase-2":            true,
-	"phase-3":            true,
-	"phase-3b":           true,
-	"phase-4":            true,
-	"phase-4b":           true,
-	"phase-7":            true,
-	"final-verification": true,
+	state.PhaseOne:               true,
+	state.PhaseTwo:               true,
+	state.PhaseThree:             true,
+	state.PhaseThreeB:            true,
+	state.PhaseFour:              true,
+	state.PhaseFourB:             true,
+	state.PhaseSeven:             true,
+	state.PhaseFinalVerification: true,
 }
 
 // ---------- Blocking guards (return error) ----------
@@ -63,7 +63,7 @@ func Guard3aArtifactExists(workspace, phase string, _ *state.State) error {
 // workspace before a task-update sets reviewStatus to completed_pass.
 // Returns nil for any reviewStatus other than "completed_pass".
 func Guard3bReviewFileExists(workspace, taskNum, reviewStatus string, _ *state.State) error {
-	if reviewStatus != "completed_pass" {
+	if reviewStatus != state.TaskStatusCompletedPass {
 		return nil
 	}
 	reviewFile := fmt.Sprintf("review-%s.md", taskNum)
@@ -78,7 +78,7 @@ func Guard3bReviewFileExists(workspace, taskNum, reviewStatus string, _ *state.S
 // phase-start for phase-5 is accepted.
 // Returns nil for any phase other than "phase-5".
 func Guard3cTasksNonEmpty(phase string, s *state.State) error {
-	if phase != "phase-5" {
+	if phase != state.PhaseFive {
 		return nil
 	}
 	if len(s.Tasks) == 0 {
@@ -92,12 +92,12 @@ func Guard3cTasksNonEmpty(phase string, s *state.State) error {
 // currentPhaseStatus == "awaiting_human".
 // Returns nil for phases that are not in awaiting_human status.
 func Guard3eCheckpointAwaitingHuman(phase string, s *state.State) error {
-	isCheckpoint := phase == "checkpoint-a" || phase == "checkpoint-b"
-	isAwaitingPhase := s.CurrentPhase == phase && s.CurrentPhaseStatus == "awaiting_human"
+	isCheckpoint := phase == state.PhaseCheckpointA || phase == state.PhaseCheckpointB
+	isAwaitingPhase := s.CurrentPhase == phase && s.CurrentPhaseStatus == state.StatusAwaitingHuman
 	if !isCheckpoint && !isAwaitingPhase {
 		return nil
 	}
-	if s.CurrentPhaseStatus != "awaiting_human" {
+	if s.CurrentPhaseStatus != state.StatusAwaitingHuman {
 		return fmt.Errorf(
 			"BLOCKED: phase-complete %s requires currentPhaseStatus == \"awaiting_human\". "+
 				"Call checkpoint {workspace} %s first to register the human review pause before completing this checkpoint",
@@ -110,10 +110,10 @@ func Guard3eCheckpointAwaitingHuman(phase string, s *state.State) error {
 // Guard3gCheckpointBDoneOrSkipped enforces Rule 3g: task-init requires checkpoint-b
 // to be present in completedPhases or skippedPhases.
 func Guard3gCheckpointBDoneOrSkipped(s *state.State) error {
-	if slices.Contains(s.CompletedPhases, "checkpoint-b") {
+	if slices.Contains(s.CompletedPhases, state.PhaseCheckpointB) {
 		return nil
 	}
-	if slices.Contains(s.SkippedPhases, "checkpoint-b") {
+	if slices.Contains(s.SkippedPhases, state.PhaseCheckpointB) {
 		return nil
 	}
 	return errors.New("BLOCKED: task-init requires checkpoint-b to be completed or skipped first. " +
@@ -126,7 +126,7 @@ func Guard3gCheckpointBDoneOrSkipped(s *state.State) error {
 // that checkpoint is true.
 // Returns nil for non-checkpoint phases and dynamic checkpoints (e.g., post-to-source).
 func Guard3jCheckpointRevisionPending(phase string, s *state.State) error {
-	if phase != "checkpoint-a" && phase != "checkpoint-b" {
+	if phase != state.PhaseCheckpointA && phase != state.PhaseCheckpointB {
 		return nil
 	}
 	if s.CheckpointRevisionPending != nil && s.CheckpointRevisionPending[phase] {
@@ -208,7 +208,7 @@ func Warn3hTaskNotFound(taskNum string, s *state.State) string {
 // while currentPhaseStatus is not "in_progress".
 // Returns a non-empty warning string when status is unexpected; empty string otherwise.
 func Warn3iPhaseNotInProgress(s *state.State) string {
-	if s.CurrentPhaseStatus != "in_progress" {
+	if s.CurrentPhaseStatus != state.StatusInProgress {
 		return fmt.Sprintf(
 			"WARNING: phase-complete called but currentPhaseStatus is %q (expected \"in_progress\"). "+
 				"Verify the pipeline state before completing this phase",

@@ -2,36 +2,34 @@
 // It may import the state/ package for state types used by the engine.
 package orchestrator
 
-// Phase ID constants — must match state.ValidPhases string values exactly.
+import "github.com/hiromaily/claude-forge/mcp-server/internal/state"
+
+// Phase ID aliases — re-exported from the state package so that callers
+// within orchestrator (engine.go, etc.) can reference them without a package prefix.
 const (
-	PhaseSetup             = "setup"
-	PhaseOne               = "phase-1"
-	PhaseTwo               = "phase-2"
-	PhaseThree             = "phase-3"
-	PhaseThreeB            = "phase-3b"
-	PhaseCheckpointA       = "checkpoint-a"
-	PhaseFour              = "phase-4"
-	PhaseFourB             = "phase-4b"
-	PhaseCheckpointB       = "checkpoint-b"
-	PhaseFive              = "phase-5"
-	PhaseSix               = "phase-6"
-	PhaseSeven             = "phase-7"
-	PhaseFinalVerification = "final-verification"
-	PhasePRCreation        = "pr-creation"
-	PhaseFinalSummary      = "final-summary"
-	PhaseFinalCommit       = "final-commit"
-	PhasePostToSource      = "post-to-source"
-	PhaseCompleted         = "completed"
+	PhaseSetup             = state.PhaseSetup
+	PhaseOne               = state.PhaseOne
+	PhaseTwo               = state.PhaseTwo
+	PhaseThree             = state.PhaseThree
+	PhaseThreeB            = state.PhaseThreeB
+	PhaseCheckpointA       = state.PhaseCheckpointA
+	PhaseFour              = state.PhaseFour
+	PhaseFourB             = state.PhaseFourB
+	PhaseCheckpointB       = state.PhaseCheckpointB
+	PhaseFive              = state.PhaseFive
+	PhaseSix               = state.PhaseSix
+	PhaseSeven             = state.PhaseSeven
+	PhaseFinalVerification = state.PhaseFinalVerification
+	PhasePRCreation        = state.PhasePRCreation
+	PhaseFinalSummary      = state.PhaseFinalSummary
+	PhaseFinalCommit       = state.PhaseFinalCommit
+	PhasePostToSource      = state.PhasePostToSource
+	PhaseCompleted         = state.PhaseCompleted
 )
 
-// AllPhases is the canonical ordering. It must remain in sync with
-// state.ValidPhases. Both are string-equal; neither imports the other.
-var AllPhases = []string{
-	PhaseSetup, PhaseOne, PhaseTwo, PhaseThree, PhaseThreeB,
-	PhaseCheckpointA, PhaseFour, PhaseFourB, PhaseCheckpointB,
-	PhaseFive, PhaseSix, PhaseSeven, PhaseFinalVerification,
-	PhasePRCreation, PhaseFinalSummary, PhaseFinalCommit, PhasePostToSource, PhaseCompleted,
-}
+// AllPhases is the canonical ordering. It is derived from state.ValidPhases
+// to ensure both remain in sync.
+var AllPhases = state.ValidPhases
 
 // nonSkippable is the set of phases that can never be passed to skip-phase.
 var nonSkippable = map[string]bool{
