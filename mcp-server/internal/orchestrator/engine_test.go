@@ -529,24 +529,25 @@ func TestNextAction(t *testing.T) {
 			wantSetupOnly: new(true),
 		},
 
-		// ── Decision 28: phase-5 branch creation setup — no branch emits setup exec ──
+		// ── Decision 28 removed: branch creation now happens during init ──
+		// Phase 5 with nil branch should proceed to spawn implementer (not create_branch setup).
 		{
-			name: "phase5_branch_setup",
+			name: "phase5_nil_branch_proceeds",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				return newTestStateManager(t, "phase-5", func(s *state.State) error {
 					s.Tasks = map[string]state.Task{
 						"1": {Title: "Task 1", ExecutionMode: "sequential", ImplStatus: "pending"},
 					}
-					// Branch is nil and UseCurrentBranch is false (default)
+					// Branch is nil — no longer triggers create_branch setup.
 					return nil
 				})
 			},
-			wantType:      ActionExec,
-			wantSetupOnly: new(true),
+			wantType:  ActionSpawnAgent,
+			wantAgent: "implementer",
 		},
 
-		// ── Decision 28 bypass: UseCurrentBranch=true skips branch setup ──
+		// ── UseCurrentBranch=true also proceeds to implementer ──
 		{
 			name: "phase5_use_current_branch",
 			setupSM: func(t *testing.T) *state.StateManager {
@@ -559,8 +560,8 @@ func TestNextAction(t *testing.T) {
 					return nil
 				})
 			},
-			wantType:      ActionSpawnAgent,
-			wantSetupOnly: new(false),
+			wantType:  ActionSpawnAgent,
+			wantAgent: "implementer",
 		},
 
 		// ── Decision 22: phase-5 sequential task — ParallelTaskIDs empty ─────
@@ -983,9 +984,9 @@ func TestDeriveBranchName(t *testing.T) {
 		t.Run(tt.specName, func(t *testing.T) {
 			t.Parallel()
 			st := &state.State{SpecName: tt.specName}
-			got := deriveBranchName(st)
+			got := DeriveBranchName(st)
 			if got != tt.want {
-				t.Errorf("deriveBranchName(%q) = %q, want %q", tt.specName, got, tt.want)
+				t.Errorf("DeriveBranchName(%q) = %q, want %q", tt.specName, got, tt.want)
 			}
 		})
 	}
@@ -995,7 +996,7 @@ func TestDeriveBranchName_Truncation(t *testing.T) {
 	t.Parallel()
 
 	long := "20260330-soa-2899-this-is-a-very-long-specification-name-that-exceeds-sixty-characters-limit"
-	got := deriveBranchName(&state.State{SpecName: long})
+	got := DeriveBranchName(&state.State{SpecName: long})
 
 	// Must start with forge/ and body must be <= 60 chars.
 	const prefix = "forge/"

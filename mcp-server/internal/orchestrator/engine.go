@@ -342,10 +342,10 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		return NewSetupExecAction(PhaseFive, []string{"task_init", st.Workspace}), nil
 	}
 
-	// Decision 28 — Branch creation setup
-	if st.Branch == nil && !st.UseCurrentBranch {
-		return NewSetupExecAction(PhaseFive, []string{"create_branch", deriveBranchName(st)}), nil
-	}
+	// Decision 28 — removed: branch creation now happens during initialisation
+	// (pipeline_init_with_context returns the branch name for immediate creation).
+	// If branch is still nil here (legacy state or UseCurrentBranch), it is not
+	// an error — the orchestrator already handles the branch setup.
 
 	// Decision 29 — Batch commit after parallel tasks complete
 	if st.NeedsBatchCommit {
@@ -667,10 +667,12 @@ func readSourceURL(workspace string) string {
 	return readFrontMatterField(workspace, "source_url", "")
 }
 
-// deriveBranchName generates a deterministic branch name from the spec name.
+// DeriveBranchName generates a deterministic branch name from the spec name.
 // It strips the date prefix (e.g., "20260330-") and truncates to 60 characters
 // to produce readable branch names like "forge/soa-2899-task-status-options".
-func deriveBranchName(st *state.State) string {
+// Exported so pipeline_init_with_context can derive the branch name during
+// initialisation (before Phase 5).
+func DeriveBranchName(st *state.State) string {
 	name := stripDatePrefix(st.SpecName)
 	name = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 

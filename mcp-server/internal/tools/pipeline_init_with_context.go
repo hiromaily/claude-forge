@@ -28,6 +28,8 @@ type PipelineInitWithContextResult struct {
 	FlowTemplate          string                  `json:"flow_template,omitempty"`
 	SkippedPhases         []string                `json:"skipped_phases,omitempty"`
 	RequestMDContent      string                  `json:"request_md_content,omitempty"`
+	Branch                string                  `json:"branch,omitempty"`
+	CreateBranch          bool                    `json:"create_branch,omitempty"`
 	Warning               string                  `json:"warning,omitempty"`
 	NeedsUserConfirmation *UserConfirmationPrompt `json:"needs_user_confirmation,omitempty"`
 }
@@ -36,6 +38,8 @@ type PipelineInitWithContextResult struct {
 type UserConfirmationPrompt struct {
 	DetectedEffort string                              `json:"detected_effort"`
 	EffortOptions  map[string][]orchestrator.SkipLabel `json:"effort_options"`
+	CurrentBranch  string                              `json:"current_branch"`
+	IsMainBranch   bool                                `json:"is_main_branch"`
 	Message        string                              `json:"message"`
 }
 
@@ -64,10 +68,11 @@ type pipelineFlags struct {
 	CurrentBranch  string
 }
 
-// userConfirmation holds confirmed effort and optional workspace slug from the second call.
+// userConfirmation holds confirmed effort, branch decision, and optional workspace slug from the second call.
 type userConfirmation struct {
-	Effort        string
-	WorkspaceSlug string // optional LLM-generated ASCII slug; overrides the auto-derived slug
+	Effort           string
+	WorkspaceSlug    string // optional LLM-generated ASCII slug; overrides the auto-derived slug
+	UseCurrentBranch bool   // true = stay on current branch; false = create new branch from slug
 }
 
 // PipelineInitWithContextHandler handles the "pipeline_init_with_context" MCP tool.
@@ -136,15 +141,21 @@ func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFla
 		"L": orchestrator.SkipsWithLabelsForEffort("L"),
 	}
 
+	// Determine branch state for the user confirmation prompt.
+	currentBranch := flags.CurrentBranch
+	isMain := currentBranch == "" || currentBranch == "main" || currentBranch == "master"
+
 	nuc := &UserConfirmationPrompt{
 		DetectedEffort: effort,
 		EffortOptions:  effortOptions,
+		CurrentBranch:  currentBranch,
+		IsMainBranch:   isMain,
 		Message: fmt.Sprintf(
-			"Detected effort=%q. "+
-				"Please confirm or override by calling pipeline_init_with_context "+
-				"again with user_confirmation={effort:...}. "+
-				"Available options: S (light flow), M (standard flow), L (full flow).",
-			effort,
+			"Detected effort=%q. Current branch=%q (is_main=%v). "+
+				"Please confirm by calling pipeline_init_with_context again with "+
+				"user_confirmation={effort:..., use_current_branch:...}. "+
+				"Available effort options: S (light flow), M (standard flow), L (full flow).",
+			effort, currentBranch, isMain,
 		),
 	}
 
@@ -187,14 +198,33 @@ func handleSecondCall(
 		return errorf("%v", err)
 	}
 
-	return okJSON(PipelineInitWithContextResult{
+	// Derive branch name and determine if branch creation is needed.
+	result := PipelineInitWithContextResult{
 		Ready:            true,
 		Workspace:        workspace,
 		Effort:           uc.Effort,
 		FlowTemplate:     flowTemplate,
 		SkippedPhases:    skippedPhases,
 		RequestMDContent: requestMD,
-	})
+	}
+
+	if uc.UseCurrentBranch {
+		// User chose to stay on current branch — no creation needed.
+		result.Branch = flags.CurrentBranch
+	} else {
+		// Derive branch name from spec name (deterministic).
+		st := &state.State{SpecName: specName}
+		branchName := orchestrator.DeriveBranchName(st)
+		result.Branch = branchName
+		result.CreateBranch = true
+
+		// Record branch in state so Phase 5 doesn't try to create it again.
+		if setErr := sm.SetBranch(workspace, branchName); setErr != nil {
+			result.Warning = fmt.Sprintf("set_branch: %v", setErr)
+		}
+	}
+
+	return okJSON(result)
 }
 
 // initWorkspace executes the 8-step I/O sequence for the second call.
@@ -234,15 +264,15 @@ func initWorkspace(
 
 	// Apply all configuration in a single write to state.json.
 	cfg := state.PipelineConfig{
-		Effort:        uc.Effort,
-		FlowTemplate:  flowTemplate,
-		AutoApprove:   flags.Auto,
-		SkipPR:        flags.SkipPR,
-		Debug:         flags.Debug,
-		SkippedPhases: skippedPhases,
+		Effort:           uc.Effort,
+		FlowTemplate:     flowTemplate,
+		AutoApprove:      flags.Auto,
+		SkipPR:           flags.SkipPR,
+		Debug:            flags.Debug,
+		SkippedPhases:    skippedPhases,
+		UseCurrentBranch: uc.UseCurrentBranch,
 	}
-	if flags.CurrentBranch != "" && flags.CurrentBranch != "main" && flags.CurrentBranch != "master" {
-		cfg.UseCurrentBranch = true
+	if uc.UseCurrentBranch && flags.CurrentBranch != "" {
 		cfg.Branch = flags.CurrentBranch
 	}
 	if err := sm.Configure(workspace, cfg); err != nil {
@@ -365,6 +395,7 @@ func parseUserConfirmation(raw any) (userConfirmation, error) {
 
 	uc.Effort = stringField(m, "effort")
 	uc.WorkspaceSlug = stringField(m, "workspace_slug")
+	uc.UseCurrentBranch = boolField(m, "use_current_branch")
 	return uc, nil
 }
 
