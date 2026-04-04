@@ -34,7 +34,8 @@ const (
 
 // PipelineInitResult is the structured result returned by PipelineInitHandler.
 // On resume path: ResumeMode is "auto", Workspace and Instruction are set.
-//   The orchestrator proceeds directly without confirmation.
+//
+//	The orchestrator proceeds directly without confirmation.
 //
 // On new pipeline path: ResumeMode is absent, all detection fields are populated.
 // On error (invalid input or resume with missing state.json): Errors is non-empty.
@@ -98,13 +99,13 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		// In both cases, if state.json exists, it's a resume.
 		coreText := result.Parsed.CoreText
 		if strings.HasPrefix(coreText, ".specs/") {
-			return handleResumePath(coreText, ResumeModeAuto)
+			return handleResumePath(coreText)
 		}
 		// Check if .specs/<coreText>/state.json exists — auto-resume detection.
 		candidateWorkspace := path.Join(".specs", coreText)
 		candidateStateJSON := filepath.Join(candidateWorkspace, "state.json")
 		if _, err := os.Stat(candidateStateJSON); err == nil {
-			return handleResumePath(candidateWorkspace, ResumeModeAuto)
+			return handleResumePath(candidateWorkspace)
 		}
 
 		// Build flags from parsed validation result.
@@ -145,7 +146,7 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 
 // handleResumePath handles the resume detection path.
 // Returns a result with ResumeMode set if state.json exists, or an error result if not.
-func handleResumePath(workspace string, mode ResumeMode) (*mcp.CallToolResult, error) {
+func handleResumePath(workspace string) (*mcp.CallToolResult, error) {
 	stateJSONPath := filepath.Join(workspace, "state.json")
 	if _, err := os.Stat(stateJSONPath); err != nil {
 		// state.json absent — return error result (not MCP error).
@@ -154,7 +155,7 @@ func handleResumePath(workspace string, mode ResumeMode) (*mcp.CallToolResult, e
 		})
 	}
 	return okJSON(PipelineInitResult{
-		ResumeMode:  mode,
+		ResumeMode:  ResumeModeAuto,
 		Workspace:   workspace,
 		Instruction: "call state_resume_info",
 	})

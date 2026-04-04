@@ -42,7 +42,6 @@ A structured design document in markdown. Be specific about:
 
 ## What NOT to Do
 
-- Do NOT write any files — return the design document as your response text. The orchestrator is responsible for writing it to `design.md`.
 - Do NOT implement any code — only describe what should be built
 - Do NOT leave open questions unresolved — make a decision and state the rationale
 - Do NOT over-engineer — stay within the scope of the request

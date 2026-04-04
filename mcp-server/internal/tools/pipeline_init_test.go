@@ -43,7 +43,7 @@ func TestHandleResumePath(t *testing.T) {
 			t.Fatalf("Init: %v", err)
 		}
 
-		res, err := handleResumePath(dir, ResumeModeAuto)
+		res, err := handleResumePath(dir)
 		if err != nil {
 			t.Fatalf("handleResumePath returned go error: %v", err)
 		}
@@ -68,7 +68,7 @@ func TestHandleResumePath(t *testing.T) {
 		dir := t.TempDir()
 		// Do NOT create state.json.
 
-		res, err := handleResumePath(dir, ResumeModeAuto)
+		res, err := handleResumePath(dir)
 		if err != nil {
 			t.Fatalf("handleResumePath returned go error: %v", err)
 		}

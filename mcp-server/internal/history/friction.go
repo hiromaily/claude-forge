@@ -102,10 +102,13 @@ func (m *FrictionMap) TotalReportsAnalyzed() int {
 	return m.totalReportsAnalyzed
 }
 
-// Build scans specsDir for improvement.md files in subdirectories, extracts
-// friction points from each file, merges them into the in-memory store, and
-// persists to friction.json. It is tolerant of absent directories and absent
-// improvement.md files.
+// Build scans specsDir for improvement reports in subdirectories, extracts
+// friction points from each, merges them into the in-memory store, and
+// persists to friction.json. It is tolerant of absent directories and files.
+//
+// Two sources are scanned per spec directory (first match wins):
+//  1. improvement.md — dedicated improvement report file
+//  2. summary.md — the "## Improvement Report" section is extracted
 func (m *FrictionMap) Build() error { //nolint:cyclop // complexity inherent in multi-category scan
 	dirEntries, err := os.ReadDir(m.specsDir)
 	if err != nil {
@@ -131,17 +134,15 @@ func (m *FrictionMap) Build() error { //nolint:cyclop // complexity inherent in 
 			continue
 		}
 
-		improvementPath := filepath.Join(m.specsDir, dirEntry.Name(), "improvement.md")
-
-		data, readErr := os.ReadFile(improvementPath)
-		if readErr != nil {
-			// No improvement.md in this spec dir — skip silently.
+		specDir := filepath.Join(m.specsDir, dirEntry.Name())
+		text := readImprovementContent(specDir)
+		if text == "" {
 			continue
 		}
 
 		m.totalReportsAnalyzed++
 
-		extractFrictionPoints(string(data), pointMap)
+		extractFrictionPoints(text, pointMap)
 	}
 
 	// Flatten pointMap to slice.
@@ -215,7 +216,83 @@ func (m *FrictionMap) persist() error {
 	return nil
 }
 
-// extractFrictionPoints scans the text of an improvement.md file and adds
+// readImprovementContent returns the improvement report text from a spec directory.
+// It first looks for a dedicated improvement.md file. If absent, it falls back
+// to extracting the "## Improvement Report" section from summary.md.
+// Returns "" if neither source contains improvement content.
+func readImprovementContent(specDir string) string {
+	// Primary: dedicated improvement.md file.
+	improvementPath := filepath.Join(specDir, "improvement.md")
+	if data, err := os.ReadFile(improvementPath); err == nil {
+		return string(data)
+	}
+
+	// Fallback: extract the ## Improvement Report section from summary.md.
+	summaryPath := filepath.Join(specDir, "summary.md")
+	data, err := os.ReadFile(summaryPath)
+	if err != nil {
+		return ""
+	}
+
+	return extractSection(string(data), "## Improvement Report")
+}
+
+// extractSection returns the content of a markdown section starting with the
+// given heading, up to (but not including) the next heading of equal or higher
+// level or end of file. Returns "" if the heading is not found.
+func extractSection(text, heading string) string {
+	headingLevel := countLeadingHashes(heading)
+	var idx int
+	if strings.HasPrefix(text, heading) {
+		idx = 0
+	} else {
+		idx = strings.Index(text, "\n"+heading)
+		if idx < 0 {
+			return ""
+		}
+		idx++ // skip the newline
+	}
+
+	// Start after the heading line.
+	start := idx + len(heading)
+	if nlIdx := strings.Index(text[start:], "\n"); nlIdx >= 0 {
+		start += nlIdx + 1
+	}
+
+	// Collect lines until a heading of equal or higher level is found.
+	rest := text[start:]
+	scanner := bufio.NewScanner(strings.NewReader(rest))
+	var sb strings.Builder
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimLeft(line, " ")
+		if strings.HasPrefix(trimmed, "#") {
+			level := countLeadingHashes(trimmed)
+			if level > 0 && level <= headingLevel {
+				break
+			}
+		}
+		sb.WriteString(line)
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// countLeadingHashes returns the number of leading '#' characters in s.
+func countLeadingHashes(s string) int {
+	n := 0
+	for _, c := range s {
+		if c == '#' {
+			n++
+		} else {
+			break
+		}
+	}
+	return n
+}
+
+// extractFrictionPoints scans the text of an improvement report and adds
 // detected friction points into pointMap (keyed by "category|description").
 // Multiple occurrences of the same key increment Frequency.
 func extractFrictionPoints(text string, pointMap map[string]*FrictionPoint) { //nolint:cyclop // multi-category classification is inherently complex

@@ -177,6 +177,59 @@ sequenceDiagram
    - **Hooks** → tool-call guardrails (deterministic, fail-open)
    - **SKILL.md** → orchestration protocol (non-deterministic, LLM-interpreted)
 
+### MCP Pipeline Tool — Use-Case Mapping
+
+The four `pipeline_*` MCP tools drive the entire pipeline lifecycle. Each tool name
+maps to a concrete use case that the orchestrator (SKILL.md) performs:
+
+| MCP Tool | Use Case | What Happens |
+|---|---|---|
+| `pipeline_init` | **Input parsing & resume detection** | Parse `/forge <input>`, detect source type (GitHub/Jira/text), check `.specs/` for existing workspace to resume, validate input. Returns workspace path, flags, and whether external data fetch is needed. |
+| `pipeline_init_with_context` (1st call) | **External data fetch & effort detection** | Fetch GitHub/Jira context if needed. Auto-detect effort level (S/M/L) from task scope. Detect current branch state. Returns effort options and branch info for user confirmation. |
+| `pipeline_init_with_context` (2nd call) | **Workspace finalisation & state init** | Receive user's confirmed effort, branch decision, and workspace slug. Create workspace directory, write `request.md` and `state.json`. Record branch setting. After this call, the workspace is ready and the branch is created. |
+| `pipeline_next_action` | **Next action dispatch** | Read current `state.json`, run `Engine.NextAction()` to deterministically select the next action (spawn_agent, checkpoint, exec, write_file, or done). Enrich agent prompts with 4-layer assembly. |
+| `pipeline_report_result` | **Phase result recording & state transition** | Record phase-log entry, validate artifact exists and meets content constraints, parse review verdicts (APPROVE/REVISE/PASS/FAIL), advance pipeline state to next phase. |
+
+### Ideal Initialisation Flow
+
+The initialisation flow is designed to minimise user interruptions by batching
+all confirmation questions into a single prompt:
+
+```
+/forge <input>
+    │
+    ▼
+pipeline_init ─── Input parsing & resume detection
+    │                (validate input, detect source type, check for resume)
+    │
+    ▼
+pipeline_init_with_context (1st) ─── External data fetch & effort detection
+    │                                  (fetch GitHub/Jira data, auto-detect effort)
+    │
+    ▼
+👤 Single user prompt:
+    ├── Effort level: S / M / L
+    ├── Branch: create new / use current
+    └── Workspace slug confirmation
+    │
+    ▼
+pipeline_init_with_context (2nd) ─── Workspace finalisation & state init
+    │                                  (write state.json + request.md,
+    │                                   return branch name + create_branch flag)
+    │
+    ▼
+Orchestrator: git checkout -b <branch>  (if create_branch is true)
+    │
+    ▼
+pipeline_next_action loop begins (Phase 1)
+```
+
+**Branch creation timing:** `pipeline_init_with_context` (2nd call) derives the
+branch name deterministically and returns it with `create_branch: true`. The
+orchestrator (SKILL.md) then runs `git checkout -b` immediately — not deferred
+to Phase 5. This ensures all subsequent phases operate on the feature branch
+from the start.
+
 ## Sequence Diagram
 
 > **Note:** Shows the full `L` (full) effort flow. Lower effort levels (S, M) skip labelled phases — see the [Effort-driven Flow](#effort-driven-flow) section.

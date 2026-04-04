@@ -342,10 +342,10 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		return NewSetupExecAction(PhaseFive, []string{"task_init", st.Workspace}), nil
 	}
 
-	// Decision 28 — Branch creation setup
-	if st.Branch == nil && !st.UseCurrentBranch {
-		return NewSetupExecAction(PhaseFive, []string{"create_branch", deriveBranchName(st)}), nil
-	}
+	// Decision 28 — removed: branch creation now happens during initialisation
+	// (pipeline_init_with_context returns the branch name for immediate creation).
+	// If branch is still nil here (legacy state or UseCurrentBranch), it is not
+	// an error — the orchestrator already handles the branch setup.
 
 	// Decision 29 — Batch commit after parallel tasks complete
 	if st.NeedsBatchCommit {
@@ -553,15 +553,22 @@ func derivePRTitle(st *state.State) string {
 // comprehensive-review.md is included only when PhaseSeven was not skipped
 // (i.e., the flow template is standard or full). For effort S (light template),
 // PhaseSeven is skipped and the file does not exist.
+// analysis.md and investigation.md are included (when present) to provide
+// context for the Improvement Report epilogue.
 func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
 	inputs := []string{state.ArtifactDesign, state.ArtifactTasks}
 	if !slices.Contains(st.SkippedPhases, PhaseSeven) {
 		inputs = append([]string{state.ArtifactComprehensiveReview}, inputs...)
 	}
 
+	// Include analysis.md and investigation.md for the Improvement Report.
+	// These files document what information was hard to find and what
+	// documentation gaps were encountered — essential for improvement proposals.
+	inputs = append(inputs, state.ArtifactAnalysis, state.ArtifactInvestigation)
+
 	return NewSpawnAgentAction(
 		agentVerifier,
-		"Generate final summary with pipeline statistics.",
+		"Generate final summary with pipeline statistics and improvement report.",
 		state.DefaultModel,
 		PhaseFinalSummary,
 		inputs,
@@ -660,10 +667,12 @@ func readSourceURL(workspace string) string {
 	return readFrontMatterField(workspace, "source_url", "")
 }
 
-// deriveBranchName generates a deterministic branch name from the spec name.
+// DeriveBranchName generates a deterministic branch name from the spec name.
 // It strips the date prefix (e.g., "20260330-") and truncates to 60 characters
 // to produce readable branch names like "forge/soa-2899-task-status-options".
-func deriveBranchName(st *state.State) string {
+// Exported so pipeline_init_with_context can derive the branch name during
+// initialisation (before Phase 5).
+func DeriveBranchName(st *state.State) string {
 	name := stripDatePrefix(st.SpecName)
 	name = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 

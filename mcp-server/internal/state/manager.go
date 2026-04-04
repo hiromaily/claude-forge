@@ -674,6 +674,8 @@ func (m *StateManager) Configure(workspace string, cfg PipelineConfig) error {
 		}
 		if cfg.UseCurrentBranch {
 			s.UseCurrentBranch = true
+		}
+		if cfg.Branch != "" {
 			s.Branch = &cfg.Branch
 		}
 		for _, phase := range cfg.SkippedPhases {

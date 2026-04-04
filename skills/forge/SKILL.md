@@ -21,16 +21,21 @@ Example: `/forge 20260401-effort-only-flow`
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, source_id=result.source_id, source_url=result.source_url, flags=result.flags, external_context=<fetched data>)`.
    b. If `result.fetch_needed` is null (plain text input): call
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags)`.
-   In both cases, the response will contain `needs_user_confirmation`. Present the detected
-   `detected_effort` and all three effort options from `effort_options` (S, M, L — each with
-   their skipped phases, including `phase_id` and human-readable `label`) to the user and
-   wait for confirmation. Use the `label` field when displaying to the user.
+   In both cases, the response will contain `needs_user_confirmation`. Present **all** of the
+   following to the user in a **single prompt** (use AskUserQuestion with multiple questions):
+   1. **Effort level**: the detected `detected_effort` and all three effort options from
+      `effort_options` (S, M, L — each with their skipped phases, using the `label` field).
+   2. **Branch decision**: based on `current_branch` and `is_main_branch` from the response:
+      - If `is_main_branch` is true: inform the user a new branch will be created (no question needed).
+      - If `is_main_branch` is false: ask whether to use the current branch or create a new one.
    While waiting, generate a concise English slug (3–6 words, lowercase, hyphen-separated,
    ASCII only) that summarises the task — e.g. `"add-user-auth-endpoint"` or
    `"fix-report-export-timeout"`. If the input is in a non-English language, translate
    the core intent into English for the slug.
    Then call `mcp__forge-state__pipeline_init_with_context` again with the same parameters plus
-   `user_confirmation={effort: <confirmed>, workspace_slug: <slug>}`.
+   `user_confirmation={effort: <confirmed>, workspace_slug: <slug>, use_current_branch: <bool>}`.
+   The response will contain `branch` (the branch name) and `create_branch` (boolean).
+   If `create_branch` is true: run `git checkout -b <branch>` via Bash immediately.
    Use the `workspace` from the confirmed response for all subsequent calls.
    **Important**: Always pass the workspace path from `pipeline_init` unchanged to the first
    `pipeline_init_with_context` call. Never construct workspace paths manually.
@@ -70,8 +75,6 @@ Repeat until done:
    - `exec`: Execute `action.commands` based on the first element:
      - If `action.commands[0]` is `task_init`: call `mcp__forge-state__task_init`
        (parse tasks from `tasks.md` in the workspace and pass as the `tasks` parameter).
-     - If `action.commands[0]` is `create_branch`: run `git checkout -b <action.commands[1]>`
-       via Bash, then call `mcp__forge-state__set_branch(workspace, branch=action.commands[1])`.
      - If `action.commands[0]` is `batch_commit`: commit all uncommitted changes from
        parallel tasks. Run `git status --short` to identify changed files, then `git add`
        only the files belonging to the parallel tasks (check each task's file list in

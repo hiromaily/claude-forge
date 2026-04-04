@@ -294,12 +294,26 @@ func TestPipelineInitWithContextCurrentBranch(t *testing.T) {
 	tests := []struct {
 		name                   string
 		currentBranch          string
+		useCurrentBranch       bool
 		expectUseCurrentBranch bool
+		expectBranchSet        bool   // true = s.Branch should be non-nil
+		expectBranchValue      string // expected branch value when expectBranchSet is true
 	}{
-		{name: "feature_branch", currentBranch: "feature/foo", expectUseCurrentBranch: true},
-		{name: "main_skipped", currentBranch: "main", expectUseCurrentBranch: false},
-		{name: "master_skipped", currentBranch: "master", expectUseCurrentBranch: false},
-		{name: "empty_skipped", currentBranch: "", expectUseCurrentBranch: false},
+		{
+			name: "feature_branch_use_current", currentBranch: "feature/foo",
+			useCurrentBranch: true, expectUseCurrentBranch: true,
+			expectBranchSet: true, expectBranchValue: "feature/foo",
+		},
+		{
+			name: "main_new_branch", currentBranch: "main",
+			useCurrentBranch: false, expectUseCurrentBranch: false,
+			expectBranchSet: true, // branch derived from spec name
+		},
+		{
+			name: "empty_new_branch", currentBranch: "",
+			useCurrentBranch: false, expectUseCurrentBranch: false,
+			expectBranchSet: true, // branch derived from spec name
+		},
 	}
 
 	for _, tc := range tests {
@@ -318,7 +332,8 @@ func TestPipelineInitWithContextCurrentBranch(t *testing.T) {
 				"external_context": map[string]any{},
 				"flags":            flags,
 				"user_confirmation": map[string]any{
-					"effort": "M",
+					"effort":             "M",
+					"use_current_branch": tc.useCurrentBranch,
 				},
 			})
 
@@ -333,8 +348,11 @@ func TestPipelineInitWithContextCurrentBranch(t *testing.T) {
 			if s.UseCurrentBranch != tc.expectUseCurrentBranch {
 				t.Errorf("UseCurrentBranch = %v, want %v (branch=%q)", s.UseCurrentBranch, tc.expectUseCurrentBranch, tc.currentBranch)
 			}
-			if tc.expectUseCurrentBranch && (s.Branch == nil || *s.Branch != tc.currentBranch) {
-				t.Errorf("Branch = %v, want %q", s.Branch, tc.currentBranch)
+			if tc.expectBranchSet && s.Branch == nil {
+				t.Error("Branch should be set, got nil")
+			}
+			if tc.expectBranchValue != "" && (s.Branch == nil || *s.Branch != tc.expectBranchValue) {
+				t.Errorf("Branch = %v, want %q", s.Branch, tc.expectBranchValue)
 			}
 		})
 	}

@@ -37,6 +37,37 @@ Include the following fields from the response in the summary document under a `
 - `retries` — total implementation and review retries
 - `review_findings` — critical and minor finding counts from review phases
 
+## Improvement Report
+
+When invoked for the **final-summary** phase (you will receive `analysis.md` and `investigation.md` as input artifacts), append an `## Improvement Report` section to your output. This retrospective documents what would have made the pipeline work easier and feeds the data flywheel for future runs.
+
+Review `analysis.md` and `investigation.md` to identify friction encountered during this pipeline run, then write the report using these fixed subsections:
+
+```
+## Improvement Report
+
+_Retrospective on what would have made this work easier._
+
+### Documentation
+(What documentation was missing, outdated, or hard to find?
+What would have shortened the analysis/investigation phase?)
+
+### Code Readability
+(What code patterns were hard to understand?
+What comments or naming changes would help future agents?)
+
+### AI Agent Support (Skills / Rules)
+(Were there missing CLAUDE.md rules, steering files, or skill definitions
+that would have reduced friction? Were existing rules helpful?)
+
+### Other
+(Any friction that doesn't fit the above categories.)
+```
+
+If a subsection has no findings, write "No friction observed." rather than omitting it. This ensures the friction extraction system can parse the file reliably.
+
+Skip this section entirely when the input artifacts do not include `analysis.md` (i.e., during final-verification phase).
+
 ## Output Format
 
 ```
@@ -61,6 +92,9 @@ Include the following fields from the response in the summary document under a `
 - Phases skipped: {phases_skipped}
 - Retries: {retries}
 - Review findings: {review_findings.critical} critical, {review_findings.minor} minor
+
+## Improvement Report
+(see above — only when analysis.md is available)
 ```
 
 ## If Failures Are Found

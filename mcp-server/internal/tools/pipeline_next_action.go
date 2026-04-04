@@ -22,6 +22,19 @@ import (
 
 const similarPipelinesSearchLimit = 3
 
+const verdictHintApproveRevise = "The file MUST contain exactly one verdict line: `## Verdict: APPROVE`, `APPROVE_WITH_NOTES`, or `REVISE`."
+
+// outputVerdictHints maps output artifact filenames to a validation hint that
+// tells the agent which verdict token(s) must appear in the file. These hints
+// mirror the verdictSet requirements in validation/artifact.go so agents
+// produce structurally valid artifacts on the first attempt.
+//
+//nolint:gochecknoglobals // package-level lookup table for verdict hints
+var outputVerdictHints = map[string]string{
+	state.ArtifactReviewDesign: verdictHintApproveRevise,
+	state.ArtifactReviewTasks:  verdictHintApproveRevise,
+}
+
 // nextActionResponse wraps orchestrator.Action to add an optional Warning field.
 // The warning is set fail-open when enrichPrompt cannot find the agent .md file.
 type nextActionResponse struct {
@@ -132,6 +145,31 @@ func enrichPrompt(
 		for _, inputFile := range action.InputFiles {
 			artifactSB.WriteString("- ")
 			artifactSB.WriteString(filepath.Join(workspace, inputFile))
+			artifactSB.WriteString("\n")
+		}
+	}
+
+	// Output artifact instruction — deterministic enforcement that agents write
+	// their output file. Without this, agents non-deterministically return results
+	// as text without writing the file, causing pipeline_report_result to fail
+	// artifact validation.
+	if action.OutputFile != "" {
+		if artifactSB.Len() > 0 {
+			artifactSB.WriteString("\n")
+		}
+		outputPath := filepath.Join(workspace, action.OutputFile)
+		artifactSB.WriteString("## Output Artifact\n\n")
+		artifactSB.WriteString("**MANDATORY**: When you have finished your work, write your complete output to this file using the Write tool:\n")
+		artifactSB.WriteString("- `")
+		artifactSB.WriteString(outputPath)
+		artifactSB.WriteString("`\n\n")
+		artifactSB.WriteString("Do NOT return the output as response text only — the pipeline requires the file to exist on disk.\n")
+
+		// Add verdict requirement hints for review-phase agents so they
+		// include the required verdict token in their output file.
+		if hint, ok := outputVerdictHints[action.OutputFile]; ok {
+			artifactSB.WriteString("\n")
+			artifactSB.WriteString(hint)
 			artifactSB.WriteString("\n")
 		}
 	}
