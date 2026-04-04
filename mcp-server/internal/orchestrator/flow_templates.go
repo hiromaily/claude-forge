@@ -9,7 +9,7 @@ const (
 
 // skipTable maps flow template name → ordered list of phases to skip at workspace setup.
 var skipTable = map[string][]string{
-	TemplateLight:    {PhaseFourB, PhaseCheckpointB, PhaseSeven},
+	TemplateLight:    {PhaseTwo, PhaseFour, PhaseFourB, PhaseCheckpointB, PhaseSeven},
 	TemplateStandard: {PhaseFourB, PhaseCheckpointB},
 	TemplateFull:     {},
 }
@@ -34,6 +34,8 @@ func SkipsForEffort(effort string) []string {
 
 // phaseLabels maps phase IDs to human-readable labels for display in effort_options.
 var phaseLabels = map[string]string{
+	PhaseTwo:         "Investigation",
+	PhaseFour:        "Task Decomposition",
 	PhaseFourB:       "Tasks AI Review",
 	PhaseCheckpointA: "Design Checkpoint",
 	PhaseCheckpointB: "Tasks Checkpoint",

@@ -133,10 +133,10 @@ const (
 // ---------- Severity markers ----------
 
 const (
-	SeverityCritical      = "CRITICAL"
-	SeverityMinor         = "MINOR"
-	SeverityCriticalTag   = "[CRITICAL]"
-	SeverityMinorTag      = "[MINOR]"
+	SeverityCritical    = "CRITICAL"
+	SeverityMinor       = "MINOR"
+	SeverityCriticalTag = "[CRITICAL]"
+	SeverityMinorTag    = "[MINOR]"
 )
 
 // ---------- File management ----------

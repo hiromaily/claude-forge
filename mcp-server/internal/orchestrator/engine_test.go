@@ -1165,3 +1165,299 @@ func TestPostToSource_CheckpointOptions(t *testing.T) {
 		})
 	}
 }
+
+// TestHandlePhaseOne_CombinedAgent verifies that handlePhaseOne dispatches the
+// combined analyst-investigator agent when PhaseTwo is in SkippedPhases, and the
+// standard situation-analyst otherwise.
+func TestHandlePhaseOne_CombinedAgent(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		skippedPhases []string
+		wantAgent     string
+	}{
+		{
+			name:          "phase_two_skipped_uses_combined_agent",
+			skippedPhases: []string{PhaseTwo},
+			wantAgent:     agentAnalystInvestigator,
+		},
+		{
+			name:          "phase_two_not_skipped_uses_situation_analyst",
+			skippedPhases: []string{},
+			wantAgent:     agentSituationAnalyst,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sm := newTestStateManager(t, "phase-1", func(s *state.State) error {
+				s.SkippedPhases = tc.skippedPhases
+				return nil
+			})
+
+			action, err := defaultEng().NextAction(sm, "")
+			if err != nil {
+				t.Fatalf("NextAction: %v", err)
+			}
+			if action.Type != ActionSpawnAgent {
+				t.Fatalf("action.Type = %q, want %q", action.Type, ActionSpawnAgent)
+			}
+			if action.Agent != tc.wantAgent {
+				t.Errorf("action.Agent = %q, want %q", action.Agent, tc.wantAgent)
+			}
+		})
+	}
+}
+
+// TestHandlePhaseThree_InvestigationOptional verifies that handlePhaseThree includes
+// investigation.md in InputFiles only when the file exists on disk.
+func TestHandlePhaseThree_InvestigationOptional(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		writeInvestigation bool
+		wantContainsInvest bool
+	}{
+		{
+			name:               "investigation_absent_not_included",
+			writeInvestigation: false,
+			wantContainsInvest: false,
+		},
+		{
+			name:               "investigation_present_included",
+			writeInvestigation: true,
+			wantContainsInvest: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sm := newTestStateManager(t, "phase-3", nil)
+			st, err := sm.GetState()
+			if err != nil {
+				t.Fatalf("GetState: %v", err)
+			}
+
+			if tc.writeInvestigation {
+				if err := writeFileForTest(st.Workspace+"/investigation.md", "# Investigation\n"); err != nil {
+					t.Fatalf("writeFileForTest: %v", err)
+				}
+			}
+
+			action, err := defaultEng().NextAction(sm, "")
+			if err != nil {
+				t.Fatalf("NextAction: %v", err)
+			}
+			if action.Type != ActionSpawnAgent {
+				t.Fatalf("action.Type = %q, want %q", action.Type, ActionSpawnAgent)
+			}
+
+			containsInvest := slices.Contains(action.InputFiles, state.ArtifactInvestigation)
+			if containsInvest != tc.wantContainsInvest {
+				t.Errorf("InputFiles contains investigation.md = %v, want %v; files = %v",
+					containsInvest, tc.wantContainsInvest, action.InputFiles)
+			}
+		})
+	}
+}
+
+// TestHandleCheckpointA_PhaseFourSkipped verifies checkpoint-a message and auto-skip
+// behaviour when PhaseFour is in SkippedPhases.
+func TestHandleCheckpointA_PhaseFourSkipped(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		skippedPhases   []string
+		autoApprove     bool
+		wantType        string
+		wantMsgContains string
+	}{
+		{
+			name:            "phase_four_skipped_no_auto_approve_shows_phase5_msg",
+			skippedPhases:   []string{PhaseFour},
+			autoApprove:     false,
+			wantType:        ActionCheckpoint,
+			wantMsgContains: "Phase 5",
+		},
+		{
+			name:            "phase_four_skipped_auto_approve_skips_checkpoint",
+			skippedPhases:   []string{PhaseFour},
+			autoApprove:     true,
+			wantType:        ActionDone,
+			wantMsgContains: "",
+		},
+		{
+			name:            "phase_four_not_skipped_shows_phase4_msg",
+			skippedPhases:   []string{},
+			autoApprove:     false,
+			wantType:        ActionCheckpoint,
+			wantMsgContains: "Phase 4",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sm := newTestStateManager(t, "checkpoint-a", func(s *state.State) error {
+				s.SkippedPhases = tc.skippedPhases
+				s.AutoApprove = tc.autoApprove
+				return nil
+			})
+
+			action, err := defaultEng().NextAction(sm, "")
+			if err != nil {
+				t.Fatalf("NextAction: %v", err)
+			}
+			if action.Type != tc.wantType {
+				t.Errorf("action.Type = %q, want %q", action.Type, tc.wantType)
+			}
+			if tc.wantMsgContains != "" && !strings.Contains(action.PresentToUser, tc.wantMsgContains) {
+				t.Errorf("PresentToUser = %q; expected to contain %q", action.PresentToUser, tc.wantMsgContains)
+			}
+			if tc.wantType == ActionDone && !strings.HasPrefix(action.Summary, SkipSummaryPrefix) {
+				t.Errorf("action.Summary = %q; expected skip prefix %q", action.Summary, SkipSummaryPrefix)
+			}
+		})
+	}
+}
+
+// TestHandlePhaseThreeB_AutoApprove_PhaseFourSkipped verifies that when AutoApprove=true,
+// verdict=APPROVE, and PhaseFour is in SkippedPhases, handlePhaseThreeB returns
+// done("skip:phase-3b"). When PhaseFour is not skipped, it returns the task decomposer.
+func TestHandlePhaseThreeB_AutoApprove_PhaseFourSkipped(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		skippedPhases []string
+		wantType      string
+		wantAgent     string
+		wantSummary   string
+	}{
+		{
+			name:          "phase_four_skipped_returns_done_skip",
+			skippedPhases: []string{PhaseFour},
+			wantType:      ActionDone,
+			wantSummary:   SkipSummaryPrefix + PhaseThreeB,
+		},
+		{
+			name:          "phase_four_not_skipped_spawns_decomposer",
+			skippedPhases: []string{},
+			wantType:      ActionSpawnAgent,
+			wantAgent:     agentTaskDecomposer,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sm := newTestStateManager(t, "phase-3b", func(s *state.State) error {
+				s.AutoApprove = true
+				s.SkippedPhases = tc.skippedPhases
+				return nil
+			})
+			st, err := sm.GetState()
+			if err != nil {
+				t.Fatalf("GetState: %v", err)
+			}
+			if err := writeFileForTest(st.Workspace+"/review-design.md", "## Verdict: APPROVE\n"); err != nil {
+				t.Fatalf("writeFileForTest: %v", err)
+			}
+
+			eng := &Engine{
+				agentDir:         "/test/agents",
+				specsDir:         "/test/specs",
+				verdictReader:    stubVerdictReader(VerdictApprove),
+				sourceTypeReader: stubSourceTypeReader("text"),
+			}
+
+			action, err := eng.NextAction(sm, "")
+			if err != nil {
+				t.Fatalf("NextAction: %v", err)
+			}
+			if action.Type != tc.wantType {
+				t.Errorf("action.Type = %q, want %q", action.Type, tc.wantType)
+			}
+			if tc.wantAgent != "" && action.Agent != tc.wantAgent {
+				t.Errorf("action.Agent = %q, want %q", action.Agent, tc.wantAgent)
+			}
+			if tc.wantSummary != "" && action.Summary != tc.wantSummary {
+				t.Errorf("action.Summary = %q, want %q", action.Summary, tc.wantSummary)
+			}
+		})
+	}
+}
+
+// TestHandlePhaseFive_MinimalTasks verifies that when PhaseFour is in SkippedPhases,
+// tasks is empty, and tasks.md does not exist, handlePhaseFive returns a write_file
+// action with SetupOnly=true. When tasks.md already exists, it falls through to task_init.
+func TestHandlePhaseFive_MinimalTasks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		writeTasksMd  bool
+		wantType      string
+		wantSetupOnly bool
+		wantContent   string
+	}{
+		{
+			name:          "tasks_md_absent_returns_write_file",
+			writeTasksMd:  false,
+			wantType:      ActionWriteFile,
+			wantSetupOnly: true,
+			wantContent:   "## Task 1",
+		},
+		{
+			name:          "tasks_md_present_falls_through_to_task_init",
+			writeTasksMd:  true,
+			wantType:      ActionExec,
+			wantSetupOnly: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sm := newTestStateManager(t, "phase-5", func(s *state.State) error {
+				s.SkippedPhases = []string{PhaseFour}
+				// Tasks is empty to trigger the setup path
+				return nil
+			})
+			st, err := sm.GetState()
+			if err != nil {
+				t.Fatalf("GetState: %v", err)
+			}
+
+			if tc.writeTasksMd {
+				if err := writeFileForTest(st.Workspace+"/tasks.md", "# Tasks\n\n## Task 1: Implement\n"); err != nil {
+					t.Fatalf("writeFileForTest: %v", err)
+				}
+			}
+
+			action, err := defaultEng().NextAction(sm, "")
+			if err != nil {
+				t.Fatalf("NextAction: %v", err)
+			}
+			if action.Type != tc.wantType {
+				t.Errorf("action.Type = %q, want %q", action.Type, tc.wantType)
+			}
+			if action.SetupOnly != tc.wantSetupOnly {
+				t.Errorf("action.SetupOnly = %v, want %v", action.SetupOnly, tc.wantSetupOnly)
+			}
+			if tc.wantContent != "" && !strings.Contains(action.Content, tc.wantContent) {
+				t.Errorf("action.Content does not contain %q: %q", tc.wantContent, action.Content)
+			}
+		})
+	}
+}
