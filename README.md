@@ -273,7 +273,7 @@ Which phases run is primarily determined by effort level. ✅ = phase runs; blan
 | 1 | Workspace Setup | ✅ | ✅ | ✅ |
 | 2 | Detect Effort | ✅ | ✅ | ✅ |
 | 3 | Situation Analysis | ✅ | ✅ | ✅ |
-| 4 | Investigation (merged into Phase 3) | | ✅ | ✅ |
+| 4 | Investigation | * | ✅ | ✅ |
 | 5 | Design | ✅ | ✅ | ✅ |
 | 6 | Design Review | ✅ | ✅ | ✅ |
 | 7 | Checkpoint A | ✅ | ✅ | ✅ |
