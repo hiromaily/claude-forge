@@ -559,15 +559,16 @@ $ARGUMENTS
        │
        ▼
 ┌──────────────────┐
-│ Final Commit      │ git add summary.md state.json
-│                   │ git commit --amend --no-edit
-│                   │ git push --force-with-lease
-│                   │ (PR branch now includes summary.md)
+│ Post to Source    │ → GitHub/Jira comment (if applicable)
 └──────┬───────────┘
        │
        ▼
 ┌──────────────────┐
-│ Post to Source    │ → GitHub/Jira comment (if applicable)
+│ Final Commit      │ pipeline_report_result → state.json = "completed"
+│                   │ git add summary.md state.json
+│                   │ git commit --amend --no-edit
+│                   │ git push --force-with-lease
+│                   │ (PR branch includes summary.md + state.json in final state)
 └──────────────────┘
 ```
 
@@ -601,8 +602,8 @@ The information flow is strictly forward — no agent reads output from a later 
 - **Final Verification**: Agent fixes issues directly, no artifact file
 - **PR Creation**: Orchestrator handles directly (git push + gh pr create)
 - **Final Summary**: Orchestrator writes summary.md (includes PR # obtained from PR Creation)
-- **Final Commit**: Orchestrator amends last commit to include summary.md + state.json, then force-pushes (PR branch now includes summary.md)
 - **Post to Source**: Orchestrator handles directly (post comment to GitHub/Jira)
+- **Final Commit**: Orchestrator calls `pipeline_report_result` first (advances state.json to "completed"), then amends last commit to include summary.md + state.json, then force-pushes (PR branch now includes summary.md + state.json in final state)
 
 ### Specs Index System
 
