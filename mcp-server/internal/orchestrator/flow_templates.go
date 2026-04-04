@@ -1,17 +1,19 @@
 package orchestrator
 
-// Template name constants — must match state.ValidTemplates values exactly.
+import "github.com/hiromaily/claude-forge/mcp-server/internal/state"
+
+// Template name constants — aliased from the state package to prevent silent divergence.
 const (
-	TemplateLight    = "light"
-	TemplateStandard = "standard"
-	TemplateFull     = "full"
+	TemplateLight    = state.TemplateLight
+	TemplateStandard = state.TemplateStandard
+	TemplateFull     = state.TemplateFull
 )
 
 // skipTable maps flow template name → ordered list of phases to skip at workspace setup.
 var skipTable = map[string][]string{
-	TemplateLight:    {PhaseTwo, PhaseFour, PhaseFourB, PhaseCheckpointB, PhaseSeven},
-	TemplateStandard: {PhaseFourB, PhaseCheckpointB},
-	TemplateFull:     {},
+	state.TemplateLight:    {PhaseTwo, PhaseFour, PhaseFourB, PhaseCheckpointB, PhaseSeven},
+	state.TemplateStandard: {PhaseFourB, PhaseCheckpointB},
+	state.TemplateFull:     {},
 }
 
 // SkipsForTemplate returns the base skip list for a template name.
