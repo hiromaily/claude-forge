@@ -101,7 +101,7 @@ func init() {
 //
 // All derived vars are zero-valued at declaration and assigned here, so they are
 // always in sync with the single source of truth: phaseRegistry.
-func initRegistry() {
+func initRegistry() { //nolint:gocyclo // complexity is inherent in the multi-pass validation and derivation logic
 	// Consistency check: lengths must match.
 	if len(phaseRegistry) != len(state.ValidPhases) {
 		panic(fmt.Sprintf(
