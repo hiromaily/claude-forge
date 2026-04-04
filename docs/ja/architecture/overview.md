@@ -53,22 +53,8 @@ SKILL.md (オーケストレーター)
 
 ## ディレクトリ構造
 
-```
-claude-forge/
-├── agents/              10の専門エージェント（.mdファイル）
-├── hooks/               フック定義（hooks.json）
-├── scripts/
-│   ├── common.sh        共有ヘルパー
-│   ├── pre-tool-hook.sh 読み取り専用、コミットブロック
-│   ├── post-agent-hook.sh エージェント出力バリデーション
-│   ├── post-bash-hook.sh post-to-source後の自動コミット
-│   ├── stop-hook.sh     パイプライン完了ガード
-│   └── test-hooks.sh    自動テストスイート（58テスト）
-├── skills/
-│   └── forge/
-│       └── SKILL.md     オーケストレーター命令
-├── mcp-server/          Go MCPサーバーソース
-├── ARCHITECTURE.md      設計の根拠（詳細）
-├── BACKLOG.md           既知の問題とロードマップ
-└── CLAUDE.md            AIエージェントガイド
-```
+<!-- Claude Code: 以下のディレクトリ構造は docs/_partials/directory-structure-ja.md から組み込まれています。
+     正規の最新構造はそのファイルを直接参照してください。
+     このセクションを直接編集せず、docs/_partials/directory-structure-ja.md を編集してください。 -->
+
+<!--@include: ../../_partials/directory-structure-ja.md-->

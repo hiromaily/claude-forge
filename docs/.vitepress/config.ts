@@ -56,12 +56,48 @@ export default withMermaid(
                     link: "/architecture/design-principles",
                   },
                   {
-                    text: "Hooks & Guardrails",
-                    link: "/architecture/hooks",
+                    text: "Runtime Flow",
+                    link: "/architecture/runtime-flow",
+                  },
+                  {
+                    text: "Pipeline Sequence",
+                    link: "/architecture/pipeline-sequence",
+                  },
+                  {
+                    text: "Data Flow",
+                    link: "/architecture/data-flow",
                   },
                   {
                     text: "State Management",
                     link: "/architecture/state-management",
+                  },
+                  {
+                    text: "Effort-driven Flow",
+                    link: "/architecture/effort-flow",
+                  },
+                  {
+                    text: "Concurrency Model",
+                    link: "/architecture/concurrency",
+                  },
+                  {
+                    text: "Hooks & Guardrails",
+                    link: "/architecture/hooks",
+                  },
+                  {
+                    text: "Human Interaction Points",
+                    link: "/architecture/human-interaction",
+                  },
+                  {
+                    text: "Key Technical Decisions",
+                    link: "/architecture/technical-decisions",
+                  },
+                  {
+                    text: "Guard Catalogue",
+                    link: "/architecture/guard-catalogue",
+                  },
+                  {
+                    text: "Go Package Layering",
+                    link: "/architecture/go-package-layering",
                   },
                 ],
               },
@@ -164,12 +200,48 @@ export default withMermaid(
                     link: "/ja/architecture/design-principles",
                   },
                   {
-                    text: "Hooks & ガードレール",
-                    link: "/ja/architecture/hooks",
+                    text: "ランタイムフロー",
+                    link: "/ja/architecture/runtime-flow",
+                  },
+                  {
+                    text: "パイプラインシーケンス",
+                    link: "/ja/architecture/pipeline-sequence",
+                  },
+                  {
+                    text: "データフロー",
+                    link: "/ja/architecture/data-flow",
                   },
                   {
                     text: "状態管理",
                     link: "/ja/architecture/state-management",
+                  },
+                  {
+                    text: "工数ドリブンフロー",
+                    link: "/ja/architecture/effort-flow",
+                  },
+                  {
+                    text: "並行処理モデル",
+                    link: "/ja/architecture/concurrency",
+                  },
+                  {
+                    text: "Hooks & ガードレール",
+                    link: "/ja/architecture/hooks",
+                  },
+                  {
+                    text: "ヒューマンインタラクション",
+                    link: "/ja/architecture/human-interaction",
+                  },
+                  {
+                    text: "技術的設計決定",
+                    link: "/ja/architecture/technical-decisions",
+                  },
+                  {
+                    text: "ガードカタログ",
+                    link: "/ja/architecture/guard-catalogue",
+                  },
+                  {
+                    text: "Goパッケージ階層",
+                    link: "/ja/architecture/go-package-layering",
                   },
                 ],
               },

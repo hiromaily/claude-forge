@@ -4,42 +4,28 @@ This is a Claude Code plugin that orchestrates a multi-phase development pipelin
 
 ## Directory Structure
 
+<!-- SSOT: docs/_partials/directory-structure.md — edit that file, not here.
+     This file is not VitePress-processed, so the @include directive cannot be used.
+     For the canonical, detailed directory tree read: docs/_partials/directory-structure.md -->
+
 ```
 claude-forge/
 ├── CLAUDE.md              ← you are here (auto-loaded by Claude Code)
-├── ARCHITECTURE.md        ← design decisions, data flows, rationale
+├── ARCHITECTURE.md        ← index (full docs in docs/architecture/)
 ├── BACKLOG.md             ← known issues, improvement candidates
 ├── .claude-plugin/
 │   └── plugin.json        ← plugin metadata (name, version)
 ├── .claude/
-│   └── rules/
-│       ├── git.md         ← Git practices enforced in this repo
-│       └── shell-script.md ← Shell scripting conventions for *.sh files
+│   └── rules/             ← git.md, shell-script.md, docs.md
 ├── agents/                ← 10 named agent definitions (.md files)
-│   ├── README.md          ← agent roster with roles
-│   ├── situation-analyst.md  (Phase 1: codebase mapping)
-│   ├── investigator.md       (Phase 2: deep-dive research)
-│   ├── architect.md          (Phase 3: design)
-│   ├── design-reviewer.md    (Phase 3b: design quality gate)
-│   ├── task-decomposer.md    (Phase 4: task breakdown)
-│   ├── task-reviewer.md      (Phase 4b: task quality gate)
-│   ├── implementer.md        (Phase 5: TDD implementation)
-│   ├── impl-reviewer.md      (Phase 6: code review)
-│   └── verifier.md           (Final: full build/test verification)
+├── docs/
+│   ├── _partials/         ← SSOT content fragments (included by docs/ files)
+│   └── architecture/      ← architecture documentation (13 focused files)
 ├── hooks/
 │   └── hooks.json         ← hook definitions (PreToolUse, PostToolUse, Stop)
-├── scripts/
-│   ├── common.sh          ← shared find_active_workspace helper (sourced by pre-tool-hook.sh and stop-hook.sh)
-│   ├── launch-mcp.sh      ← self-healing MCP launcher: runs setup.sh if binary missing, then exec's it
-│   ├── pre-tool-hook.sh   ← read-only guard, commit blocking, checkout blocking
-│   ├── post-agent-hook.sh ← agent output quality validation
-│   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md after phase-complete post-to-source
-│   ├── setup.sh           ← downloads forge-state-mcp binary from GitHub Releases (called by Setup hook and launch-mcp.sh)
-│   ├── stop-hook.sh       ← pipeline completion guard
-│   └── test-hooks.sh      ← automated test suite (62 tests; run bash scripts/test-hooks.sh to verify)
-└── skills/
-    └── forge/
-        └── SKILL.md       ← orchestrator instructions (the main skill)
+├── mcp-server/            ← Go MCP server source
+├── scripts/               ← hook scripts + test suite (pre-tool-hook, stop-hook, etc.)
+└── skills/forge/SKILL.md  ← orchestrator instructions (the main skill)
 ```
 
 ## How the Pieces Connect
@@ -82,7 +68,7 @@ SKILL.md (orchestrator)
   cd mcp-server && go test -race ./...
   ```
 
-### Key design decisions (see ARCHITECTURE.md for details)
+### Key design decisions (see [docs/architecture/technical-decisions.md](docs/architecture/technical-decisions.md) for details)
 - All agents use `model: sonnet` — cost optimization. Change to `opus` for agents that need stronger reasoning.
 - Hooks are fail-open — if jq is missing or parsing fails, the action is allowed rather than blocked.
 - State is file-based (state.json) — survives context compaction and session restarts.
@@ -230,14 +216,14 @@ tools → orchestrator → state
 - `orchestrator` must never import `tools`
 - Shared packages (`history`, `profile`, `prompt`, `validation`, `events`) may import `state` but not `orchestrator` or `tools`
 
-See `ARCHITECTURE.md` ("Go Package Layering") for the full rule set and rationale.
+See [`docs/architecture/go-package-layering.md`](docs/architecture/go-package-layering.md) for the full rule set and rationale.
 
 ---
 
 ## Before You Start Working
 
 1. Read `BACKLOG.md` for known issues and improvement candidates
-2. Read `ARCHITECTURE.md` for design rationale if making structural changes
+2. Read `docs/architecture/` for design rationale if making structural changes (see `ARCHITECTURE.md` for the index)
 3. Check `agents/README.md` for the current agent roster
 4. See the Canonical command list above for available MCP tools (all 26 state commands are in the Go MCP server)
 5. Read `.claude/rules/git.md` for Git branch and commit conventions

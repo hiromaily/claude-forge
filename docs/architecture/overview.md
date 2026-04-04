@@ -53,22 +53,8 @@ SKILL.md (orchestrator)
 
 ## Directory Structure
 
-```
-claude-forge/
-├── agents/              10 specialist agents (.md files)
-├── hooks/               Hook definitions (hooks.json)
-├── scripts/
-│   ├── common.sh        Shared helpers
-│   ├── pre-tool-hook.sh Read-only, commit blocking
-│   ├── post-agent-hook.sh Agent output validation
-│   ├── post-bash-hook.sh Auto-commit after post-to-source
-│   ├── stop-hook.sh     Pipeline completion guard
-│   └── test-hooks.sh    Automated test suite (62 tests)
-├── skills/
-│   └── forge/
-│       └── SKILL.md     Orchestrator instructions
-├── mcp-server/          Go MCP server source
-├── ARCHITECTURE.md      Full design rationale
-├── BACKLOG.md           Known issues and roadmap
-└── CLAUDE.md            AI agent guide
-```
+<!-- Claude Code: The directory structure below is included from docs/_partials/directory-structure.md,
+     which is the SSOT. Read that file directly for the canonical, up-to-date structure.
+     Do not edit this section — edit docs/_partials/directory-structure.md instead. -->
+
+<!--@include: ../_partials/directory-structure.md-->
