@@ -345,6 +345,43 @@ func handlePhase6Transition(
 		}, nil
 	}
 
+	// Before advancing the phase, check whether any task still needs a review.
+	// A task needs review when its impl artifact exists (ImplStatus==completed)
+	// but no review-{k}.md with a passing verdict is present yet.
+	// This mirrors the phase-5 setup_continue pattern so the engine can spawn
+	// reviewers for tasks 2..N without prematurely advancing to phase-7.
+	s, err := sm.GetState()
+	if err != nil {
+		return reportResultResponse{}, err
+	}
+	for k, t := range s.Tasks {
+		if t.ImplStatus != state.TaskStatusCompleted {
+			continue
+		}
+		reviewFile := filepath.Join(in.workspace, "review-"+k+".md")
+		if _, statErr := os.Stat(reviewFile); statErr != nil {
+			// Review file absent — this task still needs review.
+			return reportResultResponse{
+				StateUpdated:    true,
+				ArtifactWritten: artifactWritten,
+				VerdictParsed:   verdictParsed,
+				Findings:        allFindings,
+				NextActionHint:  "setup_continue",
+			}, nil
+		}
+		verdict, _, vErr := orchestrator.ParseVerdict(reviewFile)
+		if vErr != nil || verdict == orchestrator.VerdictFail {
+			// Unreadable or failing verdict — still has work; engine handles retry.
+			return reportResultResponse{
+				StateUpdated:    true,
+				ArtifactWritten: artifactWritten,
+				VerdictParsed:   verdictParsed,
+				Findings:        allFindings,
+				NextActionHint:  "setup_continue",
+			}, nil
+		}
+	}
+
 	if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
 		return reportResultResponse{}, err
 	}

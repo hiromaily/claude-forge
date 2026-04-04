@@ -96,11 +96,19 @@ func Guard3cTasksNonEmpty(phase string, s *state.State) error {
 // Guard3eCheckpointAwaitingHuman enforces Rule 3e: phase-complete on checkpoint-a,
 // checkpoint-b, or any phase currently in awaiting_human status requires
 // currentPhaseStatus == "awaiting_human".
-// Returns nil for phases that are not in awaiting_human status.
+// Returns nil for phases that are not in awaiting_human status, or for
+// checkpoint phases that are in SkippedPhases (skipped checkpoints are
+// completed via phase_complete directly without a prior checkpoint() call).
 func Guard3eCheckpointAwaitingHuman(phase string, s *state.State) error {
 	isCheckpoint := phase == state.PhaseCheckpointA || phase == state.PhaseCheckpointB
 	isAwaitingPhase := s.CurrentPhase == phase && s.CurrentPhaseStatus == state.StatusAwaitingHuman
 	if !isCheckpoint && !isAwaitingPhase {
+		return nil
+	}
+	// Skipped checkpoints do not require awaiting_human — the engine returns
+	// ActionDone (skip signal) and the orchestrator calls phase_complete directly
+	// without a prior checkpoint() call.
+	if slices.Contains(s.SkippedPhases, phase) {
 		return nil
 	}
 	if s.CurrentPhaseStatus != state.StatusAwaitingHuman {

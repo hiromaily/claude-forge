@@ -218,6 +218,20 @@ Tool names use underscores (`phase_complete`), not hyphens — MCP protocol requ
 
 The MCP server lives in `mcp-server/` as a **separate Go module** (`go.mod` with its own `module` path). This keeps the Go build hermetic from the rest of the repo (which has no Go code). Run `go mod tidy` from inside `mcp-server/` after adding dependencies. The `make build` / `make install` targets handle this automatically.
 
+### Go package layering
+
+The `mcp-server/internal/` packages form a strict one-way import DAG enforced by `import_cycle_test.go`:
+
+```
+tools → orchestrator → state
+```
+
+- `state` must never import `orchestrator` or `tools`
+- `orchestrator` must never import `tools`
+- Shared packages (`history`, `profile`, `prompt`, `validation`, `events`) may import `state` but not `orchestrator` or `tools`
+
+See `ARCHITECTURE.md` ("Go Package Layering") for the full rule set and rationale.
+
 ---
 
 ## Before You Start Working
