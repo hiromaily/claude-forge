@@ -33,7 +33,7 @@ const (
 // minimalTasksContent is written to tasks.md when Phase 4 (task decomposition) is
 // skipped for the light/S effort template. It creates a single sequential task
 // so that task_init can populate state and the implementer has a task to run.
-const minimalTasksContent = "# Tasks\n\n## Task 1: Implement\n\nImplement all changes described in design.md as a single implementation unit.\n\nmode: sequential\n"
+const minimalTasksContent = "# Tasks\n\n## Task 1: Implement\n\nApply all changes described in design.md as a single implementation unit.\n\nmode: sequential\n"
 
 // Engine computes the next pipeline action from the current state.
 // verdictReader and sourceTypeReader are injectable for testing;
