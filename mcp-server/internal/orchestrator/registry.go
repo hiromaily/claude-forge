@@ -166,6 +166,9 @@ func initRegistry() {
 	}
 	for _, d := range phaseRegistry {
 		for tmpl, skipped := range d.TemplateSkips {
+			if _, valid := st[tmpl]; !valid {
+				panic(fmt.Sprintf("orchestrator: phase %q has unknown template %q in TemplateSkips", d.ID, tmpl))
+			}
 			if skipped {
 				st[tmpl] = append(st[tmpl], d.ID)
 			}

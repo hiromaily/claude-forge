@@ -47,30 +47,12 @@ func TestPhaseRegistryLength(t *testing.T) {
 	}
 }
 
-// TestPhaseRegistryOrder verifies all 18 phase IDs appear in canonical pipeline order.
+// TestPhaseRegistryOrder verifies all phase IDs appear in canonical pipeline order
+// as defined by state.ValidPhases (the single source of truth).
 func TestPhaseRegistryOrder(t *testing.T) {
 	t.Parallel()
 
-	want := []string{
-		state.PhaseSetup,
-		state.PhaseOne,
-		state.PhaseTwo,
-		state.PhaseThree,
-		state.PhaseThreeB,
-		state.PhaseCheckpointA,
-		state.PhaseFour,
-		state.PhaseFourB,
-		state.PhaseCheckpointB,
-		state.PhaseFive,
-		state.PhaseSix,
-		state.PhaseSeven,
-		state.PhaseFinalVerification,
-		state.PhasePRCreation,
-		state.PhaseFinalSummary,
-		state.PhaseFinalCommit,
-		state.PhasePostToSource,
-		state.PhaseCompleted,
-	}
+	want := state.ValidPhases
 
 	if len(phaseRegistry) != len(want) {
 		t.Fatalf("len(phaseRegistry) = %d, want %d", len(phaseRegistry), len(want))
@@ -305,25 +287,25 @@ func TestInitRegistryPopulatesPhaseLabels(t *testing.T) {
 
 // TestInitRegistryPanicOnLengthMismatch verifies that initRegistry panics
 // when phaseRegistry and state.ValidPhases have different lengths.
-// It exercises the panic guard by calling initRegistry directly with a modified
-// temporary registry that has an extra entry.
-func TestInitRegistryConsistencyCheck(t *testing.T) {
-	t.Parallel()
+// Must not call t.Parallel() — it temporarily mutates the package-level phaseRegistry.
+func TestInitRegistryPanicOnLengthMismatch(t *testing.T) {
+	orig := phaseRegistry
+	defer func() { phaseRegistry = orig }()
 
-	// The consistency check is verified by the test above:
-	// if AllPhases, nonSkippable, allPhasesSet, skipTable, and phaseLabels are all
-	// correctly derived from phaseRegistry, and phaseRegistry has 18 entries matching
-	// state.ValidPhases, then the init() call must have succeeded (no panic).
-	// A panic at init time would prevent any test in this package from running.
+	// Append a dummy entry to make lengths diverge.
+	phaseRegistry = append(phaseRegistry, PhaseDescriptor{ID: "fake-phase", Skippable: true})
 
-	if len(AllPhases) != len(state.ValidPhases) {
-		t.Errorf("AllPhases length = %d, want %d (state.ValidPhases length); "+
-			"initRegistry() may not have run correctly", len(AllPhases), len(state.ValidPhases))
-	}
+	panicked := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicked = true
+			}
+		}()
+		initRegistry()
+	}()
 
-	for i, phase := range AllPhases {
-		if phase != state.ValidPhases[i] {
-			t.Errorf("AllPhases[%d] = %q, want %q (state.ValidPhases[%d])", i, phase, state.ValidPhases[i], i)
-		}
+	if !panicked {
+		t.Error("initRegistry() did not panic on phaseRegistry/state.ValidPhases length mismatch")
 	}
 }
