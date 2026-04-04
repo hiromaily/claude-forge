@@ -18,6 +18,7 @@ import (
 // Agent name constants — unexported; used only inside NextAction dispatch.
 const (
 	agentSituationAnalyst    = "situation-analyst"
+	agentAnalystInvestigator = "situation-analyst-investigator"
 	agentInvestigator        = "investigator"
 	agentArchitect           = "architect"
 	agentDesignReviewer      = "design-reviewer"
@@ -28,6 +29,11 @@ const (
 	agentComprehensiveReview = "comprehensive-reviewer"
 	agentVerifier            = "verifier"
 )
+
+// minimalTasksContent is written to tasks.md when Phase 4 (task decomposition) is
+// skipped for the light/S effort template. It creates a single sequential task
+// so that task_init can populate state and the implementer has a task to run.
+const minimalTasksContent = "# Tasks\n\n## Task 1: Implement\n\nApply all changes described in design.md as a single implementation unit.\n\nmode: sequential\n"
 
 // Engine computes the next pipeline action from the current state.
 // verdictReader and sourceTypeReader are injectable for testing;
@@ -118,8 +124,19 @@ func (e *Engine) NextAction(sm *state.StateManager, _ string) (Action, error) {
 }
 
 // handlePhaseOne handles Phase 1 (situation analysis).
-// Always dispatches agentSituationAnalyst.
-func (*Engine) handlePhaseOne(_ *state.State) (Action, error) {
+// When Phase 2 is in SkippedPhases (light/S template), dispatches the combined
+// analyst-investigator agent so both analyses are written to analysis.md in one pass.
+func (*Engine) handlePhaseOne(st *state.State) (Action, error) {
+	if slices.Contains(st.SkippedPhases, PhaseTwo) {
+		return NewSpawnAgentAction(
+			agentAnalystInvestigator,
+			"Run Phase 1 combined situation analysis and investigation.",
+			state.DefaultModel,
+			PhaseOne,
+			[]string{state.ArtifactRequest},
+			state.ArtifactAnalysis,
+		), nil
+	}
 	return NewSpawnAgentAction(
 		agentSituationAnalyst,
 		"Run Phase 1 situation analysis for the pipeline.",
@@ -143,13 +160,19 @@ func (*Engine) handlePhaseTwo(_ *state.State) (Action, error) {
 }
 
 // handlePhaseThree handles Phase 3 (architect).
-func (*Engine) handlePhaseThree(_ *state.State) (Action, error) {
+// investigation.md is included in inputs only when Phase 2 was not skipped
+// (it is absent when Phase 2 is in SkippedPhases, e.g. light/S template).
+func (*Engine) handlePhaseThree(st *state.State) (Action, error) {
+	inputFiles := []string{state.ArtifactRequest, state.ArtifactAnalysis}
+	if !slices.Contains(st.SkippedPhases, PhaseTwo) {
+		inputFiles = append(inputFiles, state.ArtifactInvestigation)
+	}
 	return NewSpawnAgentAction(
 		agentArchitect,
 		"Run Phase 3 architecture/design.",
 		state.DefaultModel,
 		PhaseThree,
-		[]string{state.ArtifactRequest, state.ArtifactAnalysis, state.ArtifactInvestigation},
+		inputFiles,
 		state.ArtifactDesign,
 	), nil
 }
@@ -190,6 +213,10 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 
 	// Decision 20 — Auto-approve gate
 	if st.AutoApprove && (verdict == VerdictApprove || verdict == VerdictApproveWithNotes) {
+		if slices.Contains(st.SkippedPhases, PhaseFour) {
+			// Phase 4 is skipped; complete phase-3b and let checkpoint-a handle auto-approval.
+			return NewDoneAction(SkipSummaryPrefix+PhaseThreeB, ""), nil
+		}
 		return NewSpawnAgentAction(
 			agentTaskDecomposer,
 			"Decompose the approved design into tasks.",
@@ -202,9 +229,13 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 
 	switch verdict {
 	case VerdictApprove, VerdictApproveWithNotes:
+		nextStep := "task decomposition"
+		if slices.Contains(st.SkippedPhases, PhaseFour) {
+			nextStep = "implementation"
+		}
 		return NewCheckpointAction(
 			"design-approved",
-			"Design review complete. Verdict: "+string(verdict)+". Proceed to task decomposition?",
+			"Design review complete. Verdict: "+string(verdict)+". Proceed to "+nextStep+"?",
 			[]string{"proceed", "revise"},
 		), nil
 	case VerdictRevise:
@@ -227,10 +258,20 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 }
 
 // handleCheckpointA handles checkpoint-a (between design review and task decomposition).
-func (*Engine) handleCheckpointA(_ *state.State) (Action, error) {
+// When phase-4 is skipped and auto-approve is on, the checkpoint is auto-skipped.
+// When phase-4 is skipped, the checkpoint message refers to Phase 5 instead of Phase 4.
+func (*Engine) handleCheckpointA(st *state.State) (Action, error) {
+	// When phase-4 is skipped and auto-approve is on, skip this checkpoint too.
+	if slices.Contains(st.SkippedPhases, PhaseFour) && st.AutoApprove {
+		return NewDoneAction(SkipSummaryPrefix+PhaseCheckpointA, ""), nil
+	}
+	msg := "Checkpoint A reached. Design approved. Proceed to Phase 4 (task decomposition)?"
+	if slices.Contains(st.SkippedPhases, PhaseFour) {
+		msg = "Checkpoint A reached. Design approved. Proceed to Phase 5 (implementation)?"
+	}
 	return NewCheckpointAction(
 		PhaseCheckpointA,
-		"Checkpoint A reached. Design approved. Proceed to Phase 4 (task decomposition)?",
+		msg,
 		[]string{"proceed", "revise", "abandon"},
 	), nil
 }
@@ -337,8 +378,24 @@ func (*Engine) handleCheckpointB(_ *state.State) (Action, error) {
 // records phase-log but does NOT call PhaseComplete. The engine re-enters on
 // the next pipeline_next_action call to check the next pre-condition.
 func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
-	// Decision 27 — task_init setup
+	// Decision 27 — task setup
 	if len(st.Tasks) == 0 {
+		// When phase-4 is skipped, write a minimal tasks.md before task_init.
+		if slices.Contains(st.SkippedPhases, PhaseFour) {
+			tasksPath := filepath.Join(st.Workspace, state.ArtifactTasks)
+			if _, err := os.Stat(tasksPath); err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					return Action{
+						Type:      ActionWriteFile,
+						Phase:     PhaseFive,
+						Path:      tasksPath,
+						Content:   minimalTasksContent,
+						SetupOnly: true,
+					}, nil
+				}
+				return Action{}, fmt.Errorf("handlePhaseFive: stat %s: %w", tasksPath, err)
+			}
+		}
 		return NewSetupExecAction(PhaseFive, []string{"task_init", st.Workspace}), nil
 	}
 
