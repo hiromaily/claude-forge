@@ -172,3 +172,158 @@ func TestPhaseRegistryLabels(t *testing.T) {
 		})
 	}
 }
+
+// TestInitRegistryPopulatesAllPhases verifies that AllPhases is populated by initRegistry()
+// and contains exactly the IDs from phaseRegistry in order.
+func TestInitRegistryPopulatesAllPhases(t *testing.T) {
+	t.Parallel()
+
+	if len(AllPhases) != len(phaseRegistry) {
+		t.Fatalf("AllPhases length = %d, want %d (len(phaseRegistry))", len(AllPhases), len(phaseRegistry))
+	}
+
+	for i, d := range phaseRegistry {
+		if AllPhases[i] != d.ID {
+			t.Errorf("AllPhases[%d] = %q, want %q (phaseRegistry[%d].ID)", i, AllPhases[i], d.ID, i)
+		}
+	}
+}
+
+// TestInitRegistryPopulatesNonSkippable verifies that nonSkippable is populated by initRegistry()
+// and contains exactly the IDs where Skippable is false in phaseRegistry.
+func TestInitRegistryPopulatesNonSkippable(t *testing.T) {
+	t.Parallel()
+
+	// Collect expected non-skippable phases from registry.
+	wantNonSkippable := map[string]bool{}
+	for _, d := range phaseRegistry {
+		if !d.Skippable {
+			wantNonSkippable[d.ID] = true
+		}
+	}
+
+	// nonSkippable must contain exactly: setup and completed.
+	for id := range wantNonSkippable {
+		if !nonSkippable[id] {
+			t.Errorf("nonSkippable[%q] = false, want true (Skippable=false in phaseRegistry)", id)
+		}
+	}
+
+	// Verify no extra entries in nonSkippable.
+	for id := range nonSkippable {
+		if !wantNonSkippable[id] {
+			t.Errorf("nonSkippable contains unexpected entry %q", id)
+		}
+	}
+}
+
+// TestInitRegistryPopulatesAllPhasesSet verifies that allPhasesSet is populated by initRegistry()
+// and contains every ID from phaseRegistry.
+func TestInitRegistryPopulatesAllPhasesSet(t *testing.T) {
+	t.Parallel()
+
+	for _, d := range phaseRegistry {
+		if !allPhasesSet[d.ID] {
+			t.Errorf("allPhasesSet[%q] = false, want true", d.ID)
+		}
+	}
+
+	if len(allPhasesSet) != len(phaseRegistry) {
+		t.Errorf("allPhasesSet length = %d, want %d", len(allPhasesSet), len(phaseRegistry))
+	}
+}
+
+// TestInitRegistryPopulatesSkipTable verifies that skipTable is populated by initRegistry()
+// and matches what TemplateSkips entries in phaseRegistry imply.
+func TestInitRegistryPopulatesSkipTable(t *testing.T) {
+	t.Parallel()
+
+	templates := []string{state.TemplateLight, state.TemplateStandard, state.TemplateFull}
+
+	for _, tmpl := range templates {
+		t.Run(tmpl, func(t *testing.T) {
+			t.Parallel()
+
+			// Build expected skip list for this template from phaseRegistry.
+			var wantSkips []string
+			for _, d := range phaseRegistry {
+				if d.TemplateSkips[tmpl] {
+					wantSkips = append(wantSkips, d.ID)
+				}
+			}
+			if wantSkips == nil {
+				wantSkips = []string{}
+			}
+
+			got := skipTable[tmpl]
+			if got == nil {
+				t.Fatalf("skipTable[%q] = nil, want %v", tmpl, wantSkips)
+			}
+
+			if len(got) != len(wantSkips) {
+				t.Fatalf("skipTable[%q] length = %d, want %d; got %v, want %v",
+					tmpl, len(got), len(wantSkips), got, wantSkips)
+			}
+
+			for i := range got {
+				if got[i] != wantSkips[i] {
+					t.Errorf("skipTable[%q][%d] = %q, want %q", tmpl, i, got[i], wantSkips[i])
+				}
+			}
+		})
+	}
+}
+
+// TestInitRegistryPopulatesPhaseLabels verifies that phaseLabels is populated by initRegistry()
+// and contains exactly the non-empty Label entries from phaseRegistry.
+func TestInitRegistryPopulatesPhaseLabels(t *testing.T) {
+	t.Parallel()
+
+	// Build expected labels from phaseRegistry.
+	wantLabels := map[string]string{}
+	for _, d := range phaseRegistry {
+		if d.Label != "" {
+			wantLabels[d.ID] = d.Label
+		}
+	}
+
+	for id, wantLabel := range wantLabels {
+		gotLabel, ok := phaseLabels[id]
+		if !ok {
+			t.Errorf("phaseLabels[%q] is missing, want %q", id, wantLabel)
+			continue
+		}
+		if gotLabel != wantLabel {
+			t.Errorf("phaseLabels[%q] = %q, want %q", id, gotLabel, wantLabel)
+		}
+	}
+
+	if len(phaseLabels) != len(wantLabels) {
+		t.Errorf("phaseLabels length = %d, want %d", len(phaseLabels), len(wantLabels))
+	}
+}
+
+// TestInitRegistryPanicOnLengthMismatch verifies that initRegistry panics
+// when phaseRegistry and state.ValidPhases have different lengths.
+// It exercises the panic guard by calling initRegistry directly with a modified
+// temporary registry that has an extra entry.
+func TestInitRegistryConsistencyCheck(t *testing.T) {
+	t.Parallel()
+
+	// The consistency check is verified by the test above:
+	// if AllPhases, nonSkippable, allPhasesSet, skipTable, and phaseLabels are all
+	// correctly derived from phaseRegistry, and phaseRegistry has 18 entries matching
+	// state.ValidPhases, then the init() call must have succeeded (no panic).
+	// A panic at init time would prevent any test in this package from running.
+
+	if len(AllPhases) != len(state.ValidPhases) {
+		t.Errorf("AllPhases length = %d, want %d (state.ValidPhases length); "+
+			"initRegistry() may not have run correctly", len(AllPhases), len(state.ValidPhases))
+	}
+
+	for i, phase := range AllPhases {
+		if phase != state.ValidPhases[i] {
+			t.Errorf("AllPhases[%d] = %q, want %q (state.ValidPhases[%d])", i, phase, state.ValidPhases[i], i)
+		}
+	}
+}

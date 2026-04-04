@@ -1,6 +1,10 @@
 package orchestrator
 
-import "github.com/hiromaily/claude-forge/mcp-server/internal/state"
+import (
+	"fmt"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+)
 
 // PhaseDescriptor holds the static metadata for one pipeline phase.
 // The ordered slice of descriptors (phaseRegistry) is the single source of truth
@@ -84,4 +88,97 @@ var phaseRegistry = []PhaseDescriptor{
 	{ID: PhaseFinalCommit, Skippable: true},
 	{ID: PhasePostToSource, Skippable: true},
 	{ID: PhaseCompleted, Skippable: false},
+}
+
+// init calls initRegistry once at package load time to populate all derived vars.
+func init() {
+	initRegistry()
+}
+
+// initRegistry populates AllPhases, nonSkippable, allPhasesSet, skipTable, and phaseLabels
+// from the phaseRegistry declaration. It panics if phaseRegistry is inconsistent with
+// state.ValidPhases (different lengths or IDs not found in state.ValidPhases).
+//
+// All derived vars are zero-valued at declaration and assigned here, so they are
+// always in sync with the single source of truth: phaseRegistry.
+func initRegistry() {
+	// Consistency check: lengths must match.
+	if len(phaseRegistry) != len(state.ValidPhases) {
+		panic(fmt.Sprintf(
+			"orchestrator: phaseRegistry has %d entries but state.ValidPhases has %d entries; "+
+				"add or remove the corresponding entry in the other slice",
+			len(phaseRegistry), len(state.ValidPhases),
+		))
+	}
+
+	// Build a fast lookup set from state.ValidPhases for the ID check.
+	validSet := make(map[string]bool, len(state.ValidPhases))
+	for _, id := range state.ValidPhases {
+		validSet[id] = true
+	}
+
+	// Verify every phaseRegistry ID is in state.ValidPhases (and in the same order).
+	for i, d := range phaseRegistry {
+		if !validSet[d.ID] {
+			panic(fmt.Sprintf(
+				"orchestrator: phaseRegistry[%d].ID = %q is not present in state.ValidPhases",
+				i, d.ID,
+			))
+		}
+		if d.ID != state.ValidPhases[i] {
+			panic(fmt.Sprintf(
+				"orchestrator: phaseRegistry[%d].ID = %q but state.ValidPhases[%d] = %q; "+
+					"phaseRegistry and state.ValidPhases must be in the same order",
+				i, d.ID, i, state.ValidPhases[i],
+			))
+		}
+	}
+
+	// Derive AllPhases: ordered slice of IDs.
+	phases := make([]string, len(phaseRegistry))
+	for i, d := range phaseRegistry {
+		phases[i] = d.ID
+	}
+	AllPhases = phases
+
+	// Derive nonSkippable: set of IDs where Skippable == false.
+	ns := make(map[string]bool)
+	for _, d := range phaseRegistry {
+		if !d.Skippable {
+			ns[d.ID] = true
+		}
+	}
+	nonSkippable = ns
+
+	// Derive allPhasesSet: set of all IDs.
+	aps := make(map[string]bool, len(phaseRegistry))
+	for _, d := range phaseRegistry {
+		aps[d.ID] = true
+	}
+	allPhasesSet = aps
+
+	// Derive skipTable: for each known template, collect IDs where TemplateSkips[template] is true.
+	// Always initialize the slice for every known template (even if empty) so that
+	// SkipsForTemplate("full") returns []string{} (non-nil).
+	st := make(map[string][]string, len(state.ValidTemplates))
+	for _, tmpl := range state.ValidTemplates {
+		st[tmpl] = []string{}
+	}
+	for _, d := range phaseRegistry {
+		for tmpl, skipped := range d.TemplateSkips {
+			if skipped {
+				st[tmpl] = append(st[tmpl], d.ID)
+			}
+		}
+	}
+	skipTable = st
+
+	// Derive phaseLabels: map of ID → Label for non-empty labels.
+	pl := make(map[string]string)
+	for _, d := range phaseRegistry {
+		if d.Label != "" {
+			pl[d.ID] = d.Label
+		}
+	}
+	phaseLabels = pl
 }

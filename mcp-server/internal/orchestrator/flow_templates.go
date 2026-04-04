@@ -10,11 +10,8 @@ const (
 )
 
 // skipTable maps flow template name → ordered list of phases to skip at workspace setup.
-var skipTable = map[string][]string{
-	state.TemplateLight:    {PhaseTwo, PhaseFour, PhaseFourB, PhaseCheckpointB, PhaseSeven},
-	state.TemplateStandard: {PhaseFourB, PhaseCheckpointB},
-	state.TemplateFull:     {},
-}
+// Assigned by initRegistry() in registry.go from phaseRegistry TemplateSkips fields.
+var skipTable map[string][]string
 
 // SkipsForTemplate returns the base skip list for a template name.
 // Returns nil for unknown templates.
@@ -35,14 +32,8 @@ func SkipsForEffort(effort string) []string {
 }
 
 // phaseLabels maps phase IDs to human-readable labels for display in effort_options.
-var phaseLabels = map[string]string{
-	PhaseTwo:         "Investigation",
-	PhaseFour:        "Task Decomposition",
-	PhaseFourB:       "Tasks AI Review",
-	PhaseCheckpointA: "Design Checkpoint",
-	PhaseCheckpointB: "Tasks Checkpoint",
-	PhaseSeven:       "Comprehensive Review",
-}
+// Assigned by initRegistry() in registry.go from phaseRegistry Label fields.
+var phaseLabels map[string]string
 
 // PhaseLabel returns a human-readable label for a phase ID.
 func PhaseLabel(phaseID string) string {
