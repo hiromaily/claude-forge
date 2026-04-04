@@ -212,10 +212,28 @@ func TestGuard3e_NonCheckpointPhase_NoCheck(t *testing.T) {
 }
 
 func TestGuard3e_CheckpointBAwaitingHuman_NoError(t *testing.T) {
+	t.Parallel()
 	s := buildTestState()
 	s.CurrentPhaseStatus = "awaiting_human"
 	if err := Guard3eCheckpointAwaitingHuman("checkpoint-b", s); err != nil {
 		t.Errorf("expected nil error for checkpoint-b awaiting_human, got: %v", err)
+	}
+}
+
+func TestGuard3e_SkippedCheckpoint_NoError(t *testing.T) {
+	t.Parallel()
+	// A skipped checkpoint must not require awaiting_human — the engine returns
+	// ActionDone (skip signal) and phase_complete is called directly.
+	for _, phase := range []string{"checkpoint-a", "checkpoint-b"} {
+		t.Run(phase, func(t *testing.T) {
+			t.Parallel()
+			s := buildTestState()
+			s.CurrentPhaseStatus = "pending"
+			s.SkippedPhases = []string{phase}
+			if err := Guard3eCheckpointAwaitingHuman(phase, s); err != nil {
+				t.Errorf("expected nil for skipped %s, got: %v", phase, err)
+			}
+		})
 	}
 }
 

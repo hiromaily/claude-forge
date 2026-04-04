@@ -255,6 +255,41 @@ func TestPipelineReportResult(t *testing.T) {
 			},
 		},
 		{
+			name:  "phase6_multi_task_pending_review",
+			phase: "phase-6",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				// Set up 2 tasks, both implemented. Task 1 reviewed (PASS), task 2 not yet.
+				tasks := map[string]state.Task{
+					"1": {ImplStatus: state.TaskStatusCompleted},
+					"2": {ImplStatus: state.TaskStatusCompleted},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				content := "## Summary\n\n## Verdict: PASS\n\nAll tests passed.\n"
+				if err := os.WriteFile(filepath.Join(dir, "review-1.md"), []byte(content), 0o644); err != nil {
+					t.Fatalf("WriteFile review-1.md: %v", err)
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "setup_continue",
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				// phase-6 must NOT advance while task 2 still needs review.
+				for _, p := range s.CompletedPhases {
+					if p == "phase-6" {
+						t.Error("phase-6 must NOT be in CompletedPhases while task 2 is unreviewed")
+					}
+				}
+			},
+		},
+		{
 			name:  "phase6_structurally_valid_but_fail",
 			phase: "phase-6",
 			setup: func(t *testing.T, sm *state.StateManager, dir string) {
