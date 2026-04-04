@@ -298,13 +298,18 @@ Which phases run is primarily determined by effort level. ✅ = phase runs; blan
 
 ## Human interaction points
 
+<!-- SSOT: docs/_partials/human-interaction-points.md — edit that file, not this section.
+     This file is not VitePress-processed, so the @include directive cannot be used here.
+     Keep this in sync with docs/_partials/human-interaction-points.md manually.
+     The canonical version is also rendered at docs/architecture/human-interaction.md. -->
+
 The pipeline pauses and returns control to the user at the following points. Points marked **blocking** require a response before the pipeline can continue; points marked **informational** present output with no further input needed.
 
 ### Input Validation
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 1 | `mcp__forge-state__validate_input` returns `valid: false` (empty, too short, malformed URL) | Error messages from the `errors` field; pipeline stops | Yes — pipeline aborts |
+| 1 | `mcp__forge-state__validate_input` returns an error (empty, too short, malformed URL) | Error messages; pipeline stops | Yes — pipeline aborts |
 | 2 | LLM judges input as gibberish or unrelated to software development | Rejection message with specific reason and valid-input examples; pipeline stops | Yes — pipeline aborts |
 | 3 | Jira URL provided but `mcp__atlassian__getJiraIssue` tool unavailable | Error with plugin install instructions; pipeline stops | Yes — pipeline aborts |
 
@@ -313,45 +318,46 @@ The pipeline pauses and returns control to the user at the following points. Poi
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
 | 4 | Current git branch is not `main`/`master` | Branch name shown; choice to use the current branch or create a new one | Yes — waits for choice |
-| 5 | Always — effort level selection is required on every run | User selects effort level (S / M / L) and sees which phases will execute for that choice | Yes — waits for selection |
+| 5 | Effort level selection (always required) | User selects effort level (S / M / L) and sees which phases will execute for that choice | Yes — waits for selection |
+| 6 | `full` template and `--auto` flag used together | Warning that `full` mandates manual checkpoints; asked to continue without auto-approve or abort | Yes — waits for choice |
 
 ### Checkpoint A — Design Review
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 6 | Auto-approve conditions met (`--auto` + AI verdict APPROVE or APPROVE_WITH_NOTES, no CRITICAL findings) | One-line notice: "Auto-approving Checkpoint A (AI verdict: …)" | No — informational |
-| 7 | Human approval required (AI returned REVISE, or no `--auto`) | Design summary: approach, key changes, risk level, AI verdict, any MINOR findings, workspace path. Asked to approve or give feedback. Sound notification plays. After each revision cycle the updated design is re-presented and the pipeline stops again | Yes — **STOP AND WAIT** |
+| 7 | Auto-approve conditions met (`--auto` + AI verdict APPROVE or APPROVE_WITH_NOTES, no CRITICAL findings) | One-line notice: "Auto-approving Checkpoint A (AI verdict: …)" | No — informational |
+| 8 | Human approval required (AI returned REVISE, or no `--auto`, or `full` template) | Design summary: approach, key changes, risk level, AI verdict, any MINOR findings, workspace path. Asked to approve or give feedback. Sound notification plays. After each revision cycle the updated design is re-presented and the pipeline stops again | Yes — **STOP AND WAIT** |
 
 ### Checkpoint B — Tasks Review
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 8 | Auto-approve conditions met | One-line notice: "Auto-approving Checkpoint B (AI verdict: …)" | No — informational |
-| 9 | Human approval required | Task overview: task count, risk level, AI verdict, any MINOR findings, workspace path. Asked to approve or give feedback. Sound notification plays. After each revision cycle the updated task list is re-presented and the pipeline stops again | Yes — **STOP AND WAIT** |
+| 9 | Auto-approve conditions met | One-line notice: "Auto-approving Checkpoint B (AI verdict: …)" | No — informational |
+| 10 | Human approval required | Task overview: task count, risk level, AI verdict, any MINOR findings, workspace path. Asked to approve or give feedback. Sound notification plays. After each revision cycle the updated task list is re-presented and the pipeline stops again | Yes — **STOP AND WAIT** |
 
 ### Implementation (Phase 5–6 loop)
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 10 | A task's impl-reviewer returns FAIL and the per-task retry limit (2) is exhausted | Failure report for that task; asked how to proceed | Yes — waits for instruction |
-| 11 | A subagent returns empty or incoherent output and the single retry also fails | Failure reported; `phase-fail` recorded in state | Yes — pipeline stalls until user intervenes |
-| 12 | Test suite fails after implementation completes | Failure output presented; `phase-fail` recorded in state | Yes — pipeline stalls |
+| 11 | A task's impl-reviewer returns FAIL and the per-task retry limit (2) is exhausted | Failure report for that task; asked how to proceed | Yes — waits for instruction |
+| 12 | A subagent returns empty or incoherent output and the single retry also fails | Failure reported; `phase-fail` recorded in state | Yes — pipeline stalls until user intervenes |
+| 13 | Test suite fails after implementation completes | Failure output presented; `phase-fail` recorded in state | Yes — pipeline stalls |
 
 ### Final Verification
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 13 | Verifier finds failures it cannot fix | Failure report presented to user | Yes — pipeline stalls |
+| 14 | Verifier finds failures it cannot fix | Failure report presented to user | Yes — pipeline stalls |
 
 ### Pipeline End
 
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
-| 14 | `summary.md` written successfully | Full contents of `summary.md` displayed (request, branch, PR, task table, improvement report, execution stats). Sound notification plays. | No — informational |
+| 15 | `summary.md` written successfully | Full contents of `summary.md` displayed (request, branch, PR, task table, improvement report, execution stats). Sound notification plays. | No — informational |
 
 ---
 
-> **Skipped checkpoints:** Checkpoint A is skipped entirely for `investigation` tasks (all effort levels). Checkpoint B is skipped for all `bugfix`, `docs`, `investigation`, and `refactor` tasks regardless of effort, and is also skipped for effort S and M (only effort L runs Checkpoint B).
+> **Skipped checkpoints:** Checkpoint B is skipped for effort S and M (only effort L runs Checkpoint B). Phase 4b (task reviewer) is also skipped for effort S and M. Use `--auto` to allow the AI reviewer verdict to auto-approve Checkpoint A (not available with `full` template).
 
 ---
 
@@ -500,28 +506,33 @@ The pipeline is built on three core principles:
 2. **State on disk** — All progress is tracked in `state.json`, so pipelines survive context compaction and session restarts. Hooks read this state to enforce constraints.
 3. **Two-layer compliance** — Critical invariants (read-only analysis, no parallel commits, checkpoint gates) are enforced both by agent instructions (probabilistic) and hook scripts (deterministic, fail-open).
 
-For the full data flow, state machine, hook architecture, agent input/output matrix, and concurrency model, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For the full data flow, state machine, hook architecture, agent input/output matrix, and concurrency model, see [ARCHITECTURE.md](ARCHITECTURE.md) (index) or browse [`docs/architecture/`](docs/architecture/) directly.
 
 ---
 
 ## Directory structure
 
+<!-- SSOT: docs/_partials/directory-structure.md — edit that file, not this section.
+     This file is not VitePress-processed, so the @include directive cannot be used here.
+     Keep this in sync with docs/_partials/directory-structure.md manually. -->
+
 ```text
 claude-forge/
-  agents/             10 specialist agents (.md files with YAML frontmatter)
-  hooks/              Hook definitions (hooks.json)
-  scripts/
-    common.sh                 Shared find_active_workspace helper (sourced by pre-tool-hook and stop-hook)
-    pre-tool-hook.sh          Read-only, commit blocking, main/master checkout block
-    post-agent-hook.sh        Agent output quality validation
-    stop-hook.sh              Pipeline completion guard
-    test-hooks.sh             Automated hook test suite (62 tests; run to verify)
-  skills/
-    forge/
-      SKILL.md        Orchestrator instructions (the main skill)
-  ARCHITECTURE.md     Design decisions and data flow diagrams
-  BACKLOG.md          Known issues and improvement candidates
-  CLAUDE.md           Guide for AI agents modifying this plugin
+├── CLAUDE.md              AI agent guide (auto-loaded by Claude Code)
+├── ARCHITECTURE.md        Index (full docs in docs/architecture/)
+├── BACKLOG.md             Known issues, improvement candidates
+├── agents/                10 named agent definitions (.md files)
+├── docs/
+│   ├── _partials/         SSOT content fragments (included by docs/ files)
+│   └── architecture/      Architecture documentation (13 focused files)
+├── hooks/                 Hook definitions (hooks.json)
+├── mcp-server/            Go MCP server source (forge-state binary)
+├── scripts/               Hook scripts and test suite
+│   ├── pre-tool-hook.sh   Read-only guard, commit blocking, checkout blocking
+│   ├── post-agent-hook.sh Agent output quality validation
+│   ├── stop-hook.sh       Pipeline completion guard
+│   └── test-hooks.sh      Automated hook test suite (62 tests)
+└── skills/forge/SKILL.md  Orchestrator instructions (the main skill)
 ```
 
 ---
@@ -534,7 +545,7 @@ Key choices that shape the plugin's architecture:
 - **The orchestrator never reads source code** — only small artifact files, keeping its context window lean.
 - **Parallel implementation with mkdir-based locking** — macOS lacks `flock`, so atomic `mkdir` is used instead. Parallel agents skip `git commit`; the orchestrator batch-commits after the group finishes.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for full rationale on these and other decisions (fail-open hooks, file-based state, agent separation).
+See [docs/architecture/technical-decisions.md](docs/architecture/technical-decisions.md) for full rationale on these and other decisions (fail-open hooks, file-based state, agent separation).
 
 ---
 
