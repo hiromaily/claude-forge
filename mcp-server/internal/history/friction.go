@@ -242,7 +242,15 @@ func readImprovementContent(specDir string) string {
 // level or end of file. Returns "" if the heading is not found.
 func extractSection(text, heading string) string {
 	headingLevel := countLeadingHashes(heading)
-	idx := strings.Index(text, heading)
+	idx := -1
+	if strings.HasPrefix(text, heading) {
+		idx = 0
+	} else {
+		idx = strings.Index(text, "\n"+heading)
+		if idx >= 0 {
+			idx++ // skip the newline
+		}
+	}
 	if idx < 0 {
 		return ""
 	}
