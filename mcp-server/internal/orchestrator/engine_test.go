@@ -1213,23 +1213,23 @@ func TestHandlePhaseOne_CombinedAgent(t *testing.T) {
 }
 
 // TestHandlePhaseThree_InvestigationOptional verifies that handlePhaseThree includes
-// investigation.md in InputFiles only when the file exists on disk.
+// investigation.md in InputFiles only when Phase 2 was not skipped.
 func TestHandlePhaseThree_InvestigationOptional(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name               string
-		writeInvestigation bool
+		phaseTwoSkipped    bool
 		wantContainsInvest bool
 	}{
 		{
 			name:               "investigation_absent_not_included",
-			writeInvestigation: false,
+			phaseTwoSkipped:    true,
 			wantContainsInvest: false,
 		},
 		{
 			name:               "investigation_present_included",
-			writeInvestigation: true,
+			phaseTwoSkipped:    false,
 			wantContainsInvest: true,
 		},
 	}
@@ -1238,17 +1238,12 @@ func TestHandlePhaseThree_InvestigationOptional(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			sm := newTestStateManager(t, "phase-3", nil)
-			st, err := sm.GetState()
-			if err != nil {
-				t.Fatalf("GetState: %v", err)
-			}
-
-			if tc.writeInvestigation {
-				if err := writeFileForTest(st.Workspace+"/investigation.md", "# Investigation\n"); err != nil {
-					t.Fatalf("writeFileForTest: %v", err)
+			sm := newTestStateManager(t, "phase-3", func(s *state.State) error {
+				if tc.phaseTwoSkipped {
+					s.SkippedPhases = []string{PhaseTwo}
 				}
-			}
+				return nil
+			})
 
 			action, err := defaultEng().NextAction(sm, "")
 			if err != nil {

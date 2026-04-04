@@ -160,12 +160,11 @@ func (*Engine) handlePhaseTwo(_ *state.State) (Action, error) {
 }
 
 // handlePhaseThree handles Phase 3 (architect).
-// investigation.md is included in inputs only when the file exists on disk
-// (it is absent when Phase 2 was skipped in the light/S template).
+// investigation.md is included in inputs only when Phase 2 was not skipped
+// (it is absent when Phase 2 is in SkippedPhases, e.g. light/S template).
 func (*Engine) handlePhaseThree(st *state.State) (Action, error) {
 	inputFiles := []string{state.ArtifactRequest, state.ArtifactAnalysis}
-	investigationPath := filepath.Join(st.Workspace, state.ArtifactInvestigation)
-	if _, err := os.Stat(investigationPath); err == nil {
+	if !slices.Contains(st.SkippedPhases, PhaseTwo) {
 		inputFiles = append(inputFiles, state.ArtifactInvestigation)
 	}
 	return NewSpawnAgentAction(
@@ -384,14 +383,17 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		// When phase-4 is skipped, write a minimal tasks.md before task_init.
 		if slices.Contains(st.SkippedPhases, PhaseFour) {
 			tasksPath := filepath.Join(st.Workspace, state.ArtifactTasks)
-			if _, err := os.Stat(tasksPath); errors.Is(err, os.ErrNotExist) {
-				return Action{
-					Type:      ActionWriteFile,
-					Phase:     PhaseFive,
-					Path:      tasksPath,
-					Content:   minimalTasksContent,
-					SetupOnly: true,
-				}, nil
+			if _, err := os.Stat(tasksPath); err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					return Action{
+						Type:      ActionWriteFile,
+						Phase:     PhaseFive,
+						Path:      tasksPath,
+						Content:   minimalTasksContent,
+						SetupOnly: true,
+					}, nil
+				}
+				return Action{}, fmt.Errorf("handlePhaseFive: stat %s: %w", tasksPath, err)
 			}
 		}
 		return NewSetupExecAction(PhaseFive, []string{"task_init", st.Workspace}), nil
