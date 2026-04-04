@@ -112,10 +112,10 @@ func (e *Engine) NextAction(sm *state.StateManager, _ string) (Action, error) {
 		return e.handlePRCreation(st)
 	case PhaseFinalSummary:
 		return e.handleFinalSummary(st)
-	case PhaseFinalCommit:
-		return e.handleFinalCommit(st)
 	case PhasePostToSource:
 		return e.handlePostToSource(st)
+	case PhaseFinalCommit:
+		return e.handleFinalCommit(st)
 	case PhaseCompleted:
 		return NewDoneAction("pipeline completed", ""), nil
 	default:
@@ -634,9 +634,9 @@ func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
 }
 
 // handleFinalCommit handles the final-commit phase — Decision 27.
-// After PR creation and final summary generation, summary.md and state.json
-// exist only locally. This step amends the last commit to include them
-// and force-pushes so the PR branch contains the final summary with the PR number.
+// This is the last phase before completed. The orchestrator calls pipeline_report_result
+// FIRST (which transitions state.json to "completed"), then amends the last commit so
+// that state.json is captured in its final state. Force-pushes the PR branch.
 // Skipped when PR creation was skipped (--nopr or pr-creation in skippedPhases),
 // since there is no commit to amend.
 func (*Engine) handleFinalCommit(st *state.State) (Action, error) {

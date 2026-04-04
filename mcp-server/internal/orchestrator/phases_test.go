@@ -25,7 +25,7 @@ func TestAllPhasesOrder(t *testing.T) {
 		"setup", "phase-1", "phase-2", "phase-3", "phase-3b",
 		"checkpoint-a", "phase-4", "phase-4b", "checkpoint-b",
 		"phase-5", "phase-6", "phase-7", "final-verification",
-		"pr-creation", "final-summary", "final-commit", "post-to-source", "completed",
+		"pr-creation", "final-summary", "post-to-source", "final-commit", "completed",
 	}
 
 	if len(AllPhases) != len(want) {
@@ -123,8 +123,14 @@ func TestNextPhase(t *testing.T) {
 			want:    "phase-1",
 		},
 		{
-			name:    "last phase before completed",
+			name:    "post-to-source advances to final-commit",
 			current: PhasePostToSource,
+			skipped: nil,
+			want:    "final-commit",
+		},
+		{
+			name:    "last phase before completed",
+			current: PhaseFinalCommit,
 			skipped: nil,
 			want:    "completed",
 		},

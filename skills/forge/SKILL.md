@@ -80,12 +80,16 @@ Repeat until done:
        only the files belonging to the parallel tasks (check each task's file list in
        `tasks.md`). Then `git commit` with a message summarising the parallel batch
        (e.g. "chore: batch commit parallel tasks N, M, ...").
-     - If `action.commands[0]` is `final_commit`: amend the last commit to include
-       `summary.md` and `state.json`, then force-push. Run:
-       `git add {workspace}/summary.md {workspace}/state.json &&
-        git commit --amend --no-edit &&
-        git push --force-with-lease`
-       This ensures the PR branch includes the final summary (with PR number).
+     - If `action.commands[0]` is `final_commit`: this is the last phase before
+       `completed`. Execute in this exact order — do not deviate:
+       1. Call `mcp__forge-state__pipeline_report_result(workspace, phase=action.phase,
+          tokens_used=0, duration_ms=0, model="")` — this transitions state.json to
+          `completed` on disk **before** the git amend.
+       2. Run:
+          `git add {workspace}/summary.md {workspace}/state.json &&
+           git commit --amend --no-edit &&
+           git push --force-with-lease`
+       **Skip Step 3 below for `final_commit`** — pipeline_report_result was already called.
      - Otherwise: run `action.commands` via Bash.
      Then call `pipeline_report_result` with `phase=action.phase`.
      If `action.setup_only` is true, pass `setup_only=true` to `pipeline_report_result`.
@@ -98,7 +102,7 @@ Repeat until done:
        `mcp__forge-state__phase_complete(workspace, phase=<parsed-phase-id>)` then loop.
        (Do NOT use currentPhase from state — state has not yet advanced at this point.)
      - Otherwise: pipeline complete. Stop.
-3. For `spawn_agent`, `exec`, and `write_file`: call
+3. For `spawn_agent`, `exec` (except `final_commit`), and `write_file`: call
    `mcp__forge-state__pipeline_report_result(workspace, phase=action.phase,
    tokens_used=<tokens>, duration_ms=<ms>, model=<model>,
    setup_only=action.setup_only)`.  (Omit `setup_only` when false/absent.)
@@ -110,6 +114,6 @@ Repeat until done:
 ## Rules
 
 - Never make orchestration decisions independently — follow action.type exactly.
-- Never skip pipeline_report_result for spawn_agent, exec, or write_file actions.
+- Never skip pipeline_report_result for spawn_agent, exec, or write_file actions — `final_commit` is the only exception: it calls pipeline_report_result before the git amend, not after (Step 3 explicitly excludes it).
 - Never pass `isolation: "worktree"` to any Agent call.
 - On MCP error: surface the error to the user and stop.

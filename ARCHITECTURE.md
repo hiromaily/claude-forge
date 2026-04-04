@@ -469,19 +469,19 @@ sequenceDiagram
     Orch->>FS: append ## Improvement Report to summary.md
     Orch->>SM: phase-complete final-summary
 
-    Orch->>SM: phase-start final-commit
-    Note over Orch,FS: summary.md + state.json are local-only at this point
-    Orch->>Orch: git add summary.md state.json
-    Orch->>Orch: git commit --amend --no-edit
-    Orch->>Orch: git push --force-with-lease
-    Note over Orch: PR branch now includes summary.md
-    Orch->>SM: phase-complete final-commit
-
     Orch->>SM: phase-start post-to-source
     opt source_type = github_issue or jira_issue
         Orch->>Orch: post summary comment
     end
     Orch->>SM: phase-complete post-to-source
+
+    Orch->>SM: phase-start final-commit
+    Note over Orch,FS: pipeline_report_result called FIRST to advance state.json to "completed"
+    Orch->>SM: phase-complete final-commit (via pipeline_report_result)
+    Orch->>Orch: git add summary.md state.json
+    Orch->>Orch: git commit --amend --no-edit
+    Orch->>Orch: git push --force-with-lease
+    Note over Orch: PR branch now includes summary.md + state.json in final state
     Note over Hook: Stop hook: allows stop<br>only after summary.md exists
     Orch->>User: Present summary + PR link
     end
@@ -559,15 +559,16 @@ $ARGUMENTS
        │
        ▼
 ┌──────────────────┐
-│ Final Commit      │ git add summary.md state.json
-│                   │ git commit --amend --no-edit
-│                   │ git push --force-with-lease
-│                   │ (PR branch now includes summary.md)
+│ Post to Source    │ → GitHub/Jira comment (if applicable)
 └──────┬───────────┘
        │
        ▼
 ┌──────────────────┐
-│ Post to Source    │ → GitHub/Jira comment (if applicable)
+│ Final Commit      │ pipeline_report_result → state.json = "completed"
+│                   │ git add summary.md state.json
+│                   │ git commit --amend --no-edit
+│                   │ git push --force-with-lease
+│                   │ (PR branch includes summary.md + state.json in final state)
 └──────────────────┘
 ```
 
@@ -601,8 +602,8 @@ The information flow is strictly forward — no agent reads output from a later 
 - **Final Verification**: Agent fixes issues directly, no artifact file
 - **PR Creation**: Orchestrator handles directly (git push + gh pr create)
 - **Final Summary**: Orchestrator writes summary.md (includes PR # obtained from PR Creation)
-- **Final Commit**: Orchestrator amends last commit to include summary.md + state.json, then force-pushes (PR branch now includes summary.md)
 - **Post to Source**: Orchestrator handles directly (post comment to GitHub/Jira)
+- **Final Commit**: Orchestrator calls `pipeline_report_result` first (advances state.json to "completed"), then amends last commit to include summary.md + state.json, then force-pushes (PR branch now includes summary.md + state.json in final state)
 
 ### Specs Index System
 
@@ -1062,7 +1063,7 @@ Findings markers (`[CRITICAL]`, `[MINOR]`) are counted and accumulated into the 
 
 | Action | Layer | Code location | Trigger |
 |---|---|---|---|
-| Final commit: amend `summary.md` + `state.json` into last commit, then force-push | Shell hook (v1) / Engine exec action (v2) | `post-bash-hook.sh` (v1 legacy) / `engine.go` final-commit action (v2) | After `final-summary` phase completes; before `post-to-source` |
+| Final commit: amend `summary.md` + `state.json` into last commit, then force-push | Shell hook (v1) / Engine exec action (v2) | `post-bash-hook.sh` (v1 legacy) / `engine.go` final-commit action (v2) | After `post-to-source` phase completes; `pipeline_report_result` called first so state.json is in "completed" state when committed |
 | Revision counter increment | MCP handler | `pipeline_report_result.go` | `REVISE` verdict in review phases |
 | Pattern knowledge accumulation | MCP handler | `pipeline_report_result.go` | Any review phase completion with findings |
 

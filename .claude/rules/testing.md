@@ -28,8 +28,8 @@ ValidPhases and AllPhases must remain in sync and include all phases in this ord
 ```
 setup → phase-1 → phase-2 → phase-3 → phase-3b → checkpoint-a →
 phase-4 → phase-4b → checkpoint-b → phase-5 → phase-6 → phase-7 →
-final-verification → pr-creation → final-summary → final-commit →
-post-to-source → completed
+final-verification → pr-creation → final-summary → post-to-source →
+final-commit → completed
 ```
 
 - [ ] `TestAllPhasesCount` expects 18
