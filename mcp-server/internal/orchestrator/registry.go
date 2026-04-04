@@ -85,8 +85,8 @@ var phaseRegistry = []PhaseDescriptor{
 	{ID: PhaseFinalVerification, Skippable: true},
 	{ID: PhasePRCreation, Skippable: true},
 	{ID: PhaseFinalSummary, Skippable: true},
-	{ID: PhaseFinalCommit, Skippable: true},
 	{ID: PhasePostToSource, Skippable: true},
+	{ID: PhaseFinalCommit, Skippable: true},
 	{ID: PhaseCompleted, Skippable: false},
 }
 

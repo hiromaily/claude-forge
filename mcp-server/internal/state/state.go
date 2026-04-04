@@ -8,7 +8,7 @@ var ValidPhases = []string{
 	PhaseSetup, PhaseOne, PhaseTwo, PhaseThree, PhaseThreeB,
 	PhaseCheckpointA, PhaseFour, PhaseFourB, PhaseCheckpointB,
 	PhaseFive, PhaseSix, PhaseSeven, PhaseFinalVerification,
-	PhasePRCreation, PhaseFinalSummary, PhaseFinalCommit, PhasePostToSource, PhaseCompleted,
+	PhasePRCreation, PhaseFinalSummary, PhasePostToSource, PhaseFinalCommit, PhaseCompleted,
 }
 
 // ValidEfforts enumerates legal effort labels.

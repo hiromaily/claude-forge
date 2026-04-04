@@ -469,19 +469,19 @@ sequenceDiagram
     Orch->>FS: append ## Improvement Report to summary.md
     Orch->>SM: phase-complete final-summary
 
-    Orch->>SM: phase-start final-commit
-    Note over Orch,FS: summary.md + state.json are local-only at this point
-    Orch->>Orch: git add summary.md state.json
-    Orch->>Orch: git commit --amend --no-edit
-    Orch->>Orch: git push --force-with-lease
-    Note over Orch: PR branch now includes summary.md
-    Orch->>SM: phase-complete final-commit
-
     Orch->>SM: phase-start post-to-source
     opt source_type = github_issue or jira_issue
         Orch->>Orch: post summary comment
     end
     Orch->>SM: phase-complete post-to-source
+
+    Orch->>SM: phase-start final-commit
+    Note over Orch,FS: pipeline_report_result called FIRST to advance state.json to "completed"
+    Orch->>SM: phase-complete final-commit (via pipeline_report_result)
+    Orch->>Orch: git add summary.md state.json
+    Orch->>Orch: git commit --amend --no-edit
+    Orch->>Orch: git push --force-with-lease
+    Note over Orch: PR branch now includes summary.md + state.json in final state
     Note over Hook: Stop hook: allows stop<br>only after summary.md exists
     Orch->>User: Present summary + PR link
     end
@@ -1062,7 +1062,7 @@ Findings markers (`[CRITICAL]`, `[MINOR]`) are counted and accumulated into the 
 
 | Action | Layer | Code location | Trigger |
 |---|---|---|---|
-| Final commit: amend `summary.md` + `state.json` into last commit, then force-push | Shell hook (v1) / Engine exec action (v2) | `post-bash-hook.sh` (v1 legacy) / `engine.go` final-commit action (v2) | After `final-summary` phase completes; before `post-to-source` |
+| Final commit: amend `summary.md` + `state.json` into last commit, then force-push | Shell hook (v1) / Engine exec action (v2) | `post-bash-hook.sh` (v1 legacy) / `engine.go` final-commit action (v2) | After `post-to-source` phase completes; `pipeline_report_result` called first so state.json is in "completed" state when committed |
 | Revision counter increment | MCP handler | `pipeline_report_result.go` | `REVISE` verdict in review phases |
 | Pattern knowledge accumulation | MCP handler | `pipeline_report_result.go` | Any review phase completion with findings |
 
