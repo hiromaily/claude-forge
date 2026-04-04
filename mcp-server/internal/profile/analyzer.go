@@ -225,25 +225,27 @@ func sortedLanguages(counts map[string]int, total int) []Language {
 }
 
 // detectTestFramework checks for go.mod (-> "go test") or package.json (-> jest/vitest/mocha).
+// Subdir go.mod files (monorepo with Go inside) take precedence over a root-level package.json
+// that may belong to a documentation toolchain rather than the primary test suite.
 func (p *RepoProfiler) detectTestFramework() string {
 	if fileExists(filepath.Join(p.repoRoot, "go.mod")) {
 		return "go test"
 	}
 
-	pkgJSON := filepath.Join(p.repoRoot, "package.json")
-	if !fileExists(pkgJSON) {
-		// Check subdirs for go.mod (monorepo with Go inside).
-		entries, err := os.ReadDir(p.repoRoot)
-		if err == nil {
-			for _, e := range entries {
-				if e.IsDir() {
-					if fileExists(filepath.Join(p.repoRoot, e.Name(), "go.mod")) {
-						return "go test"
-					}
+	// Check subdirs for go.mod (monorepo with Go inside) before falling back to package.json.
+	entries, err := os.ReadDir(p.repoRoot)
+	if err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				if fileExists(filepath.Join(p.repoRoot, e.Name(), "go.mod")) {
+					return "go test"
 				}
 			}
 		}
+	}
 
+	pkgJSON := filepath.Join(p.repoRoot, "package.json")
+	if !fileExists(pkgJSON) {
 		return ""
 	}
 

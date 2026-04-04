@@ -27,25 +27,17 @@ const (
 	PhaseCompleted         = state.PhaseCompleted
 )
 
-// AllPhases is the canonical ordering. It is derived from state.ValidPhases
-// to ensure both remain in sync.
-var AllPhases = state.ValidPhases
+// AllPhases is the canonical ordering, derived from phaseRegistry by initRegistry().
+// It is assigned at package init time and must not be mutated after that.
+var AllPhases []string
 
 // nonSkippable is the set of phases that can never be passed to skip-phase.
-var nonSkippable = map[string]bool{
-	PhaseSetup:     true,
-	PhaseCompleted: true,
-}
+// Assigned by initRegistry() from phaseRegistry entries where Skippable == false.
+var nonSkippable map[string]bool
 
-// allPhasesSet is a fast-lookup set derived from AllPhases.
-var allPhasesSet = func() map[string]bool {
-	m := make(map[string]bool, len(AllPhases))
-	for _, p := range AllPhases {
-		m[p] = true
-	}
-
-	return m
-}()
+// allPhasesSet is a fast-lookup set of all phase IDs.
+// Assigned by initRegistry() from phaseRegistry entries.
+var allPhasesSet map[string]bool
 
 // IsSkippable returns true if phase is a valid skip target.
 // A phase is skippable if it is a known phase and not in nonSkippable.

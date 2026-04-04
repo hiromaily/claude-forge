@@ -2,16 +2,19 @@
 package orchestrator
 
 import (
+	"reflect"
 	"testing"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
 func TestAllPhasesCount(t *testing.T) {
 	t.Parallel()
 
-	const wantCount = 18
+	wantCount := len(phaseRegistry)
 
 	if got := len(AllPhases); got != wantCount {
-		t.Errorf("AllPhases length = %d, want %d", got, wantCount)
+		t.Errorf("AllPhases length = %d, want %d (len(phaseRegistry))", got, wantCount)
 	}
 }
 
@@ -148,5 +151,79 @@ func TestNextPhase(t *testing.T) {
 				t.Errorf("NextPhase(%q, %v) = %q, want %q", tc.current, tc.skipped, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestPhaseRegistryConsistency verifies that phaseRegistry and state.ValidPhases
+// contain the same IDs in the same order. This is the primary regression guard
+// for the two-edit-site rule (add a phase to both state.ValidPhases and phaseRegistry).
+func TestPhaseRegistryConsistency(t *testing.T) {
+	t.Parallel()
+
+	t.Run("every_registry_id_in_valid_phases", func(t *testing.T) {
+		t.Parallel()
+
+		validSet := make(map[string]bool, len(state.ValidPhases))
+		for _, id := range state.ValidPhases {
+			validSet[id] = true
+		}
+
+		for i, d := range phaseRegistry {
+			if !validSet[d.ID] {
+				t.Errorf("phaseRegistry[%d].ID = %q not found in state.ValidPhases", i, d.ID)
+			}
+		}
+	})
+
+	t.Run("every_valid_phase_in_registry", func(t *testing.T) {
+		t.Parallel()
+
+		registrySet := make(map[string]bool, len(phaseRegistry))
+		for _, d := range phaseRegistry {
+			registrySet[d.ID] = true
+		}
+
+		for i, id := range state.ValidPhases {
+			if !registrySet[id] {
+				t.Errorf("state.ValidPhases[%d] = %q not found in phaseRegistry", i, id)
+			}
+		}
+	})
+
+	t.Run("same_order", func(t *testing.T) {
+		t.Parallel()
+
+		if len(phaseRegistry) != len(state.ValidPhases) {
+			t.Fatalf("length mismatch: phaseRegistry has %d entries, state.ValidPhases has %d",
+				len(phaseRegistry), len(state.ValidPhases))
+		}
+
+		for i, d := range phaseRegistry {
+			if d.ID != state.ValidPhases[i] {
+				t.Errorf("position %d: phaseRegistry[%d].ID = %q, state.ValidPhases[%d] = %q",
+					i, i, d.ID, i, state.ValidPhases[i])
+			}
+		}
+	})
+}
+
+// TestSkipTableDerivedFromRegistry verifies that SkipsForTemplate(state.TemplateLight)
+// returns exactly the phase IDs whose TemplateSkips["light"] is true in phaseRegistry,
+// in declaration order.
+func TestSkipTableDerivedFromRegistry(t *testing.T) {
+	t.Parallel()
+
+	// Compute expected light skips from phaseRegistry directly (declaration order).
+	var wantLightSkips []string
+	for _, d := range phaseRegistry {
+		if d.TemplateSkips[state.TemplateLight] {
+			wantLightSkips = append(wantLightSkips, d.ID)
+		}
+	}
+
+	got := SkipsForTemplate(state.TemplateLight)
+
+	if !reflect.DeepEqual(got, wantLightSkips) {
+		t.Errorf("SkipsForTemplate(%q) = %v, want %v (derived from phaseRegistry)", state.TemplateLight, got, wantLightSkips)
 	}
 }

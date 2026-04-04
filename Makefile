@@ -50,6 +50,11 @@ setup-manual: install
 	@echo "⚠ Restart your Claude Code session to activate the MCP server."
 	@echo "  After restart, run /mcp to verify forge-state shows as Connected."
 
+# test: Run the Go test suite for the MCP server
+.PHONY: test
+test:
+	cd $(MCP_DIR) && go test -race ./...
+
 # clean: Remove the built binary
 .PHONY: clean
 clean:

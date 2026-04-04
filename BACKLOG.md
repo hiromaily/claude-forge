@@ -37,6 +37,19 @@ Ordered by priority. Higher rows should be tackled first.
 
 ---
 
+## Phase Registry: Deferred Scatter Points
+
+The **declarative phase registry** refactor (`feature/declarative-phase-registry`) consolidated the six per-phase edit sites in `orchestrator/` into two (`state/state.go` + `orchestrator/registry.go`). Two additional scatter points were intentionally left out of scope to avoid cross-package coupling:
+
+| Location | Symbol(s) | Notes |
+|---|---|---|
+| `mcp-server/internal/validation/artifact.go` | `artifactRules` | Per-phase lookup table of expected artifact filenames and required headings. Moving into `PhaseDescriptor` would force `orchestrator` to import `validation` (or vice versa), inverting the current clean dependency direction. |
+| `mcp-server/internal/tools/guards.go` | `phaseArtifacts`, `phaseLogRequired` | Per-phase guard maps consulted by MCP tool handlers. Encoding these in the descriptor would require `orchestrator` to depend on `tools`, which itself imports `orchestrator` — creating a cycle. |
+
+**Future direction:** If a registry package (`orchestrator/registry`) is ever extracted as a leaf package (no imports of `validation` or `tools`), both tables could be merged into extended `PhaseDescriptor` fields. Until then, keep the tables in their respective packages and rely on `TestPhaseRegistryConsistency` + the `initRegistry()` panic to detect ID-set drift.
+
+---
+
 ## Improvement Candidates
 
 | Issue | Title | Notes |
