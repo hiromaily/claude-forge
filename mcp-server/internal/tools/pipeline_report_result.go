@@ -288,7 +288,9 @@ func determineTransition(
 
 		// All tasks complete — clear any completed_fail retry state so the
 		// engine dispatches fresh reviewers after the retry implementer ran.
-		clearCompletedFailTasks(sm, in.workspace)
+		if err := clearCompletedFailTasks(sm, in.workspace); err != nil {
+			return reportResultResponse{}, err
+		}
 	}
 
 	if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
@@ -382,40 +384,54 @@ func handlePhase6Transition(
 	// Deterministic: reconcile ReviewStatus from review file verdicts.
 	// This ensures the engine (handlePhaseSix) never re-processes a task
 	// whose review file already contains a passing verdict.
-	if updateErr := sm.Update(func(st *state.State) error {
-		for k, t := range st.Tasks {
-			if t.ImplStatus != state.TaskStatusCompleted {
-				continue
-			}
-			// Already marked as passing — skip.
-			if t.ReviewStatus == state.TaskStatusCompletedPass ||
-				t.ReviewStatus == state.TaskStatusCompletedPassNote {
-				continue
-			}
-			reviewFile := filepath.Join(in.workspace, "review-"+k+".md")
-			if _, statErr := os.Stat(reviewFile); statErr != nil {
-				continue
-			}
-			verdict, _, vErr := orchestrator.ParseVerdict(reviewFile)
-			if vErr != nil {
-				continue
-			}
-			switch verdict { //nolint:exhaustive // only PASS variants update state; FAIL/REVISE/UNKNOWN are intentionally ignored here
-			case orchestrator.VerdictPass:
-				t.ReviewStatus = state.TaskStatusCompletedPass
-				st.Tasks[k] = t
-			case orchestrator.VerdictPassWithNotes:
-				t.ReviewStatus = state.TaskStatusCompletedPassNote
-				st.Tasks[k] = t
-			}
+	// Read verdicts outside the lock to avoid I/O inside a critical section.
+	s, err := sm.GetState()
+	if err != nil {
+		return reportResultResponse{}, err
+	}
+	type verdictUpdate struct {
+		key    string
+		status string
+	}
+	var verdictUpdates []verdictUpdate
+	for k, t := range s.Tasks {
+		if t.ImplStatus != state.TaskStatusCompleted {
+			continue
 		}
-		return nil
-	}); updateErr != nil {
-		return reportResultResponse{}, updateErr
+		if t.ReviewStatus == state.TaskStatusCompletedPass ||
+			t.ReviewStatus == state.TaskStatusCompletedPassNote {
+			continue
+		}
+		reviewFile := filepath.Join(in.workspace, "review-"+k+".md")
+		if _, statErr := os.Stat(reviewFile); statErr != nil {
+			continue
+		}
+		verdict, _, vErr := orchestrator.ParseVerdict(reviewFile)
+		if vErr != nil {
+			continue
+		}
+		switch verdict { //nolint:exhaustive // only PASS variants update state; FAIL/REVISE/UNKNOWN are intentionally ignored here
+		case orchestrator.VerdictPass:
+			verdictUpdates = append(verdictUpdates, verdictUpdate{key: k, status: state.TaskStatusCompletedPass})
+		case orchestrator.VerdictPassWithNotes:
+			verdictUpdates = append(verdictUpdates, verdictUpdate{key: k, status: state.TaskStatusCompletedPassNote})
+		}
+	}
+	if len(verdictUpdates) > 0 {
+		if updateErr := sm.Update(func(st *state.State) error {
+			for _, u := range verdictUpdates {
+				t := st.Tasks[u.key]
+				t.ReviewStatus = u.status
+				st.Tasks[u.key] = t
+			}
+			return nil
+		}); updateErr != nil {
+			return reportResultResponse{}, updateErr
+		}
 	}
 
 	// Check whether any task still needs a review.
-	s, err := sm.GetState()
+	s, err = sm.GetState()
 	if err != nil {
 		return reportResultResponse{}, err
 	}
@@ -465,16 +481,17 @@ func reviewFileTaskKey(filename string) string {
 // clearCompletedFailTasks resets ReviewStatus and removes stale review files for
 // tasks in the "completed_fail" state. Called from the phase-5 handler after a
 // retry implementer run so the engine dispatches a fresh reviewer on the next call.
-// Fail-open: errors are suppressed so the phase-5 advance is not blocked.
-func clearCompletedFailTasks(sm *state.StateManager, workspace string) {
-	_ = sm.Update(func(st *state.State) error {
+func clearCompletedFailTasks(sm *state.StateManager, workspace string) error {
+	return sm.Update(func(st *state.State) error {
 		for k, t := range st.Tasks {
 			if t.ReviewStatus != state.TaskStatusCompletedFail {
 				continue
 			}
 			// Delete the stale review file so the engine dispatches a fresh reviewer.
 			reviewFile := filepath.Join(workspace, "review-"+k+".md")
-			_ = os.Remove(reviewFile)
+			if err := os.Remove(reviewFile); err != nil && !os.IsNotExist(err) {
+				return err
+			}
 			t.ReviewStatus = ""
 			st.Tasks[k] = t
 		}

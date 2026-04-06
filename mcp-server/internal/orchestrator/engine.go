@@ -500,22 +500,7 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 		// incremented ImplRetries and set ReviewStatus. Dispatch the retry
 		// without re-reading the file (idempotent: state is the guard).
 		if task.ReviewStatus == state.TaskStatusCompletedFail {
-			if task.ImplRetries >= state.MaxRevisionRetries {
-				return NewCheckpointAction(
-					"impl-retry-limit-"+k,
-					fmt.Sprintf("Implementation retry limit reached for task %s (%d retries). Human review required.", k, state.MaxRevisionRetries),
-					[]string{"approve", "abandon"},
-				), nil
-			}
-			// Include review-k.md so the implementer can read the reviewer's feedback.
-			return NewSpawnAgentAction(
-				agentImplementer,
-				"Retry implementation for task "+k+" after review failure.",
-				state.DefaultModel,
-				PhaseFive,
-				[]string{state.ArtifactTasks, state.ArtifactDesign, "review-" + k + ".md"},
-				"impl-"+k+".md",
-			), nil
+			return dispatchImplementerRetry(k, task)
 		}
 
 		// If review file doesn't exist, spawn reviewer.
@@ -545,22 +530,7 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 			// pipeline_report_result will increment ImplRetries and set
 			// ReviewStatus = "completed_fail" when called. Use the current
 			// counter to guard the retry limit conservatively.
-			if task.ImplRetries >= state.MaxRevisionRetries {
-				return NewCheckpointAction(
-					"impl-retry-limit-"+k,
-					fmt.Sprintf("Implementation retry limit reached for task %s (%d retries). Human review required.", k, state.MaxRevisionRetries),
-					[]string{"approve", "abandon"},
-				), nil
-			}
-			// Include review-k.md so the implementer can read the feedback.
-			return NewSpawnAgentAction(
-				agentImplementer,
-				"Retry implementation for task "+k+" after review failure.",
-				state.DefaultModel,
-				PhaseFive,
-				[]string{state.ArtifactTasks, state.ArtifactDesign, "review-" + k + ".md"},
-				"impl-"+k+".md",
-			), nil
+			return dispatchImplementerRetry(k, task)
 		}
 		// VerdictPass, VerdictPassWithNotes, or any other passing verdict:
 		// task is considered reviewed. This is recorded in state by
@@ -575,6 +545,26 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 		PhaseSeven,
 		[]string{state.ArtifactTasks},
 		"verification.md",
+	), nil
+}
+
+// dispatchImplementerRetry returns an action to retry the implementer for task k,
+// or a checkpoint action when the retry limit has been reached.
+func dispatchImplementerRetry(k string, task state.Task) (Action, error) {
+	if task.ImplRetries >= state.MaxRevisionRetries {
+		return NewCheckpointAction(
+			"impl-retry-limit-"+k,
+			fmt.Sprintf("Implementation retry limit reached for task %s (%d retries). Human review required.", k, state.MaxRevisionRetries),
+			[]string{"approve", "abandon"},
+		), nil
+	}
+	return NewSpawnAgentAction(
+		agentImplementer,
+		"Retry implementation for task "+k+" after review failure.",
+		state.DefaultModel,
+		PhaseFive,
+		[]string{state.ArtifactTasks, state.ArtifactDesign, "review-" + k + ".md"},
+		"impl-"+k+".md",
 	), nil
 }
 
