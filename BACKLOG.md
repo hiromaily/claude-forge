@@ -37,6 +37,90 @@ Ordered by priority. Higher rows should be tackled first.
 
 ---
 
+## Deterministic Orchestration — Move SKILL.md Logic into MCP Server
+
+**Problem:** SKILL.md delegates many mechanical, state-machine operations to the LLM orchestrator via prose instructions. Since the orchestrator is an LLM, it non-deterministically skips, misorders, or misparametrizes these operations. Observed failures from a production run (SOA-2984):
+
+| Failure | Root cause | Impact |
+|---------|-----------|--------|
+| Parallel tasks not committed | Orchestrator didn't execute `batch_commit` action | Review FAIL on all parallel tasks |
+| Infinite impl retry loop | Stale review file re-read; `ImplRetries` never incremented | Pipeline stuck until manual state intervention |
+| Checkpoint phase name mismatch | Engine returned `post-to-jira` but `Checkpoint()` expected `post-to-source` | MCP error, manual workaround needed |
+| `final_commit` git add blocked | `.specs/` in `.gitignore`; SKILL.md didn't use `git add -f` | Final commit silently failed |
+| Review status not persisted | Engine checked `ReviewStatus==""` but never wrote passing status | Re-dispatched reviewers for already-reviewed tasks |
+
+**Root insight:** Most of what SKILL.md instructs is purely mechanical and requires no LLM judgment. The LLM orchestrator should only be responsible for three things:
+
+1. **Spawning agents** (Claude Code Agent tool constraint)
+2. **User interaction** (checkpoints, AskUserQuestion)
+3. **External API calls** (GitHub CLI, Jira MCP — requires judgment)
+
+Everything else can be absorbed into `pipeline_next_action` / `pipeline_report_result`:
+
+### Proposed changes
+
+#### P1: Absorb `skip:` phase completion into `pipeline_next_action`
+
+**Current:** Engine returns `done` with `skip:phase-id` → SKILL.md tells orchestrator to call `phase_complete` → orchestrator calls `pipeline_next_action` again.
+
+**Proposed:** `pipeline_next_action` internally calls `PhaseComplete` for skipped phases and re-enters the dispatch loop, returning only actionable items (spawn_agent, checkpoint, exec) to the orchestrator. The orchestrator never sees `skip:` actions.
+
+**Benefit:** Eliminates a class of "forgot to call phase_complete" bugs. Reduces SKILL.md complexity.
+
+#### P2: Absorb `task_init` parsing into MCP server
+
+**Current:** SKILL.md tells orchestrator to parse `tasks.md` markdown, extract task metadata, and pass it as JSON to `task_init`.
+
+**Proposed:** `task_init` MCP tool reads and parses `tasks.md` directly from the workspace. No orchestrator involvement needed.
+
+**Benefit:** Eliminates markdown parsing errors from LLM. The MCP server has deterministic access to the file.
+
+#### P3: Absorb `batch_commit` into MCP server
+
+**Current:** SKILL.md tells orchestrator to run `git status`, `git add` specific files, `git commit`.
+
+**Proposed:** `batch_commit` becomes a dedicated MCP tool (or an internal step in `pipeline_report_result`) that reads task file lists from state.json, runs git commands, and returns the commit hash.
+
+**Benefit:** Eliminates the most impactful failure observed — parallel tasks going uncommitted.
+
+#### P4: Absorb `final_commit` into MCP server
+
+**Current:** SKILL.md tells orchestrator to call `pipeline_report_result`, then `git add -f`, `git commit --amend`, `git push`.
+
+**Proposed:** Single MCP tool `final_commit` that executes the entire sequence atomically, handling `.gitignore` and error recovery internally.
+
+**Benefit:** Eliminates git-related edge cases (gitignore, amend ordering).
+
+#### P5: Merge `pipeline_report_result` into `pipeline_next_action`
+
+**Current:** After every action, orchestrator must call `pipeline_report_result` with correct parameters, then call `pipeline_next_action`. Two separate round-trips.
+
+**Proposed:** `pipeline_next_action` accepts optional `previous_result` parameters (tokens, duration, model). Internally calls `report_result` logic before computing the next action. Single round-trip per cycle.
+
+**Benefit:** Eliminates "forgot to call report_result" and "wrong phase parameter" bugs. Halves MCP round-trips.
+
+#### Resulting minimal SKILL.md
+
+After P1–P5, the orchestrator loop becomes:
+
+```
+1. Call pipeline_next_action(workspace, previous_tokens, previous_duration, previous_model)
+2. Based on action.type:
+   - spawn_agent → call Agent tool → go to 1
+   - checkpoint → present to user → go to 1
+   - post_to_source → determine source type from URL, call API → go to 1
+   - pr_creation → run gh pr create → go to 1
+   - done → stop
+```
+
+No skip handling, no task_init parsing, no batch_commit, no final_commit, no report_result calls. The LLM orchestrator becomes a thin dispatcher for agent spawning and user interaction.
+
+**Effort:** L (multiple MCP tool changes, SKILL.md rewrite, test updates)
+
+**Priority:** High — addresses the most fundamental source of non-determinism in the pipeline.
+
+---
+
 ## Phase Registry: Deferred Scatter Points
 
 The **declarative phase registry** refactor (`feature/declarative-phase-registry`) consolidated the six per-phase edit sites in `orchestrator/` into two (`state/state.go` + `orchestrator/registry.go`). Two additional scatter points were intentionally left out of scope to avoid cross-package coupling:

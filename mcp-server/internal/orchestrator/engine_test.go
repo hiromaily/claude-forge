@@ -1118,14 +1118,14 @@ func TestPostToSource_CheckpointOptions(t *testing.T) {
 			name:         "jira_issue",
 			sourceType:   "jira_issue",
 			sourceURL:    "https://example.atlassian.net/browse/PROJ-123",
-			wantName:     "post-to-jira",
+			wantName:     "post-to-source",
 			wantURLInMsg: "https://example.atlassian.net/browse/PROJ-123",
 		},
 		{
 			name:         "github_issue",
 			sourceType:   "github_issue",
 			sourceURL:    "https://github.com/org/repo/issues/42",
-			wantName:     "post-to-github",
+			wantName:     "post-to-source",
 			wantURLInMsg: "https://github.com/org/repo/issues/42",
 		},
 	}

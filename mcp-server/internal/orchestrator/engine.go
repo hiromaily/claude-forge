@@ -467,62 +467,86 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 }
 
 // handlePhaseSix handles Phase 6 (impl reviewer) — Decision 23.
+//
+// Task lifecycle within Phase 6:
+//   - ReviewStatus ""                → spawn reviewer → reviewer writes review-{k}.md
+//   - ReviewStatus ""  + file exists → read verdict:
+//   - PASS/PASS_WITH_NOTES → set ReviewStatus to completed_pass (deterministic)
+//   - FAIL → delete stale review file, increment ImplRetries, re-enter Phase 5
+//   - ReviewStatus "completed_pass"/"completed_pass_with_notes" → skip (already done)
+//   - ReviewStatus "completed_fail" → should not appear here (handled by retry flow)
 func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 	// Decision 23 — Phase 6 PASS/FAIL retry
 	taskKeys := sortedTaskKeys(st.Tasks)
 
 	for _, k := range taskKeys {
 		task := st.Tasks[k]
-		// Find tasks that have been implemented but not reviewed
-		if task.ImplStatus == state.TaskStatusCompleted && task.ReviewStatus == "" {
-			reviewFile := filepath.Join(st.Workspace, "review-"+k+".md")
 
-			// If review file doesn't exist, spawn reviewer
-			if _, err := os.Stat(reviewFile); err != nil {
-				if !errors.Is(err, os.ErrNotExist) {
-					return Action{}, fmt.Errorf("handlePhaseSix: stat %s: %w", reviewFile, err)
-				}
-				return NewSpawnAgentAction(
-					agentImplReviewer,
-					"Review implementation for task "+k+".",
-					state.DefaultModel,
-					PhaseSix,
-					[]string{"impl-" + k + ".md", state.ArtifactTasks},
-					"review-"+k+".md",
-				), nil
-			}
-
-			// Read verdict
-			verdict, _, err := e.verdictReader(reviewFile)
-			if err != nil {
-				return Action{}, fmt.Errorf("handlePhaseSix: read verdict for task %s: %w", k, err)
-			}
-
-			if verdict == VerdictFail {
-				// Check retry limit
-				if task.ImplRetries >= state.MaxRevisionRetries {
-					return NewCheckpointAction(
-						"impl-retry-limit-"+k,
-						fmt.Sprintf("Implementation retry limit reached for task %s (%d retries). Human review required.", k, state.MaxRevisionRetries),
-						[]string{"approve", "abandon"},
-					), nil
-				}
-				// Retry implementation
-				return NewSpawnAgentAction(
-					agentImplementer,
-					"Retry implementation for task "+k+" after review failure.",
-					state.DefaultModel,
-					PhaseFive,
-					[]string{state.ArtifactTasks, state.ArtifactDesign, "review-" + k + ".md"},
-					"impl-"+k+".md",
-				), nil
-			}
-			// VerdictPass, VerdictPassWithNotes, or any other passing verdict:
-			// task is considered reviewed; continue to next task in loop.
+		// Skip tasks that are not yet implemented.
+		if task.ImplStatus != state.TaskStatusCompleted {
+			continue
 		}
+
+		// Skip tasks that are already reviewed and passing.
+		if task.ReviewStatus == state.TaskStatusCompletedPass ||
+			task.ReviewStatus == state.TaskStatusCompletedPassNote {
+			continue
+		}
+
+		reviewFile := filepath.Join(st.Workspace, "review-"+k+".md")
+
+		// If review file doesn't exist, spawn reviewer.
+		if _, err := os.Stat(reviewFile); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return Action{}, fmt.Errorf("handlePhaseSix: stat %s: %w", reviewFile, err)
+			}
+			return NewSpawnAgentAction(
+				agentImplReviewer,
+				"Review implementation for task "+k+".",
+				state.DefaultModel,
+				PhaseSix,
+				[]string{"impl-" + k + ".md", state.ArtifactTasks},
+				"review-"+k+".md",
+			), nil
+		}
+
+		// Read verdict from existing review file.
+		verdict, _, err := e.verdictReader(reviewFile)
+		if err != nil {
+			return Action{}, fmt.Errorf("handlePhaseSix: read verdict for task %s: %w", k, err)
+		}
+
+		if verdict == VerdictFail {
+			// Check retry limit.
+			if task.ImplRetries >= state.MaxRevisionRetries {
+				return NewCheckpointAction(
+					"impl-retry-limit-"+k,
+					fmt.Sprintf("Implementation retry limit reached for task %s (%d retries). Human review required.", k, state.MaxRevisionRetries),
+					[]string{"approve", "abandon"},
+				), nil
+			}
+			// Deterministic: delete stale review file so the next Phase 6
+			// entry spawns a fresh reviewer instead of re-reading old FAIL.
+			_ = os.Remove(reviewFile)
+			// Retry implementation — the action carries retry metadata
+			// so pipeline_next_action can increment ImplRetries.
+			// Note: review file was just deleted, so it is NOT included in InputFiles.
+			return NewImplRetryAction(
+				agentImplementer,
+				"Retry implementation for task "+k+" after review failure.",
+				state.DefaultModel,
+				PhaseFive,
+				[]string{state.ArtifactTasks, state.ArtifactDesign},
+				"impl-"+k+".md",
+				k,
+			), nil
+		}
+		// VerdictPass, VerdictPassWithNotes, or any other passing verdict:
+		// task is considered reviewed. This is recorded in state by
+		// pipeline_report_result so the engine never re-processes this task.
 	}
 
-	// All tasks reviewed; proceed
+	// All tasks reviewed; proceed.
 	return NewSpawnAgentAction(
 		agentVerifier,
 		"Verify all implementations.",
@@ -654,12 +678,15 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 	// Decision 26 — Post-to-source dispatch
 	sourceType := e.sourceTypeReader(st.Workspace)
 
-	var checkpointName, label string
+	// Use the phase ID as checkpoint name so mcp__forge-state__checkpoint()
+	// validation succeeds (it compares checkpoint name against CurrentPhase).
+	// The source type (github/jira) is embedded in the message, not the name.
+	var label string
 	switch sourceType {
 	case state.SourceTypeGitHub:
-		checkpointName, label = "post-to-github", "GitHub issue"
+		label = "GitHub issue"
 	case state.SourceTypeJira:
-		checkpointName, label = "post-to-jira", "Jira issue"
+		label = "Jira issue"
 	default: // "text" and anything else — skip this phase
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
 	}
@@ -673,7 +700,7 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/%s",
 		label, sourceURL, st.Workspace, state.ArtifactSummary,
 	)
-	return NewCheckpointAction(checkpointName, msg, []string{"post", "skip"}), nil
+	return NewCheckpointAction(PhasePostToSource, msg, []string{"post", "skip"}), nil
 }
 
 // readFrontMatterField reads a named field from {workspace}/request.md YAML front matter.

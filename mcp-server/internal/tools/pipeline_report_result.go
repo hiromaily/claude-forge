@@ -298,7 +298,14 @@ func determineTransition(
 }
 
 // handlePhase6Transition processes phase-6 results, parsing verdicts from review-*.md
-// files (or impl-*.md as fallback for backward compatibility).
+// files and deterministically updating task ReviewStatus in state.json.
+//
+// Key invariant: after this function returns, every task whose review-{k}.md
+// contains a PASS/PASS_WITH_NOTES verdict will have its ReviewStatus set in
+// state.json. This prevents the engine from re-dispatching reviewers for
+// already-reviewed tasks.
+//
+//nolint:gocyclo // complexity is inherent in multi-task verdict reconciliation
 func handlePhase6Transition(
 	sm *state.StateManager,
 	in reportResultInput,
@@ -345,33 +352,53 @@ func handlePhase6Transition(
 		}, nil
 	}
 
-	// Before advancing the phase, check whether any task still needs a review.
-	// A task needs review when its impl artifact exists (ImplStatus==completed)
-	// but no review-{k}.md with a passing verdict is present yet.
-	// This mirrors the phase-5 setup_continue pattern so the engine can spawn
-	// reviewers for tasks 2..N without prematurely advancing to phase-7.
+	// Deterministic: reconcile ReviewStatus from review file verdicts.
+	// This ensures the engine (handlePhaseSix) never re-processes a task
+	// whose review file already contains a passing verdict.
+	if updateErr := sm.Update(func(st *state.State) error {
+		for k, t := range st.Tasks {
+			if t.ImplStatus != state.TaskStatusCompleted {
+				continue
+			}
+			// Already marked as passing — skip.
+			if t.ReviewStatus == state.TaskStatusCompletedPass ||
+				t.ReviewStatus == state.TaskStatusCompletedPassNote {
+				continue
+			}
+			reviewFile := filepath.Join(in.workspace, "review-"+k+".md")
+			if _, statErr := os.Stat(reviewFile); statErr != nil {
+				continue
+			}
+			verdict, _, vErr := orchestrator.ParseVerdict(reviewFile)
+			if vErr != nil {
+				continue
+			}
+			switch verdict {
+			case orchestrator.VerdictPass:
+				t.ReviewStatus = state.TaskStatusCompletedPass
+				st.Tasks[k] = t
+			case orchestrator.VerdictPassWithNotes:
+				t.ReviewStatus = state.TaskStatusCompletedPassNote
+				st.Tasks[k] = t
+			}
+		}
+		return nil
+	}); updateErr != nil {
+		return reportResultResponse{}, updateErr
+	}
+
+	// Check whether any task still needs a review.
 	s, err := sm.GetState()
 	if err != nil {
 		return reportResultResponse{}, err
 	}
-	for k, t := range s.Tasks {
+	for _, t := range s.Tasks {
 		if t.ImplStatus != state.TaskStatusCompleted {
 			continue
 		}
-		reviewFile := filepath.Join(in.workspace, "review-"+k+".md")
-		if _, statErr := os.Stat(reviewFile); statErr != nil {
-			// Review file absent — this task still needs review.
-			return reportResultResponse{
-				StateUpdated:    true,
-				ArtifactWritten: artifactWritten,
-				VerdictParsed:   verdictParsed,
-				Findings:        allFindings,
-				NextActionHint:  "setup_continue",
-			}, nil
-		}
-		verdict, _, vErr := orchestrator.ParseVerdict(reviewFile)
-		if vErr != nil || verdict == orchestrator.VerdictFail {
-			// Unreadable or failing verdict — still has work; engine handles retry.
+		if t.ReviewStatus != state.TaskStatusCompletedPass &&
+			t.ReviewStatus != state.TaskStatusCompletedPassNote {
+			// Task needs review — hold in phase-6.
 			return reportResultResponse{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
