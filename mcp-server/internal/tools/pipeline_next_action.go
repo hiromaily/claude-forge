@@ -80,6 +80,14 @@ func PipelineNextActionHandler(
 
 		resp := nextActionResponse{Action: action}
 
+		// appendWarning accumulates warnings into resp.Warning, semicolon-separated.
+		appendWarning := func(msg string) {
+			if resp.Warning != "" {
+				resp.Warning += "; "
+			}
+			resp.Warning += msg
+		}
+
 		// Eliminate the window between pipeline_next_action returning a checkpoint action
 		// and the orchestrator calling mcp__forge-state__checkpoint().
 		// Set currentPhaseStatus to "awaiting_human" immediately so the stop hook permits
@@ -90,14 +98,14 @@ func PipelineNextActionHandler(
 				return nil
 			}); updateErr != nil {
 				// Fail-open: warn but still return the action.
-				resp.Warning = fmt.Sprintf("set awaiting_human: %v", updateErr)
+				appendWarning(fmt.Sprintf("set awaiting_human: %v", updateErr))
 			}
 		}
 
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
 			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb, profiler); enrichErr != nil {
 				// Fail-open: return the action with a warning, not an error.
-				resp.Warning = fmt.Sprintf("enrichPrompt: %v", enrichErr)
+				appendWarning(fmt.Sprintf("enrichPrompt: %v", enrichErr))
 			}
 		}
 

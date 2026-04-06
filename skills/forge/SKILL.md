@@ -54,16 +54,16 @@ Repeat until done:
      This is mandatory — it registers the pause so the pipeline can exit safely if
      the user closes the conversation before responding. Never skip or defer this call.
      Then present `action.present_to_user` to the user. Wait for response.
-     - **Special: `post-to-github` / `post-to-jira` checkpoints** — when `action.name`
-       is `"post-to-github"` or `"post-to-jira"`:
+     - **Special: `post-to-source` checkpoint** — when `action.name`
+       is `"post-to-source"` (the message will indicate GitHub or Jira):
        1. Ask the user whether to post the work report (use AskUserQuestion
           with options "post" / "skip").
        2. If the user chooses **"post"**:
           a. Extract the source URL from `action.present_to_user` (the line starting with `URL:`).
-          b. Post the comment based on `action.name`:
-             - **`post-to-github`**: run
+          b. Determine the source type from the URL (GitHub if `github.com`, Jira if `atlassian.net`):
+             - **GitHub**: run
                `gh issue comment <url> --body-file {workspace}/summary.md`
-             - **`post-to-jira`**: Extract the domain and issue key from the URL
+             - **Jira**: Extract the domain and issue key from the URL
                (e.g. `example.atlassian.net` and `PROJ-123` from `https://example.atlassian.net/browse/PROJ-123`). Try in order:
                1. Atlassian MCP tools (if available)
                2. Convert `{workspace}/summary.md` to Atlassian Document Format (ADF) and run:
@@ -85,8 +85,8 @@ Repeat until done:
        1. Call `mcp__forge-state__pipeline_report_result(workspace, phase=action.phase,
           tokens_used=0, duration_ms=0, model="")` — this transitions state.json to
           `completed` on disk **before** the git amend.
-       2. Run:
-          `git add {workspace}/summary.md {workspace}/state.json &&
+       2. Run (use `-f` to handle gitignored workspace files):
+          `git add -f {workspace}/summary.md {workspace}/state.json &&
            git commit --amend --no-edit &&
            git push --force-with-lease`
        **Skip Step 3 below for `final_commit`** — pipeline_report_result was already called.

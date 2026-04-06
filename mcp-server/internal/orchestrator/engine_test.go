@@ -639,7 +639,10 @@ func TestNextAction(t *testing.T) {
 
 		// ── Decision 23: phase-6 FAIL verdict retries implementation ──────────
 		{
-			name: "phase6_impl_fail",
+			// Transitional fallback: ReviewStatus not yet set by pipeline_report_result.
+			// Engine reads the review file and dispatches the retry, including the
+			// review file in InputFiles so the implementer has feedback context.
+			name: "phase6_impl_fail_transitional",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				sm := newTestStateManager(t, "phase-6", func(s *state.State) error {
@@ -665,8 +668,51 @@ func TestNextAction(t *testing.T) {
 					sourceTypeReader: stubSourceTypeReader("text"),
 				}
 			},
-			wantType:  ActionSpawnAgent,
-			wantAgent: agentImplementer,
+			wantType:          ActionSpawnAgent,
+			wantAgent:         agentImplementer,
+			wantInputContains: "review-1.md",
+		},
+
+		// ── Decision 23: phase-6 completed_fail dispatches retry (idempotent) ─
+		{
+			// Primary path after pipeline_report_result has set ReviewStatus.
+			// Engine uses state as guard (no file read), so NextAction is idempotent.
+			name: "phase6_impl_fail_completed_fail",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				sm := newTestStateManager(t, "phase-6", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{
+						"1": {
+							Title:         "Task 1",
+							ExecutionMode: "sequential",
+							ImplStatus:    "completed",
+							ReviewStatus:  state.TaskStatusCompletedFail,
+							ImplRetries:   1,
+						},
+					}
+					return nil
+				})
+				st, err := sm.GetState()
+				if err != nil {
+					t.Fatalf("GetState: %v", err)
+				}
+				// review-1.md exists (not deleted) — engine must NOT re-read it.
+				if err := writeFileForTest(st.Workspace+"/review-1.md", "## Verdict: FAIL\n"); err != nil {
+					t.Fatalf("writeFileForTest: %v", err)
+				}
+				return sm
+			},
+			engFn: func() *Engine {
+				return &Engine{
+					agentDir:         "/test/agents",
+					specsDir:         "/test/specs",
+					verdictReader:    stubVerdictReader(VerdictFail),
+					sourceTypeReader: stubSourceTypeReader("text"),
+				}
+			},
+			wantType:          ActionSpawnAgent,
+			wantAgent:         agentImplementer,
+			wantInputContains: "review-1.md",
 		},
 
 		// ── Decision 23: phase-6 retry limit escalates to human ───────────────
@@ -680,28 +726,13 @@ func TestNextAction(t *testing.T) {
 							Title:         "Task 1",
 							ExecutionMode: "sequential",
 							ImplStatus:    "completed",
-							ReviewStatus:  "",
+							ReviewStatus:  state.TaskStatusCompletedFail,
 							ImplRetries:   2,
 						},
 					}
 					return nil
 				})
-				st, err := sm.GetState()
-				if err != nil {
-					t.Fatalf("GetState: %v", err)
-				}
-				if err := writeFileForTest(st.Workspace+"/review-1.md", "## Verdict: FAIL\n"); err != nil {
-					t.Fatalf("writeFileForTest: %v", err)
-				}
 				return sm
-			},
-			engFn: func() *Engine {
-				return &Engine{
-					agentDir:         "/test/agents",
-					specsDir:         "/test/specs",
-					verdictReader:    stubVerdictReader(VerdictFail),
-					sourceTypeReader: stubSourceTypeReader("text"),
-				}
 			},
 			wantType: ActionCheckpoint,
 		},
@@ -1118,14 +1149,14 @@ func TestPostToSource_CheckpointOptions(t *testing.T) {
 			name:         "jira_issue",
 			sourceType:   "jira_issue",
 			sourceURL:    "https://example.atlassian.net/browse/PROJ-123",
-			wantName:     "post-to-jira",
+			wantName:     "post-to-source",
 			wantURLInMsg: "https://example.atlassian.net/browse/PROJ-123",
 		},
 		{
 			name:         "github_issue",
 			sourceType:   "github_issue",
 			sourceURL:    "https://github.com/org/repo/issues/42",
-			wantName:     "post-to-github",
+			wantName:     "post-to-source",
 			wantURLInMsg: "https://github.com/org/repo/issues/42",
 		},
 	}

@@ -204,10 +204,17 @@ func TestPipelineReportResult(t *testing.T) {
 			phase: "phase-6",
 			setup: func(t *testing.T, sm *state.StateManager, dir string) {
 				t.Helper()
-				// Write impl-1.md with FAIL verdict in body.
+				// Initialize task so ReviewStatus and ImplRetries can be verified.
+				tasks := map[string]state.Task{
+					"1": {Title: "Task 1", ImplStatus: state.TaskStatusCompleted},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				// Write review-1.md with FAIL verdict.
 				content := "## Summary\n\n## Verdict: FAIL\n\nTests did not pass.\n"
-				if err := os.WriteFile(filepath.Join(dir, "impl-1.md"), []byte(content), 0o644); err != nil {
-					t.Fatalf("WriteFile impl-1.md: %v", err)
+				if err := os.WriteFile(filepath.Join(dir, "review-1.md"), []byte(content), 0o644); err != nil {
+					t.Fatalf("WriteFile review-1.md: %v", err)
 				}
 			},
 			wantIsError:     false,
@@ -225,6 +232,14 @@ func TestPipelineReportResult(t *testing.T) {
 					if p == "phase-6" {
 						t.Errorf("phase-6 must NOT be in CompletedPhases after FAIL")
 					}
+				}
+				// pipeline_report_result must record FAIL in state for deterministic retry.
+				task := s.Tasks["1"]
+				if task.ReviewStatus != state.TaskStatusCompletedFail {
+					t.Errorf("Tasks[1].ReviewStatus = %q, want %q", task.ReviewStatus, state.TaskStatusCompletedFail)
+				}
+				if task.ImplRetries != 1 {
+					t.Errorf("Tasks[1].ImplRetries = %d, want 1", task.ImplRetries)
 				}
 			},
 		},
@@ -349,6 +364,52 @@ func TestPipelineReportResult(t *testing.T) {
 			wantStateUpdate: true,
 			wantWarningNE:   true, // duplicate warning expected
 			wantHint:        "proceed",
+		},
+		{
+			// After a retry implementer run (phase-5), tasks in ReviewStatus="completed_fail"
+			// must be reset to "" and their stale review files deleted so the engine
+			// dispatches a fresh reviewer instead of re-dispatching the implementer.
+			name:  "phase5_clears_completed_fail_state",
+			phase: "phase-5",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				tasks := map[string]state.Task{
+					"1": {
+						Title:        "Task 1",
+						ImplStatus:   state.TaskStatusCompleted,
+						ReviewStatus: state.TaskStatusCompletedFail,
+						ImplRetries:  1,
+					},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				// impl-1.md exists (retry implementer just ran).
+				if err := os.WriteFile(filepath.Join(dir, "impl-1.md"), []byte("content"), 0o644); err != nil {
+					t.Fatalf("WriteFile impl-1.md: %v", err)
+				}
+				// Stale review-1.md must be deleted after phase-5 completes.
+				if err := os.WriteFile(filepath.Join(dir, "review-1.md"), []byte("## Verdict: FAIL\n"), 0o644); err != nil {
+					t.Fatalf("WriteFile review-1.md: %v", err)
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "proceed",
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				task := s.Tasks["1"]
+				if task.ReviewStatus != "" {
+					t.Errorf("Tasks[1].ReviewStatus = %q after phase-5, want empty (cleared)", task.ReviewStatus)
+				}
+				if _, statErr := os.Stat(filepath.Join(dir, "review-1.md")); !os.IsNotExist(statErr) {
+					t.Error("review-1.md should have been deleted by clearCompletedFailTasks")
+				}
+			},
 		},
 	}
 
