@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
@@ -164,7 +166,11 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 	})
 
-	t.Run("skip_prefix_passthrough", func(t *testing.T) {
+	t.Run("skip_absorption", func(t *testing.T) {
+		// P1: verify that a skip signal is absorbed internally and the handler returns
+		// the first non-skip action rather than returning done+skip: to the caller.
+		// phase-3b is skipped; the next non-skipped phase is checkpoint-a → spawn_agent
+		// (or checkpoint) depending on the engine's subsequent decision.
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-3b", func(s *state.State) error {
 			s.SkippedPhases = []string{"phase-3b"}
@@ -185,11 +191,14 @@ func TestPipelineNextAction(t *testing.T) {
 		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
 			t.Fatalf("unmarshal action: %v", err)
 		}
-		if action.Type != orchestrator.ActionDone {
-			t.Errorf("action.Type = %q, want %q", action.Type, orchestrator.ActionDone)
+		// The handler must NOT return a done+skip: action to the caller (P1 absorption).
+		if action.Type == orchestrator.ActionDone && strings.HasPrefix(action.Summary, orchestrator.SkipSummaryPrefix) {
+			t.Errorf("handler returned skip signal to caller (action.Type=%q, Summary=%q); P1 should absorb this internally",
+				action.Type, action.Summary)
 		}
-		if !strings.HasPrefix(action.Summary, orchestrator.SkipSummaryPrefix) {
-			t.Errorf("action.Summary = %q, want prefix %q", action.Summary, orchestrator.SkipSummaryPrefix)
+		// The action should be a non-skip, non-done type (spawn_agent or checkpoint).
+		if action.Type == orchestrator.ActionDone && action.Summary == "" {
+			t.Errorf("unexpected true done (empty summary) after skip absorption")
 		}
 	})
 
@@ -331,6 +340,242 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 		if !result.IsError {
 			t.Errorf("handler should return MCP error for nonexistent workspace; got: %+v", result)
+		}
+	})
+
+	t.Run("task_init_absorption", func(t *testing.T) {
+		// P2: when the engine returns ActionTaskInit (st.Tasks is empty in phase-5),
+		// the handler internally calls executeTaskInit and re-invokes eng.NextAction.
+		// The result should be a spawn_agent action for the implementer (not ActionTaskInit).
+		t.Parallel()
+
+		workspace, sm := initWorkspaceForNextAction(t, "phase-5", nil)
+		// workspace/tasks.md must exist for executeTaskInit to parse.
+		tasksContent := "# Tasks\n\n## Task 1: Implement\n\nApply all changes.\n\nmode: sequential\n"
+		if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksContent), 0o600); err != nil {
+			t.Fatalf("write tasks.md: %v", err)
+		}
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned Go error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var action orchestrator.Action
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
+			t.Fatalf("unmarshal action: %v", err)
+		}
+
+		// The handler must NOT return ActionTaskInit to the caller (P2 absorption).
+		if action.Type == orchestrator.ActionTaskInit {
+			t.Errorf("handler returned ActionTaskInit to caller; P2 should absorb this internally")
+		}
+		// After task_init, the engine should dispatch the implementer (spawn_agent).
+		if action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q after task_init absorption, want %q", action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if action.Agent != "implementer" {
+			t.Errorf("action.Agent = %q after task_init absorption, want %q", action.Agent, "implementer")
+		}
+
+		// Confirm that tasks are now stored in state (executeTaskInit side effect).
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState after task_init_absorption: %v", loadErr)
+		}
+		if len(s.Tasks) == 0 {
+			t.Errorf("state.Tasks is empty after task_init_absorption; expected tasks to be stored")
+		}
+	})
+
+	t.Run("batch_commit_absorption", func(t *testing.T) {
+		// P3: when NeedsBatchCommit=true, the handler internally calls executeBatchCommit,
+		// clears the flag, and re-invokes eng.NextAction. The result is the next non-batch
+		// action. Also verifies that state.NeedsBatchCommit == false on disk after the call.
+		t.Parallel()
+
+		// A real git repo is required because executeBatchCommit calls git commands.
+		repoDir := t.TempDir()
+		runGitCmd := func(args ...string) {
+			t.Helper()
+			cmd := exec.Command("git", args...)
+			cmd.Dir = repoDir
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+		runGitCmd("init")
+		runGitCmd("config", "user.email", "test@example.com")
+		runGitCmd("config", "user.name", "Test")
+		// Create initial commit so HEAD exists.
+		if err := os.WriteFile(filepath.Join(repoDir, "README.md"), []byte("placeholder\n"), 0o600); err != nil {
+			t.Fatalf("write README.md: %v", err)
+		}
+		runGitCmd("add", "README.md")
+		runGitCmd("commit", "-m", "chore: initial commit")
+
+		// Create workspace inside the git repo so repoRoot works.
+		workspace := filepath.Join(repoDir, ".specs", "test-batch")
+		if err := os.MkdirAll(workspace, 0o755); err != nil {
+			t.Fatalf("mkdir workspace: %v", err)
+		}
+
+		sm := state.NewStateManager("dev")
+		if err := sm.Init(workspace, "test-batch"); err != nil {
+			t.Fatalf("sm.Init: %v", err)
+		}
+
+		// Set up phase-5 with tasks loaded (so engine skips task_init), with
+		// NeedsBatchCommit=true (triggers ActionBatchCommit from engine).
+		if err := sm.Update(func(s *state.State) error {
+			s.CurrentPhase = state.PhaseFive
+			s.Tasks = map[string]state.Task{
+				"1": {
+					Title:         "Task 1",
+					ExecutionMode: state.ExecModeParallel,
+					ImplStatus:    state.TaskStatusCompleted,
+					ReviewStatus:  "pending",
+					Files:         []string{}, // empty → executeBatchCommit uses git diff fallback (no-op warning)
+				},
+			}
+			s.NeedsBatchCommit = true
+			return nil
+		}); err != nil {
+			t.Fatalf("sm.Update: %v", err)
+		}
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned Go error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp struct {
+			orchestrator.Action
+			Warning string `json:"warning,omitempty"`
+		}
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal response: %v", err)
+		}
+
+		// The handler must NOT return ActionBatchCommit to the caller (P3 absorption).
+		if resp.Type == orchestrator.ActionBatchCommit {
+			t.Errorf("handler returned ActionBatchCommit to caller; P3 should absorb this internally")
+		}
+
+		// Assert NeedsBatchCommit is false on disk after the call.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState after batch_commit_absorption: %v", loadErr)
+		}
+		if s.NeedsBatchCommit {
+			t.Errorf("state.NeedsBatchCommit = true after batch_commit_absorption; expected false")
+		}
+	})
+
+	t.Run("final_commit_absorption", func(t *testing.T) {
+		// P4: when the engine returns ActionExec with commands[0]=="final_commit",
+		// the handler internally calls executeFinalCommit and returns ActionDone.
+		// After the call, state.json must show currentPhase == "completed".
+		t.Parallel()
+
+		// Set up a git repo with a remote so git push --force-with-lease works.
+		bareDir := t.TempDir()
+		runBareGit := func(dir string, args ...string) {
+			t.Helper()
+			cmd := exec.Command("git", args...)
+			cmd.Dir = dir
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+			}
+		}
+
+		// Create a bare remote repository.
+		runBareGit(bareDir, "init", "--bare")
+
+		// Clone from bare into a working repo.
+		repoDir := t.TempDir()
+		runBareGit(repoDir, "clone", bareDir, ".")
+		runBareGit(repoDir, "config", "user.email", "test@example.com")
+		runBareGit(repoDir, "config", "user.name", "Test")
+
+		// Create initial commit and push to remote.
+		if err := os.WriteFile(filepath.Join(repoDir, "README.md"), []byte("placeholder\n"), 0o600); err != nil {
+			t.Fatalf("write README.md: %v", err)
+		}
+		runBareGit(repoDir, "add", "README.md")
+		runBareGit(repoDir, "commit", "-m", "chore: initial commit")
+		runBareGit(repoDir, "push", "origin", "HEAD")
+
+		// Create workspace inside the repo.
+		workspace := filepath.Join(repoDir, ".specs", "test-final-commit")
+		if err := os.MkdirAll(workspace, 0o755); err != nil {
+			t.Fatalf("mkdir workspace: %v", err)
+		}
+
+		sm := state.NewStateManager("dev")
+		if err := sm.Init(workspace, "test-final-commit"); err != nil {
+			t.Fatalf("sm.Init: %v", err)
+		}
+
+		// Set phase to final-commit with SkipPr=false so the engine returns
+		// ActionExec with commands[0]=="final_commit".
+		if err := sm.Update(func(s *state.State) error {
+			s.CurrentPhase = state.PhaseFinalCommit
+			s.SkipPr = false
+			return nil
+		}); err != nil {
+			t.Fatalf("sm.Update: %v", err)
+		}
+
+		// Write a summary.md so executeFinalCommit's git add -f succeeds.
+		summaryContent := "# Summary\n\nPipeline complete.\n"
+		if err := os.WriteFile(filepath.Join(workspace, "summary.md"), []byte(summaryContent), 0o600); err != nil {
+			t.Fatalf("write summary.md: %v", err)
+		}
+
+		kb := history.NewKnowledgeBase("")
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned Go error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var action orchestrator.Action
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
+			t.Fatalf("unmarshal action: %v", err)
+		}
+
+		// P4 absorption: the handler must return ActionDone (not ActionExec with final_commit).
+		if action.Type != orchestrator.ActionDone {
+			t.Errorf("action.Type = %q after final_commit absorption, want %q", action.Type, orchestrator.ActionDone)
+		}
+
+		// State must be written as completed.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState after final_commit_absorption: %v", loadErr)
+		}
+		if s.CurrentPhase != state.PhaseCompleted {
+			t.Errorf("currentPhase = %q after final_commit_absorption, want %q", s.CurrentPhase, state.PhaseCompleted)
 		}
 	})
 }

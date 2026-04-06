@@ -492,6 +492,83 @@ func (m *StateManager) PhaseComplete(workspace, phase string) error {
 	})
 }
 
+// PhaseArtifacts maps phase identifiers to the artifact file that must
+// exist in the workspace before phase-complete is accepted.
+// Exported so the tools package can use the same map instead of duplicating it.
+// Phases absent from this map have no required artifact (e.g., checkpoint-a,
+// phase-5, pr-creation).
+var PhaseArtifacts = map[string]string{
+	PhaseOne:          ArtifactAnalysis,
+	PhaseTwo:          ArtifactInvestigation,
+	PhaseThree:        ArtifactDesign,
+	PhaseThreeB:       ArtifactReviewDesign,
+	PhaseFour:         ArtifactTasks,
+	PhaseFourB:        ArtifactReviewTasks,
+	PhaseSeven:        ArtifactComprehensiveReview,
+	PhaseFinalSummary: ArtifactSummary,
+}
+
+// PhaseCompleteSkipped advances pipeline state for a phase that is being
+// programmatically skipped by the pipeline_next_action skip loop (P1).
+// Unlike PhaseComplete, it does not enforce Guard3eCheckpointAwaitingHuman,
+// because skipped checkpoints never transition through "awaiting_human".
+// All other guards (artifact existence, revision-pending) still apply.
+func (m *StateManager) PhaseCompleteSkipped(workspace, phase string) error {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
+
+	if !containsPhase(phase) {
+		return fmt.Errorf("PhaseCompleteSkipped: invalid phase %q", phase)
+	}
+
+	return m.Update(func(s *State) error {
+		// Guard3a equivalent: artifact must exist for phases that require one,
+		// unless the phase is in the skipped set.
+		if artifact, required := PhaseArtifacts[phase]; required {
+			if !slices.Contains(s.SkippedPhases, phase) {
+				path := filepath.Join(workspace, artifact)
+				if _, err := os.Stat(path); os.IsNotExist(err) {
+					return fmt.Errorf(
+						"BLOCKED: %s must exist before completing %s. Write the artifact file first",
+						artifact, phase,
+					)
+				}
+			}
+		}
+
+		// Guard3j equivalent: block if checkpoint revision is pending.
+		if phase == PhaseCheckpointA || phase == PhaseCheckpointB {
+			if s.CheckpointRevisionPending != nil && s.CheckpointRevisionPending[phase] {
+				return fmt.Errorf(
+					"BLOCKED: phase-complete %s requires 'clear-revision-pending' to be called first. "+
+						"The user requested a revision — call clear-revision-pending {workspace} %s "+
+						"after receiving explicit user approval, then call phase-complete",
+					phase, phase,
+				)
+			}
+		}
+
+		// Guard3e (CheckpointAwaitingHuman) is intentionally NOT applied here.
+		// Skipped phases never transition through "awaiting_human", so the guard
+		// would incorrectly block them.
+
+		next := nextPhase(phase)
+
+		// Add to completedPhases (deduplicated).
+		s.CompletedPhases = appendUnique(s.CompletedPhases, phase)
+		s.CurrentPhase = next
+		if next == PhaseCompleted {
+			s.CurrentPhaseStatus = StatusCompleted
+		} else {
+			s.CurrentPhaseStatus = StatusPending
+		}
+		s.Timestamps.PhaseStarted = nil
+		return nil
+	})
+}
+
 // PhaseFail records a phase failure with message, equivalent to cmd_phase_fail.
 func (m *StateManager) PhaseFail(workspace, phase, message string) error {
 	// Workspace entry-point guard.

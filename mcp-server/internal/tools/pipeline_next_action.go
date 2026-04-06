@@ -42,6 +42,10 @@ type nextActionResponse struct {
 	Warning string `json:"warning,omitempty"`
 }
 
+// maxDispatchIter is the maximum number of iterations for the P1 skip loop and the
+// P2/P3/P4 dispatch loop. The pipeline has 18 phases; 20 provides a safe margin.
+const maxDispatchIter = 20
+
 // PipelineNextActionHandler returns the next pipeline action for the orchestrator
 // to execute, given the current workspace state.
 //
@@ -52,6 +56,15 @@ type nextActionResponse struct {
 // The handler creates a per-call StateManager to avoid workspace-binding conflicts,
 // delegates to eng.NextAction, and — for spawn_agent actions — enriches the prompt
 // with the agent .md file contents and input artifact file paths.
+//
+// Internal absorptions (not returned to the orchestrator):
+//   - P1: skip-completion loop — ActionDone with SkipSummaryPrefix triggers
+//     sm2.PhaseCompleteSkipped and re-invokes eng.NextAction until a non-skip action.
+//   - P2: ActionTaskInit — calls executeTaskInit then re-invokes eng.NextAction.
+//   - P3: ActionBatchCommit — calls executeBatchCommit, clears NeedsBatchCommit, re-invokes.
+//   - P4: ActionExec with commands[0]=="final_commit" — calls executeFinalCommit, returns done.
+//
+//nolint:gocyclo // complexity is inherent in the P1-P4 dispatch logic; splitting would obscure the flow
 func PipelineNextActionHandler(
 	sm *state.StateManager,
 	eng *orchestrator.Engine,
@@ -78,6 +91,34 @@ func PipelineNextActionHandler(
 			return errorf("next_action: %v", err)
 		}
 
+		// P1: absorb skip-completion loop internally.
+		// Each ActionDone with a SkipSummaryPrefix triggers PhaseCompleteSkipped and
+		// re-invokes eng.NextAction. The loop is bounded to 20 iterations (pipeline has
+		// 18 phases; 20 provides a safe margin against infinite cycles).
+		for iter := range maxDispatchIter {
+			if action.Type != orchestrator.ActionDone ||
+				!strings.HasPrefix(action.Summary, orchestrator.SkipSummaryPrefix) {
+				break
+			}
+			skipPhase := strings.TrimPrefix(action.Summary, orchestrator.SkipSummaryPrefix)
+			if skipErr := sm2.PhaseCompleteSkipped(workspace, skipPhase); skipErr != nil {
+				return errorf("skip phase_complete %s: %v", skipPhase, skipErr)
+			}
+			action, err = eng.NextAction(sm2, "")
+			if err != nil {
+				return errorf("next_action (after skip %s): %v", skipPhase, err)
+			}
+			if iter == maxDispatchIter-1 {
+				// We've used all iterations and the loop condition would be rechecked.
+				// Check if we'd loop again (i.e., still in skip mode).
+				if action.Type == orchestrator.ActionDone &&
+					strings.HasPrefix(action.Summary, orchestrator.SkipSummaryPrefix) {
+					return errorf("skip loop exceeded %d iterations — possible engine cycle; last skip: %s",
+						maxDispatchIter, strings.TrimPrefix(action.Summary, orchestrator.SkipSummaryPrefix))
+				}
+			}
+		}
+
 		resp := nextActionResponse{Action: action}
 
 		// appendWarning accumulates warnings into resp.Warning, semicolon-separated.
@@ -86,6 +127,70 @@ func PipelineNextActionHandler(
 				resp.Warning += "; "
 			}
 			resp.Warning += msg
+		}
+
+		// P2/P3/P4 dispatch loop: absorb ActionTaskInit, ActionBatchCommit, and the
+		// final_commit exec interception. The loop is bounded by maxDispatchIter to guard
+		// against infinite cycles.
+		for iter := range maxDispatchIter {
+			switch action.Type {
+			case orchestrator.ActionTaskInit:
+				// P2: execute task_init internally and re-enter the loop.
+				if taskErr := executeTaskInit(action.Phase, sm2); taskErr != nil {
+					return errorf("task_init: %v", taskErr)
+				}
+				action, err = eng.NextAction(sm2, "")
+				if err != nil {
+					return errorf("next_action (after task_init): %v", err)
+				}
+				if iter == maxDispatchIter-1 {
+					return errorf("dispatch loop exceeded %d iterations — possible engine cycle; last action: %s",
+						maxDispatchIter, action.Type)
+				}
+				continue
+
+			case orchestrator.ActionBatchCommit:
+				// P3: execute batch commit internally, clear NeedsBatchCommit, re-enter.
+				warning, batchErr := executeBatchCommit(workspace, sm2)
+				if warning != "" {
+					appendWarning(warning)
+				}
+				if batchErr != nil {
+					return errorf("batch_commit: %v", batchErr)
+				}
+				// Clear NeedsBatchCommit flag in state.
+				if updateErr := sm2.Update(func(s *state.State) error {
+					s.NeedsBatchCommit = false
+					return nil
+				}); updateErr != nil {
+					return errorf("clear NeedsBatchCommit: %v", updateErr)
+				}
+				action, err = eng.NextAction(sm2, "")
+				if err != nil {
+					return errorf("next_action (after batch_commit): %v", err)
+				}
+				if iter == maxDispatchIter-1 {
+					return errorf("dispatch loop exceeded %d iterations — possible engine cycle; last action: %s",
+						maxDispatchIter, action.Type)
+				}
+				continue
+
+			case orchestrator.ActionExec:
+				// P4: intercept final_commit exec — handle entirely in Go.
+				if len(action.Commands) > 0 && action.Commands[0] == "final_commit" {
+					if finalErr := executeFinalCommit(workspace, sm2, kb); finalErr != nil {
+						return errorf("final_commit: %v", finalErr)
+					}
+					return okJSON(nextActionResponse{Action: orchestrator.NewDoneAction("pipeline completed", "")})
+				}
+				// Non-final_commit exec: fall through to return the action to the orchestrator.
+
+			default:
+				// ActionSpawnAgent, ActionCheckpoint, ActionWriteFile, ActionDone — return as-is.
+			}
+
+			// Action is ready to be returned to the orchestrator.
+			break
 		}
 
 		// Eliminate the window between pipeline_next_action returning a checkpoint action
@@ -101,6 +206,8 @@ func PipelineNextActionHandler(
 				appendWarning(fmt.Sprintf("set awaiting_human: %v", updateErr))
 			}
 		}
+
+		resp.Action = action
 
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
 			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb, profiler); enrichErr != nil {

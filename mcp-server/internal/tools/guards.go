@@ -14,20 +14,6 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
-// phaseArtifacts maps phase identifiers to the artifact file that must exist in
-// the workspace before phase-complete is accepted.  Phases absent from this map
-// have no required artifact (e.g. checkpoint-a, phase-5, pr-creation).
-var phaseArtifacts = map[string]string{
-	state.PhaseOne:          state.ArtifactAnalysis,
-	state.PhaseTwo:          state.ArtifactInvestigation,
-	state.PhaseThree:        state.ArtifactDesign,
-	state.PhaseThreeB:       state.ArtifactReviewDesign,
-	state.PhaseFour:         state.ArtifactTasks,
-	state.PhaseFourB:        state.ArtifactReviewTasks,
-	state.PhaseSeven:        state.ArtifactComprehensiveReview,
-	state.PhaseFinalSummary: state.ArtifactSummary,
-}
-
 // phaseLogRequired lists phases that are expected to emit a phase-log entry
 // before phase-complete.  Checkpoint and admin phases are excluded.
 var phaseLogRequired = map[string]bool{
@@ -49,7 +35,7 @@ var phaseLogRequired = map[string]bool{
 // the skipped set, or when the artifact exists.
 // Returns a non-nil error when the required artifact is absent.
 func Guard3aArtifactExists(workspace, phase string, s *state.State) error {
-	artifact, required := phaseArtifacts[phase]
+	artifact, required := state.PhaseArtifacts[phase]
 	if !required {
 		return nil
 	}

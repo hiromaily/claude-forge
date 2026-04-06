@@ -518,14 +518,14 @@ func TestNextAction(t *testing.T) {
 			wantType: ActionCheckpoint,
 		},
 
-		// ── Decision 27: phase-5 task_init setup — empty tasks emits setup exec ──
+		// ── Decision 27: phase-5 task_init setup — empty tasks emits ActionTaskInit ──
 		{
 			name: "phase5_task_init_setup",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				return newTestStateManager(t, "phase-5", nil) // no tasks set
 			},
-			wantType:      ActionExec,
+			wantType:      ActionTaskInit,
 			wantSetupOnly: new(true),
 		},
 
@@ -635,6 +635,23 @@ func TestNextAction(t *testing.T) {
 			},
 			wantType:        ActionSpawnAgent,
 			wantParallelIDs: []string{"1", "2", "3"},
+		},
+
+		// ── Decision 29: phase-5 batch commit — NeedsBatchCommit=true emits ActionBatchCommit ──
+		{
+			name: "phase5_batch_commit",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "parallel", ImplStatus: "completed"},
+					}
+					s.NeedsBatchCommit = true
+					return nil
+				})
+			},
+			wantType:      ActionBatchCommit,
+			wantSetupOnly: new(true),
 		},
 
 		// ── Decision 23: phase-6 FAIL verdict retries implementation ──────────
@@ -1446,7 +1463,7 @@ func TestHandlePhaseFive_MinimalTasks(t *testing.T) {
 		{
 			name:          "tasks_md_present_falls_through_to_task_init",
 			writeTasksMd:  true,
-			wantType:      ActionExec,
+			wantType:      ActionTaskInit,
 			wantSetupOnly: true,
 		},
 	}
