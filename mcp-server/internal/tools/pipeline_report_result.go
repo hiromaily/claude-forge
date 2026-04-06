@@ -210,20 +210,6 @@ func determineTransition(
 
 	// Step 9: All other phases — advance unless setup_only.
 	if in.setupOnly {
-		// Clear batch commit flag only after a batch_commit exec completes.
-		// Other phase-5 setup actions (task_init, create_branch) must not clear it.
-		s, stateErr := sm.GetState()
-		if stateErr != nil {
-			return reportResultResponse{}, stateErr
-		}
-		if in.phase == "phase-5" && s.NeedsBatchCommit {
-			if updateErr := sm.Update(func(st *state.State) error {
-				st.NeedsBatchCommit = false
-				return nil
-			}); updateErr != nil {
-				return reportResultResponse{}, updateErr
-			}
-		}
 		return reportResultResponse{
 			StateUpdated:    true,
 			ArtifactWritten: artifactWritten,
