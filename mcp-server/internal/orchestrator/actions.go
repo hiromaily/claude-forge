@@ -44,10 +44,6 @@ type Action struct {
 	// setup flag — when true, pipeline_report_result records phase-log but skips PhaseComplete
 	SetupOnly bool `json:"setup_only,omitempty"`
 
-	// retry metadata — set when Phase 6 triggers an impl retry so
-	// pipeline_next_action can deterministically increment ImplRetries.
-	RetryTaskKey string `json:"retry_task_key,omitempty"`
-
 	// done fields
 	Summary     string `json:"summary,omitempty"`
 	SummaryPath string `json:"summary_path,omitempty"`
@@ -120,22 +116,6 @@ func NewSetupExecAction(phase string, commands []string) Action {
 		Phase:     phase,
 		Commands:  commands,
 		SetupOnly: true,
-	}
-}
-
-// NewImplRetryAction constructs an ActionSpawnAgent that carries the task key
-// of a failed task so pipeline_next_action can increment ImplRetries
-// deterministically before returning the action to the orchestrator.
-func NewImplRetryAction(agent, prompt, model, phase string, inputFiles []string, outputFile, retryTaskKey string) Action {
-	return Action{
-		Type:         ActionSpawnAgent,
-		Agent:        agent,
-		Prompt:       prompt,
-		Model:        model,
-		Phase:        phase,
-		InputFiles:   inputFiles,
-		OutputFile:   outputFile,
-		RetryTaskKey: retryTaskKey,
 	}
 }
 

@@ -469,12 +469,13 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 // handlePhaseSix handles Phase 6 (impl reviewer) — Decision 23.
 //
 // Task lifecycle within Phase 6:
-//   - ReviewStatus ""                → spawn reviewer → reviewer writes review-{k}.md
-//   - ReviewStatus ""  + file exists → read verdict:
-//   - PASS/PASS_WITH_NOTES → set ReviewStatus to completed_pass (deterministic)
-//   - FAIL → delete stale review file, increment ImplRetries, re-enter Phase 5
-//   - ReviewStatus "completed_pass"/"completed_pass_with_notes" → skip (already done)
-//   - ReviewStatus "completed_fail" → should not appear here (handled by retry flow)
+//   - ReviewStatus ""                     → no review file → spawn reviewer
+//   - ReviewStatus ""       + file exists → read verdict (transitional state):
+//   - PASS/PASS_WITH_NOTES → pipeline_report_result will set ReviewStatus
+//   - FAIL → dispatch implementer retry with review file as context
+//   - ReviewStatus "completed_fail"        → pipeline_report_result set this;
+//     dispatch implementer retry using review file (idempotent via state guard)
+//   - ReviewStatus "completed_pass"/"completed_pass_with_notes" → skip (done)
 func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 	// Decision 23 — Phase 6 PASS/FAIL retry
 	taskKeys := sortedTaskKeys(st.Tasks)
@@ -495,6 +496,28 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 
 		reviewFile := filepath.Join(st.Workspace, "review-"+k+".md")
 
+		// Task was reviewed and failed — pipeline_report_result has already
+		// incremented ImplRetries and set ReviewStatus. Dispatch the retry
+		// without re-reading the file (idempotent: state is the guard).
+		if task.ReviewStatus == state.TaskStatusCompletedFail {
+			if task.ImplRetries >= state.MaxRevisionRetries {
+				return NewCheckpointAction(
+					"impl-retry-limit-"+k,
+					fmt.Sprintf("Implementation retry limit reached for task %s (%d retries). Human review required.", k, state.MaxRevisionRetries),
+					[]string{"approve", "abandon"},
+				), nil
+			}
+			// Include review-k.md so the implementer can read the reviewer's feedback.
+			return NewSpawnAgentAction(
+				agentImplementer,
+				"Retry implementation for task "+k+" after review failure.",
+				state.DefaultModel,
+				PhaseFive,
+				[]string{state.ArtifactTasks, state.ArtifactDesign, "review-" + k + ".md"},
+				"impl-"+k+".md",
+			), nil
+		}
+
 		// If review file doesn't exist, spawn reviewer.
 		if _, err := os.Stat(reviewFile); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
@@ -510,14 +533,18 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 			), nil
 		}
 
-		// Read verdict from existing review file.
+		// Review file exists but ReviewStatus not yet set — transitional state
+		// (pipeline_report_result not yet called after this reviewer run).
+		// Read verdict as fallback so the orchestrator is never left waiting.
 		verdict, _, err := e.verdictReader(reviewFile)
 		if err != nil {
 			return Action{}, fmt.Errorf("handlePhaseSix: read verdict for task %s: %w", k, err)
 		}
 
 		if verdict == VerdictFail {
-			// Check retry limit.
+			// pipeline_report_result will increment ImplRetries and set
+			// ReviewStatus = "completed_fail" when called. Use the current
+			// counter to guard the retry limit conservatively.
 			if task.ImplRetries >= state.MaxRevisionRetries {
 				return NewCheckpointAction(
 					"impl-retry-limit-"+k,
@@ -525,20 +552,14 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 					[]string{"approve", "abandon"},
 				), nil
 			}
-			// Deterministic: delete stale review file so the next Phase 6
-			// entry spawns a fresh reviewer instead of re-reading old FAIL.
-			_ = os.Remove(reviewFile)
-			// Retry implementation — the action carries retry metadata
-			// so pipeline_next_action can increment ImplRetries.
-			// Note: review file was just deleted, so it is NOT included in InputFiles.
-			return NewImplRetryAction(
+			// Include review-k.md so the implementer can read the feedback.
+			return NewSpawnAgentAction(
 				agentImplementer,
 				"Retry implementation for task "+k+" after review failure.",
 				state.DefaultModel,
 				PhaseFive,
-				[]string{state.ArtifactTasks, state.ArtifactDesign},
+				[]string{state.ArtifactTasks, state.ArtifactDesign, "review-" + k + ".md"},
 				"impl-"+k+".md",
-				k,
 			), nil
 		}
 		// VerdictPass, VerdictPassWithNotes, or any other passing verdict:

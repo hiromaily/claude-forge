@@ -285,6 +285,10 @@ func determineTransition(
 				NextActionHint:  "setup_continue",
 			}, nil
 		}
+
+		// All tasks complete — clear any completed_fail retry state so the
+		// engine dispatches fresh reviewers after the retry implementer ran.
+		clearCompletedFailTasks(sm, in.workspace)
 	}
 
 	if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
@@ -343,6 +347,29 @@ func handlePhase6Transition(
 	}
 
 	if anyFail {
+		// Deterministic: record the FAIL verdict in state so the engine can
+		// dispatch the retry via ReviewStatus without re-reading the review file.
+		// This also prevents double-increment if pipeline_next_action is called
+		// multiple times before the orchestrator calls pipeline_report_result.
+		if updateErr := sm.Update(func(st *state.State) error {
+			for _, result := range results {
+				if result.File == "" || result.VerdictFound != state.VerdictFail {
+					continue
+				}
+				taskKey := reviewFileTaskKey(result.File)
+				if taskKey == "" {
+					continue
+				}
+				if t, ok := st.Tasks[taskKey]; ok {
+					t.ImplRetries++
+					t.ReviewStatus = state.TaskStatusCompletedFail
+					st.Tasks[taskKey] = t
+				}
+			}
+			return nil
+		}); updateErr != nil {
+			return reportResultResponse{}, updateErr
+		}
 		return reportResultResponse{
 			StateUpdated:    true,
 			ArtifactWritten: artifactWritten,
@@ -419,4 +446,38 @@ func handlePhase6Transition(
 		Findings:        allFindings,
 		NextActionHint:  "proceed",
 	}, nil
+}
+
+// reviewFileTaskKey extracts the task key from a review file basename.
+// e.g. "review-1.md" → "1", "review-task-abc.md" → "task-abc".
+// Returns "" if the filename does not match the review-*.md or impl-*.md pattern.
+func reviewFileTaskKey(filename string) string {
+	base := filepath.Base(filename)
+	switch {
+	case strings.HasPrefix(base, "review-") && strings.HasSuffix(base, ".md"):
+		return strings.TrimSuffix(strings.TrimPrefix(base, "review-"), ".md")
+	case strings.HasPrefix(base, "impl-") && strings.HasSuffix(base, ".md"):
+		return strings.TrimSuffix(strings.TrimPrefix(base, "impl-"), ".md")
+	}
+	return ""
+}
+
+// clearCompletedFailTasks resets ReviewStatus and removes stale review files for
+// tasks in the "completed_fail" state. Called from the phase-5 handler after a
+// retry implementer run so the engine dispatches a fresh reviewer on the next call.
+// Fail-open: errors are suppressed so the phase-5 advance is not blocked.
+func clearCompletedFailTasks(sm *state.StateManager, workspace string) {
+	_ = sm.Update(func(st *state.State) error {
+		for k, t := range st.Tasks {
+			if t.ReviewStatus != state.TaskStatusCompletedFail {
+				continue
+			}
+			// Delete the stale review file so the engine dispatches a fresh reviewer.
+			reviewFile := filepath.Join(workspace, "review-"+k+".md")
+			_ = os.Remove(reviewFile)
+			t.ReviewStatus = ""
+			st.Tasks[k] = t
+		}
+		return nil
+	})
 }

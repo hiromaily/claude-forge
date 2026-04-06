@@ -88,22 +88,6 @@ func PipelineNextActionHandler(
 			resp.Warning += msg
 		}
 
-		// Deterministic: when the engine dispatches an impl retry (RetryTaskKey is set),
-		// increment ImplRetries in state.json immediately so the retry counter advances
-		// regardless of whether the orchestrator calls pipeline_report_result correctly.
-		if action.RetryTaskKey != "" {
-			if updateErr := sm2.Update(func(s *state.State) error {
-				if t, ok := s.Tasks[action.RetryTaskKey]; ok {
-					t.ImplRetries++
-					t.ReviewStatus = "" // reset so fresh review is dispatched after retry
-					s.Tasks[action.RetryTaskKey] = t
-				}
-				return nil
-			}); updateErr != nil {
-				appendWarning(fmt.Sprintf("increment ImplRetries: %v", updateErr))
-			}
-		}
-
 		// Eliminate the window between pipeline_next_action returning a checkpoint action
 		// and the orchestrator calling mcp__forge-state__checkpoint().
 		// Set currentPhaseStatus to "awaiting_human" immediately so the stop hook permits
