@@ -400,7 +400,7 @@ func handlePhase6Transition(
 			if vErr != nil {
 				continue
 			}
-			switch verdict {
+			switch verdict { //nolint:exhaustive // only PASS variants update state; FAIL/REVISE/UNKNOWN are intentionally ignored here
 			case orchestrator.VerdictPass:
 				t.ReviewStatus = state.TaskStatusCompletedPass
 				st.Tasks[k] = t
