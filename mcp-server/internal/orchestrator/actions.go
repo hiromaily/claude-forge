@@ -2,11 +2,13 @@ package orchestrator
 
 // Action type constants — match design-mcp-v2.md JSON "type" values.
 const (
-	ActionSpawnAgent = "spawn_agent"
-	ActionCheckpoint = "checkpoint"
-	ActionExec       = "exec"
-	ActionWriteFile  = "write_file"
-	ActionDone       = "done"
+	ActionSpawnAgent  = "spawn_agent"
+	ActionCheckpoint  = "checkpoint"
+	ActionExec        = "exec"
+	ActionWriteFile   = "write_file"
+	ActionDone        = "done"
+	ActionTaskInit    = "task_init"    // engine dispatches task_init internally; never surfaced to orchestrator
+	ActionBatchCommit = "batch_commit" // engine dispatches batch commit internally; never surfaced to orchestrator
 )
 
 // SkipSummaryPrefix is the prefix placed in Action.Summary for per-phase skip signals.
@@ -125,5 +127,25 @@ func NewDoneAction(summary, summaryPath string) Action {
 		Type:        ActionDone,
 		Summary:     summary,
 		SummaryPath: summaryPath,
+	}
+}
+
+// NewTaskInitAction constructs an Action of type ActionTaskInit.
+// SetupOnly is true so pipeline_report_result records phase-log but skips PhaseComplete.
+func NewTaskInitAction(phase string) Action {
+	return Action{
+		Type:      ActionTaskInit,
+		Phase:     phase,
+		SetupOnly: true,
+	}
+}
+
+// NewBatchCommitAction constructs an Action of type ActionBatchCommit.
+// SetupOnly is true so pipeline_report_result records phase-log but skips PhaseComplete.
+func NewBatchCommitAction(phase string) Action {
+	return Action{
+		Type:      ActionBatchCommit,
+		Phase:     phase,
+		SetupOnly: true,
 	}
 }
