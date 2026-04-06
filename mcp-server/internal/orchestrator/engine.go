@@ -64,9 +64,18 @@ func NewEngine(agentDir, specsDir string) *Engine {
 //
 // Caller contract for skip signals: when action.Type == ActionDone and
 // strings.HasPrefix(action.Summary, SkipSummaryPrefix), the caller must call
-// phase-complete for the current phase, then invoke NextAction again.
+// PhaseCompleteSkipped for the current phase, then invoke NextAction again.
 // A true pipeline completion returns ActionDone with a Summary that does NOT
 // start with SkipSummaryPrefix.
+//
+// Caller contract for ActionTaskInit: the caller must initialise tasks from
+// workspace/tasks.md (via executeTaskInit or equivalent), then invoke NextAction again.
+// The action has SetupOnly=true; pipeline_report_result records phase-log only.
+//
+// Caller contract for ActionBatchCommit: the caller must commit parallel task changes
+// (via executeBatchCommit or equivalent), clear NeedsBatchCommit in state, then invoke
+// NextAction again. The action has SetupOnly=true; pipeline_report_result records
+// phase-log only.
 //
 //nolint:gocyclo // complexity is inherent in the dispatch table
 func (e *Engine) NextAction(sm *state.StateManager, _ string) (Action, error) {
@@ -396,7 +405,7 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 				return Action{}, fmt.Errorf("handlePhaseFive: stat %s: %w", tasksPath, err)
 			}
 		}
-		return NewSetupExecAction(PhaseFive, []string{"task_init", st.Workspace}), nil
+		return NewTaskInitAction(PhaseFive), nil
 	}
 
 	// Decision 28 — removed: branch creation now happens during initialisation
@@ -406,7 +415,7 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 
 	// Decision 29 — Batch commit after parallel tasks complete
 	if st.NeedsBatchCommit {
-		return NewSetupExecAction(PhaseFive, []string{"batch_commit"}), nil
+		return NewBatchCommitAction(PhaseFive), nil
 	}
 
 	// Decision 22 — Phase 5 parallel/sequential ordering
