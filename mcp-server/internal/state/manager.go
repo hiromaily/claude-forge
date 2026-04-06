@@ -492,13 +492,12 @@ func (m *StateManager) PhaseComplete(workspace, phase string) error {
 	})
 }
 
-// phaseArtifactsRequired maps phase identifiers to the artifact file that must
+// PhaseArtifacts maps phase identifiers to the artifact file that must
 // exist in the workspace before phase-complete is accepted.
-// This mirrors the phaseArtifacts map in the tools package; it is duplicated
-// here to avoid an import cycle (state cannot import tools).
+// Exported so the tools package can use the same map instead of duplicating it.
 // Phases absent from this map have no required artifact (e.g., checkpoint-a,
 // phase-5, pr-creation).
-var phaseArtifactsRequired = map[string]string{
+var PhaseArtifacts = map[string]string{
 	PhaseOne:          ArtifactAnalysis,
 	PhaseTwo:          ArtifactInvestigation,
 	PhaseThree:        ArtifactDesign,
@@ -527,7 +526,7 @@ func (m *StateManager) PhaseCompleteSkipped(workspace, phase string) error {
 	return m.Update(func(s *State) error {
 		// Guard3a equivalent: artifact must exist for phases that require one,
 		// unless the phase is in the skipped set.
-		if artifact, required := phaseArtifactsRequired[phase]; required {
+		if artifact, required := PhaseArtifacts[phase]; required {
 			if !slices.Contains(s.SkippedPhases, phase) {
 				path := filepath.Join(workspace, artifact)
 				if _, err := os.Stat(path); os.IsNotExist(err) {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
@@ -126,6 +127,105 @@ func TestExecuteBatchCommit_EmptyFiles(t *testing.T) {
 	// The fallback no-op path must produce a warning explaining the situation.
 	if warning == "" {
 		t.Errorf("executeBatchCommit with no changed files: expected non-empty warning, got empty string")
+	}
+}
+
+// initGitRepoWithRemote initialises a working git repository in dir with a
+// local bare repository as its "origin" remote.  The initial commit is pushed
+// so that --force-with-lease succeeds in executeFinalCommit.  Returns the path
+// of the bare repository.
+func initGitRepoWithRemote(t *testing.T, dir string) string {
+	t.Helper()
+
+	bareDir := t.TempDir()
+
+	runIn := func(wd string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = wd
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v in %s: %v\n%s", args, wd, err, out)
+		}
+	}
+
+	// Create the bare remote.
+	runIn(bareDir, "init", "--bare")
+
+	// Initialise the working repo and push to it.
+	initGitRepo(t, dir)
+	runIn(dir, "remote", "add", "origin", bareDir)
+	// push.default=current means `git push --force-with-lease` (no args) pushes
+	// the current branch to a remote branch of the same name — works regardless
+	// of whether the local default branch is "main" or "master".
+	runIn(dir, "config", "push.default", "current")
+	runIn(dir, "push", "-u", "origin", "HEAD")
+
+	return bareDir
+}
+
+// TestExecuteFinalCommit_Success verifies that executeFinalCommit advances
+// state to "completed", force-adds workspace artifacts, amends the last
+// commit, and pushes successfully when a remote is configured.
+func TestExecuteFinalCommit_Success(t *testing.T) {
+	// Not parallel — modifies git working tree state.
+	dir := t.TempDir()
+	initGitRepoWithRemote(t, dir)
+
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(dir, "test-spec"); err != nil {
+		t.Fatalf("sm.Init: %v", err)
+	}
+
+	// Create summary.md so git add -f succeeds.
+	summaryPath := filepath.Join(dir, "summary.md")
+	if err := os.WriteFile(summaryPath, []byte("# Summary\n"), 0o600); err != nil {
+		t.Fatalf("write summary.md: %v", err)
+	}
+
+	kb := history.NewKnowledgeBase("")
+	if err := executeFinalCommit(dir, sm, kb); err != nil {
+		t.Fatalf("executeFinalCommit returned unexpected error: %v", err)
+	}
+
+	// Verify state.json on disk reflects completed status.
+	s, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if s.CurrentPhase != state.PhaseCompleted {
+		t.Errorf("CurrentPhase = %q, want %q", s.CurrentPhase, state.PhaseCompleted)
+	}
+	if s.CurrentPhaseStatus != state.StatusCompleted {
+		t.Errorf("CurrentPhaseStatus = %q, want %q", s.CurrentPhaseStatus, state.StatusCompleted)
+	}
+}
+
+// TestExecuteFinalCommit_PushFails verifies that executeFinalCommit returns an
+// error when the git push step fails (no remote configured).  State is still
+// advanced to "completed" in step 1 before the push is attempted.
+func TestExecuteFinalCommit_PushFails(t *testing.T) {
+	// Not parallel — modifies git working tree state.
+	dir := t.TempDir()
+	initGitRepo(t, dir) // no remote added
+
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(dir, "test-spec"); err != nil {
+		t.Fatalf("sm.Init: %v", err)
+	}
+
+	summaryPath := filepath.Join(dir, "summary.md")
+	if err := os.WriteFile(summaryPath, []byte("# Summary\n"), 0o600); err != nil {
+		t.Fatalf("write summary.md: %v", err)
+	}
+
+	kb := history.NewKnowledgeBase("")
+	err := executeFinalCommit(dir, sm, kb)
+	if err == nil {
+		t.Fatal("executeFinalCommit expected error when push has no remote, got nil")
+	}
+	if !strings.Contains(err.Error(), "executeFinalCommit push") {
+		t.Errorf("error %q does not mention 'executeFinalCommit push'", err.Error())
 	}
 }
 

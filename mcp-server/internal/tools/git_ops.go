@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
@@ -169,8 +170,8 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 	}
 
 	// Step 3: Force-add workspace artifacts (summary.md and state.json).
-	summaryPath := workspace + "/summary.md"
-	statePath := workspace + "/state.json"
+	summaryPath := filepath.Join(workspace, "summary.md")
+	statePath := filepath.Join(workspace, "state.json")
 	if err := runGit(repo, "add", "-f", summaryPath, statePath); err != nil {
 		return fmt.Errorf("executeFinalCommit add: %w", err)
 	}
