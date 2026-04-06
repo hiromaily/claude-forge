@@ -80,11 +80,10 @@ func TestPipelineRoundTrip_Phase1ToPhase2(t *testing.T) {
 	}
 }
 
-// TestPipelineRoundTrip_SkipSignal verifies that:
-//  1. PipelineNextActionHandler at phase-2 (with phase-2 in skippedPhases)
-//     returns a done action whose summary starts with "skip:".
-//  2. After calling phase_complete for phase-2, the next call returns
-//     the first non-skipped phase (phase-3).
+// TestPipelineRoundTrip_SkipSignal verifies that the P1 skip-absorption loop is
+// fully internal: when phase-2 is in skippedPhases, PipelineNextActionHandler
+// absorbs the skip signal and returns the first non-skipped actionable phase
+// (phase-3 spawn_agent) rather than exposing the done+skip: signal to the caller.
 func TestPipelineRoundTrip_SkipSignal(t *testing.T) {
 	t.Parallel()
 
@@ -95,7 +94,9 @@ func TestPipelineRoundTrip_SkipSignal(t *testing.T) {
 	eng := orchestrator.NewEngine("", "")
 	nextActionH := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
 
-	// Step 1: call pipeline_next_action at phase-2 which is skipped.
+	// Call pipeline_next_action at phase-2 which is skipped.
+	// The handler MUST absorb the skip internally (P1) and return the next
+	// actionable phase (phase-3 spawn_agent) directly — no done+skip: passthrough.
 	result, err := callNextAction(t, nextActionH, workspace)
 	if err != nil {
 		t.Fatalf("PipelineNextActionHandler (skip) returned Go error: %v", err)
@@ -104,53 +105,23 @@ func TestPipelineRoundTrip_SkipSignal(t *testing.T) {
 		t.Fatalf("PipelineNextActionHandler (skip) returned MCP error: %s", textContent(result))
 	}
 
-	var skipAction orchestrator.Action
-	if err := json.Unmarshal([]byte(textContent(result)), &skipAction); err != nil {
-		t.Fatalf("unmarshal skip action: %v (raw: %s)", err, textContent(result))
+	var action orchestrator.Action
+	if err := json.Unmarshal([]byte(textContent(result)), &action); err != nil {
+		t.Fatalf("unmarshal action: %v (raw: %s)", err, textContent(result))
 	}
 
-	// Assert: done with "skip:" prefix.
-	if skipAction.Type != orchestrator.ActionDone {
-		t.Fatalf("skip action.Type = %q, want %q", skipAction.Type, orchestrator.ActionDone)
-	}
-	if !strings.HasPrefix(skipAction.Summary, orchestrator.SkipSummaryPrefix) {
-		t.Fatalf("skip action.Summary = %q, want prefix %q", skipAction.Summary, orchestrator.SkipSummaryPrefix)
-	}
-
-	// Step 2: simulate SKILL.md loop — call phase_complete for the skipped phase,
-	// then call pipeline_next_action again.
-	// Use a fresh StateManager to avoid workspace-binding conflicts.
-	smPhaseComplete := state.NewStateManager("dev")
-	if err := smPhaseComplete.PhaseComplete(workspace, "phase-2"); err != nil {
-		t.Fatalf("PhaseComplete(phase-2): %v", err)
-	}
-
-	// Step 3: call pipeline_next_action again — should return the next non-skipped phase.
-	// Create a new handler bound to the updated workspace.
-	smNext := state.NewStateManager("dev")
-	if err := smNext.LoadFromFile(workspace); err != nil {
-		t.Fatalf("LoadFromFile after phase_complete: %v", err)
-	}
-	nextActionH2 := PipelineNextActionHandler(smNext, eng, "", nil, nil, nil)
-	result2, err := callNextAction(t, nextActionH2, workspace)
-	if err != nil {
-		t.Fatalf("PipelineNextActionHandler (after skip) returned Go error: %v", err)
-	}
-	if result2.IsError {
-		t.Fatalf("PipelineNextActionHandler (after skip) returned MCP error: %s", textContent(result2))
-	}
-
-	var nextAction orchestrator.Action
-	if err := json.Unmarshal([]byte(textContent(result2)), &nextAction); err != nil {
-		t.Fatalf("unmarshal next action: %v (raw: %s)", err, textContent(result2))
+	// Assert: the returned action is NOT a skip signal (P1 absorbs it internally).
+	if action.Type == orchestrator.ActionDone && strings.HasPrefix(action.Summary, orchestrator.SkipSummaryPrefix) {
+		t.Fatalf("handler returned skip signal to caller (type=%q, summary=%q); P1 should absorb this",
+			action.Type, action.Summary)
 	}
 
 	// Assert: the returned action is for phase-3 (first non-skipped phase after phase-2).
-	if nextAction.Type != orchestrator.ActionSpawnAgent {
-		t.Errorf("nextAction.Type = %q, want %q", nextAction.Type, orchestrator.ActionSpawnAgent)
+	if action.Type != orchestrator.ActionSpawnAgent {
+		t.Errorf("action.Type = %q, want %q", action.Type, orchestrator.ActionSpawnAgent)
 	}
-	if nextAction.Phase != orchestrator.PhaseThree {
-		t.Errorf("nextAction.Phase = %q, want %q", nextAction.Phase, orchestrator.PhaseThree)
+	if action.Phase != orchestrator.PhaseThree {
+		t.Errorf("action.Phase = %q, want %q", action.Phase, orchestrator.PhaseThree)
 	}
 }
 

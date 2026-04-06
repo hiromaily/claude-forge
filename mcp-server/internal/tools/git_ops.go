@@ -1,0 +1,189 @@
+// Package tools — git operations for batch and final commit absorption.
+// These functions are called internally by PipelineNextActionHandler to execute
+// git operations that were previously delegated to the orchestrator via exec actions.
+package tools
+
+import (
+	"bytes"
+	"fmt"
+	"os/exec"
+	"strings"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+)
+
+// repoRoot returns the absolute path of the git repository root for the given
+// workspace directory. It runs `git -C <workspace> rev-parse --show-toplevel`
+// and returns the trimmed stdout. On failure, the error includes full stdout and
+// stderr for diagnostics.
+func repoRoot(workspace string) (string, error) {
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command("git", "-C", workspace, "rev-parse", "--show-toplevel")
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git rev-parse --show-toplevel: %w\nstdout: %s\nstderr: %s",
+			err, stdout.String(), stderr.String())
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+// runGit executes a git command and returns a wrapped error with stdout/stderr
+// included when the command fails. The first argument is the working-directory
+// flag value (used with `git -C <dir>`); remaining args are the git sub-command
+// and its arguments.
+func runGit(dir string, args ...string) error {
+	fullArgs := append([]string{"-C", dir}, args...)
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command("git", fullArgs...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git %s: %w\nstdout: %s\nstderr: %s",
+			strings.Join(args, " "), err, stdout.String(), stderr.String())
+	}
+	return nil
+}
+
+// executeBatchCommit stages and commits all files changed by completed parallel tasks.
+//
+// Algorithm:
+//  1. Load state to read Tasks.
+//  2. Collect Files from parallel+completed tasks. Fall back to `git diff --name-only HEAD`
+//     when the collected list is empty (covers implementers that modified files
+//     without populating Tasks[k].Files).
+//  3. Detect untracked files via `git status --short --porcelain`. Untracked files
+//     are NOT staged — they are surfaced in the returned warning string so the
+//     operator can see what was omitted.
+//  4. Run `git add -- <files>` then `git commit -m "chore: batch commit parallel tasks"`.
+//
+// The warning return value (when non-empty) is surfaced in nextActionResponse.Warning
+// by the PipelineNextActionHandler caller; it is not logged internally.
+//
+//nolint:gocyclo // complexity is inherent in the multi-step fallback and detection logic
+func executeBatchCommit(workspace string, sm *state.StateManager) (warning string, err error) {
+	s, err := sm.GetState()
+	if err != nil {
+		return "", fmt.Errorf("executeBatchCommit load state: %w", err)
+	}
+
+	repo, err := repoRoot(workspace)
+	if err != nil {
+		return "", err
+	}
+
+	// Step 1: Collect files from parallel+completed tasks.
+	var files []string
+	for _, t := range s.Tasks {
+		if t.ExecutionMode == state.ExecModeParallel && t.ImplStatus == state.TaskStatusCompleted {
+			files = append(files, t.Files...)
+		}
+	}
+
+	// Step 2: Fall back to `git diff --name-only HEAD` when file list is empty.
+	if len(files) == 0 {
+		var stdout bytes.Buffer
+		cmd := exec.Command("git", "-C", repo, "diff", "--name-only", "HEAD")
+		cmd.Stdout = &stdout
+		if runErr := cmd.Run(); runErr != nil {
+			// Fail-open: if the diff command fails (e.g. no commits yet), return
+			// a warning instead of blocking the pipeline.
+			return fmt.Sprintf("git diff fallback failed: %v", runErr), nil
+		}
+		raw := strings.TrimSpace(stdout.String())
+		if raw == "" {
+			// No changed tracked files — nothing to commit; this is a no-op.
+			return "batch commit: no changed files detected (git diff --name-only HEAD returned empty)", nil
+		}
+		for line := range strings.SplitSeq(raw, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				files = append(files, line)
+			}
+		}
+	}
+
+	// Step 3: Detect untracked files and include in warning (do NOT stage them).
+	var warnings []string
+	{
+		var stdout bytes.Buffer
+		cmd := exec.Command("git", "-C", repo, "status", "--short", "--porcelain")
+		cmd.Stdout = &stdout
+		if runErr := cmd.Run(); runErr == nil {
+			var untracked []string
+			for line := range strings.SplitSeq(stdout.String(), "\n") {
+				if after, ok := strings.CutPrefix(line, "?? "); ok {
+					path := strings.TrimSpace(after)
+					if path != "" {
+						untracked = append(untracked, path)
+					}
+				}
+			}
+			if len(untracked) > 0 {
+				warnings = append(warnings, "untracked files not committed (add manually if needed): "+
+					strings.Join(untracked, ", "))
+			}
+		}
+	}
+
+	// Step 4: Stage files.
+	addArgs := append([]string{"add", "--"}, files...)
+	if err := runGit(repo, addArgs...); err != nil {
+		return strings.Join(warnings, "; "), fmt.Errorf("batch commit stage: %w", err)
+	}
+
+	// Step 5: Commit.
+	if err := runGit(repo, "commit", "-m", "chore: batch commit parallel tasks"); err != nil {
+		return strings.Join(warnings, "; "), fmt.Errorf("batch commit: %w", err)
+	}
+
+	return strings.Join(warnings, "; "), nil
+}
+
+// executeFinalCommit finalises the pipeline by:
+//  1. Calling handleReportResult with the final-commit phase to write state.json as completed.
+//  2. Force-adding workspace/summary.md and workspace/state.json.
+//  3. Amending the last commit (--no-edit) to include the state files.
+//  4. Force-pushing with --force-with-lease.
+//
+// Ordering invariant: handleReportResult must be called first so that state.json
+// on disk reflects the completed status before it is staged by `git add -f`.
+//
+// On any git failure the full stdout/stderr is included in the returned error.
+// No rollback is attempted — state is already written as completed.
+func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.KnowledgeBase) error {
+	// Step 1: Advance state to completed via handleReportResult.
+	in := reportResultInput{
+		workspace: workspace,
+		phase:     state.PhaseFinalCommit,
+	}
+	if _, err := handleReportResult(sm, kb, in); err != nil {
+		return fmt.Errorf("executeFinalCommit handleReportResult: %w", err)
+	}
+
+	// Step 2: Determine repo root.
+	repo, err := repoRoot(workspace)
+	if err != nil {
+		return err
+	}
+
+	// Step 3: Force-add workspace artifacts (summary.md and state.json).
+	summaryPath := workspace + "/summary.md"
+	statePath := workspace + "/state.json"
+	if err := runGit(repo, "add", "-f", summaryPath, statePath); err != nil {
+		return fmt.Errorf("executeFinalCommit add: %w", err)
+	}
+
+	// Step 4: Amend the last commit to include the staged state files.
+	if err := runGit(repo, "commit", "--amend", "--no-edit"); err != nil {
+		return fmt.Errorf("executeFinalCommit amend: %w", err)
+	}
+
+	// Step 5: Push with --force-with-lease to protect against concurrent pushes.
+	if err := runGit(repo, "push", "--force-with-lease"); err != nil {
+		return fmt.Errorf("executeFinalCommit push: %w", err)
+	}
+
+	return nil
+}

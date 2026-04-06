@@ -164,7 +164,11 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 	})
 
-	t.Run("skip_prefix_passthrough", func(t *testing.T) {
+	t.Run("skip_absorption", func(t *testing.T) {
+		// P1: verify that a skip signal is absorbed internally and the handler returns
+		// the first non-skip action rather than returning done+skip: to the caller.
+		// phase-3b is skipped; the next non-skipped phase is checkpoint-a → spawn_agent
+		// (or checkpoint) depending on the engine's subsequent decision.
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-3b", func(s *state.State) error {
 			s.SkippedPhases = []string{"phase-3b"}
@@ -185,11 +189,14 @@ func TestPipelineNextAction(t *testing.T) {
 		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
 			t.Fatalf("unmarshal action: %v", err)
 		}
-		if action.Type != orchestrator.ActionDone {
-			t.Errorf("action.Type = %q, want %q", action.Type, orchestrator.ActionDone)
+		// The handler must NOT return a done+skip: action to the caller (P1 absorption).
+		if action.Type == orchestrator.ActionDone && strings.HasPrefix(action.Summary, orchestrator.SkipSummaryPrefix) {
+			t.Errorf("handler returned skip signal to caller (action.Type=%q, Summary=%q); P1 should absorb this internally",
+				action.Type, action.Summary)
 		}
-		if !strings.HasPrefix(action.Summary, orchestrator.SkipSummaryPrefix) {
-			t.Errorf("action.Summary = %q, want prefix %q", action.Summary, orchestrator.SkipSummaryPrefix)
+		// The action should be a non-skip, non-done type (spawn_agent or checkpoint).
+		if action.Type == orchestrator.ActionDone && action.Summary == "" {
+			t.Errorf("unexpected true done (empty summary) after skip absorption")
 		}
 	})
 
