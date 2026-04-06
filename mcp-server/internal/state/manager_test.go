@@ -2258,6 +2258,126 @@ func TestConfigure_SkippedPhasesDoNotAdvanceCurrentPhaseUnlessLanding(t *testing
 	})
 }
 
+// ---------- PhaseCompleteSkipped ----------
+
+func TestPhaseCompleteSkipped_CheckpointA(t *testing.T) {
+	t.Parallel()
+	// AC-1: PhaseCompleteSkipped("checkpoint-a") succeeds when
+	// currentPhaseStatus == "pending" (i.e., never transitioned through
+	// "awaiting_human"). Guard3eCheckpointAwaitingHuman in the tools layer
+	// would block PhaseComplete on a checkpoint with status "pending", but
+	// PhaseCompleteSkipped intentionally bypasses that guard.
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Advance pipeline to checkpoint-a by completing preceding phases.
+	// ValidPhases order: setup → phase-1 → phase-2 → phase-3 → phase-3b → checkpoint-a
+	// Each phase requires its artifact; write stubs before completing.
+	artifacts := []string{
+		state.ArtifactAnalysis,
+		state.ArtifactInvestigation,
+		state.ArtifactDesign,
+		state.ArtifactReviewDesign,
+	}
+	for _, a := range artifacts {
+		if err := os.WriteFile(filepath.Join(dir, a), []byte("stub"), 0o600); err != nil {
+			t.Fatalf("WriteFile(%s): %v", a, err)
+		}
+	}
+
+	// Complete phase-1 through phase-3b so currentPhase becomes checkpoint-a.
+	for _, ph := range []string{state.PhaseOne, state.PhaseTwo, state.PhaseThree, state.PhaseThreeB} {
+		if err := m.PhaseStart(dir, ph); err != nil {
+			t.Fatalf("PhaseStart(%s): %v", ph, err)
+		}
+		if err := m.PhaseComplete(dir, ph); err != nil {
+			t.Fatalf("PhaseComplete(%s): %v", ph, err)
+		}
+	}
+
+	// Verify state is at checkpoint-a with status "pending" (never awaiting_human).
+	pre := loadState(t, dir)
+	if pre.CurrentPhase != "checkpoint-a" {
+		t.Fatalf("currentPhase before PhaseCompleteSkipped: got %q, want %q", pre.CurrentPhase, "checkpoint-a")
+	}
+	if pre.CurrentPhaseStatus != "pending" {
+		t.Fatalf("currentPhaseStatus before PhaseCompleteSkipped: got %q, want %q", pre.CurrentPhaseStatus, "pending")
+	}
+
+	// PhaseCompleteSkipped must succeed even though currentPhaseStatus is "pending".
+	// In contrast, the Guard3eCheckpointAwaitingHuman (in the tools layer) would
+	// block a regular phase-complete call on checkpoint-a when status != "awaiting_human".
+	if err := m.PhaseCompleteSkipped(dir, "checkpoint-a"); err != nil {
+		t.Fatalf("PhaseCompleteSkipped(checkpoint-a): unexpected error: %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.CurrentPhase != "phase-4" {
+		t.Errorf("currentPhase: got %q, want %q", s.CurrentPhase, "phase-4")
+	}
+	if s.CurrentPhaseStatus != "pending" {
+		t.Errorf("currentPhaseStatus: got %q, want %q", s.CurrentPhaseStatus, "pending")
+	}
+	found := false
+	for _, p := range s.CompletedPhases {
+		if p == "checkpoint-a" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("completedPhases: checkpoint-a not found in %v", s.CompletedPhases)
+	}
+}
+
+func TestPhaseCompleteSkipped_Normal(t *testing.T) {
+	t.Parallel()
+	// AC-2: PhaseCompleteSkipped for a non-checkpoint phase (phase-1) produces
+	// the same currentPhase advancement as PhaseComplete would.
+	dir := t.TempDir()
+	m := newManager()
+	if err := m.Init(dir, "s"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// Write required artifact for phase-1 (analysis.md).
+	if err := os.WriteFile(filepath.Join(dir, state.ArtifactAnalysis), []byte("stub"), 0o600); err != nil {
+		t.Fatalf("WriteFile(analysis.md): %v", err)
+	}
+
+	// Start phase-1 so currentPhaseStatus is "in_progress".
+	if err := m.PhaseStart(dir, state.PhaseOne); err != nil {
+		t.Fatalf("PhaseStart(phase-1): %v", err)
+	}
+
+	// PhaseCompleteSkipped should advance currentPhase to phase-2, same as PhaseComplete.
+	if err := m.PhaseCompleteSkipped(dir, state.PhaseOne); err != nil {
+		t.Fatalf("PhaseCompleteSkipped(phase-1): unexpected error: %v", err)
+	}
+
+	s := loadState(t, dir)
+	if s.CurrentPhase != "phase-2" {
+		t.Errorf("currentPhase: got %q, want %q", s.CurrentPhase, "phase-2")
+	}
+	if s.CurrentPhaseStatus != "pending" {
+		t.Errorf("currentPhaseStatus: got %q, want %q", s.CurrentPhaseStatus, "pending")
+	}
+	found := false
+	for _, p := range s.CompletedPhases {
+		if p == "phase-1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("completedPhases: phase-1 not found in %v", s.CompletedPhases)
+	}
+	if s.Timestamps.PhaseStarted != nil {
+		t.Errorf("timestamps.phaseStarted: want nil after complete, got %v", s.Timestamps.PhaseStarted)
+	}
+}
+
 // ---------- helper ----------
 
 // containsAny returns true if s contains any of the given substrings.
