@@ -143,6 +143,10 @@ func PipelineNextActionHandler(
 				if err != nil {
 					return errorf("next_action (after task_init): %v", err)
 				}
+				if iter == maxDispatchIter-1 {
+					return errorf("dispatch loop exceeded %d iterations — possible engine cycle; last action: %s",
+						maxDispatchIter, action.Type)
+				}
 				continue
 
 			case orchestrator.ActionBatchCommit:
@@ -165,6 +169,10 @@ func PipelineNextActionHandler(
 				if err != nil {
 					return errorf("next_action (after batch_commit): %v", err)
 				}
+				if iter == maxDispatchIter-1 {
+					return errorf("dispatch loop exceeded %d iterations — possible engine cycle; last action: %s",
+						maxDispatchIter, action.Type)
+				}
 				continue
 
 			case orchestrator.ActionExec:
@@ -182,7 +190,6 @@ func PipelineNextActionHandler(
 			}
 
 			// Action is ready to be returned to the orchestrator.
-			_ = iter // iter used for bound check below
 			break
 		}
 

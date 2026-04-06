@@ -1,0 +1,408 @@
+{
+  "version": 2,
+  "forge-state-mcp-version": "v2.2.0",
+  "specName": "move-skill-logic-to-mcp-server",
+  "workspace": ".specs/20260406-move-skill-logic-to-mcp-server",
+  "branch": "forge/move-skill-logic-to-mcp-server",
+  "effort": "L",
+  "flowTemplate": "full",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "setup",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "checkpoint-a",
+    "phase-4",
+    "phase-4b",
+    "checkpoint-b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "final-verification",
+    "pr-creation",
+    "final-summary",
+    "post-to-source",
+    "final-commit"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "needsBatchCommit": false,
+  "tasks": {
+    "1": {
+      "title": "Add ActionTaskInit and ActionBatchCommit to orchestrator/actions.go",
+      "executionMode": "",
+      "depends_on": [],
+      "files": [
+        "mcp-server/internal/orchestrator/actions.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "10": {
+      "title": "Implement P1-P4 dispatch loop in pipeline_next_action.go",
+      "executionMode": "",
+      "depends_on": [
+        1,
+        2,
+        6,
+        8
+      ],
+      "files": [
+        "mcp-server/internal/tools/pipeline_next_action.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "11": {
+      "title": "Update pipeline_next_action_test.go for absorbed P1-P4 behavior",
+      "executionMode": "",
+      "depends_on": [
+        10
+      ],
+      "files": [
+        "mcp-server/internal/tools/pipeline_next_action_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "12": {
+      "title": "Remove dead NeedsBatchCommit block from pipeline_report_result.go",
+      "executionMode": "",
+      "depends_on": [
+        10
+      ],
+      "files": [
+        "mcp-server/internal/tools/pipeline_report_result.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "13": {
+      "title": "Update pipeline_integration_test.go for new absorbed-loop contracts",
+      "executionMode": "",
+      "depends_on": [
+        10,
+        12
+      ],
+      "files": [
+        "mcp-server/internal/tools/pipeline_integration_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "14": {
+      "title": "Update SKILL.md to remove P1-P4 prose",
+      "executionMode": "",
+      "depends_on": [
+        10
+      ],
+      "files": [
+        "skills/forge/SKILL.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "15": {
+      "title": "Full test suite validation",
+      "executionMode": "",
+      "depends_on": [
+        3,
+        4,
+        5,
+        7,
+        9,
+        11,
+        12,
+        13,
+        14
+      ],
+      "files": [],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Add PhaseCompleteSkipped to state/manager.go",
+      "executionMode": "",
+      "depends_on": [],
+      "files": [
+        "mcp-server/internal/state/manager.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Update engine.go to emit ActionTaskInit and ActionBatchCommit",
+      "executionMode": "",
+      "depends_on": [
+        1
+      ],
+      "files": [
+        "mcp-server/internal/orchestrator/engine.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Update engine_test.go for new action types",
+      "executionMode": "",
+      "depends_on": [
+        3
+      ],
+      "files": [
+        "mcp-server/internal/orchestrator/engine_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "5": {
+      "title": "Add unit tests for PhaseCompleteSkipped in state/manager_test.go",
+      "executionMode": "",
+      "depends_on": [
+        2
+      ],
+      "files": [
+        "mcp-server/internal/state/manager_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "6": {
+      "title": "Create mcp-server/internal/tools/task_ops.go with executeTaskInit and ParseTasksMd",
+      "executionMode": "",
+      "depends_on": [],
+      "files": [
+        "mcp-server/internal/tools/task_ops.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "7": {
+      "title": "Create mcp-server/internal/tools/task_ops_test.go",
+      "executionMode": "",
+      "depends_on": [
+        6
+      ],
+      "files": [
+        "mcp-server/internal/tools/task_ops_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "8": {
+      "title": "Create mcp-server/internal/tools/git_ops.go with repoRoot, executeBatchCommit, executeFinalCommit",
+      "executionMode": "",
+      "depends_on": [],
+      "files": [
+        "mcp-server/internal/tools/git_ops.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "9": {
+      "title": "Create mcp-server/internal/tools/git_ops_test.go",
+      "executionMode": "",
+      "depends_on": [
+        8
+      ],
+      "files": [
+        "mcp-server/internal/tools/git_ops_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass_with_notes",
+      "implRetries": 0,
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 82151,
+      "duration_ms": 198029,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T09:59:30.53978Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 101502,
+      "duration_ms": 203912,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:03:09.30385Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 68476,
+      "duration_ms": 196992,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:06:42.703397Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 55392,
+      "duration_ms": 186831,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:10:07.355063Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 58876,
+      "duration_ms": 145229,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:16:38.485238Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 43490,
+      "duration_ms": 108744,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:18:53.882594Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-06T10:22:41.432918Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 230416,
+      "duration_ms": 257299,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:28:12.360001Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 64391,
+      "duration_ms": 161729,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:32:11.432414Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 57371,
+      "duration_ms": 107613,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:34:24.333364Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 79487,
+      "duration_ms": 263730,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:43:24.375456Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 183742,
+      "duration_ms": 276373,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:49:28.590997Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 45714,
+      "duration_ms": 73098,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:51:05.072782Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 21402,
+      "duration_ms": 40065,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:52:06.10261Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 140617,
+      "duration_ms": 241359,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T10:56:44.332964Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 83986,
+      "duration_ms": 207850,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T11:00:38.85935Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 21783,
+      "duration_ms": 36888,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T11:01:29.934634Z"
+    },
+    {
+      "phase": "pr-creation",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-06T11:02:30.341732Z"
+    },
+    {
+      "phase": "final-summary",
+      "tokens": 54126,
+      "duration_ms": 125337,
+      "model": "sonnet",
+      "timestamp": "2026-04-06T11:04:57.254519Z"
+    },
+    {
+      "phase": "final-commit",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-06T11:05:11.987325Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-04-06T09:55:38.64308Z",
+    "lastUpdated": "2026-04-06T11:05:11.988505Z",
+    "phaseStarted": null
+  },
+  "error": null
+}
