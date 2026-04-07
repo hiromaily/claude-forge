@@ -615,11 +615,12 @@ func (*Engine) handleFinalVerification(_ *state.State) (Action, error) {
 // handlePRCreation handles the pr-creation phase — Decision 24.
 //
 // Design note (phase ordering invariant):
-//   pr-creation runs BEFORE final-summary. At this point summary.md does not
-//   exist yet — it is generated in the final-summary phase so it can include
-//   the PR number. A placeholder body is used here; executeFinalCommit updates
-//   the PR body with the full summary.md via `gh pr edit` after final-summary
-//   completes. See executeFinalCommit in git_ops.go for the body-update step.
+//
+//	pr-creation runs BEFORE final-summary. At this point summary.md does not
+//	exist yet — it is generated in the final-summary phase so it can include
+//	the PR number. A placeholder body is used here; executeFinalCommit updates
+//	the PR body with the full summary.md via `gh pr edit` after final-summary
+//	completes. See executeFinalCommit in git_ops.go for the body-update step.
 func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 	// Decision 24 — PR skip (runtime SkipPr flag)
 	// Note: Decision 14 already handles the case where pr-creation is in SkippedPhases.
@@ -629,7 +630,7 @@ func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 
 	title := derivePRTitle(st)
 
-	body := fmt.Sprintf("[forge] Pipeline summary will be generated shortly.\n\nSpec: %s", st.SpecName)
+	body := "[forge] Pipeline summary will be generated shortly.\n\nSpec: " + st.SpecName
 
 	return NewExecAction(PhasePRCreation, []string{
 		"gh", "pr", "create",

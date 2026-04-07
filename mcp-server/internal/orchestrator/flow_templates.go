@@ -11,6 +11,12 @@ const (
 
 // skipTable maps flow template name → ordered list of phases to skip at workspace setup.
 // Assigned by initRegistry() in registry.go from phaseRegistry TemplateSkips fields.
+//
+// Invariant: every valid template key is always present with a non-nil slice.
+// The "full" template skips nothing, so its slice is []string{} (non-nil, length 0).
+// SkipsForTemplate("full") therefore returns an empty slice, never nil.
+// This invariant is established by initRegistry() pre-populating each template key
+// before iterating phaseRegistry; a missing-or-nil entry for any valid template is a bug.
 var skipTable map[string][]string
 
 // SkipsForTemplate returns the base skip list for a template name.

@@ -48,7 +48,7 @@ All 13 packages: PASS (`go test -race ./...`), 0 linter issues.
 - Retries: 0
 - Review findings: 0 critical, 6 minor
 
-## Improvement Report
+## Improvement Report (Applied)
 
 _Retrospective on what would have made this work easier._
 
