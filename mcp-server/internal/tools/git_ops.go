@@ -6,6 +6,7 @@ package tools
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -144,9 +145,14 @@ func executeBatchCommit(workspace string, sm *state.StateManager) (warning strin
 
 // executeFinalCommit finalises the pipeline by:
 //  1. Calling handleReportResult with the final-commit phase to write state.json as completed.
-//  2. Force-adding workspace/summary.md and workspace/state.json.
-//  3. Amending the last commit (--no-edit) to include the state files.
-//  4. Force-pushing with --force-with-lease.
+//  2. Determining the repository root directory.
+//  3. Updating the PR body with the final summary.md (best-effort, non-fatal).
+//     This is necessary because pr-creation runs BEFORE final-summary —
+//     summary.md does not exist at PR creation time.
+//     See handlePRCreation in engine.go for the design rationale.
+//  4. Force-adding workspace/summary.md and workspace/state.json.
+//  5. Amending the last commit (--no-edit) to include the state files.
+//  6. Force-pushing with --force-with-lease.
 //
 // Ordering invariant: handleReportResult must be called first so that state.json
 // on disk reflects the completed status before it is staged by `git add -f`.
@@ -169,22 +175,57 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 		return err
 	}
 
-	// Step 3: Force-add workspace artifacts (summary.md and state.json).
+	// Step 3: Update PR body with the final summary.md.
+	// pr-creation phase used a placeholder body because summary.md is generated
+	// later in the final-summary phase. Now that summary.md exists, replace the
+	// PR body with the complete version. `gh pr edit` targets the PR on the
+	// current branch — no explicit PR number needed.
+	// Best-effort: if `gh` is not available or the edit fails (e.g. CI, test env),
+	// log a warning and continue — the PR body will retain the placeholder but
+	// the commit and push must still succeed.
 	summaryPath := filepath.Join(workspace, "summary.md")
+	if _, statErr := os.Stat(summaryPath); statErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: executeFinalCommit: summary.md not found, skipping PR body update\n")
+	} else if err := runCommand(repo, "gh", "pr", "edit", "--body-file", summaryPath); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: executeFinalCommit: gh pr edit failed (non-fatal): %v\n", err)
+	}
+
+	// Step 4: Force-add workspace artifacts (state.json and summary.md if it exists).
 	statePath := filepath.Join(workspace, "state.json")
-	if err := runGit(repo, "add", "-f", summaryPath, statePath); err != nil {
+	addArgs := []string{"add", "-f", statePath}
+	if _, statErr := os.Stat(summaryPath); statErr == nil {
+		addArgs = append(addArgs, summaryPath)
+	}
+	if err := runGit(repo, addArgs...); err != nil {
 		return fmt.Errorf("executeFinalCommit add: %w", err)
 	}
 
-	// Step 4: Amend the last commit to include the staged state files.
+	// Step 5: Amend the last commit to include the staged state files.
 	if err := runGit(repo, "commit", "--amend", "--no-edit"); err != nil {
 		return fmt.Errorf("executeFinalCommit amend: %w", err)
 	}
 
-	// Step 5: Push with --force-with-lease to protect against concurrent pushes.
+	// Step 6: Push with --force-with-lease to protect against concurrent pushes.
 	if err := runGit(repo, "push", "--force-with-lease"); err != nil {
 		return fmt.Errorf("executeFinalCommit push: %w", err)
 	}
 
+	return nil
+}
+
+// runCommand executes a non-git command with the given working directory.
+// Unlike runGit (which uses `git -C <dir>`), this sets cmd.Dir because
+// non-git commands like `gh` do not have a `-C` equivalent.
+// Returns a wrapped error with stdout/stderr on failure.
+func runCommand(dir string, name string, args ...string) error {
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s %s: %w\nstdout: %s\nstderr: %s",
+			name, strings.Join(args, " "), err, stdout.String(), stderr.String())
+	}
 	return nil
 }
