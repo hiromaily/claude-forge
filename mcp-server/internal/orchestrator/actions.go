@@ -14,7 +14,7 @@ const (
 // SkipSummaryPrefix is the prefix placed in Action.Summary for per-phase skip signals.
 // The engine emits ActionDone{Summary: SkipSummaryPrefix + phaseID} when a phase
 // should be skipped; PipelineNextActionHandler detects this prefix, calls
-// StateManager.PhaseCompleteSkipped(phaseID), and loops to compute the next action —
+// StateManager.PhaseCompleteSkipped(workspace, phaseID), and loops to compute the next action —
 // so the orchestrator never sees a skip signal directly.
 //
 // Callers outside the handler that need to distinguish a skip from true pipeline

@@ -62,7 +62,7 @@ depends_on: [2, 3]
 The MCP server's `ParseTasksMd` function extracts task state from plaintext fields inside each task section. These fields **must** be present for the server to populate task state correctly:
 
 - `mode:` — `sequential` or `parallel`; defaults to `sequential` when absent.
-- `files:` — a header followed by a `- ` bullet list of file paths (one per line). The parser reads paths from the bullets only; a single-line `**Files:** \`path\`` is ignored by the parser.
+- `files:` — a header followed by a `- ` bullet list of file paths (one per line). The parser reads paths from the bullets only and does NOT strip backticks; do NOT wrap paths in backticks. A single-line `**Files:** path` is ignored by the parser.
 - `depends_on:` — comma-separated task numbers, with or without brackets (e.g. `[1, 2]` or `1, 2`); omit when there are no dependencies.
 
 ## What NOT to Do
