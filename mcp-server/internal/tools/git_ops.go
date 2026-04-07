@@ -190,9 +190,13 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 		fmt.Fprintf(os.Stderr, "warning: executeFinalCommit: gh pr edit failed (non-fatal): %v\n", err)
 	}
 
-	// Step 4: Force-add workspace artifacts (summary.md and state.json).
+	// Step 4: Force-add workspace artifacts (state.json and summary.md if it exists).
 	statePath := filepath.Join(workspace, "state.json")
-	if err := runGit(repo, "add", "-f", summaryPath, statePath); err != nil {
+	addArgs := []string{"add", "-f", statePath}
+	if _, statErr := os.Stat(summaryPath); statErr == nil {
+		addArgs = append(addArgs, summaryPath)
+	}
+	if err := runGit(repo, addArgs...); err != nil {
 		return fmt.Errorf("executeFinalCommit add: %w", err)
 	}
 
