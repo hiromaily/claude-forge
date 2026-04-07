@@ -754,6 +754,35 @@ func TestNextAction(t *testing.T) {
 			wantType: ActionCheckpoint,
 		},
 
+		// ── Decision 23: phase-6 all tasks reviewed → done (phase transition) ─
+		{
+			// Regression guard: before fix, this path incorrectly dispatched
+			// agentVerifier with "verification.md" instead of advancing to phase-7.
+			name: "phase6_all_reviewed_done",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-6", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{
+						"1": {
+							Title:         "Task 1",
+							ExecutionMode: "sequential",
+							ImplStatus:    "completed",
+							ReviewStatus:  state.TaskStatusCompletedPass,
+						},
+						"2": {
+							Title:         "Task 2",
+							ExecutionMode: "sequential",
+							ImplStatus:    "completed",
+							ReviewStatus:  state.TaskStatusCompletedPassNote,
+						},
+					}
+					return nil
+				})
+			},
+			wantType:    ActionDone,
+			wantSummary: SkipSummaryPrefix + PhaseSix,
+		},
+
 		// ── Phase 7: comprehensive reviewer ──────────────────────────────────
 		{
 			name: "phase7_comprehensive_reviewer",

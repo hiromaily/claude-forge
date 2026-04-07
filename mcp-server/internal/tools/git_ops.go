@@ -145,13 +145,14 @@ func executeBatchCommit(workspace string, sm *state.StateManager) (warning strin
 
 // executeFinalCommit finalises the pipeline by:
 //  1. Calling handleReportResult with the final-commit phase to write state.json as completed.
-//  2. Updating the PR body with the final summary.md (generated in the preceding
-//     final-summary phase). This is necessary because pr-creation runs BEFORE
-//     final-summary — summary.md does not exist at PR creation time.
+//  2. Determining the repository root directory.
+//  3. Updating the PR body with the final summary.md (best-effort, non-fatal).
+//     This is necessary because pr-creation runs BEFORE final-summary —
+//     summary.md does not exist at PR creation time.
 //     See handlePRCreation in engine.go for the design rationale.
-//  3. Force-adding workspace/summary.md and workspace/state.json.
-//  4. Amending the last commit (--no-edit) to include the state files.
-//  5. Force-pushing with --force-with-lease.
+//  4. Force-adding workspace/summary.md and workspace/state.json.
+//  5. Amending the last commit (--no-edit) to include the state files.
+//  6. Force-pushing with --force-with-lease.
 //
 // Ordering invariant: handleReportResult must be called first so that state.json
 // on disk reflects the completed status before it is staged by `git add -f`.
@@ -183,7 +184,9 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 	// log a warning and continue — the PR body will retain the placeholder but
 	// the commit and push must still succeed.
 	summaryPath := filepath.Join(workspace, "summary.md")
-	if err := runCommand(repo, "gh", "pr", "edit", "--body-file", summaryPath); err != nil {
+	if _, statErr := os.Stat(summaryPath); statErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: executeFinalCommit: summary.md not found, skipping PR body update\n")
+	} else if err := runCommand(repo, "gh", "pr", "edit", "--body-file", summaryPath); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: executeFinalCommit: gh pr edit failed (non-fatal): %v\n", err)
 	}
 
@@ -207,6 +210,8 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 }
 
 // runCommand executes a non-git command with the given working directory.
+// Unlike runGit (which uses `git -C <dir>`), this sets cmd.Dir because
+// non-git commands like `gh` do not have a `-C` equivalent.
 // Returns a wrapped error with stdout/stderr on failure.
 func runCommand(dir string, name string, args ...string) error {
 	var stdout, stderr bytes.Buffer

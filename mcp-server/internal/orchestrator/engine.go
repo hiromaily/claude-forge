@@ -629,10 +629,12 @@ func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 
 	title := derivePRTitle(st)
 
+	body := fmt.Sprintf("[forge] Pipeline summary will be generated shortly.\n\nSpec: %s", st.SpecName)
+
 	return NewExecAction(PhasePRCreation, []string{
 		"gh", "pr", "create",
 		"--title", title,
-		"--body", "Pipeline summary will be added after generation.",
+		"--body", body,
 	}), nil
 }
 
