@@ -52,7 +52,7 @@ PR: https://github.com/hiromaily/claude-forge/pull/131
 
 ## Improvement Report
 
-_Retrospective on what would have made this work easier._
+_Retrospective on what would have made this work easier. **Applied 2026-04-07.**_
 
 ### Documentation
 

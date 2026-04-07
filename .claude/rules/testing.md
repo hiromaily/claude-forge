@@ -4,6 +4,8 @@ When making changes to this plugin, verify the items relevant to the area you ch
 
 ## Go MCP Server (`cd mcp-server && go test -race ./...`)
 
+> **Important:** All `go` commands must be run from inside `mcp-server/`. The module lives at `mcp-server/`; running `go test ./...` from the repo root finds no Go files and silently passes.
+
 ### State management commands (26 commands)
 
 All commands are tested in `mcp-server/internal/state/`:

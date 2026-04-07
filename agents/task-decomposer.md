@@ -43,14 +43,27 @@ A numbered task list where each task includes:
 ## Task 1: {title} [sequential|parallel]
 **Design ref:** Section X
 **Depends on:** None | Task N, Task M
-**Files:** `path/to/file1.go`, `path/to/file2.go`
 **Acceptance criteria:**
 - [ ] **AC-1:** Criterion 1
 - [ ] **AC-2:** Criterion 2
 
+mode: sequential
+files:
+- path/to/file1.go
+- path/to/file2.go
+depends_on: [2, 3]
+
 ## Task 2: {title} [sequential|parallel]
 ...
 ```
+
+### Machine-readable fields (required for MCP server parsing)
+
+The MCP server's `ParseTasksMd` function extracts task state from plaintext fields inside each task section. These fields **must** be present for the server to populate task state correctly:
+
+- `mode:` — `sequential` or `parallel`; defaults to `sequential` when absent.
+- `files:` — a header followed by a `- ` bullet list of file paths (one per line). The parser reads paths from the bullets only; a single-line `**Files:** \`path\`` is ignored by the parser.
+- `depends_on:` — comma-separated task numbers, with or without brackets (e.g. `[1, 2]` or `1, 2`); omit when there are no dependencies.
 
 ## What NOT to Do
 

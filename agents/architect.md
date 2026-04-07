@@ -46,3 +46,11 @@ A structured design document in markdown. Be specific about:
 - Do NOT leave open questions unresolved — make a decision and state the rationale
 - Do NOT over-engineer — stay within the scope of the request
 - Do NOT ignore project conventions found in steering files
+
+## Design Checklist for Constant/Type Changes
+
+When the design adds or removes a constant or type variant (e.g., a new `ActionType` string, a new phase ID, a new enum value):
+
+- [ ] List every exhaustive `switch` or `if/else` site in the codebase that must be updated — include file path and line number.
+- [ ] Add a task in `tasks.md` for each switch site update, or merge it into the task that introduces the constant.
+- [ ] Note whether any linter suppression (`//nolint:exhaustive` or `_ = iter`) masks an incomplete switch; the implementer must remove the suppression and handle the new case explicitly.
