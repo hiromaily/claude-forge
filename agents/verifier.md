@@ -27,6 +27,8 @@ Before producing the output report, call the analytics MCP tool to retrieve pipe
 mcp__forge-state__analytics_pipeline_summary(workspace: "{workspace}")
 ```
 
+> **Convention**: The values returned by this call are the authoritative pipeline statistics for `summary.md`. Earlier snapshots in review artifacts (e.g., `comprehensive-review.md`) reflect a mid-run state and will show lower totals. Always use the figures from this call, not those earlier snapshots.
+
 Include the following fields from the response in the summary document under a `## Pipeline Statistics` section:
 
 - `total_tokens` — total tokens consumed across all phases
