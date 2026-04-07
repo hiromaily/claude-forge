@@ -64,9 +64,9 @@ flowchart TD
 | 11 | `phase-6` | Code Review — per task, up to 2 retries | impl-reviewer | review-N.md |
 | 12 | `phase-7` | Comprehensive Review — cross-cutting concerns | comprehensive-reviewer | comprehensive-review.md |
 | 13 | `final-verification` | Full build + test suite verification | verifier | final-verification.md |
-| 14 | `pr-creation` | Create PR via `gh pr create` | Orchestrator | PR URL |
-| 15 | `final-summary` | Generate summary.md with PR number | Orchestrator | summary.md |
-| 16 | `final-commit` | Amend last commit with summary.md + force-push | Orchestrator | — |
+| 14 | `pr-creation` | Create PR via `gh pr create` (summary.md not yet available) | Orchestrator | PR URL |
+| 15 | `final-summary` | Generate summary.md with PR number, execution stats, improvement report | Orchestrator | summary.md |
+| 16 | `final-commit` | Update PR body with summary.md, amend last commit, force-push | Orchestrator | — |
 | 17 | `post-to-source` | Post summary to GitHub/Jira issue | Orchestrator | issue comment |
 | 18 | `completed` | Pipeline done | — | — |
 

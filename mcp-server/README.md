@@ -21,7 +21,7 @@ The pipeline progresses through 18 phases in a fixed canonical order. The Engine
 | 10 | `phase-6` | Code review per task (PASS / PASS_WITH_NOTES / FAIL) | impl-reviewer agent | `review-{N}.md` |
 | 11 | `phase-7` | Comprehensive cross-cutting review of all changes | comprehensive-reviewer agent | `comprehensive-review.md` |
 | 12 | `final-verification` | Full typecheck + test suite run; fix failures if possible | verifier agent | _(fixes applied directly)_ |
-| 13 | `pr-creation` | `git push` + `gh pr create` — PR number is now known | Orchestrator | PR on GitHub |
+| 13 | `pr-creation` | `git push` + `gh pr create` with placeholder body (summary.md not yet available) | Orchestrator | PR on GitHub |
 | 14 | `final-summary` | Generate `summary.md` with PR number, execution stats, improvement report | Orchestrator | `summary.md` |
 | 15 | `final-commit` | Amend last commit to include `summary.md` + `state.json`, then force-push | Orchestrator | PR branch updated |
 | 16 | `post-to-source` | Post summary comment to GitHub Issue or Jira Issue (if applicable) | Orchestrator | issue comment |

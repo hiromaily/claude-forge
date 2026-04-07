@@ -227,8 +227,8 @@ sequenceDiagram
     rect rgb(245, 245, 245)
     Note over Orch,User: PR Creation + Final Summary + Final Commit
     Orch->>SM: phase-start pr-creation
-    Orch->>Orch: git push + gh pr create
-    Note over Orch: PR # is now known
+    Orch->>Orch: git push + gh pr create (placeholder body)
+    Note over Orch: PR # is now known (summary.md not yet generated)
     Orch->>SM: phase-complete pr-creation
 
     Orch->>SM: phase-start final-summary
@@ -246,10 +246,11 @@ sequenceDiagram
     Orch->>SM: phase-start final-commit
     Note over Orch,FS: pipeline_report_result called FIRST to advance state.json to "completed"
     Orch->>SM: phase-complete final-commit (via pipeline_report_result)
+    Orch->>Orch: gh pr edit --body-file summary.md (replace placeholder)
     Orch->>Orch: git add summary.md state.json
     Orch->>Orch: git commit --amend --no-edit
     Orch->>Orch: git push --force-with-lease
-    Note over Orch: PR branch now includes summary.md + state.json in final state
+    Note over Orch: PR body updated + branch includes summary.md + state.json
     Note over Hook: Stop hook: allows stop<br>only after summary.md exists
     Orch->>User: Present summary + PR link
     end

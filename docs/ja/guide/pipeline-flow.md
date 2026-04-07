@@ -64,9 +64,9 @@ flowchart TD
 | 11 | `phase-6` | コードレビュー — タスクごと、最大2回リトライ | impl-reviewer | review-N.md |
 | 12 | `phase-7` | 包括的レビュー — 横断的な懸念事項 | comprehensive-reviewer | comprehensive-review.md |
 | 13 | `final-verification` | フルビルド + テストスイート検証 | verifier | final-verification.md |
-| 14 | `pr-creation` | `gh pr create` による PR 作成 | オーケストレーター | PR URL |
-| 15 | `final-summary` | PR 番号を含む summary.md 生成 | オーケストレーター | summary.md |
-| 16 | `final-commit` | 最終コミットを summary.md で amend + force-push | オーケストレーター | — |
+| 14 | `pr-creation` | `gh pr create` による PR 作成（summary.md は未生成） | オーケストレーター | PR URL |
+| 15 | `final-summary` | PR 番号・実行統計・改善レポートを含む summary.md 生成 | オーケストレーター | summary.md |
+| 16 | `final-commit` | PR body を summary.md で更新 + 最終コミット amend + force-push | オーケストレーター | — |
 | 17 | `post-to-source` | GitHub/Jira Issue にサマリーを投稿 | オーケストレーター | Issue コメント |
 | 18 | `completed` | パイプライン完了 | — | — |
 
