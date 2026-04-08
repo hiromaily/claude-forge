@@ -18,6 +18,7 @@ Read these files:
 
 ## Review Checklist
 
+0. **Spec alignment (highest priority)** — compare each requirement, acceptance criterion, and expected behaviour in request.md against the approach chosen in design.md. Verify the design fulfils the spec's intent, not just a plausible interpretation. Pay special attention to what the spec says should be created vs. deleted vs. modified. If the design contradicts or omits a spec requirement, this is CRITICAL.
 1. **Coverage** — does the design address every open question and risk from investigation.md?
 2. **Completeness** — are all callers/importers of deleted or renamed items accounted for (source AND tests)? List any that appear missing.
 3. **Consistency** — do interface changes ripple correctly through all affected files listed?

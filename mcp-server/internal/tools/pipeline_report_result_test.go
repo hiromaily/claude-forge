@@ -411,6 +411,113 @@ func TestPipelineReportResult(t *testing.T) {
 				}
 			},
 		},
+		{
+			// Phase 5 completion gate: all tasks marked completed in state but
+			// impl-2.md missing on disk — must block phase completion.
+			name:  "phase5_completion_gate_blocks_missing_impl",
+			phase: "phase-5",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				tasks := map[string]state.Task{
+					"1": {Title: "Task 1", ImplStatus: state.TaskStatusCompleted},
+					"2": {Title: "Task 2", ImplStatus: state.TaskStatusCompleted},
+					"3": {Title: "Task 3", ImplStatus: state.TaskStatusCompleted},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				// Only impl-1.md exists; impl-2.md and impl-3.md are missing.
+				if err := os.WriteFile(filepath.Join(dir, "impl-1.md"), []byte("content"), 0o644); err != nil {
+					t.Fatalf("WriteFile impl-1.md: %v", err)
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "setup_continue",
+			wantWarningNE:   true, // warning about missing impl files
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				for _, p := range s.CompletedPhases {
+					if p == "phase-5" {
+						t.Error("phase-5 must NOT be in CompletedPhases when impl files are missing")
+					}
+				}
+			},
+		},
+		{
+			// Phase 5 completion gate: all impl files present — should advance.
+			name:  "phase5_completion_gate_passes_all_impl_present",
+			phase: "phase-5",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				tasks := map[string]state.Task{
+					"1": {Title: "Task 1", ImplStatus: state.TaskStatusCompleted},
+					"2": {Title: "Task 2", ImplStatus: state.TaskStatusCompleted},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				for _, k := range []string{"1", "2"} {
+					if err := os.WriteFile(filepath.Join(dir, "impl-"+k+".md"), []byte("content"), 0o644); err != nil {
+						t.Fatalf("WriteFile impl-%s.md: %v", k, err)
+					}
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "proceed",
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				if !slices.Contains(s.CompletedPhases, "phase-5") {
+					t.Errorf("phase-5 should be in CompletedPhases when all impl files exist; completed = %v", s.CompletedPhases)
+				}
+			},
+		},
+		{
+			// Phase 6 completion gate: all tasks reviewed (PASS) but review-2.md
+			// missing on disk — must block phase completion.
+			name:  "phase6_completion_gate_blocks_missing_review",
+			phase: "phase-6",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				tasks := map[string]state.Task{
+					"1": {ImplStatus: state.TaskStatusCompleted, ReviewStatus: state.TaskStatusCompletedPass},
+					"2": {ImplStatus: state.TaskStatusCompleted, ReviewStatus: state.TaskStatusCompletedPass},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				// Only review-1.md exists; review-2.md is missing.
+				content := "## Summary\n\n## Verdict: PASS\n\nAll good.\n"
+				if err := os.WriteFile(filepath.Join(dir, "review-1.md"), []byte(content), 0o644); err != nil {
+					t.Fatalf("WriteFile review-1.md: %v", err)
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "setup_continue",
+			wantWarningNE:   true, // warning about missing review files
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				for _, p := range s.CompletedPhases {
+					if p == "phase-6" {
+						t.Error("phase-6 must NOT be in CompletedPhases when review files are missing")
+					}
+				}
+			},
+		},
 	}
 
 	for _, tc := range tests {
