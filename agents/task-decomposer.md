@@ -31,10 +31,11 @@ A numbered task list where each task includes:
 - **Acceptance criteria** — 1-3 numbered items (`AC-1`, `AC-2`, …), each specific, verifiable, and testable/observable at runtime or via test
 - **Execution mode** — `[parallel]` or `[sequential]`
 
-## Rules for Parallel vs Sequential
+## Rules for Execution Modes
 
 - Mark `[parallel]` only if the task does NOT depend on another task's output AND does not write to the same files as another parallel task
 - Mark `[sequential]` if it depends on a prior task or shares files with another task
+- Mark `[human_gate]` if the task requires human action that AI cannot perform — e.g. merging a PR in another repository, updating an external dependency after a release, manual approval from a stakeholder, or any step that blocks progress until a human completes it. The pipeline will pause deterministically and prompt the user.
 - Group parallel tasks by their dependency tier
 
 ## Output Format
@@ -61,7 +62,7 @@ depends_on: [2, 3]
 
 The MCP server's `ParseTasksMd` function extracts task state from plaintext fields inside each task section. These fields **must** be present for the server to populate task state correctly:
 
-- `mode:` — `sequential` or `parallel`; defaults to `sequential` when absent.
+- `mode:` — `sequential`, `parallel`, or `human_gate`; defaults to `sequential` when absent.
 - `files:` — a header followed by a `- ` bullet list of file paths (one per line). The parser reads paths from the bullets only and does NOT strip backticks; do NOT wrap paths in backticks. A single-line `**Files:** path` is ignored by the parser.
 - `depends_on:` — comma-separated task numbers, with or without brackets (e.g. `[1, 2]` or `1, 2`); omit when there are no dependencies.
 

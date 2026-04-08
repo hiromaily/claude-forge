@@ -40,6 +40,7 @@ type State struct {
 	Revisions                 Revisions       `json:"revisions"`
 	CheckpointRevisionPending map[string]bool `json:"checkpointRevisionPending"`
 	NeedsBatchCommit          bool            `json:"needsBatchCommit"`
+	PendingHumanGate          *string         `json:"pendingHumanGate,omitempty"`
 	Tasks                     map[string]Task `json:"tasks"`
 	PhaseLog                  []PhaseLogEntry `json:"phaseLog"`
 	Timestamps                Timestamps      `json:"timestamps"`

@@ -48,6 +48,16 @@ func runGit(dir string, args ...string) error {
 	return nil
 }
 
+// isGitIgnored checks whether path is ignored by .gitignore rules in the
+// repository rooted at repo. It uses `git check-ignore -q` which exits 0 when
+// the path IS ignored and 1 when it is NOT ignored. Any other error (e.g. repo
+// not found) is treated as "not ignored" (fail-open) to avoid blocking the
+// pipeline on unexpected git failures.
+func isGitIgnored(repo, path string) bool {
+	cmd := exec.Command("git", "-C", repo, "check-ignore", "-q", path)
+	return cmd.Run() == nil // exit 0 → ignored
+}
+
 // executeBatchCommit stages and commits all files changed by completed parallel tasks.
 //
 // Algorithm:
@@ -150,8 +160,11 @@ func executeBatchCommit(workspace string, sm *state.StateManager) (warning strin
 //     This is necessary because pr-creation runs BEFORE final-summary —
 //     summary.md does not exist at PR creation time.
 //     See handlePRCreation in engine.go for the design rationale.
-//  4. Force-adding workspace/summary.md and workspace/state.json.
-//  5. Amending the last commit (--no-edit) to include the state files.
+//  4. Force-adding workspace/summary.md and workspace/state.json — but only files
+//     that are NOT gitignored. Each file is checked individually via isGitIgnored
+//     so that negation patterns (e.g. !.specs/**/state.json) are respected.
+//     When all artifact files are gitignored, step 5 (amend) is skipped entirely.
+//  5. Amending the last commit (--no-edit) to include the staged state files.
 //  6. Force-pushing with --force-with-lease.
 //
 // Ordering invariant: handleReportResult must be called first so that state.json
@@ -191,18 +204,34 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 	}
 
 	// Step 4: Force-add workspace artifacts (state.json and summary.md if it exists).
+	// Each file is checked individually against .gitignore so that negation
+	// patterns are respected per-file. When all candidates are gitignored the
+	// amend step is skipped entirely.
 	statePath := filepath.Join(workspace, "state.json")
-	addArgs := []string{"add", "-f", statePath}
+	candidates := []string{statePath}
 	if _, statErr := os.Stat(summaryPath); statErr == nil {
-		addArgs = append(addArgs, summaryPath)
-	}
-	if err := runGit(repo, addArgs...); err != nil {
-		return fmt.Errorf("executeFinalCommit add: %w", err)
+		candidates = append(candidates, summaryPath)
 	}
 
-	// Step 5: Amend the last commit to include the staged state files.
-	if err := runGit(repo, "commit", "--amend", "--no-edit"); err != nil {
-		return fmt.Errorf("executeFinalCommit amend: %w", err)
+	var addFiles []string
+	for _, f := range candidates {
+		if isGitIgnored(repo, f) {
+			fmt.Fprintf(os.Stderr, "info: executeFinalCommit: %s is gitignored, skipping\n", filepath.Base(f))
+		} else {
+			addFiles = append(addFiles, f)
+		}
+	}
+
+	if len(addFiles) > 0 {
+		addArgs := append([]string{"add", "-f"}, addFiles...)
+		if err := runGit(repo, addArgs...); err != nil {
+			return fmt.Errorf("executeFinalCommit add: %w", err)
+		}
+
+		// Step 5: Amend the last commit to include the staged state files.
+		if err := runGit(repo, "commit", "--amend", "--no-edit"); err != nil {
+			return fmt.Errorf("executeFinalCommit amend: %w", err)
+		}
 	}
 
 	// Step 6: Push with --force-with-lease to protect against concurrent pushes.

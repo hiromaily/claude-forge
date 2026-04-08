@@ -63,6 +63,7 @@ const (
 const (
 	ExecModeParallel   = "parallel"
 	ExecModeSequential = "sequential"
+	ExecModeHumanGate  = "human_gate"
 )
 
 // ---------- Revision types ----------

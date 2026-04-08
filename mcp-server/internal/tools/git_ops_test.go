@@ -134,7 +134,7 @@ func TestExecuteBatchCommit_EmptyFiles(t *testing.T) {
 // local bare repository as its "origin" remote.  The initial commit is pushed
 // so that --force-with-lease succeeds in executeFinalCommit.  Returns the path
 // of the bare repository.
-func initGitRepoWithRemote(t *testing.T, dir string) string {
+func initGitRepoWithRemote(t *testing.T, dir string) {
 	t.Helper()
 
 	bareDir := t.TempDir()
@@ -160,8 +160,6 @@ func initGitRepoWithRemote(t *testing.T, dir string) string {
 	// of whether the local default branch is "main" or "master".
 	runIn(dir, "config", "push.default", "current")
 	runIn(dir, "push", "-u", "origin", "HEAD")
-
-	return bareDir
 }
 
 // TestExecuteFinalCommit_Success verifies that executeFinalCommit advances
@@ -226,6 +224,157 @@ func TestExecuteFinalCommit_PushFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "executeFinalCommit push") {
 		t.Errorf("error %q does not mention 'executeFinalCommit push'", err.Error())
+	}
+}
+
+// TestIsGitIgnored verifies the isGitIgnored helper against actual .gitignore rules.
+func TestIsGitIgnored(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+
+	// Write a .gitignore that ignores the .specs directory.
+	gitignore := filepath.Join(dir, ".gitignore")
+	if err := os.WriteFile(gitignore, []byte(".specs/\n"), 0o600); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{name: "ignored_file", path: ".specs/state.json", want: true},
+		{name: "ignored_nested", path: ".specs/20260408-test/summary.md", want: true},
+		{name: "not_ignored", path: "src/main.go", want: false},
+		{name: "readme", path: "README.md", want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := isGitIgnored(dir, tc.path)
+			if got != tc.want {
+				t.Errorf("isGitIgnored(%q, %q) = %v, want %v", dir, tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestIsGitIgnored_NoGitignore verifies that isGitIgnored returns false (fail-open)
+// when no .gitignore exists.
+func TestIsGitIgnored_NoGitignore(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+
+	if got := isGitIgnored(dir, ".specs/state.json"); got {
+		t.Errorf("isGitIgnored with no .gitignore = true, want false")
+	}
+}
+
+// TestIsGitIgnored_NegationPattern verifies that .gitignore negation patterns
+// (e.g. !.specs/**/state.json) correctly mark files as not-ignored.
+func TestIsGitIgnored_NegationPattern(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+
+	// Ignore .specs/ but exclude state.json and summary.md via negation.
+	// The !.specs/*/ line is required to unignore intermediate directories;
+	// without it, git ignores the parent dir and negation for children has no effect.
+	gitignore := filepath.Join(dir, ".gitignore")
+	content := ".specs/**\n!.specs/*/\n!.specs/**/state.json\n!.specs/**/summary.md\n"
+	if err := os.WriteFile(gitignore, []byte(content), 0o600); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{name: "state_json_not_ignored", path: ".specs/20260408-test/state.json", want: false},
+		{name: "summary_md_not_ignored", path: ".specs/20260408-test/summary.md", want: false},
+		{name: "design_md_ignored", path: ".specs/20260408-test/design.md", want: true},
+		{name: "analysis_md_ignored", path: ".specs/20260408-test/analysis.md", want: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := isGitIgnored(dir, tc.path)
+			if got != tc.want {
+				t.Errorf("isGitIgnored(%q, %q) = %v, want %v", dir, tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestExecuteFinalCommit_GitIgnored verifies that executeFinalCommit skips the
+// artifact commit (git add -f + amend) when the workspace directory is gitignored.
+func TestExecuteFinalCommit_GitIgnored(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepoWithRemote(t, dir)
+
+	// Write a .gitignore that excludes the workspace entirely.
+	gitignore := filepath.Join(dir, ".gitignore")
+	if err := os.WriteFile(gitignore, []byte(".specs/\n"), 0o600); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+
+	// Commit the .gitignore so git knows about it.
+	runIn := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runIn("add", ".gitignore")
+	runIn("commit", "-m", "chore: add .gitignore")
+	runIn("push")
+
+	sm := state.NewStateManager("dev")
+	// The workspace is inside .specs/ which is gitignored.
+	wsDir := filepath.Join(dir, ".specs", "20260408-test")
+	if err := os.MkdirAll(wsDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	if err := sm.Init(wsDir, "test-spec"); err != nil {
+		t.Fatalf("sm.Init: %v", err)
+	}
+
+	summaryPath := filepath.Join(wsDir, "summary.md")
+	if err := os.WriteFile(summaryPath, []byte("# Summary\n"), 0o600); err != nil {
+		t.Fatalf("write summary.md: %v", err)
+	}
+
+	kb := history.NewKnowledgeBase("")
+	if err := executeFinalCommit(wsDir, sm, kb); err != nil {
+		t.Fatalf("executeFinalCommit returned unexpected error: %v", err)
+	}
+
+	// Verify state.json reflects completed status (handleReportResult still runs).
+	s, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if s.CurrentPhase != state.PhaseCompleted {
+		t.Errorf("CurrentPhase = %q, want %q", s.CurrentPhase, state.PhaseCompleted)
+	}
+
+	// Verify state.json was NOT added to the last commit.
+	cmd := exec.Command("git", "-C", dir, "log", "--oneline", "-1", "--name-only")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git log: %v\n%s", err, out)
+	}
+	if strings.Contains(string(out), "state.json") {
+		t.Errorf("state.json was committed despite being gitignored: %s", out)
 	}
 }
 

@@ -320,8 +320,8 @@ func TestPipelineNextAction(t *testing.T) {
 		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
 			t.Fatalf("unmarshal response: %v", err)
 		}
-		if resp.Type != orchestrator.ActionSpawnAgent {
-			t.Errorf("action.Type = %q, want %q", resp.Type, orchestrator.ActionSpawnAgent)
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q", resp.Action.Type, orchestrator.ActionSpawnAgent)
 		}
 		if resp.Warning == "" {
 			t.Errorf("expected non-empty warning when agent file is missing, got empty warning")
@@ -471,7 +471,7 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 
 		// The handler must NOT return ActionBatchCommit to the caller (P3 absorption).
-		if resp.Type == orchestrator.ActionBatchCommit {
+		if resp.Action.Type == orchestrator.ActionBatchCommit {
 			t.Errorf("handler returned ActionBatchCommit to caller; P3 should absorb this internally")
 		}
 
@@ -576,6 +576,122 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 		if s.CurrentPhase != state.PhaseCompleted {
 			t.Errorf("currentPhase = %q after final_commit_absorption, want %q", s.CurrentPhase, state.PhaseCompleted)
+		}
+	})
+
+	t.Run("human_gate_returns_human_gate_type_and_sets_pending", func(t *testing.T) {
+		t.Parallel()
+		workspace, sm := initWorkspaceForNextAction(t, "phase-5", func(s *state.State) error {
+			s.Tasks = map[string]state.Task{
+				"1": {
+					Title:         "Merge external PR",
+					ExecutionMode: state.ExecModeHumanGate,
+					ImplStatus:    "pending",
+					ReviewStatus:  "pending",
+				},
+				"2": {
+					Title:         "Update deps",
+					ExecutionMode: state.ExecModeSequential,
+					ImplStatus:    "pending",
+					ReviewStatus:  "pending",
+				},
+			}
+			return nil
+		})
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+
+		// First call: engine sees human_gate → handler returns human_gate action.
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if resp.Action.Type != orchestrator.ActionHumanGate {
+			t.Errorf("action.Type = %q, want %q", resp.Action.Type, orchestrator.ActionHumanGate)
+		}
+		if resp.Action.Name != "1" {
+			t.Errorf("action.Name = %q, want %q", resp.Action.Name, "1")
+		}
+
+		// Verify PendingHumanGate is set in state.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if s.PendingHumanGate == nil || *s.PendingHumanGate != "1" {
+			t.Errorf("PendingHumanGate = %v, want ptr to \"1\"", s.PendingHumanGate)
+		}
+		if s.CurrentPhaseStatus != state.StatusAwaitingHuman {
+			t.Errorf("CurrentPhaseStatus = %q, want %q", s.CurrentPhaseStatus, state.StatusAwaitingHuman)
+		}
+	})
+
+	t.Run("human_gate_resolved_on_next_call", func(t *testing.T) {
+		t.Parallel()
+		taskKey := "1"
+		workspace, sm := initWorkspaceForNextAction(t, "phase-5", func(s *state.State) error {
+			s.PendingHumanGate = &taskKey
+			s.CurrentPhaseStatus = state.StatusAwaitingHuman
+			s.Tasks = map[string]state.Task{
+				"1": {
+					Title:         "Merge external PR",
+					ExecutionMode: state.ExecModeHumanGate,
+					ImplStatus:    "pending",
+					ReviewStatus:  "pending",
+				},
+				"2": {
+					Title:         "Update deps",
+					ExecutionMode: state.ExecModeSequential,
+					ImplStatus:    "pending",
+					ReviewStatus:  "pending",
+				},
+			}
+			return nil
+		})
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+
+		// Call pipeline_next_action: P0 should resolve the gate and advance.
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		// Should advance to task 2 (spawn implementer), not emit human_gate again.
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q (should advance past resolved gate)", resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+
+		// Verify task 1 is completed and PendingHumanGate is cleared.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if s.PendingHumanGate != nil {
+			t.Errorf("PendingHumanGate should be nil, got %v", s.PendingHumanGate)
+		}
+		task1 := s.Tasks["1"]
+		if task1.ImplStatus != state.TaskStatusCompleted {
+			t.Errorf("task 1 ImplStatus = %q, want %q", task1.ImplStatus, state.TaskStatusCompleted)
+		}
+		if task1.ReviewStatus != state.TaskStatusCompletedPass {
+			t.Errorf("task 1 ReviewStatus = %q, want %q", task1.ReviewStatus, state.TaskStatusCompletedPass)
 		}
 	})
 }

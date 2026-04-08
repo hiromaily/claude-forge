@@ -61,6 +61,21 @@ files:
 			},
 		},
 		{
+			name: "human_gate mode",
+			content: `## Task 3: Wait for external PR merge
+mode: human_gate
+`,
+			wantKeys: []string{"3"},
+			wantTasks: map[string]state.Task{
+				"3": {
+					Title:         "Wait for external PR merge",
+					ExecutionMode: "human_gate",
+					ImplStatus:    "pending",
+					ReviewStatus:  "pending",
+				},
+			},
+		},
+		{
 			name: "multi-task document",
 			content: `## Task 1: First task
 mode: sequential

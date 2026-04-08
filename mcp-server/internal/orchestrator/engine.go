@@ -453,11 +453,19 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		return NewDoneAction(SkipSummaryPrefix+PhaseFive, ""), nil
 	}
 
-	// Detect parallel groups: consecutive tasks with executionMode == "parallel"
-	// Check if the first pending task is parallel
+	// Detect execution mode of the first pending task.
 	firstKey := pendingKeys[0]
 	firstTask := st.Tasks[firstKey]
 
+	// Decision 30 — Human gate: task requires human action before the pipeline
+	// can continue (e.g. merge an external PR, update a dependency).
+	// The handler converts this to a user-facing prompt and manages task
+	// completion deterministically via PendingHumanGate in state.
+	if firstTask.ExecutionMode == state.ExecModeHumanGate {
+		return NewHumanGateAction(PhaseFive, firstKey, firstTask.Title), nil
+	}
+
+	// Detect parallel groups: consecutive tasks with executionMode == "parallel"
 	if firstTask.ExecutionMode == state.ExecModeParallel {
 		// Collect all consecutive parallel tasks from the start
 		var parallelKeys []string

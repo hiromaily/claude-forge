@@ -86,6 +86,26 @@ func PipelineNextActionHandler(
 			return errorf("load state: %v", err)
 		}
 
+		// P0: Resolve pending human gate from a previous call.
+		// If PendingHumanGate is set, the user has acknowledged the gate
+		// (by calling pipeline_next_action again). Mark the task completed
+		// and clear the flag before computing the next action.
+		if st, stErr := sm2.GetState(); stErr == nil && st.PendingHumanGate != nil {
+			taskKey := *st.PendingHumanGate
+			if updateErr := sm2.Update(func(s *state.State) error {
+				if t, ok := s.Tasks[taskKey]; ok {
+					t.ImplStatus = state.TaskStatusCompleted
+					t.ReviewStatus = state.TaskStatusCompletedPass // skip review for human gates
+					s.Tasks[taskKey] = t
+				}
+				s.PendingHumanGate = nil
+				s.CurrentPhaseStatus = state.StatusInProgress
+				return nil
+			}); updateErr != nil {
+				return errorf("resolve human gate task %s: %v", taskKey, updateErr)
+			}
+		}
+
 		action, err := eng.NextAction(sm2, userResponse)
 		if err != nil {
 			return errorf("next_action: %v", err)
@@ -184,6 +204,22 @@ func PipelineNextActionHandler(
 					return okJSON(nextActionResponse{Action: orchestrator.NewDoneAction("pipeline completed", "")})
 				}
 				// Non-final_commit exec: fall through to return the action to the orchestrator.
+
+			case orchestrator.ActionHumanGate:
+				// P5: Human gate — store the pending task key in state so P0 can
+				// resolve it on the next call. The action is returned as-is
+				// (type "human_gate") to the orchestrator, which follows SKILL.md
+				// human_gate rules (present to user, then call pipeline_next_action).
+				// Do NOT convert to ActionCheckpoint — the orchestrator must NOT
+				// call checkpoint() or phase_complete() for human gates.
+				taskKey := action.Name
+				if updateErr := sm2.Update(func(s *state.State) error {
+					s.PendingHumanGate = &taskKey
+					s.CurrentPhaseStatus = state.StatusAwaitingHuman
+					return nil
+				}); updateErr != nil {
+					return errorf("set PendingHumanGate: %v", updateErr)
+				}
 
 			default:
 				// ActionSpawnAgent, ActionCheckpoint, ActionWriteFile, ActionDone — return as-is.
