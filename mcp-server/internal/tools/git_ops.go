@@ -191,18 +191,24 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 	}
 
 	// Step 4: Force-add workspace artifacts (state.json and summary.md if it exists).
+	// Skip entirely when the workspace directory is gitignored — the user has
+	// intentionally excluded .specs from version control.
 	statePath := filepath.Join(workspace, "state.json")
-	addArgs := []string{"add", "-f", statePath}
-	if _, statErr := os.Stat(summaryPath); statErr == nil {
-		addArgs = append(addArgs, summaryPath)
-	}
-	if err := runGit(repo, addArgs...); err != nil {
-		return fmt.Errorf("executeFinalCommit add: %w", err)
-	}
+	if isGitIgnored(repo, statePath) {
+		fmt.Fprintf(os.Stderr, "info: executeFinalCommit: workspace is gitignored, skipping artifact commit\n")
+	} else {
+		addArgs := []string{"add", "-f", statePath}
+		if _, statErr := os.Stat(summaryPath); statErr == nil {
+			addArgs = append(addArgs, summaryPath)
+		}
+		if err := runGit(repo, addArgs...); err != nil {
+			return fmt.Errorf("executeFinalCommit add: %w", err)
+		}
 
-	// Step 5: Amend the last commit to include the staged state files.
-	if err := runGit(repo, "commit", "--amend", "--no-edit"); err != nil {
-		return fmt.Errorf("executeFinalCommit amend: %w", err)
+		// Step 5: Amend the last commit to include the staged state files.
+		if err := runGit(repo, "commit", "--amend", "--no-edit"); err != nil {
+			return fmt.Errorf("executeFinalCommit amend: %w", err)
+		}
 	}
 
 	// Step 6: Push with --force-with-lease to protect against concurrent pushes.
@@ -211,6 +217,16 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 	}
 
 	return nil
+}
+
+// isGitIgnored checks whether path is ignored by .gitignore rules in the
+// repository rooted at repo. It uses `git check-ignore -q` which exits 0 when
+// the path IS ignored and 1 when it is NOT ignored. Any other error (e.g. repo
+// not found) is treated as "not ignored" (fail-open) to avoid blocking the
+// pipeline on unexpected git failures.
+func isGitIgnored(repo, path string) bool {
+	cmd := exec.Command("git", "-C", repo, "check-ignore", "-q", path)
+	return cmd.Run() == nil // exit 0 → ignored
 }
 
 // runCommand executes a non-git command with the given working directory.
