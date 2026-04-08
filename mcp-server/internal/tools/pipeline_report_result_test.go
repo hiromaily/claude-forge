@@ -413,7 +413,8 @@ func TestPipelineReportResult(t *testing.T) {
 		},
 		{
 			// Phase 5 completion gate: all tasks marked completed in state but
-			// impl-2.md missing on disk — must block phase completion.
+			// impl-2.md missing on disk — must block phase completion and reset
+			// ImplStatus so the engine re-dispatches implementers.
 			name:  "phase5_completion_gate_blocks_missing_impl",
 			phase: "phase-5",
 			setup: func(t *testing.T, sm *state.StateManager, dir string) {
@@ -445,6 +446,17 @@ func TestPipelineReportResult(t *testing.T) {
 					if p == "phase-5" {
 						t.Error("phase-5 must NOT be in CompletedPhases when impl files are missing")
 					}
+				}
+				// ImplStatus must be reset for tasks with missing impl files.
+				if s.Tasks["2"].ImplStatus != "" {
+					t.Errorf("Tasks[2].ImplStatus = %q, want empty (reset by gate)", s.Tasks["2"].ImplStatus)
+				}
+				if s.Tasks["3"].ImplStatus != "" {
+					t.Errorf("Tasks[3].ImplStatus = %q, want empty (reset by gate)", s.Tasks["3"].ImplStatus)
+				}
+				// Task 1 has its impl file — ImplStatus must remain completed.
+				if s.Tasks["1"].ImplStatus != state.TaskStatusCompleted {
+					t.Errorf("Tasks[1].ImplStatus = %q, want %q (file exists)", s.Tasks["1"].ImplStatus, state.TaskStatusCompleted)
 				}
 			},
 		},
@@ -483,7 +495,8 @@ func TestPipelineReportResult(t *testing.T) {
 		},
 		{
 			// Phase 6 completion gate: all tasks reviewed (PASS) but review-2.md
-			// missing on disk — must block phase completion.
+			// missing on disk — must block phase completion and reset ReviewStatus
+			// so the engine re-dispatches reviewers.
 			name:  "phase6_completion_gate_blocks_missing_review",
 			phase: "phase-6",
 			setup: func(t *testing.T, sm *state.StateManager, dir string) {
@@ -515,6 +528,14 @@ func TestPipelineReportResult(t *testing.T) {
 					if p == "phase-6" {
 						t.Error("phase-6 must NOT be in CompletedPhases when review files are missing")
 					}
+				}
+				// ReviewStatus must be reset for tasks with missing review files.
+				if s.Tasks["2"].ReviewStatus != "" {
+					t.Errorf("Tasks[2].ReviewStatus = %q, want empty (reset by gate)", s.Tasks["2"].ReviewStatus)
+				}
+				// Task 1 has its review file — ReviewStatus must remain.
+				if s.Tasks["1"].ReviewStatus != state.TaskStatusCompletedPass {
+					t.Errorf("Tasks[1].ReviewStatus = %q, want %q (file exists)", s.Tasks["1"].ReviewStatus, state.TaskStatusCompletedPass)
 				}
 			},
 		},

@@ -281,12 +281,25 @@ func determineTransition(
 		// Phase 5 completion gate: verify impl file count matches task count.
 		// This is a deterministic safety check — even if task status says all
 		// completed, the actual impl-{N}.md files must exist for every task.
+		// When missing files are found, reset ImplStatus so the engine
+		// re-dispatches implementers on the next pipeline_next_action call.
 		if missing := missingImplFiles(in.workspace, s.Tasks); len(missing) > 0 {
+			if updateErr := sm.Update(func(st *state.State) error {
+				for _, k := range missing {
+					if t, ok := st.Tasks[k]; ok {
+						t.ImplStatus = ""
+						st.Tasks[k] = t
+					}
+				}
+				return nil
+			}); updateErr != nil {
+				return reportResultResponse{}, updateErr
+			}
 			return reportResultResponse{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
 				NextActionHint:  "setup_continue",
-				Warning:         "phase-5 completion blocked: missing impl files for tasks: " + strings.Join(missing, ", "),
+				Warning:         "phase-5 completion blocked: missing impl files for tasks: " + strings.Join(missing, ", ") + " — ImplStatus reset to pending",
 			}, nil
 		}
 
@@ -457,14 +470,27 @@ func handlePhase6Transition(
 	}
 
 	// Phase 6 completion gate: verify review file count matches task count.
+	// When missing files are found, reset ReviewStatus so the engine
+	// re-dispatches reviewers on the next pipeline_next_action call.
 	if missing := missingReviewFiles(in.workspace, s.Tasks); len(missing) > 0 {
+		if updateErr := sm.Update(func(st *state.State) error {
+			for _, k := range missing {
+				if t, ok := st.Tasks[k]; ok {
+					t.ReviewStatus = ""
+					st.Tasks[k] = t
+				}
+			}
+			return nil
+		}); updateErr != nil {
+			return reportResultResponse{}, updateErr
+		}
 		return reportResultResponse{
 			StateUpdated:    true,
 			ArtifactWritten: artifactWritten,
 			VerdictParsed:   verdictParsed,
 			Findings:        allFindings,
 			NextActionHint:  "setup_continue",
-			Warning:         "phase-6 completion blocked: missing review files for tasks: " + strings.Join(missing, ", "),
+			Warning:         "phase-6 completion blocked: missing review files for tasks: " + strings.Join(missing, ", ") + " — ReviewStatus reset to pending",
 		}, nil
 	}
 

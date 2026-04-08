@@ -23,6 +23,8 @@ The orchestrator tells you:
 
 ### Part B: Spec Completion Check (functional correctness)
 
+> **Scope**: Part B applies only during the **final-verification** phase. Skip this section entirely during the **final-summary** phase (when you receive `analysis.md` and `investigation.md` as input artifacts).
+
 5. **Read `{workspace}/request.md`** and extract every acceptance criterion, expected behaviour, and completion condition listed in the spec.
 6. **For each criterion**, locate the corresponding code change on this branch (use `git diff main...HEAD`) and judge whether the implementation satisfies it.
 7. **Report a table**:
