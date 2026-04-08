@@ -134,7 +134,7 @@ func TestExecuteBatchCommit_EmptyFiles(t *testing.T) {
 // local bare repository as its "origin" remote.  The initial commit is pushed
 // so that --force-with-lease succeeds in executeFinalCommit.  Returns the path
 // of the bare repository.
-func initGitRepoWithRemote(t *testing.T, dir string) string {
+func initGitRepoWithRemote(t *testing.T, dir string) {
 	t.Helper()
 
 	bareDir := t.TempDir()
@@ -160,8 +160,6 @@ func initGitRepoWithRemote(t *testing.T, dir string) string {
 	// of whether the local default branch is "main" or "master".
 	runIn(dir, "config", "push.default", "current")
 	runIn(dir, "push", "-u", "origin", "HEAD")
-
-	return bareDir
 }
 
 // TestExecuteFinalCommit_Success verifies that executeFinalCommit advances
