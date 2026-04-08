@@ -523,9 +523,14 @@ func reviewFileTaskKey(filename string) string {
 // missingImplFiles returns task keys whose impl-{key}.md file does not exist on disk.
 // Used as a deterministic completion gate for Phase 5 — prevents the phase from
 // advancing when some tasks lack implementation artifacts, regardless of task status.
+// Human-gate tasks are excluded because they are completed by user acknowledgement
+// and intentionally produce no impl file.
 func missingImplFiles(workspace string, tasks map[string]state.Task) []string {
 	var missing []string
-	for k := range tasks {
+	for k, t := range tasks {
+		if t.ExecutionMode == state.ExecModeHumanGate {
+			continue
+		}
 		implFile := filepath.Join(workspace, "impl-"+k+".md")
 		if _, err := os.Stat(implFile); err != nil {
 			missing = append(missing, k)
@@ -538,9 +543,13 @@ func missingImplFiles(workspace string, tasks map[string]state.Task) []string {
 // missingReviewFiles returns task keys whose review-{key}.md file does not exist on disk.
 // Used as a deterministic completion gate for Phase 6 — prevents the phase from
 // advancing when some tasks lack review artifacts.
+// Human-gate tasks are excluded because they skip review and produce no review file.
 func missingReviewFiles(workspace string, tasks map[string]state.Task) []string {
 	var missing []string
-	for k := range tasks {
+	for k, t := range tasks {
+		if t.ExecutionMode == state.ExecModeHumanGate {
+			continue
+		}
 		reviewFile := filepath.Join(workspace, "review-"+k+".md")
 		if _, err := os.Stat(reviewFile); err != nil {
 			missing = append(missing, k)

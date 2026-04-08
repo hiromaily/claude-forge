@@ -461,6 +461,45 @@ func TestPipelineReportResult(t *testing.T) {
 			},
 		},
 		{
+			// Phase 5 completion gate: human_gate tasks must be excluded from
+			// the impl file check — they complete by user acknowledgement and
+			// produce no impl file. Without this exclusion, human_gate tasks
+			// would cause an infinite reset loop.
+			name:  "phase5_completion_gate_skips_human_gate_tasks",
+			phase: "phase-5",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				tasks := map[string]state.Task{
+					"1": {Title: "Task 1", ImplStatus: state.TaskStatusCompleted},
+					"2": {Title: "Human task", ImplStatus: state.TaskStatusCompleted, ExecutionMode: state.ExecModeHumanGate, ReviewStatus: state.TaskStatusCompletedPass},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				// Only task 1 has an impl file; task 2 is human_gate (no file expected).
+				if err := os.WriteFile(filepath.Join(dir, "impl-1.md"), []byte("content"), 0o644); err != nil {
+					t.Fatalf("WriteFile impl-1.md: %v", err)
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "proceed",
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				if !slices.Contains(s.CompletedPhases, "phase-5") {
+					t.Errorf("phase-5 should be in CompletedPhases; human_gate task should not block; completed = %v", s.CompletedPhases)
+				}
+				// Human gate task's ImplStatus must remain completed (not reset).
+				if s.Tasks["2"].ImplStatus != state.TaskStatusCompleted {
+					t.Errorf("Tasks[2].ImplStatus = %q, want %q (human_gate must not be reset)", s.Tasks["2"].ImplStatus, state.TaskStatusCompleted)
+				}
+			},
+		},
+		{
 			// Phase 5 completion gate: all impl files present — should advance.
 			name:  "phase5_completion_gate_passes_all_impl_present",
 			phase: "phase-5",
