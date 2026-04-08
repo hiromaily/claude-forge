@@ -411,6 +411,173 @@ func TestPipelineReportResult(t *testing.T) {
 				}
 			},
 		},
+		{
+			// Phase 5 completion gate: all tasks marked completed in state but
+			// impl-2.md missing on disk — must block phase completion and reset
+			// ImplStatus so the engine re-dispatches implementers.
+			name:  "phase5_completion_gate_blocks_missing_impl",
+			phase: "phase-5",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				tasks := map[string]state.Task{
+					"1": {Title: "Task 1", ImplStatus: state.TaskStatusCompleted},
+					"2": {Title: "Task 2", ImplStatus: state.TaskStatusCompleted},
+					"3": {Title: "Task 3", ImplStatus: state.TaskStatusCompleted},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				// Only impl-1.md exists; impl-2.md and impl-3.md are missing.
+				if err := os.WriteFile(filepath.Join(dir, "impl-1.md"), []byte("content"), 0o644); err != nil {
+					t.Fatalf("WriteFile impl-1.md: %v", err)
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "setup_continue",
+			wantWarningNE:   true, // warning about missing impl files
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				for _, p := range s.CompletedPhases {
+					if p == "phase-5" {
+						t.Error("phase-5 must NOT be in CompletedPhases when impl files are missing")
+					}
+				}
+				// ImplStatus must be reset for tasks with missing impl files.
+				if s.Tasks["2"].ImplStatus != "" {
+					t.Errorf("Tasks[2].ImplStatus = %q, want empty (reset by gate)", s.Tasks["2"].ImplStatus)
+				}
+				if s.Tasks["3"].ImplStatus != "" {
+					t.Errorf("Tasks[3].ImplStatus = %q, want empty (reset by gate)", s.Tasks["3"].ImplStatus)
+				}
+				// Task 1 has its impl file — ImplStatus must remain completed.
+				if s.Tasks["1"].ImplStatus != state.TaskStatusCompleted {
+					t.Errorf("Tasks[1].ImplStatus = %q, want %q (file exists)", s.Tasks["1"].ImplStatus, state.TaskStatusCompleted)
+				}
+			},
+		},
+		{
+			// Phase 5 completion gate: human_gate tasks must be excluded from
+			// the impl file check — they complete by user acknowledgement and
+			// produce no impl file. Without this exclusion, human_gate tasks
+			// would cause an infinite reset loop.
+			name:  "phase5_completion_gate_skips_human_gate_tasks",
+			phase: "phase-5",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				tasks := map[string]state.Task{
+					"1": {Title: "Task 1", ImplStatus: state.TaskStatusCompleted},
+					"2": {Title: "Human task", ImplStatus: state.TaskStatusCompleted, ExecutionMode: state.ExecModeHumanGate, ReviewStatus: state.TaskStatusCompletedPass},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				// Only task 1 has an impl file; task 2 is human_gate (no file expected).
+				if err := os.WriteFile(filepath.Join(dir, "impl-1.md"), []byte("content"), 0o644); err != nil {
+					t.Fatalf("WriteFile impl-1.md: %v", err)
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "proceed",
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				if !slices.Contains(s.CompletedPhases, "phase-5") {
+					t.Errorf("phase-5 should be in CompletedPhases; human_gate task should not block; completed = %v", s.CompletedPhases)
+				}
+				// Human gate task's ImplStatus must remain completed (not reset).
+				if s.Tasks["2"].ImplStatus != state.TaskStatusCompleted {
+					t.Errorf("Tasks[2].ImplStatus = %q, want %q (human_gate must not be reset)", s.Tasks["2"].ImplStatus, state.TaskStatusCompleted)
+				}
+			},
+		},
+		{
+			// Phase 5 completion gate: all impl files present — should advance.
+			name:  "phase5_completion_gate_passes_all_impl_present",
+			phase: "phase-5",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				tasks := map[string]state.Task{
+					"1": {Title: "Task 1", ImplStatus: state.TaskStatusCompleted},
+					"2": {Title: "Task 2", ImplStatus: state.TaskStatusCompleted},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				for _, k := range []string{"1", "2"} {
+					if err := os.WriteFile(filepath.Join(dir, "impl-"+k+".md"), []byte("content"), 0o644); err != nil {
+						t.Fatalf("WriteFile impl-%s.md: %v", k, err)
+					}
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "proceed",
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				if !slices.Contains(s.CompletedPhases, "phase-5") {
+					t.Errorf("phase-5 should be in CompletedPhases when all impl files exist; completed = %v", s.CompletedPhases)
+				}
+			},
+		},
+		{
+			// Phase 6 completion gate: all tasks reviewed (PASS) but review-2.md
+			// missing on disk — must block phase completion and reset ReviewStatus
+			// so the engine re-dispatches reviewers.
+			name:  "phase6_completion_gate_blocks_missing_review",
+			phase: "phase-6",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				tasks := map[string]state.Task{
+					"1": {ImplStatus: state.TaskStatusCompleted, ReviewStatus: state.TaskStatusCompletedPass},
+					"2": {ImplStatus: state.TaskStatusCompleted, ReviewStatus: state.TaskStatusCompletedPass},
+				}
+				if err := sm.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("TaskInit: %v", err)
+				}
+				// Only review-1.md exists; review-2.md is missing.
+				content := "## Summary\n\n## Verdict: PASS\n\nAll good.\n"
+				if err := os.WriteFile(filepath.Join(dir, "review-1.md"), []byte(content), 0o644); err != nil {
+					t.Fatalf("WriteFile review-1.md: %v", err)
+				}
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "setup_continue",
+			wantWarningNE:   true, // warning about missing review files
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				for _, p := range s.CompletedPhases {
+					if p == "phase-6" {
+						t.Error("phase-6 must NOT be in CompletedPhases when review files are missing")
+					}
+				}
+				// ReviewStatus must be reset for tasks with missing review files.
+				if s.Tasks["2"].ReviewStatus != "" {
+					t.Errorf("Tasks[2].ReviewStatus = %q, want empty (reset by gate)", s.Tasks["2"].ReviewStatus)
+				}
+				// Task 1 has its review file — ReviewStatus must remain.
+				if s.Tasks["1"].ReviewStatus != state.TaskStatusCompletedPass {
+					t.Errorf("Tasks[1].ReviewStatus = %q, want %q (file exists)", s.Tasks["1"].ReviewStatus, state.TaskStatusCompletedPass)
+				}
+			},
+		},
 	}
 
 	for _, tc := range tests {

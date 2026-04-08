@@ -54,6 +54,9 @@ Key behaviors to preserve:
 - [ ] `pipeline_next_action` returns file paths (not contents) in the artifacts section
 - [ ] `pipeline_next_action` sets `currentPhaseStatus = "awaiting_human"` for checkpoint actions
 - [ ] `pipeline_report_result` validates artifacts and parses review verdicts
+- [ ] `pipeline_report_result` Phase 5 completion gate: blocks phase completion when impl-{N}.md files are missing; resets `ImplStatus` to `""` so the engine re-dispatches implementers
+- [ ] `pipeline_report_result` Phase 6 completion gate: blocks phase completion when review-{N}.md files are missing; resets `ReviewStatus` to `""` so the engine re-dispatches reviewers
+- [ ] Completion gates exclude `human_gate` tasks (no impl/review files expected)
 - [ ] Fail-open: missing agent .md files return a warning, not an error
 
 ## Hook Scripts (`bash scripts/test-hooks.sh`)

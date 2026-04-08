@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -133,6 +134,11 @@ func handleReportResult(sm *state.StateManager, kb *history.KnowledgeBase, in re
 		return errorf("%v", err)
 	}
 
+	// Merge any warning from the transition handler (e.g. completion gate)
+	// into the accumulated warnings before building the final response.
+	if resp.Warning != "" {
+		warnings = append(warnings, resp.Warning)
+	}
 	resp.Warning = strings.Join(warnings, "; ")
 	return okJSON(resp)
 }
@@ -269,6 +275,31 @@ func determineTransition(
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
 				NextActionHint:  "setup_continue",
+			}, nil
+		}
+
+		// Phase 5 completion gate: verify impl file count matches task count.
+		// This is a deterministic safety check — even if task status says all
+		// completed, the actual impl-{N}.md files must exist for every task.
+		// When missing files are found, reset ImplStatus so the engine
+		// re-dispatches implementers on the next pipeline_next_action call.
+		if missing := missingImplFiles(in.workspace, s.Tasks); len(missing) > 0 {
+			if updateErr := sm.Update(func(st *state.State) error {
+				for _, k := range missing {
+					if t, ok := st.Tasks[k]; ok {
+						t.ImplStatus = ""
+						st.Tasks[k] = t
+					}
+				}
+				return nil
+			}); updateErr != nil {
+				return reportResultResponse{}, updateErr
+			}
+			return reportResultResponse{
+				StateUpdated:    true,
+				ArtifactWritten: artifactWritten,
+				NextActionHint:  "setup_continue",
+				Warning:         "phase-5 completion blocked: missing impl files for tasks: " + strings.Join(missing, ", ") + " — ImplStatus reset to pending",
 			}, nil
 		}
 
@@ -438,6 +469,31 @@ func handlePhase6Transition(
 		}
 	}
 
+	// Phase 6 completion gate: verify review file count matches task count.
+	// When missing files are found, reset ReviewStatus so the engine
+	// re-dispatches reviewers on the next pipeline_next_action call.
+	if missing := missingReviewFiles(in.workspace, s.Tasks); len(missing) > 0 {
+		if updateErr := sm.Update(func(st *state.State) error {
+			for _, k := range missing {
+				if t, ok := st.Tasks[k]; ok {
+					t.ReviewStatus = ""
+					st.Tasks[k] = t
+				}
+			}
+			return nil
+		}); updateErr != nil {
+			return reportResultResponse{}, updateErr
+		}
+		return reportResultResponse{
+			StateUpdated:    true,
+			ArtifactWritten: artifactWritten,
+			VerdictParsed:   verdictParsed,
+			Findings:        allFindings,
+			NextActionHint:  "setup_continue",
+			Warning:         "phase-6 completion blocked: missing review files for tasks: " + strings.Join(missing, ", ") + " — ReviewStatus reset to pending",
+		}, nil
+	}
+
 	if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
 		return reportResultResponse{}, err
 	}
@@ -462,6 +518,39 @@ func reviewFileTaskKey(filename string) string {
 		return strings.TrimSuffix(strings.TrimPrefix(base, "impl-"), ".md")
 	}
 	return ""
+}
+
+// missingArtifactFiles returns task keys whose {prefix}{key}.md file does not exist on disk.
+// Human-gate tasks are excluded because they produce no artifact file.
+func missingArtifactFiles(workspace, prefix string, tasks map[string]state.Task) []string {
+	var missing []string
+	for k, t := range tasks {
+		if t.ExecutionMode == state.ExecModeHumanGate {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(workspace, prefix+k+".md")); err != nil {
+			missing = append(missing, k)
+		}
+	}
+	sort.Strings(missing)
+	return missing
+}
+
+// missingImplFiles returns task keys whose impl-{key}.md file does not exist on disk.
+// Used as a deterministic completion gate for Phase 5 — prevents the phase from
+// advancing when some tasks lack implementation artifacts, regardless of task status.
+// Human-gate tasks are excluded because they are completed by user acknowledgement
+// and intentionally produce no impl file.
+func missingImplFiles(workspace string, tasks map[string]state.Task) []string {
+	return missingArtifactFiles(workspace, "impl-", tasks)
+}
+
+// missingReviewFiles returns task keys whose review-{key}.md file does not exist on disk.
+// Used as a deterministic completion gate for Phase 6 — prevents the phase from
+// advancing when some tasks lack review artifacts.
+// Human-gate tasks are excluded because they skip review and produce no review file.
+func missingReviewFiles(workspace string, tasks map[string]state.Task) []string {
+	return missingArtifactFiles(workspace, "review-", tasks)
 }
 
 // clearCompletedFailTasks resets ReviewStatus and removes stale review files for

@@ -14,10 +14,26 @@ The orchestrator tells you:
 
 ## Verification Steps
 
+### Part A: Build Verification (technical correctness)
+
 1. **Confirm you are on the feature branch**: `git branch --show-current` — verify it matches `feature/{spec-name}`
 2. **Run full typecheck**: the project's typecheck command (check `CLAUDE.md` or `Makefile` for the command, e.g. `make lint`, `pnpm typecheck`)
 3. **Run full test suite**: the project's test command (e.g. `make test-local`, `pnpm test`)
-4. **Report results**: list all failures found on the feature branch
+4. **Report results**: list all failures found on the feature branch. To identify pre-existing failures, use `git stash` to temporarily shelve uncommitted changes, run the tests, record the failures, then `git stash pop` — do NOT switch branches.
+
+### Part B: Spec Completion Check (functional correctness)
+
+> **Scope**: Part B applies only during the **final-verification** phase. Skip this section entirely during the **final-summary** phase (when you receive `analysis.md` and `investigation.md` as input artifacts).
+
+5. **Read `{workspace}/request.md`** and extract every acceptance criterion, expected behaviour, and completion condition listed in the spec.
+6. **For each criterion**, locate the corresponding code change on this branch (use `git diff main...HEAD`) and judge whether the implementation satisfies it.
+7. **Report a table**:
+
+| Criterion | Verdict | Evidence |
+|-----------|---------|----------|
+| (text from request.md) | PASS / FAIL | (file:line or explanation) |
+
+If any criterion is FAIL, the overall verification is FAIL regardless of Part A results.
 
 ## Final Summary Statistics
 
@@ -75,16 +91,24 @@ Skip this section entirely when the input artifacts do not include `analysis.md`
 ```
 ## Verification Report
 
-### Typecheck
+### Part A: Build Verification
+
+#### Typecheck
 - Status: PASS | FAIL
 - Errors: (count and details, if any)
 
-### Test Suite
+#### Test Suite
 - Total: X passed, Y failed, Z skipped
 - Failures: (list with error messages, if any)
 
+### Part B: Spec Completion Check
+
+| Criterion | Verdict | Evidence |
+|-----------|---------|----------|
+| ... | PASS/FAIL | ... |
+
 ### Overall: PASS | FAIL
-(FAIL if any failures are found)
+(FAIL if any Part A failure or Part B FAIL exists)
 
 ## Pipeline Statistics
 - Total tokens: {total_tokens}
