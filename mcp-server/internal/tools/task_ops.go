@@ -99,12 +99,12 @@ func ParseTasksMd(content string) (map[string]state.Task, error) {
 		if strings.HasPrefix(lower, "mode:") {
 			val := strings.TrimSpace(trimmed[len("mode:"):])
 			switch {
-			case strings.EqualFold(val, "parallel"):
-				current.task.ExecutionMode = "parallel"
-			case strings.EqualFold(val, "human_gate"):
-				current.task.ExecutionMode = "human_gate"
+			case strings.EqualFold(val, state.ExecModeParallel):
+				current.task.ExecutionMode = state.ExecModeParallel
+			case strings.EqualFold(val, state.ExecModeHumanGate):
+				current.task.ExecutionMode = state.ExecModeHumanGate
 			default:
-				current.task.ExecutionMode = "sequential"
+				current.task.ExecutionMode = state.ExecModeSequential
 			}
 			current.inFiles = false
 			continue
