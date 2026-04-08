@@ -11,7 +11,7 @@ const (
 	ActionDone        = "done"
 	ActionTaskInit    = "task_init"    // engine dispatches task_init internally; never surfaced to orchestrator
 	ActionBatchCommit = "batch_commit" // engine dispatches batch commit internally; never surfaced to orchestrator
-	ActionHumanGate  = "human_gate"   // engine dispatches human gate; handler converts to checkpoint for orchestrator
+	ActionHumanGate   = "human_gate"   // engine dispatches human gate; handler presents to orchestrator as-is
 )
 
 // SkipSummaryPrefix is the prefix placed in Action.Summary for per-phase skip signals.

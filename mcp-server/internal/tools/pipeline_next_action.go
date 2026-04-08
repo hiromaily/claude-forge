@@ -206,9 +206,12 @@ func PipelineNextActionHandler(
 				// Non-final_commit exec: fall through to return the action to the orchestrator.
 
 			case orchestrator.ActionHumanGate:
-				// P5: Human gate — store the pending task key in state and convert
-				// to a checkpoint-like response for the orchestrator. The task is
-				// marked completed on the next pipeline_next_action call (P0 above).
+				// P5: Human gate — store the pending task key in state so P0 can
+				// resolve it on the next call. The action is returned as-is
+				// (type "human_gate") to the orchestrator, which follows SKILL.md
+				// human_gate rules (present to user, then call pipeline_next_action).
+				// Do NOT convert to ActionCheckpoint — the orchestrator must NOT
+				// call checkpoint() or phase_complete() for human gates.
 				taskKey := action.Name
 				if updateErr := sm2.Update(func(s *state.State) error {
 					s.PendingHumanGate = &taskKey
@@ -217,8 +220,6 @@ func PipelineNextActionHandler(
 				}); updateErr != nil {
 					return errorf("set PendingHumanGate: %v", updateErr)
 				}
-				// Convert to a checkpoint response the orchestrator can display.
-				action.Type = orchestrator.ActionCheckpoint
 
 			default:
 				// ActionSpawnAgent, ActionCheckpoint, ActionWriteFile, ActionDone — return as-is.
