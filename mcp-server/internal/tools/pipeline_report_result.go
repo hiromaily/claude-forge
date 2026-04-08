@@ -520,19 +520,15 @@ func reviewFileTaskKey(filename string) string {
 	return ""
 }
 
-// missingImplFiles returns task keys whose impl-{key}.md file does not exist on disk.
-// Used as a deterministic completion gate for Phase 5 — prevents the phase from
-// advancing when some tasks lack implementation artifacts, regardless of task status.
-// Human-gate tasks are excluded because they are completed by user acknowledgement
-// and intentionally produce no impl file.
-func missingImplFiles(workspace string, tasks map[string]state.Task) []string {
+// missingArtifactFiles returns task keys whose {prefix}{key}.md file does not exist on disk.
+// Human-gate tasks are excluded because they produce no artifact file.
+func missingArtifactFiles(workspace, prefix string, tasks map[string]state.Task) []string {
 	var missing []string
 	for k, t := range tasks {
 		if t.ExecutionMode == state.ExecModeHumanGate {
 			continue
 		}
-		implFile := filepath.Join(workspace, "impl-"+k+".md")
-		if _, err := os.Stat(implFile); err != nil {
+		if _, err := os.Stat(filepath.Join(workspace, prefix+k+".md")); err != nil {
 			missing = append(missing, k)
 		}
 	}
@@ -540,23 +536,21 @@ func missingImplFiles(workspace string, tasks map[string]state.Task) []string {
 	return missing
 }
 
+// missingImplFiles returns task keys whose impl-{key}.md file does not exist on disk.
+// Used as a deterministic completion gate for Phase 5 — prevents the phase from
+// advancing when some tasks lack implementation artifacts, regardless of task status.
+// Human-gate tasks are excluded because they are completed by user acknowledgement
+// and intentionally produce no impl file.
+func missingImplFiles(workspace string, tasks map[string]state.Task) []string {
+	return missingArtifactFiles(workspace, "impl-", tasks)
+}
+
 // missingReviewFiles returns task keys whose review-{key}.md file does not exist on disk.
 // Used as a deterministic completion gate for Phase 6 — prevents the phase from
 // advancing when some tasks lack review artifacts.
 // Human-gate tasks are excluded because they skip review and produce no review file.
 func missingReviewFiles(workspace string, tasks map[string]state.Task) []string {
-	var missing []string
-	for k, t := range tasks {
-		if t.ExecutionMode == state.ExecModeHumanGate {
-			continue
-		}
-		reviewFile := filepath.Join(workspace, "review-"+k+".md")
-		if _, err := os.Stat(reviewFile); err != nil {
-			missing = append(missing, k)
-		}
-	}
-	sort.Strings(missing)
-	return missing
+	return missingArtifactFiles(workspace, "review-", tasks)
 }
 
 // clearCompletedFailTasks resets ReviewStatus and removes stale review files for

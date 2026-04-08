@@ -19,7 +19,7 @@ The orchestrator tells you:
 1. **Confirm you are on the feature branch**: `git branch --show-current` — verify it matches `feature/{spec-name}`
 2. **Run full typecheck**: the project's typecheck command (check `CLAUDE.md` or `Makefile` for the command, e.g. `make lint`, `pnpm typecheck`)
 3. **Run full test suite**: the project's test command (e.g. `make test-local`, `pnpm test`)
-4. **Report results**: list all failures found on the feature branch. Distinguish pre-existing failures (present on `main` before this branch) from new ones.
+4. **Report results**: list all failures found on the feature branch. To identify pre-existing failures, use `git stash` to temporarily shelve uncommitted changes, run the tests, record the failures, then `git stash pop` — do NOT switch branches.
 
 ### Part B: Spec Completion Check (functional correctness)
 
