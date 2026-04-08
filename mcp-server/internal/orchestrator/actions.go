@@ -1,5 +1,7 @@
 package orchestrator
 
+import "fmt"
+
 // Action type constants — match design-mcp-v2.md JSON "type" values.
 const (
 	ActionSpawnAgent  = "spawn_agent"
@@ -9,6 +11,7 @@ const (
 	ActionDone        = "done"
 	ActionTaskInit    = "task_init"    // engine dispatches task_init internally; never surfaced to orchestrator
 	ActionBatchCommit = "batch_commit" // engine dispatches batch commit internally; never surfaced to orchestrator
+	ActionHumanGate  = "human_gate"   // engine dispatches human gate; handler converts to checkpoint for orchestrator
 )
 
 // SkipSummaryPrefix is the prefix placed in Action.Summary for per-phase skip signals.
@@ -153,5 +156,19 @@ func NewBatchCommitAction(phase string) Action {
 		Type:      ActionBatchCommit,
 		Phase:     phase,
 		SetupOnly: true,
+	}
+}
+
+// NewHumanGateAction constructs an Action of type ActionHumanGate.
+// TaskKey is the numeric task key (e.g. "3") that requires human action.
+// The pipeline_next_action handler converts this to a checkpoint-like response
+// for the orchestrator and stores the task key in PendingHumanGate.
+func NewHumanGateAction(phase, taskKey, title string) Action {
+	return Action{
+		Type:          ActionHumanGate,
+		Phase:         phase,
+		Name:          taskKey,
+		PresentToUser: fmt.Sprintf("Task %s requires human action: %s\n\nComplete the action and choose 'done' to continue, or 'skip' to mark it without action.", taskKey, title),
+		Options:       []string{"done", "skip", "abandon"},
 	}
 }

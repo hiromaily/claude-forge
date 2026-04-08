@@ -1533,3 +1533,74 @@ func TestHandlePhaseFive_MinimalTasks(t *testing.T) {
 		})
 	}
 }
+
+// TestHandlePhaseFive_HumanGate verifies that the engine emits ActionHumanGate
+// when the first pending task has execution mode "human_gate".
+func TestHandlePhaseFive_HumanGate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		tasks    map[string]state.Task
+		wantType string
+		wantName string
+	}{
+		{
+			name: "human_gate_task_emits_action",
+			tasks: map[string]state.Task{
+				"1": {
+					Title:         "Merge PR in external repo",
+					ExecutionMode: state.ExecModeHumanGate,
+					ImplStatus:    "pending",
+				},
+				"2": {
+					Title:         "Update dependencies",
+					ExecutionMode: state.ExecModeSequential,
+					ImplStatus:    "pending",
+					DependsOn:     []int{1},
+				},
+			},
+			wantType: ActionHumanGate,
+			wantName: "1",
+		},
+		{
+			name: "completed_human_gate_skipped",
+			tasks: map[string]state.Task{
+				"1": {
+					Title:         "Merge PR in external repo",
+					ExecutionMode: state.ExecModeHumanGate,
+					ImplStatus:    state.TaskStatusCompleted,
+				},
+				"2": {
+					Title:         "Update dependencies",
+					ExecutionMode: state.ExecModeSequential,
+					ImplStatus:    "pending",
+				},
+			},
+			wantType: ActionSpawnAgent,
+			wantName: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sm := newTestStateManager(t, "phase-5", func(s *state.State) error {
+				s.Tasks = tc.tasks
+				return nil
+			})
+
+			action, err := defaultEng().NextAction(sm, "")
+			if err != nil {
+				t.Fatalf("NextAction: %v", err)
+			}
+			if action.Type != tc.wantType {
+				t.Errorf("action.Type = %q, want %q", action.Type, tc.wantType)
+			}
+			if tc.wantName != "" && action.Name != tc.wantName {
+				t.Errorf("action.Name = %q, want %q", action.Name, tc.wantName)
+			}
+		})
+	}
+}

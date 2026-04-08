@@ -78,6 +78,13 @@ Repeat until done:
      (action.phase is always populated for exec actions.)
    - `write_file`: Write `action.content` to `action.path`. Then call
      `pipeline_report_result` with `phase=action.phase`. (action.phase always populated.)
+   - `human_gate`: A task requires human action (e.g. merge an external PR, update dependencies).
+     Present `action.present_to_user` to the user using AskUserQuestion with `action.options`.
+     - If the user chooses **"done"** or **"skip"**: call `pipeline_next_action` again.
+       The handler automatically marks the task as completed.
+     - If the user chooses **"abandon"**: call `mcp__forge-state__abandon(workspace)`.
+     Do NOT call `checkpoint` or `phase_complete` for human_gate actions.
+     Do NOT call `pipeline_report_result` for human_gate actions.
    - `done`: Pipeline complete. Stop.
 3. For `spawn_agent`, `exec`, and `write_file`: call
    `mcp__forge-state__pipeline_report_result(workspace, phase=action.phase,
