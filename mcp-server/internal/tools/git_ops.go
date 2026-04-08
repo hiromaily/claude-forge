@@ -48,6 +48,16 @@ func runGit(dir string, args ...string) error {
 	return nil
 }
 
+// isGitIgnored checks whether path is ignored by .gitignore rules in the
+// repository rooted at repo. It uses `git check-ignore -q` which exits 0 when
+// the path IS ignored and 1 when it is NOT ignored. Any other error (e.g. repo
+// not found) is treated as "not ignored" (fail-open) to avoid blocking the
+// pipeline on unexpected git failures.
+func isGitIgnored(repo, path string) bool {
+	cmd := exec.Command("git", "-C", repo, "check-ignore", "-q", path)
+	return cmd.Run() == nil // exit 0 → ignored
+}
+
 // executeBatchCommit stages and commits all files changed by completed parallel tasks.
 //
 // Algorithm:
@@ -150,8 +160,11 @@ func executeBatchCommit(workspace string, sm *state.StateManager) (warning strin
 //     This is necessary because pr-creation runs BEFORE final-summary —
 //     summary.md does not exist at PR creation time.
 //     See handlePRCreation in engine.go for the design rationale.
-//  4. Force-adding workspace/summary.md and workspace/state.json.
-//  5. Amending the last commit (--no-edit) to include the state files.
+//  4. Force-adding workspace/summary.md and workspace/state.json — but only files
+//     that are NOT gitignored. Each file is checked individually via isGitIgnored
+//     so that negation patterns (e.g. !.specs/**/state.json) are respected.
+//     When all artifact files are gitignored, step 5 (amend) is skipped entirely.
+//  5. Amending the last commit (--no-edit) to include the staged state files.
 //  6. Force-pushing with --force-with-lease.
 //
 // Ordering invariant: handleReportResult must be called first so that state.json
@@ -191,16 +204,26 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 	}
 
 	// Step 4: Force-add workspace artifacts (state.json and summary.md if it exists).
-	// Skip entirely when the workspace directory is gitignored — the user has
-	// intentionally excluded .specs from version control.
+	// Each file is checked individually against .gitignore so that negation
+	// patterns are respected per-file. When all candidates are gitignored the
+	// amend step is skipped entirely.
 	statePath := filepath.Join(workspace, "state.json")
-	if isGitIgnored(repo, statePath) {
-		fmt.Fprintf(os.Stderr, "info: executeFinalCommit: workspace is gitignored, skipping artifact commit\n")
-	} else {
-		addArgs := []string{"add", "-f", statePath}
-		if _, statErr := os.Stat(summaryPath); statErr == nil {
-			addArgs = append(addArgs, summaryPath)
+	candidates := []string{statePath}
+	if _, statErr := os.Stat(summaryPath); statErr == nil {
+		candidates = append(candidates, summaryPath)
+	}
+
+	var addFiles []string
+	for _, f := range candidates {
+		if isGitIgnored(repo, f) {
+			fmt.Fprintf(os.Stderr, "info: executeFinalCommit: %s is gitignored, skipping\n", filepath.Base(f))
+		} else {
+			addFiles = append(addFiles, f)
 		}
+	}
+
+	if len(addFiles) > 0 {
+		addArgs := append([]string{"add", "-f"}, addFiles...)
 		if err := runGit(repo, addArgs...); err != nil {
 			return fmt.Errorf("executeFinalCommit add: %w", err)
 		}
@@ -217,16 +240,6 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 	}
 
 	return nil
-}
-
-// isGitIgnored checks whether path is ignored by .gitignore rules in the
-// repository rooted at repo. It uses `git check-ignore -q` which exits 0 when
-// the path IS ignored and 1 when it is NOT ignored. Any other error (e.g. repo
-// not found) is treated as "not ignored" (fail-open) to avoid blocking the
-// pipeline on unexpected git failures.
-func isGitIgnored(repo, path string) bool {
-	cmd := exec.Command("git", "-C", repo, "check-ignore", "-q", path)
-	return cmd.Run() == nil // exit 0 → ignored
 }
 
 // runCommand executes a non-git command with the given working directory.
