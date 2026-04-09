@@ -256,10 +256,12 @@ func PipelineNextActionHandler(
 		// does not re-evaluate branch type on subsequent calls.
 		if action.Type == orchestrator.ActionCheckpoint {
 			if st2, stErr := sm2.GetState(); stErr == nil && !st2.BranchClassified {
-				_ = sm2.Update(func(s *state.State) error {
+				if updateErr := sm2.Update(func(s *state.State) error {
 					s.BranchClassified = true
 					return nil
-				})
+				}); updateErr != nil {
+					appendWarning(fmt.Sprintf("set BranchClassified: %v", updateErr))
+				}
 			}
 		}
 

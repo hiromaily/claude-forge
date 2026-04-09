@@ -864,27 +864,27 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeFix,
 		Keywords: []string{
-			"bug", "fix", "defect", "hotfix",       // EN
-			"バグ", "修正", "不具合", "障害",          // JA
-			"fehler", "bugfix",                       // DE
-			"correctif", "bogue",                     // FR
+			"bug", "fix", "defect", "hotfix", // EN
+			"バグ", "修正", "不具合", "障害", // JA
+			"fehler", "bugfix", // DE
+			"correctif", "bogue", // FR
 		},
 	},
 	{
 		Type: BranchTypeRefactor,
 		Keywords: []string{
-			"refactor", "restructure", "reorganize",  // EN
-			"リファクタ", "再構成", "構造改善",          // JA
-			"refaktorierung", "umstrukturierung",     // DE
-			"refactorisation", "restructuration",     // FR
+			"refactor", "restructure", "reorganize", // EN
+			"リファクタ", "再構成", "構造改善", // JA
+			"refaktorierung", "umstrukturierung", // DE
+			"refactorisation", "restructuration", // FR
 		},
 	},
 	{
 		Type: BranchTypeDocs,
 		Keywords: []string{
-			"documentation", "readme",                // EN
-			"ドキュメント", "文書", "資料",              // JA
-			"dokumentation",                          // DE
+			"documentation", "readme", // EN
+			"ドキュメント", "文書", "資料", // JA
+			"dokumentation", // DE
 			// FR: "documentation" is shared with EN
 		},
 	},
@@ -892,9 +892,9 @@ var branchTypeRules = []branchTypeRule{
 		Type: BranchTypeChore,
 		Keywords: []string{
 			"dependency", "upgrade", "migration", "config", // EN
-			"依存", "アップグレード", "移行", "設定",          // JA
-			"abhängigkeit", "konfiguration",                // DE
-			"dépendance", "configuration",                  // FR
+			"依存", "アップグレード", "移行", "設定", // JA
+			"abhängigkeit", "configuration", // DE
+			"dépendance", "configuration", // FR
 		},
 	},
 }
@@ -916,8 +916,9 @@ func ClassifyBranchType(content string) string {
 // branchPrefix extracts the prefix before the first "/" in a branch name.
 // Returns the full string if no "/" is present.
 func branchPrefix(branch string) string {
-	if idx := strings.IndexByte(branch, '/'); idx >= 0 {
-		return branch[:idx]
+	prefix, _, found := strings.Cut(branch, "/")
+	if found {
+		return prefix
 	}
 	return branch
 }
@@ -933,6 +934,11 @@ func (e *Engine) maybeRenameBranch(st *state.State) (Action, bool) {
 	designPath := filepath.Join(st.Workspace, state.ArtifactDesign)
 	data, err := os.ReadFile(designPath)
 	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			// Unexpected error (permissions, I/O failure) — log to stderr for diagnostics.
+			fmt.Fprintf(os.Stderr, "maybeRenameBranch: read design.md: %v\n", err)
+		}
+		// design.md may not exist yet (pre-Phase 3); treat as not-yet-classified.
 		return Action{}, false
 	}
 
