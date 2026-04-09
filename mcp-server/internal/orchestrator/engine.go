@@ -926,7 +926,7 @@ func branchPrefix(branch string) string {
 // maybeRenameBranch checks whether the current branch prefix matches the
 // classified type from design.md. Returns a rename action when a mismatch
 // is detected, or (Action{}, false) when no rename is needed.
-func (e *Engine) maybeRenameBranch(st *state.State) (Action, bool) {
+func (e *Engine) maybeRenameBranch(st *state.State) (Action, bool) { //nolint:revive // e intentionally unused; method on Engine for consistency
 	if st.BranchClassified || st.UseCurrentBranch || st.Branch == nil {
 		return Action{}, false
 	}
