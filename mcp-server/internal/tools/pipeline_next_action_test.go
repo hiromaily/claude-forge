@@ -634,6 +634,62 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 	})
 
+	t.Run("rename_branch_returned_and_state_updated", func(t *testing.T) {
+		// When the engine returns ActionRenameBranch at checkpoint-a, the handler must:
+		// 1. Pre-update state (Branch + BranchClassified) before returning.
+		// 2. Return the rename_branch action to the orchestrator (not absorb it).
+		t.Parallel()
+
+		branch := "feature/test-slug"
+		workspace, sm := initWorkspaceForNextAction(t, "checkpoint-a", func(s *state.State) error {
+			s.Branch = &branch
+			s.BranchClassified = false
+			return nil
+		})
+
+		// Write design.md with fix-related content to trigger ClassifyBranchType → "fix".
+		designContent := "# Design\n\nFix the broken endpoint that returns 500 errors.\n"
+		if err := os.WriteFile(filepath.Join(workspace, "design.md"), []byte(designContent), 0o600); err != nil {
+			t.Fatalf("write design.md: %v", err)
+		}
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var action orchestrator.Action
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
+			t.Fatalf("unmarshal action: %v", err)
+		}
+
+		// The handler must return rename_branch to the orchestrator.
+		if action.Type != orchestrator.ActionRenameBranch {
+			t.Fatalf("action.Type = %q, want %q", action.Type, orchestrator.ActionRenameBranch)
+		}
+		if action.NewBranch != "fix/test-slug" {
+			t.Errorf("action.NewBranch = %q, want %q", action.NewBranch, "fix/test-slug")
+		}
+
+		// Verify state was pre-updated.
+		after, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if after.Branch == nil || *after.Branch != "fix/test-slug" {
+			t.Errorf("state.Branch = %v, want ptr to %q", after.Branch, "fix/test-slug")
+		}
+		if !after.BranchClassified {
+			t.Errorf("state.BranchClassified = false, want true")
+		}
+	})
+
 	t.Run("human_gate_resolved_on_next_call", func(t *testing.T) {
 		t.Parallel()
 		taskKey := "1"

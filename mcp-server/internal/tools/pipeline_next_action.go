@@ -221,12 +221,33 @@ func PipelineNextActionHandler(
 					return errorf("set PendingHumanGate: %v", updateErr)
 				}
 
+			case orchestrator.ActionRenameBranch:
+				if updateErr := sm2.Update(func(s *state.State) error {
+					s.Branch = &action.NewBranch
+					s.BranchClassified = true
+					return nil
+				}); updateErr != nil {
+					return errorf("rename_branch state update: %v", updateErr)
+				}
+				// Fall through to return to orchestrator.
+
 			default:
 				// ActionSpawnAgent, ActionCheckpoint, ActionWriteFile, ActionDone — return as-is.
 			}
 
 			// Action is ready to be returned to the orchestrator.
 			break
+		}
+
+		// When reaching a checkpoint without a rename, mark BranchClassified so the engine
+		// does not re-evaluate branch type on subsequent calls.
+		if action.Type == orchestrator.ActionCheckpoint {
+			if st2, stErr := sm2.GetState(); stErr == nil && !st2.BranchClassified {
+				_ = sm2.Update(func(s *state.State) error {
+					s.BranchClassified = true
+					return nil
+				})
+			}
 		}
 
 		// Eliminate the window between pipeline_next_action returning a checkpoint action
