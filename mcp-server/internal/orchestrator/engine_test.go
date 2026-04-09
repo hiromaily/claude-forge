@@ -1798,7 +1798,7 @@ func TestClassifyBranchType(t *testing.T) {
 		{name: "de_umstrukturierung", content: "Umstrukturierung des Paketlayouts", want: BranchTypeRefactor},
 		{name: "de_dokumentation", content: "Dokumentation für die API hinzufügen", want: BranchTypeDocs},
 		{name: "de_abhaengigkeit", content: "Abhängigkeit aktualisieren", want: BranchTypeChore},
-		{name: "de_konfiguration", content: "Konfiguration der Staging-Umgebung", want: BranchTypeChore},
+		{name: "de_configuration", content: "Configuration der Staging-Umgebung", want: BranchTypeChore},
 
 		// French
 		{name: "fr_correctif", content: "Correctif pour le crash en production", want: BranchTypeFix},
