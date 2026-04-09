@@ -1052,9 +1052,9 @@ func TestDeriveBranchName(t *testing.T) {
 		specName string
 		want     string
 	}{
-		{"20260330-soa-2899-task-status", "forge/soa-2899-task-status"},
-		{"soa-2899-task-status", "forge/soa-2899-task-status"},
-		{"My Feature", "forge/my-feature"},
+		{"20260330-soa-2899-task-status", "feature/soa-2899-task-status"},
+		{"soa-2899-task-status", "feature/soa-2899-task-status"},
+		{"My Feature", "feature/my-feature"},
 	}
 
 	for _, tt := range tests {
@@ -1075,8 +1075,8 @@ func TestDeriveBranchName_Truncation(t *testing.T) {
 	long := "20260330-soa-2899-this-is-a-very-long-specification-name-that-exceeds-sixty-characters-limit"
 	got := DeriveBranchName(&state.State{SpecName: long})
 
-	// Must start with forge/ and body must be <= 60 chars.
-	const prefix = "forge/"
+	// Must start with feature/ and body must be <= 60 chars.
+	const prefix = "feature/"
 	body := got[len(prefix):]
 	if len(body) > 60 {
 		t.Errorf("branch body length = %d (> 60): %q", len(body), body)
@@ -1101,7 +1101,7 @@ func TestDerivePRTitle(t *testing.T) {
 		{"refactor_prefix", "refactor/clean-up", "clean-up", "refactor: clean up"},
 		{"docs_prefix", "docs/update-readme", "update-readme", "docs: update readme"},
 		{"chore_prefix", "chore/bump-deps", "bump-deps", "chore: bump deps"},
-		{"unknown_prefix_defaults_feat", "forge/some-task", "some-task", "feat: some task"},
+		{"feature_default_prefix", "feature/some-task", "some-task", "feat: some task"},
 		{"no_branch_defaults_feat", "", "some-task", "feat: some task"},
 	}
 

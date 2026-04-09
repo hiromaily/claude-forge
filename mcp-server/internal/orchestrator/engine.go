@@ -802,7 +802,9 @@ func readSourceURL(workspace string) string {
 
 // DeriveBranchName generates a deterministic branch name from the spec name.
 // It strips the date prefix (e.g., "20260330-") and truncates to 60 characters
-// to produce readable branch names like "forge/soa-2899-task-status-options".
+// to produce readable branch names like "feature/soa-2899-task-status-options".
+// The default prefix is "feature/"; it may be renamed to fix/, refactor/, etc.
+// by maybeRenameBranch after Phase 3b classifies the design document.
 // Exported so pipeline_init_with_context can derive the branch name during
 // initialisation (before Phase 5).
 func DeriveBranchName(st *state.State) string {
@@ -818,7 +820,7 @@ func DeriveBranchName(st *state.State) string {
 		}
 	}
 
-	return "forge/" + name
+	return "feature/" + name
 }
 
 // stripDatePrefix removes a leading "YYYYMMDD-" date prefix from a spec name.
