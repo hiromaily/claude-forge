@@ -4,14 +4,14 @@ import "fmt"
 
 // Action type constants — match design-mcp-v2.md JSON "type" values.
 const (
-	ActionSpawnAgent  = "spawn_agent"
-	ActionCheckpoint  = "checkpoint"
-	ActionExec        = "exec"
-	ActionWriteFile   = "write_file"
-	ActionDone        = "done"
-	ActionTaskInit    = "task_init"    // engine dispatches task_init internally; never surfaced to orchestrator
-	ActionBatchCommit = "batch_commit" // engine dispatches batch commit internally; never surfaced to orchestrator
-	ActionHumanGate   = "human_gate"   // engine dispatches human gate; handler presents to orchestrator as-is
+	ActionSpawnAgent   = "spawn_agent"
+	ActionCheckpoint   = "checkpoint"
+	ActionExec         = "exec"
+	ActionWriteFile    = "write_file"
+	ActionDone         = "done"
+	ActionTaskInit     = "task_init"     // engine dispatches task_init internally; never surfaced to orchestrator
+	ActionBatchCommit  = "batch_commit"  // engine dispatches batch commit internally; never surfaced to orchestrator
+	ActionHumanGate    = "human_gate"    // engine dispatches human gate; handler presents to orchestrator as-is
 	ActionRenameBranch = "rename_branch" // engine dispatches branch rename when design content suggests a different type
 )
 
