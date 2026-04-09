@@ -864,36 +864,37 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeFix,
 		Keywords: []string{
-			"bug", "fix", "defect", "hotfix",
-			"バグ", "修正", "不具合", "障害",
-			"fehler", "bugfix",
-			"correctif", "bogue",
+			"bug", "fix", "defect", "hotfix",       // EN
+			"バグ", "修正", "不具合", "障害",          // JA
+			"fehler", "bugfix",                       // DE
+			"correctif", "bogue",                     // FR
 		},
 	},
 	{
 		Type: BranchTypeRefactor,
 		Keywords: []string{
-			"refactor", "restructure", "reorganize",
-			"リファクタ", "再構成", "構造改善",
-			"refaktorierung", "umstrukturierung",
-			"refactorisation", "restructuration",
+			"refactor", "restructure", "reorganize",  // EN
+			"リファクタ", "再構成", "構造改善",          // JA
+			"refaktorierung", "umstrukturierung",     // DE
+			"refactorisation", "restructuration",     // FR
 		},
 	},
 	{
 		Type: BranchTypeDocs,
 		Keywords: []string{
-			"documentation", "readme",
-			"ドキュメント", "文書", "資料",
-			"dokumentation",
+			"documentation", "readme",                // EN
+			"ドキュメント", "文書", "資料",              // JA
+			"dokumentation",                          // DE
+			// FR: "documentation" is shared with EN
 		},
 	},
 	{
 		Type: BranchTypeChore,
 		Keywords: []string{
-			"dependency", "upgrade", "migration", "config",
-			"依存", "アップグレード", "移行", "設定",
-			"abhängigkeit", "konfiguration",
-			"dépendance", "configuration",
+			"dependency", "upgrade", "migration", "config", // EN
+			"依存", "アップグレード", "移行", "設定",          // JA
+			"abhängigkeit", "konfiguration",                // DE
+			"dépendance", "configuration",                  // FR
 		},
 	},
 }
@@ -943,8 +944,12 @@ func (e *Engine) maybeRenameBranch(st *state.State) (Action, bool) {
 	}
 
 	// Build new branch name by replacing the prefix.
-	suffix := (*st.Branch)[len(currentPrefix):]
-	newBranch := classified + suffix
+	// Guard: if the branch has no "/" (e.g. "main"), skip rename.
+	idx := strings.IndexByte(*st.Branch, '/')
+	if idx < 0 {
+		return Action{}, false
+	}
+	newBranch := classified + (*st.Branch)[idx:]
 
 	return NewRenameBranchAction(PhaseCheckpointA, *st.Branch, newBranch), true
 }

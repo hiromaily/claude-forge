@@ -1731,6 +1731,28 @@ func TestMaybeRenameBranch_use_current_branch(t *testing.T) {
 	}
 }
 
+func TestMaybeRenameBranch_no_slash_in_branch(t *testing.T) {
+	t.Parallel()
+
+	sm := newTestStateManager(t, PhaseCheckpointA, func(s *state.State) error {
+		s.Branch = new(string("main"))
+		return nil
+	})
+	st, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if err := writeFileForTest(st.Workspace+"/design.md", "# Design\n\nFix the bug.\n"); err != nil {
+		t.Fatalf("writeFileForTest: %v", err)
+	}
+
+	eng := defaultEng()
+	_, needed := eng.maybeRenameBranch(st)
+	if needed {
+		t.Error("maybeRenameBranch returned needed=true for branch without slash")
+	}
+}
+
 func TestClassifyBranchType(t *testing.T) {
 	t.Parallel()
 

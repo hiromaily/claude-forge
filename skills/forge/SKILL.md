@@ -88,7 +88,7 @@ Repeat until done:
      Do NOT call `checkpoint` or `phase_complete` for human_gate actions.
      Do NOT call `pipeline_report_result` for human_gate actions.
    - `done`: Pipeline complete. Stop.
-3. For `spawn_agent`, `exec`, and `write_file`: call
+3. For `spawn_agent`, `exec`, `write_file`, and `rename_branch`: call
    `mcp__forge-state__pipeline_report_result(workspace, phase=action.phase,
    tokens_used=<tokens>, duration_ms=<ms>, model=<model>,
    setup_only=action.setup_only)`.  (Omit `setup_only` when false/absent.)
