@@ -12,6 +12,7 @@ const (
 	ActionTaskInit    = "task_init"    // engine dispatches task_init internally; never surfaced to orchestrator
 	ActionBatchCommit = "batch_commit" // engine dispatches batch commit internally; never surfaced to orchestrator
 	ActionHumanGate   = "human_gate"   // engine dispatches human gate; handler presents to orchestrator as-is
+	ActionRenameBranch = "rename_branch" // engine dispatches branch rename when design content suggests a different type
 )
 
 // SkipSummaryPrefix is the prefix placed in Action.Summary for per-phase skip signals.
@@ -51,6 +52,10 @@ type Action struct {
 	// write_file fields
 	Path    string `json:"path,omitempty"`
 	Content string `json:"content,omitempty"`
+
+	// rename_branch fields
+	OldBranch string `json:"old_branch,omitempty"`
+	NewBranch string `json:"new_branch,omitempty"`
 
 	// setup flag — when true, pipeline_report_result records phase-log but skips PhaseComplete
 	SetupOnly bool `json:"setup_only,omitempty"`
@@ -155,6 +160,18 @@ func NewBatchCommitAction(phase string) Action {
 	return Action{
 		Type:      ActionBatchCommit,
 		Phase:     phase,
+		SetupOnly: true,
+	}
+}
+
+// NewRenameBranchAction constructs an Action of type ActionRenameBranch.
+// SetupOnly is true so pipeline_report_result records phase-log but skips PhaseComplete.
+func NewRenameBranchAction(phase, oldBranch, newBranch string) Action {
+	return Action{
+		Type:      ActionRenameBranch,
+		Phase:     phase,
+		OldBranch: oldBranch,
+		NewBranch: newBranch,
 		SetupOnly: true,
 	}
 }
