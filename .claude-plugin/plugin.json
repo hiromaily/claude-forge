@@ -1,7 +1,7 @@
 {
   "name": "claude-forge",
   "description": "The entire development pipeline (analysis → investigation → design → AI review → task → AI review → implementation → review) is orchestrated using isolated subagents, preventing context contamination and saving tokens.",
-  "version": "2.3.4",
+  "version": "2.4.0",
   "author": {
     "name": "hiromaily"
   },
