@@ -1776,14 +1776,14 @@ func TestClassifyBranchType(t *testing.T) {
 		{name: "de_umstrukturierung", content: "Umstrukturierung des Paketlayouts", want: BranchTypeRefactor},
 		{name: "de_dokumentation", content: "Dokumentation für die API hinzufügen", want: BranchTypeDocs},
 		{name: "de_abhaengigkeit", content: "Abhängigkeit aktualisieren", want: BranchTypeChore},
-		{name: "de_konfiguration", content: "Konfiguration für Staging-Umgebung", want: BranchTypeChore},
+		{name: "de_konfiguration", content: "Konfiguration der Staging-Umgebung", want: BranchTypeChore},
 
 		// French
 		{name: "fr_correctif", content: "Correctif pour le crash en production", want: BranchTypeFix},
 		{name: "fr_bogue", content: "Résoudre le bogue dans le parseur", want: BranchTypeFix},
 		{name: "fr_refactorisation", content: "Refactorisation de la couche handler", want: BranchTypeRefactor},
 		{name: "fr_restructuration", content: "Restructuration du layout des packages", want: BranchTypeRefactor},
-		{name: "fr_dependance", content: "Mise à jour de la dépendance", want: BranchTypeChore},
+		{name: "fr_dependence", content: "Mise à jour de la dépendance", want: BranchTypeChore},
 		{name: "fr_configuration", content: "Configuration de l'environnement", want: BranchTypeChore},
 
 		// Priority: fix > refactor when both present
