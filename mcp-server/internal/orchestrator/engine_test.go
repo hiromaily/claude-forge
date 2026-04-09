@@ -1604,3 +1604,225 @@ func TestHandlePhaseFive_HumanGate(t *testing.T) {
 		})
 	}
 }
+
+func TestBranchPrefix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		branch string
+		want   string
+	}{
+		{"feature/soa-2899", "feature"},
+		{"fix/login-bug", "fix"},
+		{"refactor/cleanup", "refactor"},
+		{"main", "main"},
+		{"", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.branch, func(t *testing.T) {
+			t.Parallel()
+			got := branchPrefix(tc.branch)
+			if got != tc.want {
+				t.Errorf("branchPrefix(%q) = %q, want %q", tc.branch, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMaybeRenameBranch_needed(t *testing.T) {
+	t.Parallel()
+
+	sm := newTestStateManager(t, PhaseCheckpointA, func(s *state.State) error {
+		s.Branch = new(string("feature/soa-2899"))
+		return nil
+	})
+	st, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	// Write design.md with bug-fix content
+	if err := writeFileForTest(st.Workspace+"/design.md", "# Design\n\nFix the login validation bug.\n"); err != nil {
+		t.Fatalf("writeFileForTest: %v", err)
+	}
+
+	eng := defaultEng()
+	action, needed := eng.maybeRenameBranch(st)
+	if !needed {
+		t.Fatal("maybeRenameBranch returned needed=false, want true")
+	}
+	if action.Type != ActionRenameBranch {
+		t.Errorf("action.Type = %q, want %q", action.Type, ActionRenameBranch)
+	}
+	if action.OldBranch != "feature/soa-2899" {
+		t.Errorf("action.OldBranch = %q, want %q", action.OldBranch, "feature/soa-2899")
+	}
+	if action.NewBranch != "fix/soa-2899" {
+		t.Errorf("action.NewBranch = %q, want %q", action.NewBranch, "fix/soa-2899")
+	}
+}
+
+func TestMaybeRenameBranch_already_classified(t *testing.T) {
+	t.Parallel()
+
+	sm := newTestStateManager(t, PhaseCheckpointA, func(s *state.State) error {
+		s.Branch = new(string("feature/soa-2899"))
+		s.BranchClassified = true
+		return nil
+	})
+	st, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if err := writeFileForTest(st.Workspace+"/design.md", "# Design\n\nFix the bug.\n"); err != nil {
+		t.Fatalf("writeFileForTest: %v", err)
+	}
+
+	eng := defaultEng()
+	_, needed := eng.maybeRenameBranch(st)
+	if needed {
+		t.Error("maybeRenameBranch returned needed=true for already classified branch")
+	}
+}
+
+func TestMaybeRenameBranch_same_type(t *testing.T) {
+	t.Parallel()
+
+	sm := newTestStateManager(t, PhaseCheckpointA, func(s *state.State) error {
+		s.Branch = new(string("feature/add-user-auth"))
+		return nil
+	})
+	st, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	// Content has no special keywords → defaults to "feature", matches current prefix
+	if err := writeFileForTest(st.Workspace+"/design.md", "# Design\n\nAdd a new user authentication page.\n"); err != nil {
+		t.Fatalf("writeFileForTest: %v", err)
+	}
+
+	eng := defaultEng()
+	_, needed := eng.maybeRenameBranch(st)
+	if needed {
+		t.Error("maybeRenameBranch returned needed=true when classified type matches current prefix")
+	}
+}
+
+func TestMaybeRenameBranch_use_current_branch(t *testing.T) {
+	t.Parallel()
+
+	sm := newTestStateManager(t, PhaseCheckpointA, func(s *state.State) error {
+		s.Branch = new(string("feature/soa-2899"))
+		s.UseCurrentBranch = true
+		return nil
+	})
+	st, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if err := writeFileForTest(st.Workspace+"/design.md", "# Design\n\nFix the bug.\n"); err != nil {
+		t.Fatalf("writeFileForTest: %v", err)
+	}
+
+	eng := defaultEng()
+	_, needed := eng.maybeRenameBranch(st)
+	if needed {
+		t.Error("maybeRenameBranch returned needed=true when UseCurrentBranch is set")
+	}
+}
+
+func TestClassifyBranchType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		// English
+		{name: "en_bug", content: "This design fixes a bug in the login flow", want: BranchTypeFix},
+		{name: "en_fix", content: "Fix the validation error on submit", want: BranchTypeFix},
+		{name: "en_hotfix", content: "Hotfix for production crash", want: BranchTypeFix},
+		{name: "en_defect", content: "Address defect in email parser", want: BranchTypeFix},
+		{name: "en_refactor", content: "Refactor the handler layer for clarity", want: BranchTypeRefactor},
+		{name: "en_restructure", content: "Restructure the package layout", want: BranchTypeRefactor},
+		{name: "en_reorganize", content: "Reorganize test helpers", want: BranchTypeRefactor},
+		{name: "en_documentation", content: "Add documentation for the API", want: BranchTypeDocs},
+		{name: "en_readme", content: "Update the README with examples", want: BranchTypeDocs},
+		{name: "en_dependency", content: "Upgrade dependency versions", want: BranchTypeChore},
+		{name: "en_migration", content: "Database migration for new schema", want: BranchTypeChore},
+		{name: "en_config", content: "Update config for staging environment", want: BranchTypeChore},
+		{name: "en_feature", content: "Add user authentication with OAuth", want: BranchTypeFeature},
+
+		// Japanese
+		{name: "ja_bug", content: "ログインフローのバグを修正", want: BranchTypeFix},
+		{name: "ja_fix", content: "バリデーションエラーの修正を行う", want: BranchTypeFix},
+		{name: "ja_fuguai", content: "メール送信の不具合を調査", want: BranchTypeFix},
+		{name: "ja_shougai", content: "本番環境の障害対応", want: BranchTypeFix},
+		{name: "ja_refactor", content: "ハンドラ層のリファクタリング", want: BranchTypeRefactor},
+		{name: "ja_saikousei", content: "パッケージの再構成", want: BranchTypeRefactor},
+		{name: "ja_document", content: "APIのドキュメント追加", want: BranchTypeDocs},
+		{name: "ja_bunsho", content: "仕様の文書化", want: BranchTypeDocs},
+		{name: "ja_shiryou", content: "設計資料を更新", want: BranchTypeDocs},
+		{name: "ja_izon", content: "依存パッケージの更新", want: BranchTypeChore},
+		{name: "ja_upgrade", content: "Goバージョンのアップグレード", want: BranchTypeChore},
+		{name: "ja_ikou", content: "DBスキーマの移行作業", want: BranchTypeChore},
+		{name: "ja_settei", content: "環境設定の変更", want: BranchTypeChore},
+
+		// German
+		{name: "de_fehler", content: "Fehler im Login-Flow beheben", want: BranchTypeFix},
+		{name: "de_bugfix", content: "Bugfix für Produktionsabsturz", want: BranchTypeFix},
+		{name: "de_refaktorierung", content: "Refaktorierung der Handler-Schicht", want: BranchTypeRefactor},
+		{name: "de_umstrukturierung", content: "Umstrukturierung des Paketlayouts", want: BranchTypeRefactor},
+		{name: "de_dokumentation", content: "Dokumentation für die API hinzufügen", want: BranchTypeDocs},
+		{name: "de_abhaengigkeit", content: "Abhängigkeit aktualisieren", want: BranchTypeChore},
+		{name: "de_konfiguration", content: "Konfiguration für Staging-Umgebung", want: BranchTypeChore},
+
+		// French
+		{name: "fr_correctif", content: "Correctif pour le crash en production", want: BranchTypeFix},
+		{name: "fr_bogue", content: "Résoudre le bogue dans le parseur", want: BranchTypeFix},
+		{name: "fr_refactorisation", content: "Refactorisation de la couche handler", want: BranchTypeRefactor},
+		{name: "fr_restructuration", content: "Restructuration du layout des packages", want: BranchTypeRefactor},
+		{name: "fr_dependance", content: "Mise à jour de la dépendance", want: BranchTypeChore},
+		{name: "fr_configuration", content: "Configuration de l'environnement", want: BranchTypeChore},
+
+		// Priority: fix > refactor when both present
+		{name: "priority_fix_over_refactor", content: "Refactor and fix the bug", want: BranchTypeFix},
+		// Priority: fix > docs when both present
+		{name: "priority_fix_over_docs", content: "Fix documentation bug", want: BranchTypeFix},
+
+		// Case insensitivity
+		{name: "case_insensitive_FIX", content: "FIX the broken tests", want: BranchTypeFix},
+		{name: "case_insensitive_REFACTOR", content: "REFACTOR the service layer", want: BranchTypeRefactor},
+		{name: "case_insensitive_DOCUMENTATION", content: "DOCUMENTATION update needed", want: BranchTypeDocs},
+
+		// Default
+		{name: "empty_input", content: "", want: BranchTypeFeature},
+		{name: "no_keywords", content: "Add new user profile page with avatar upload", want: BranchTypeFeature},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := ClassifyBranchType(tc.content)
+			if got != tc.want {
+				t.Errorf("ClassifyBranchType(%q) = %q, want %q", tc.content, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewRenameBranchAction(t *testing.T) {
+	t.Parallel()
+	action := NewRenameBranchAction("checkpoint-a", "feature/soa-2899", "fix/soa-2899")
+	want := Action{
+		Type:      ActionRenameBranch,
+		Phase:     "checkpoint-a",
+		OldBranch: "feature/soa-2899",
+		NewBranch: "fix/soa-2899",
+		SetupOnly: true,
+	}
+	if !reflect.DeepEqual(action, want) {
+		t.Errorf("NewRenameBranchAction() = %+v, want %+v", action, want)
+	}
+}
