@@ -32,6 +32,7 @@ type State struct {
 	AutoApprove               bool            `json:"autoApprove"`
 	SkipPr                    bool            `json:"skipPr"`
 	UseCurrentBranch          bool            `json:"useCurrentBranch"`
+	BranchClassified          bool            `json:"branchClassified"`
 	Debug                     bool            `json:"debug"`
 	SkippedPhases             []string        `json:"skippedPhases"`
 	CurrentPhase              string          `json:"currentPhase"`

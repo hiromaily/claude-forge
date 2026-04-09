@@ -62,6 +62,7 @@ Lefthook runs automatically on git operations. Both hooks only trigger when `**/
 | Hook | Command | Behaviour |
 |---|---|---|
 | `pre-commit` | `make go-fmt` | Formats staged `.go` files and re-stages the fixes (`stage_fixed: true`) |
+| `pre-commit` | `make go-lint-fast` | Runs fast-only linters and re-stages the fixes (`stage_fixed: true`) |
 | `pre-push` | `make go-lint` | Lints and auto-fixes `.go` files before push |
 
 **pre-push detail**: `make go-lint` runs `golangci-lint run --fix`. If it fixes all issues it exits 0 and the push succeeds — but the auto-fixed changes remain unstaged in the working tree. If unfixable issues remain it exits non-zero and blocks the push. After a blocked push: commit the auto-fixed files, then re-push.

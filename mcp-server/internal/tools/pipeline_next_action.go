@@ -221,12 +221,48 @@ func PipelineNextActionHandler(
 					return errorf("set PendingHumanGate: %v", updateErr)
 				}
 
+			case orchestrator.ActionRenameBranch:
+				// P6: execute git branch -m internally, update state, re-enter.
+				newBranch := action.NewBranch // capture before action is reassigned
+				if renameErr := runGit(workspace, "branch", "-m", action.OldBranch, newBranch); renameErr != nil {
+					return errorf("rename_branch git: %v", renameErr)
+				}
+				if updateErr := sm2.Update(func(s *state.State) error {
+					s.Branch = &newBranch
+					s.BranchClassified = true
+					return nil
+				}); updateErr != nil {
+					return errorf("rename_branch state update: %v", updateErr)
+				}
+				action, err = eng.NextAction(sm2, "")
+				if err != nil {
+					return errorf("next_action (after rename_branch): %v", err)
+				}
+				if iter == maxDispatchIter-1 {
+					return errorf("dispatch loop exceeded %d iterations — possible engine cycle; last action: %s",
+						maxDispatchIter, action.Type)
+				}
+				continue
+
 			default:
 				// ActionSpawnAgent, ActionCheckpoint, ActionWriteFile, ActionDone — return as-is.
 			}
 
 			// Action is ready to be returned to the orchestrator.
 			break
+		}
+
+		// When reaching a checkpoint without a rename, mark BranchClassified so the engine
+		// does not re-evaluate branch type on subsequent calls.
+		if action.Type == orchestrator.ActionCheckpoint {
+			if st2, stErr := sm2.GetState(); stErr == nil && !st2.BranchClassified {
+				if updateErr := sm2.Update(func(s *state.State) error {
+					s.BranchClassified = true
+					return nil
+				}); updateErr != nil {
+					appendWarning(fmt.Sprintf("set BranchClassified: %v", updateErr))
+				}
+			}
 		}
 
 		// Eliminate the window between pipeline_next_action returning a checkpoint action

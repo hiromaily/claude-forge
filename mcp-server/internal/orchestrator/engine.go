@@ -116,6 +116,9 @@ func (e *Engine) NextAction(sm *state.StateManager, _ string) (Action, error) {
 	case PhaseThreeB:
 		return e.handlePhaseThreeB(st)
 	case PhaseCheckpointA:
+		if action, needed := e.maybeRenameBranch(st); needed {
+			return action, nil
+		}
 		return e.handleCheckpointA(st)
 	case PhaseFour:
 		return e.handlePhaseFour(st)
@@ -799,7 +802,9 @@ func readSourceURL(workspace string) string {
 
 // DeriveBranchName generates a deterministic branch name from the spec name.
 // It strips the date prefix (e.g., "20260330-") and truncates to 60 characters
-// to produce readable branch names like "forge/soa-2899-task-status-options".
+// to produce readable branch names like "feature/soa-2899-task-status-options".
+// The default prefix is "feature/"; it may be renamed to fix/, refactor/, etc.
+// by maybeRenameBranch after Phase 3b classifies the design document.
 // Exported so pipeline_init_with_context can derive the branch name during
 // initialisation (before Phase 5).
 func DeriveBranchName(st *state.State) string {
@@ -815,7 +820,7 @@ func DeriveBranchName(st *state.State) string {
 		}
 	}
 
-	return "forge/" + name
+	return "feature/" + name
 }
 
 // stripDatePrefix removes a leading "YYYYMMDD-" date prefix from a spec name.
@@ -834,6 +839,125 @@ func stripDatePrefix(name string) string {
 		}
 	}
 	return name
+}
+
+// Branch type constants used by ClassifyBranchType to categorise design content.
+const (
+	BranchTypeFeature  = "feature"
+	BranchTypeFix      = "fix"
+	BranchTypeRefactor = "refactor"
+	BranchTypeDocs     = "docs"
+	BranchTypeChore    = "chore"
+)
+
+// branchTypeRule associates a branch type with keywords that signal it.
+type branchTypeRule struct {
+	Type     string
+	Keywords []string
+}
+
+// branchTypeRules is the priority-ordered list of branch type classification rules.
+// Order matters: fix > refactor > docs > chore > feature (default fallback).
+//
+//nolint:gochecknoglobals
+var branchTypeRules = []branchTypeRule{
+	{
+		Type: BranchTypeFix,
+		Keywords: []string{
+			"bug", "fix", "defect", "hotfix", // EN
+			"バグ", "修正", "不具合", "障害", // JA
+			"fehler", "bugfix", // DE
+			"correctif", "bogue", // FR
+		},
+	},
+	{
+		Type: BranchTypeRefactor,
+		Keywords: []string{
+			"refactor", "restructure", "reorganize", // EN
+			"リファクタ", "再構成", "構造改善", // JA
+			"refaktorierung", "umstrukturierung", // DE
+			"refactorisation", "restructuration", // FR
+		},
+	},
+	{
+		Type: BranchTypeDocs,
+		Keywords: []string{
+			"documentation", "readme", // EN
+			"ドキュメント", "文書", "資料", // JA
+			"dokumentation", // DE
+			// FR: "documentation" is shared with EN
+		},
+	},
+	{
+		Type: BranchTypeChore,
+		Keywords: []string{
+			"dependency", "upgrade", "migration", "config", // EN
+			"依存", "アップグレード", "移行", "設定", // JA
+			"abhängigkeit", "configuration", // DE
+			"dépendance", "configuration", // FR
+		},
+	},
+}
+
+// ClassifyBranchType scans content for keywords and returns the best matching
+// branch type. Priority: fix > refactor > docs > chore > feature (default).
+func ClassifyBranchType(content string) string {
+	lower := strings.ToLower(content)
+	for _, rule := range branchTypeRules {
+		for _, kw := range rule.Keywords {
+			if strings.Contains(lower, kw) {
+				return rule.Type
+			}
+		}
+	}
+	return BranchTypeFeature
+}
+
+// branchPrefix extracts the prefix before the first "/" in a branch name.
+// Returns the full string if no "/" is present.
+func branchPrefix(branch string) string {
+	prefix, _, found := strings.Cut(branch, "/")
+	if found {
+		return prefix
+	}
+	return branch
+}
+
+// maybeRenameBranch checks whether the current branch prefix matches the
+// classified type from design.md. Returns a rename action when a mismatch
+// is detected, or (Action{}, false) when no rename is needed.
+func (e *Engine) maybeRenameBranch(st *state.State) (Action, bool) { //nolint:revive // e intentionally unused; method on Engine for consistency
+	if st.BranchClassified || st.UseCurrentBranch || st.Branch == nil {
+		return Action{}, false
+	}
+
+	designPath := filepath.Join(st.Workspace, state.ArtifactDesign)
+	data, err := os.ReadFile(designPath)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			// Unexpected error (permissions, I/O failure) — log to stderr for diagnostics.
+			fmt.Fprintf(os.Stderr, "maybeRenameBranch: read design.md: %v\n", err)
+		}
+		// design.md may not exist yet (pre-Phase 3); treat as not-yet-classified.
+		return Action{}, false
+	}
+
+	classified := ClassifyBranchType(string(data))
+	currentPrefix := branchPrefix(*st.Branch)
+
+	if classified == currentPrefix {
+		return Action{}, false
+	}
+
+	// Build new branch name by replacing the prefix.
+	// Guard: if the branch has no "/" (e.g. "main"), skip rename.
+	idx := strings.IndexByte(*st.Branch, '/')
+	if idx < 0 {
+		return Action{}, false
+	}
+	newBranch := classified + (*st.Branch)[idx:]
+
+	return NewRenameBranchAction(PhaseCheckpointA, *st.Branch, newBranch), true
 }
 
 // sortedTaskKeys returns task keys from tasks sorted numerically ascending.

@@ -17,6 +17,17 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
+// runGitCmd runs a git command in the given directory and fails the test on error.
+func runGitCmd(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
 // initWorkspaceForNextAction sets up a minimal workspace for pipeline_next_action tests.
 func initWorkspaceForNextAction(t *testing.T, phase string, modify func(*state.State) error) (string, *state.StateManager) {
 	t.Helper()
@@ -631,6 +642,70 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 		if s.CurrentPhaseStatus != state.StatusAwaitingHuman {
 			t.Errorf("CurrentPhaseStatus = %q, want %q", s.CurrentPhaseStatus, state.StatusAwaitingHuman)
+		}
+	})
+
+	t.Run("rename_branch_absorbed_and_state_updated", func(t *testing.T) {
+		// When the engine returns ActionRenameBranch at checkpoint-a, the handler must:
+		// 1. Execute git branch -m internally.
+		// 2. Update state (Branch + BranchClassified).
+		// 3. Re-enter the engine loop (the orchestrator never sees rename_branch).
+		t.Parallel()
+
+		branch := "feature/test-slug"
+		workspace, sm := initWorkspaceForNextAction(t, "checkpoint-a", func(s *state.State) error {
+			s.Branch = &branch
+			s.BranchClassified = false
+			return nil
+		})
+
+		// Set up a git repo with the feature/test-slug branch so git branch -m works.
+		initGitRepo(t, workspace)
+		runGitCmd(t, workspace, "checkout", "-b", "feature/test-slug")
+
+		// Write design.md with fix-related content to trigger ClassifyBranchType → "fix".
+		designContent := "# Design\n\nFix the broken endpoint that returns 500 errors.\n"
+		if err := os.WriteFile(filepath.Join(workspace, "design.md"), []byte(designContent), 0o600); err != nil {
+			t.Fatalf("write design.md: %v", err)
+		}
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var action orchestrator.Action
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
+			t.Fatalf("unmarshal action: %v", err)
+		}
+
+		// rename_branch must be absorbed — the returned action should be checkpoint.
+		if action.Type == orchestrator.ActionRenameBranch {
+			t.Fatalf("rename_branch was not absorbed — leaked to orchestrator")
+		}
+		if action.Type != orchestrator.ActionCheckpoint {
+			t.Fatalf("action.Type = %q, want %q (checkpoint-a after absorbed rename)", action.Type, orchestrator.ActionCheckpoint)
+		}
+
+		// Verify state was updated: branch renamed and classified.
+		after, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if after.Branch == nil {
+			t.Fatalf("state.Branch is nil, want ptr to %q", "fix/test-slug")
+		}
+		if *after.Branch != "fix/test-slug" {
+			t.Errorf("state.Branch = %q, want %q", *after.Branch, "fix/test-slug")
+		}
+		if !after.BranchClassified {
+			t.Errorf("state.BranchClassified = false, want true")
 		}
 	})
 
