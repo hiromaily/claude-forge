@@ -78,8 +78,6 @@ Repeat until done:
      (action.phase is always populated for exec actions.)
    - `write_file`: Write `action.content` to `action.path`. Then call
      `pipeline_report_result` with `phase=action.phase`. (action.phase always populated.)
-   - `rename_branch`: Run `git branch -m <action.old_branch> <action.new_branch>` via Bash.
-     Then call `pipeline_report_result` with `phase=action.phase, setup_only=true`.
    - `human_gate`: A task requires human action (e.g. merge an external PR, update dependencies).
      Present `action.present_to_user` to the user using AskUserQuestion with `action.options`.
      - If the user chooses **"done"** or **"skip"**: call `pipeline_next_action` again.
@@ -88,7 +86,7 @@ Repeat until done:
      Do NOT call `checkpoint` or `phase_complete` for human_gate actions.
      Do NOT call `pipeline_report_result` for human_gate actions.
    - `done`: Pipeline complete. Stop.
-3. For `spawn_agent`, `exec`, `write_file`, and `rename_branch`: call
+3. For `spawn_agent`, `exec`, and `write_file`: call
    `mcp__forge-state__pipeline_report_result(workspace, phase=action.phase,
    tokens_used=<tokens>, duration_ms=<ms>, model=<model>,
    setup_only=action.setup_only)`.  (Omit `setup_only` when false/absent.)
@@ -100,6 +98,6 @@ Repeat until done:
 ## Rules
 
 - Never make orchestration decisions independently — follow action.type exactly.
-- Never skip pipeline_report_result for spawn_agent, exec, write_file, or rename_branch actions.
+- Never skip pipeline_report_result for spawn_agent, exec, or write_file actions.
 - Never pass `isolation: "worktree"` to any Agent call.
 - On MCP error: surface the error to the user and stop.
