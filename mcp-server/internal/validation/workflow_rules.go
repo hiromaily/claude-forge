@@ -29,27 +29,44 @@ type WorkflowRules struct {
 
 // Rule is a single workflow enforcement rule.
 type Rule struct {
-	ID      string     `yaml:"id"`
-	When    Conditions `yaml:"when"`
-	Require string     `yaml:"require"`
-	Reason  string     `yaml:"reason"`
+	// ID is a unique, human-readable identifier referenced in error messages.
+	ID string `yaml:"id"`
+	// When is the condition set (AND-combined) that determines match.
+	When Conditions `yaml:"when"`
+	// Require is the enforcement action. MVP supports only "human_gate".
+	Require string `yaml:"require"`
+	// Reason is the short explanation surfaced to the user when a violation fires.
+	Reason string `yaml:"reason"`
 
 	// compiledTitleRegex is set by LoadRules after YAML parse. Not serialised.
 	compiledTitleRegex *regexp.Regexp `yaml:"-"`
 }
 
-// Conditions specifies when a rule matches a task.
+// Conditions specifies when a rule matches a task. Every specified field must
+// match (AND semantics); conditions left empty are ignored.
 type Conditions struct {
-	FilesMatch   []string `yaml:"files_match,omitempty"`
-	TitleMatches string   `yaml:"title_matches,omitempty"`
+	// FilesMatch is a list of doublestar glob patterns. A condition is met
+	// when any pattern matches any file in the task's Files list.
+	FilesMatch []string `yaml:"files_match,omitempty"`
+	// TitleMatches is a Go regex evaluated against the task title.
+	TitleMatches string `yaml:"title_matches,omitempty"`
 }
 
 // Violation describes a single rule violation produced by Validate.
+// It carries enough context for FormatReviewFindings to render a
+// human-readable review-tasks.md entry.
 type Violation struct {
-	TaskKey   string
+	// TaskKey is the map key of the violating task in the Validate input.
+	TaskKey string
+	// TaskTitle is a copy of the task's title for error rendering.
 	TaskTitle string
-	RuleID    string
-	Reason    string
+	// RuleID is the id of the rule whose conditions were met.
+	RuleID string
+	// Reason is copied from Rule.Reason at detection time.
+	Reason string
+	// MatchedBy is a comma-separated tag describing which conditions fired
+	// (e.g. "files_match:backend/**/*.proto,title_matches"). Format is
+	// intentionally short for inclusion in review-tasks.md bullets.
 	MatchedBy string
 }
 
@@ -57,7 +74,8 @@ type Violation struct {
 const WorkflowRulesFileName = ".specs/instructions.md"
 
 // requireHumanGate is the only permitted value of Rule.Require in MVP.
-const requireHumanGate = "human_gate"
+// The literal tracks state.ExecModeHumanGate — keep them in sync.
+const requireHumanGate = state.ExecModeHumanGate
 
 // LoadRules reads and parses {repoRoot}/.specs/instructions.md.
 //
@@ -170,15 +188,16 @@ func validateAndCompileRule(r *Rule) error {
 //
 // Pattern iteration order is preserved (first-win) so stable error
 // messages can reference the pattern that triggered the match.
+//
+// Patterns are pre-validated by validateAndCompileRule, so doublestar.Match
+// should never return an error for inputs produced by LoadRules. We still
+// defensively skip any pattern that does fail rather than panicking — this
+// only matters if matchFiles is called from a non-LoadRules code path.
 func matchFiles(patterns, files []string) string {
 	for _, p := range patterns {
 		for _, f := range files {
 			ok, err := doublestar.Match(p, f)
 			if err != nil {
-				// doublestar.Match only returns ErrBadPattern, which LoadRules
-				// could in principle catch earlier. Here we swallow it and
-				// move on to the next pattern rather than panicking on
-				// unvalidated input.
 				continue
 			}
 			if ok {

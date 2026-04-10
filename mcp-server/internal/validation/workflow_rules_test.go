@@ -79,6 +79,7 @@ func TestLoadRules_ParseErrors(t *testing.T) {
 		{"missing_id", "testdata/workflow_rules/rules_missing_id.md", "missing 'id'"},
 		{"no_frontmatter", "testdata/workflow_rules/rules_no_frontmatter.md", "missing YAML frontmatter"},
 		{"bad_glob", "testdata/workflow_rules/rules_bad_glob.md", "invalid files_match pattern"},
+		{"no_conditions", "testdata/workflow_rules/rules_no_conditions.md", "at least one of files_match, title_matches"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -226,6 +227,65 @@ func TestValidate_EmptyRules(t *testing.T) {
 	}
 	if got := validation.Validate(tasks, nil); len(got) != 0 {
 		t.Errorf("Validate with nil rules = %+v, want []", got)
+	}
+}
+
+// TestValidate_FilesMatchWithEmptyFilesList verifies that a task with an
+// empty Files slice does not trigger a files_match-only rule. This guards
+// against a regression where an unspecified files list would be treated
+// as matching any pattern.
+func TestValidate_FilesMatchWithEmptyFilesList(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	if err := copyFixture(t, "testdata/workflow_rules/rules_validate.md", filepath.Join(tmp, ".specs", "instructions.md")); err != nil {
+		t.Fatalf("copy fixture: %v", err)
+	}
+	rules, err := validation.LoadRules(tmp)
+	if err != nil {
+		t.Fatalf("LoadRules: %v", err)
+	}
+
+	tasks := map[string]state.Task{
+		"1": {Title: "No files task", Files: nil, ExecutionMode: "sequential"},
+		"2": {Title: "Empty files task", Files: []string{}, ExecutionMode: "sequential"},
+	}
+
+	v := validation.Validate(tasks, rules)
+	if len(v) != 0 {
+		t.Errorf("Validate with empty Files = %+v, want [] (files_match rule must not fire on empty list)", v)
+	}
+}
+
+// TestValidate_MatchedByFormat pins the delimited format of Violation.MatchedBy
+// so downstream consumers (FormatReviewFindings renderer) keep a stable contract.
+func TestValidate_MatchedByFormat(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	if err := copyFixture(t, "testdata/workflow_rules/rules_and_semantics.md", filepath.Join(tmp, ".specs", "instructions.md")); err != nil {
+		t.Fatalf("copy fixture: %v", err)
+	}
+	rules, err := validation.LoadRules(tmp)
+	if err != nil {
+		t.Fatalf("LoadRules: %v", err)
+	}
+
+	// Both conditions must match for rules_and_semantics.
+	tasks := map[string]state.Task{
+		"1": {Title: "Drop unused column", Files: []string{"backend/migrations/004.sql"}, ExecutionMode: "sequential"},
+	}
+	v := validation.Validate(tasks, rules)
+	if len(v) != 1 {
+		t.Fatalf("len(violations) = %d, want 1: %+v", len(v), v)
+	}
+	got := v[0].MatchedBy
+	// Format contract: "files_match:<pattern>,title_matches" when both fired.
+	if !strings.HasPrefix(got, "files_match:") {
+		t.Errorf("MatchedBy = %q, want prefix %q", got, "files_match:")
+	}
+	if !strings.Contains(got, ",title_matches") {
+		t.Errorf("MatchedBy = %q, want substring %q", got, ",title_matches")
 	}
 }
 
