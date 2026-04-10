@@ -758,6 +758,77 @@ files:
 	if slices.Contains(s.CompletedPhases, "phase-4") {
 		t.Errorf("phase-4 must NOT be in CompletedPhases after workflow rules violation; completed = %v", s.CompletedPhases)
 	}
+
+	// Assert: TaskRevisions was bumped so handlePhaseFour can enforce the
+	// retry limit on the next pipeline_next_action call.
+	if s.Revisions.TaskRevisions != 1 {
+		t.Errorf("Revisions.TaskRevisions = %d, want 1", s.Revisions.TaskRevisions)
+	}
+}
+
+// TestReportResult_Phase4WorkflowRulesBumpsTaskRevisions verifies that each
+// phase-4 workflow-rules violation increments Revisions.TaskRevisions so the
+// engine's MaxRevisionRetries guard (handlePhaseFour) eventually escalates.
+func TestReportResult_Phase4WorkflowRulesBumpsTaskRevisions(t *testing.T) {
+	t.Parallel()
+
+	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-bump-task-revisions")
+
+	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
+	instructionsBody := `---
+rules:
+  - id: proto-rule
+    when:
+      files_match: ["**/*.proto"]
+    require: human_gate
+    reason: "coordinate with proto repo"
+---
+`
+	if err := os.WriteFile(instructionsPath, []byte(instructionsBody), 0o644); err != nil {
+		t.Fatalf("write instructions: %v", err)
+	}
+
+	tasksBody := `# Tasks
+
+## Task 1: Update deal proto
+
+Add a new field to the deal proto.
+
+mode: sequential
+files:
+- backend/pkg/api/deal.proto
+`
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	// First call: violation → revision_required, TaskRevisions == 1.
+	resp1 := callPhase4Report(t, sm, workspace)
+	if resp1.NextActionHint != "revision_required" {
+		t.Fatalf("first call: NextActionHint = %q, want %q", resp1.NextActionHint, "revision_required")
+	}
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if s.Revisions.TaskRevisions != 1 {
+		t.Errorf("after first violation: TaskRevisions = %d, want 1", s.Revisions.TaskRevisions)
+	}
+
+	// Second call: same violation → another bump, TaskRevisions == 2.
+	// This matches MaxRevisionRetries, at which point handlePhaseFour returns
+	// a checkpoint on the next pipeline_next_action call (covered in engine tests).
+	resp2 := callPhase4Report(t, sm, workspace)
+	if resp2.NextActionHint != "revision_required" {
+		t.Fatalf("second call: NextActionHint = %q, want %q", resp2.NextActionHint, "revision_required")
+	}
+	s, err = state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if s.Revisions.TaskRevisions != 2 {
+		t.Errorf("after second violation: TaskRevisions = %d, want 2", s.Revisions.TaskRevisions)
+	}
 }
 
 // TestReportResult_Phase4NoInstructionsFile verifies that phase-4 completes

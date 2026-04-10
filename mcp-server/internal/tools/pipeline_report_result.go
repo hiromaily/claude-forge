@@ -316,7 +316,7 @@ func determineTransition(
 	// review-tasks.md and emit revision_required so the engine re-dispatches
 	// task-decomposer with the findings.
 	if in.phase == "phase-4" {
-		if resp, handled, err := applyWorkflowRules(in.workspace, artifactWritten); err != nil {
+		if resp, handled, err := applyWorkflowRules(sm, in.workspace, artifactWritten); err != nil {
 			return reportResultResponse{}, err
 		} else if handled {
 			return resp, nil
@@ -606,7 +606,13 @@ func clearCompletedFailTasks(sm *state.StateManager, workspace string) error {
 // Why here and not in validation.ValidateArtifacts: that API only checks
 // file presence and verdict tokens — it does not take the parsed tasks
 // map or the repo root. This helper owns the specific phase-4 wiring.
-func applyWorkflowRules(workspace, artifactWritten string) (reportResultResponse, bool, error) {
+//
+// On the violation path, this helper bumps state.Revisions.TaskRevisions via
+// sm.RevisionBump so the engine's retry-limit guard (handlePhaseFour) can
+// enforce MaxRevisionRetries on the next pipeline_next_action call. This
+// mirrors how VerdictRevise on phase-4b increments the same counter in
+// determineTransition.
+func applyWorkflowRules(sm *state.StateManager, workspace, artifactWritten string) (reportResultResponse, bool, error) {
 	tasksPath := filepath.Join(workspace, state.ArtifactTasks)
 	tasksData, err := os.ReadFile(tasksPath)
 	if err != nil {
@@ -652,6 +658,14 @@ func applyWorkflowRules(workspace, artifactWritten string) (reportResultResponse
 	body := validation.FormatReviewFindings(violations)
 	if err := os.WriteFile(reviewPath, []byte(body), 0o600); err != nil {
 		return reportResultResponse{}, false, fmt.Errorf("write %s: %w", state.ArtifactReviewTasks, err)
+	}
+
+	// Bump TaskRevisions so handlePhaseFour enforces MaxRevisionRetries on
+	// the next pipeline_next_action call. This mirrors how determineTransition
+	// bumps the same counter when phase-4b parses a REVISE verdict — keeping
+	// the retry-limit enforcement in one place (the engine).
+	if err := sm.RevisionBump(workspace, state.RevTypeTasks); err != nil {
+		return reportResultResponse{}, false, fmt.Errorf("revision bump (tasks): %w", err)
 	}
 
 	findings := make([]orchestrator.Finding, 0, len(violations))
