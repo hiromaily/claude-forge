@@ -3,6 +3,7 @@ module github.com/hiromaily/claude-forge/mcp-server
 go 1.26
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/mark3labs/mcp-go v0.45.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	golang.org/x/mod v0.34.0

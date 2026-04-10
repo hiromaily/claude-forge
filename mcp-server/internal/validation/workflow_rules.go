@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"gopkg.in/yaml.v3"
 )
 
@@ -152,4 +153,29 @@ func validateAndCompileRule(r *Rule) error {
 		r.compiledTitleRegex = re
 	}
 	return nil
+}
+
+// matchFiles returns the first pattern in patterns that matches any file
+// in files, or "" if no combination matches. Patterns use doublestar
+// syntax (supports `**` for recursive directory matching).
+//
+// Pattern iteration order is preserved (first-win) so stable error
+// messages can reference the pattern that triggered the match.
+func matchFiles(patterns, files []string) string {
+	for _, p := range patterns {
+		for _, f := range files {
+			ok, err := doublestar.Match(p, f)
+			if err != nil {
+				// doublestar.Match only returns ErrBadPattern, which LoadRules
+				// could in principle catch earlier. Here we swallow it and
+				// move on to the next pattern rather than panicking on
+				// unvalidated input.
+				continue
+			}
+			if ok {
+				return p
+			}
+		}
+	}
+	return ""
 }

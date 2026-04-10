@@ -132,6 +132,54 @@ func contains(s, substr string) bool {
 	return false
 }
 
+func TestMatchFiles(t *testing.T) {
+	cases := []struct {
+		name     string
+		patterns []string
+		files    []string
+		want     string // matched pattern, or "" if no match
+	}{
+		{
+			name:     "recursive_proto",
+			patterns: []string{"backend/**/*.proto"},
+			files:    []string{"backend/pkg/api/deal.proto"},
+			want:     "backend/**/*.proto",
+		},
+		{
+			name:     "any_file_matches_wins",
+			patterns: []string{"**/*.sql"},
+			files:    []string{"README.md", "backend/migrations/001.sql"},
+			want:     "**/*.sql",
+		},
+		{
+			name:     "no_match",
+			patterns: []string{"**/*.proto"},
+			files:    []string{"backend/pkg/api/deal.go"},
+			want:     "",
+		},
+		{
+			name:     "multiple_patterns_first_wins",
+			patterns: []string{"**/*.proto", "**/*.sql"},
+			files:    []string{"m.sql"},
+			want:     "**/*.sql",
+		},
+		{
+			name:     "empty_files",
+			patterns: []string{"**/*"},
+			files:    nil,
+			want:     "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := matchFiles(tc.patterns, tc.files)
+			if got != tc.want {
+				t.Errorf("matchFiles() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestLoadRules_MissingFile(t *testing.T) {
 	tmp := t.TempDir()
 	// No .specs/instructions.md created.
