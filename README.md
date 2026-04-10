@@ -498,6 +498,45 @@ Effort is detected from: `--effort=` flag > Jira story points > heuristic > defa
 
 ---
 
+## Repository workflow rules (`.specs/instructions.md`)
+
+You can commit a `.specs/instructions.md` file to your repository to enforce
+deterministic workflow rules at phase-4 completion. When a task matches a
+rule but is missing `mode: human_gate`, the engine automatically triggers
+REVISE and re-runs task-decomposer with the violation findings.
+
+### Quick example — dealon-app
+
+```markdown
+---
+rules:
+  - id: akupara-proto
+    when:
+      files_match:
+        - "backend/**/*.proto"
+        - "backend/gen/proto/**"
+    require: human_gate
+    reason: "akupara-proto の PR マージ状態を確認してください"
+
+  - id: destructive-migration
+    when:
+      files_match:
+        - "backend/migrations/**/*.sql"
+      title_matches: "(?i)drop\\s+(table|column)"
+    require: human_gate
+    reason: "破壊的マイグレーションのため stakeholder 確認が必要です"
+---
+```
+
+**Scope:** workflow rules only — not coding style, domain knowledge, or
+personal preferences. Keep those in `CLAUDE.md` / `AGENTS.md` /
+`.kiro/steering/`.
+
+See [`docs/reference/workflow-instructions.md`](docs/reference/workflow-instructions.md)
+for the full schema, evaluation flow, and failure modes.
+
+---
+
 ## How it works
 
 The pipeline is built on three core principles:
