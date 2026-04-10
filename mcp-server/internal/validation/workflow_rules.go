@@ -8,6 +8,7 @@
 package validation
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -109,14 +110,14 @@ func extractFrontmatter(data []byte) ([]byte, error) {
 	content = strings.TrimLeft(content, "\n\r\t ")
 
 	if !strings.HasPrefix(content, "---\n") && !strings.HasPrefix(content, "---\r\n") {
-		return nil, fmt.Errorf("missing YAML frontmatter: file must start with '---'")
+		return nil, errors.New("missing YAML frontmatter: file must start with '---'")
 	}
 
 	// Find the closing fence. It must appear on its own line.
 	// Walk lines starting after the opening fence.
 	lines := strings.Split(content, "\n")
 	if len(lines) < 2 {
-		return nil, fmt.Errorf("unterminated YAML frontmatter")
+		return nil, errors.New("unterminated YAML frontmatter")
 	}
 	// lines[0] is the opening "---"
 	var yamlLines []string
@@ -129,7 +130,7 @@ func extractFrontmatter(data []byte) ([]byte, error) {
 		yamlLines = append(yamlLines, lines[i])
 	}
 	if !closed {
-		return nil, fmt.Errorf("unterminated YAML frontmatter (no closing '---' line)")
+		return nil, errors.New("unterminated YAML frontmatter (no closing '---' line)")
 	}
 	return []byte(strings.Join(yamlLines, "\n")), nil
 }
@@ -137,16 +138,21 @@ func extractFrontmatter(data []byte) ([]byte, error) {
 // validateAndCompileRule checks structural invariants and pre-compiles regexes.
 func validateAndCompileRule(r *Rule) error {
 	if r.ID == "" {
-		return fmt.Errorf("missing 'id'")
+		return errors.New("missing 'id'")
 	}
 	if r.Reason == "" {
-		return fmt.Errorf("missing 'reason'")
+		return errors.New("missing 'reason'")
 	}
 	if r.Require != requireHumanGate {
 		return fmt.Errorf("require: %q not supported (only %q in MVP)", r.Require, requireHumanGate)
 	}
 	if len(r.When.FilesMatch) == 0 && r.When.TitleMatches == "" {
-		return fmt.Errorf("when: must specify at least one of files_match, title_matches")
+		return errors.New("when: must specify at least one of files_match, title_matches")
+	}
+	for _, p := range r.When.FilesMatch {
+		if !doublestar.ValidatePattern(p) {
+			return fmt.Errorf("invalid files_match pattern %q", p)
+		}
 	}
 	if r.When.TitleMatches != "" {
 		re, err := regexp.Compile(r.When.TitleMatches)
@@ -219,8 +225,9 @@ func Validate(tasks map[string]state.Task, rules *WorkflowRules) []Violation {
 		if task.ExecutionMode == state.ExecModeHumanGate {
 			continue // already correctly marked; never a violation
 		}
-		for _, r := range rules.Rules {
-			ok, matchedBy := ruleMatches(&r, task)
+		for i := range rules.Rules {
+			r := &rules.Rules[i]
+			ok, matchedBy := ruleMatches(r, task)
 			if ok {
 				violations = append(violations, Violation{
 					TaskKey:   k,
@@ -255,11 +262,6 @@ func ruleMatches(r *Rule, task state.Task) (bool, string) {
 			return false, ""
 		}
 		parts = append(parts, "title_matches")
-	}
-	if len(parts) == 0 {
-		// No conditions at all — should have been caught by LoadRules.
-		// Treat as non-match to avoid false positives.
-		return false, ""
 	}
 	return true, strings.Join(parts, ",")
 }
