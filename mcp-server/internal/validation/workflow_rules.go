@@ -263,3 +263,29 @@ func ruleMatches(r *Rule, task state.Task) (bool, string) {
 	}
 	return true, strings.Join(parts, ",")
 }
+
+// FormatReviewFindings renders violations as the body of review-tasks.md
+// that the existing phase-4b revision loop understands. It emits a top-level
+// REVISE verdict token followed by one section per violation.
+//
+// Returns "" when violations is empty so callers can check length before
+// writing the file.
+func FormatReviewFindings(violations []Violation) string {
+	if len(violations) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("# Task Review — Workflow Rules Violations\n\n")
+	sb.WriteString("**Verdict:** REVISE\n\n")
+	sb.WriteString("The following tasks violate workflow rules declared in `.specs/instructions.md`.\n")
+	sb.WriteString("Each violating task must be re-generated with `mode: human_gate` set.\n\n")
+
+	for _, v := range violations {
+		fmt.Fprintf(&sb, "## Task %s: %s\n\n", v.TaskKey, v.TaskTitle)
+		fmt.Fprintf(&sb, "- rule: %s\n", v.RuleID)
+		fmt.Fprintf(&sb, "- matched_by: %s\n", v.MatchedBy)
+		fmt.Fprintf(&sb, "- reason: %s\n", v.Reason)
+		fmt.Fprintf(&sb, "- required fix: set `mode: human_gate` on this task.\n\n")
+	}
+	return sb.String()
+}

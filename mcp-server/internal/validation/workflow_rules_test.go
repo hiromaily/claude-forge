@@ -343,3 +343,46 @@ func TestValidate_EmptyRules(t *testing.T) {
 		t.Errorf("Validate with nil rules = %+v, want []", got)
 	}
 }
+
+func TestFormatReviewFindings(t *testing.T) {
+	violations := []Violation{
+		{
+			TaskKey:   "1",
+			TaskTitle: "Update deal proto",
+			RuleID:    "akupara-proto",
+			Reason:    "akupara-proto coordination required",
+			MatchedBy: "files_match:backend/**/*.proto",
+		},
+		{
+			TaskKey:   "4",
+			TaskTitle: "Drop column users.old",
+			RuleID:    "drop-col",
+			Reason:    "stakeholder approval required",
+			MatchedBy: "title_matches",
+		},
+	}
+	got := FormatReviewFindings(violations)
+
+	wantSubstrings := []string{
+		"REVISE",
+		"Task 1: Update deal proto",
+		"rule: akupara-proto",
+		"akupara-proto coordination required",
+		"mode: human_gate",
+		"Task 4: Drop column users.old",
+		"rule: drop-col",
+		"stakeholder approval required",
+	}
+	for _, want := range wantSubstrings {
+		if !contains(got, want) {
+			t.Errorf("FormatReviewFindings output missing %q\n---\n%s\n---", want, got)
+		}
+	}
+}
+
+func TestFormatReviewFindings_Empty(t *testing.T) {
+	got := FormatReviewFindings(nil)
+	if got != "" {
+		t.Errorf("FormatReviewFindings(nil) = %q, want empty", got)
+	}
+}
