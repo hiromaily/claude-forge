@@ -12,10 +12,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"gopkg.in/yaml.v3"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
 // WorkflowRules is the root YAML schema of .specs/instructions.md.
@@ -187,4 +190,76 @@ func matchTitle(re *regexp.Regexp, title string) bool {
 		return false
 	}
 	return re.MatchString(title)
+}
+
+// Validate walks tasks and returns violations: tasks that match any rule's
+// `when` conditions but do not have ExecutionMode == "human_gate".
+//
+// Semantics:
+//   - Within a rule's `when`, all specified conditions must match (AND).
+//   - A task may violate multiple rules; every violation is reported.
+//   - Returns nil (empty slice) if rules is nil or has zero rules.
+//   - Violations are sorted by (TaskKey asc, RuleID asc) for deterministic
+//     error messages.
+func Validate(tasks map[string]state.Task, rules *WorkflowRules) []Violation {
+	if rules == nil || len(rules.Rules) == 0 {
+		return nil
+	}
+
+	// Collect task keys in deterministic order.
+	keys := make([]string, 0, len(tasks))
+	for k := range tasks {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var violations []Violation
+	for _, k := range keys {
+		task := tasks[k]
+		if task.ExecutionMode == state.ExecModeHumanGate {
+			continue // already correctly marked; never a violation
+		}
+		for _, r := range rules.Rules {
+			ok, matchedBy := ruleMatches(&r, task)
+			if ok {
+				violations = append(violations, Violation{
+					TaskKey:   k,
+					TaskTitle: task.Title,
+					RuleID:    r.ID,
+					Reason:    r.Reason,
+					MatchedBy: matchedBy,
+				})
+			}
+		}
+	}
+	return violations
+}
+
+// ruleMatches applies AND semantics across conditions. Returns (matched,
+// matchedBy). matchedBy is a short human-readable tag indicating which
+// condition(s) triggered the match — used in error messages.
+func ruleMatches(r *Rule, task state.Task) (bool, string) {
+	hasFiles := len(r.When.FilesMatch) > 0
+	hasTitle := r.When.TitleMatches != ""
+
+	var parts []string
+	if hasFiles {
+		matched := matchFiles(r.When.FilesMatch, task.Files)
+		if matched == "" {
+			return false, ""
+		}
+		parts = append(parts, "files_match:"+matched)
+	}
+	if hasTitle {
+		if !matchTitle(r.compiledTitleRegex, task.Title) {
+			return false, ""
+		}
+		parts = append(parts, "title_matches")
+	}
+	if len(parts) == 0 {
+		// No conditions at all — should have been caught by LoadRules.
+		// Treat as non-match to avoid false positives.
+		return false, ""
+	}
+	return true, strings.Join(parts, ",")
 }

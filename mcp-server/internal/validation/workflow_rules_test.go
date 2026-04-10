@@ -4,7 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"testing"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
 var (
@@ -230,4 +233,113 @@ func mustCompile(t *testing.T, pat string) *regexp.Regexp {
 		t.Fatalf("compile %q: %v", pat, err)
 	}
 	return re
+}
+
+func TestValidate(t *testing.T) {
+	// Build a rules struct directly instead of going through LoadRules
+	// so this test isolates Validate behaviour.
+	rules := &WorkflowRules{
+		Rules: []Rule{
+			{
+				ID:      "akupara-proto",
+				When:    Conditions{FilesMatch: []string{"backend/**/*.proto"}},
+				Require: "human_gate",
+				Reason:  "akupara-proto coordination required",
+			},
+			{
+				ID:                 "drop-col",
+				When:               Conditions{TitleMatches: `(?i)drop column`},
+				Require:            "human_gate",
+				Reason:             "stakeholder approval required",
+				compiledTitleRegex: mustCompile(t, `(?i)drop column`),
+			},
+		},
+	}
+
+	tasks := map[string]state.Task{
+		"1": {
+			Title:         "Update deal proto",
+			Files:         []string{"backend/pkg/api/deal.proto"},
+			ExecutionMode: "sequential",
+		},
+		"2": {
+			Title:         "Refactor helper",
+			Files:         []string{"backend/pkg/util/helper.go"},
+			ExecutionMode: "sequential",
+		},
+		"3": {
+			Title:         "Drop column users.legacy_token",
+			Files:         []string{"backend/migrations/003.sql"},
+			ExecutionMode: "human_gate", // already correct — no violation
+		},
+		"4": {
+			Title:         "Drop column users.old",
+			Files:         []string{"backend/migrations/004.sql"},
+			ExecutionMode: "sequential", // violates drop-col rule
+		},
+	}
+
+	violations := Validate(tasks, rules)
+
+	// Task 1 violates akupara-proto. Task 4 violates drop-col.
+	// Task 2 is clean. Task 3 is already human_gate.
+	if got := len(violations); got != 2 {
+		t.Fatalf("len(violations) = %d, want 2: %+v", got, violations)
+	}
+
+	// Violations should be sorted by TaskKey for determinism.
+	sort.SliceStable(violations, func(i, j int) bool {
+		return violations[i].TaskKey < violations[j].TaskKey
+	})
+
+	if violations[0].TaskKey != "1" || violations[0].RuleID != "akupara-proto" {
+		t.Errorf("violations[0] = %+v, want task 1 / akupara-proto", violations[0])
+	}
+	if violations[1].TaskKey != "4" || violations[1].RuleID != "drop-col" {
+		t.Errorf("violations[1] = %+v, want task 4 / drop-col", violations[1])
+	}
+}
+
+func TestValidate_AndSemantics(t *testing.T) {
+	// Rule requires BOTH files_match AND title_matches.
+	rules := &WorkflowRules{
+		Rules: []Rule{
+			{
+				ID: "both",
+				When: Conditions{
+					FilesMatch:   []string{"backend/migrations/**/*.sql"},
+					TitleMatches: `(?i)drop`,
+				},
+				Require:            "human_gate",
+				Reason:             "combined",
+				compiledTitleRegex: mustCompile(t, `(?i)drop`),
+			},
+		},
+	}
+
+	tasks := map[string]state.Task{
+		// files match but title does not
+		"1": {Title: "Add index", Files: []string{"backend/migrations/010.sql"}, ExecutionMode: "sequential"},
+		// title matches but files do not
+		"2": {Title: "Drop unused flag", Files: []string{"frontend/app/flags.ts"}, ExecutionMode: "sequential"},
+		// both match
+		"3": {Title: "Drop column", Files: []string{"backend/migrations/011.sql"}, ExecutionMode: "sequential"},
+	}
+
+	v := Validate(tasks, rules)
+	if len(v) != 1 || v[0].TaskKey != "3" {
+		t.Errorf("Validate = %+v, want exactly task 3 violating", v)
+	}
+}
+
+func TestValidate_EmptyRules(t *testing.T) {
+	tasks := map[string]state.Task{
+		"1": {Title: "Anything", Files: []string{"a.go"}, ExecutionMode: "sequential"},
+	}
+	if got := Validate(tasks, &WorkflowRules{}); len(got) != 0 {
+		t.Errorf("Validate with empty rules = %+v, want []", got)
+	}
+	if got := Validate(tasks, nil); len(got) != 0 {
+		t.Errorf("Validate with nil rules = %+v, want []", got)
+	}
 }
