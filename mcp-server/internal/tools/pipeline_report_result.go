@@ -590,9 +590,13 @@ func clearCompletedFailTasks(sm *state.StateManager, workspace string) error {
 // applyWorkflowRules runs .specs/instructions.md rules against the phase-4
 // tasks.md output. Returns (handled=true, resp) when violations exist and
 // the caller should return without calling PhaseComplete. Returns
-// (handled=false, zero) when no rules file exists, no violations are found,
-// or the tasks.md cannot be located (the existing artifact validation will
-// already have caught that case).
+// (handled=false, zero) in any of these pass-through cases:
+//   - tasks.md cannot be read or parsed (the existing artifact validator
+//     will surface the failure).
+//   - no violations were found. This also covers the "no rules file"
+//     case: validation.LoadRules returns an empty rule set when
+//     .specs/instructions.md is absent, so Validate yields zero
+//     violations and we proceed unchanged.
 //
 // Why here and not in validation.ValidateArtifacts: that API only checks
 // file presence and verdict tokens — it does not take the parsed tasks
@@ -611,6 +615,13 @@ func applyWorkflowRules(workspace, artifactWritten string) (reportResultResponse
 		return reportResultResponse{}, false, nil
 	}
 
+	// Workflow rules only apply when the workspace follows the
+	// .specs/<spec>/ layout. Any other layout (e.g. flat test fixtures)
+	// falls through silently — fail-open rather than mis-resolving the
+	// repo root into an unrelated directory.
+	if filepath.Base(filepath.Dir(workspace)) != ".specs" {
+		return reportResultResponse{}, false, nil
+	}
 	// Repo root is two levels up from a .specs/<spec-name>/ workspace.
 	repoRoot := filepath.Dir(filepath.Dir(workspace))
 	rules, err := validation.LoadRules(repoRoot)
