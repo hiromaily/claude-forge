@@ -77,6 +77,61 @@ func readFile(p string) ([]byte, error)  { return osReadFile(p) }
 func mkdirAll(p string) error            { return osMkdirAll(p, 0o755) }
 func writeFile(p string, b []byte) error { return osWriteFile(p, b, 0o644) }
 
+func TestLoadRules_ParseErrors(t *testing.T) {
+	cases := []struct {
+		name        string
+		fixture     string
+		wantErrSubs string
+	}{
+		{"unknown_field", "testdata/workflow_rules/rules_unknown_field.md", "field requires not found"},
+		{"bad_regex", "testdata/workflow_rules/rules_bad_regex.md", "invalid title_matches regex"},
+		{"bad_require", "testdata/workflow_rules/rules_bad_require.md", "not supported"},
+		{"missing_id", "testdata/workflow_rules/rules_missing_id.md", "missing 'id'"},
+		{"no_frontmatter", "testdata/workflow_rules/rules_no_frontmatter.md", "missing YAML frontmatter"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			if err := copyFixture(t, tc.fixture, filepath.Join(tmp, ".specs", "instructions.md")); err != nil {
+				t.Fatalf("copy fixture: %v", err)
+			}
+			_, err := LoadRules(tmp)
+			if err == nil {
+				t.Fatalf("LoadRules(%s): expected error, got nil", tc.fixture)
+			}
+			if !contains(err.Error(), tc.wantErrSubs) {
+				t.Errorf("LoadRules(%s): error %q does not contain %q",
+					tc.fixture, err.Error(), tc.wantErrSubs)
+			}
+		})
+	}
+}
+
+func TestLoadRules_Empty(t *testing.T) {
+	tmp := t.TempDir()
+	if err := copyFixture(t, "testdata/workflow_rules/rules_empty.md", filepath.Join(tmp, ".specs", "instructions.md")); err != nil {
+		t.Fatalf("copy fixture: %v", err)
+	}
+	rules, err := LoadRules(tmp)
+	if err != nil {
+		t.Fatalf("LoadRules: %v", err)
+	}
+	if len(rules.Rules) != 0 {
+		t.Errorf("rule count = %d, want 0", len(rules.Rules))
+	}
+}
+
+// contains returns true iff substr appears in s. Local helper to avoid
+// pulling strings into the test file's top-of-file import block twice.
+func contains(s, substr string) bool {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestLoadRules_MissingFile(t *testing.T) {
 	tmp := t.TempDir()
 	// No .specs/instructions.md created.
