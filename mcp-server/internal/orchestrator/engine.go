@@ -302,18 +302,22 @@ func (*Engine) handleCheckpointA(st *state.State) (Action, error) {
 	), nil
 }
 
-// handlePhaseFour handles Phase 4 (task decomposer).
+// handlePhaseFour handles Phase 4 (task decomposer) with two entry modes:
 //
-// Fresh run: no review-tasks.md → spawn task-decomposer with [design.md] only.
+//   - Fresh run (no review-tasks.md): spawn task-decomposer with [design.md].
+//   - Revision run (review-tasks.md present, written by applyWorkflowRules
+//     on a workflow-rules violation): spawn task-decomposer with
+//     [design.md, review-tasks.md] so the decomposer sees the findings, or
+//     emit a checkpoint if Revisions.TaskRevisions has hit MaxRevisionRetries.
 //
-// Revision run: review-tasks.md exists (written by applyWorkflowRules on a
-// workflow-rules violation) → spawn task-decomposer with [design.md, review-tasks.md]
-// so the decomposer sees the findings, or emit a checkpoint if the revision
-// retry limit has been reached. This mirrors handlePhaseFourB's REVISE path.
+// The retry-limit checkpoint name is "task-workflow-rules-retry-limit",
+// distinct from the phase-4b "task-retry-limit", so logs and analytics can
+// tell the two escalation sources apart. This mirrors handlePhaseFourB's
+// REVISE path structurally.
 func (*Engine) handlePhaseFour(st *state.State) (Action, error) {
 	reviewPath := filepath.Join(st.Workspace, state.ArtifactReviewTasks)
 
-	// Fresh run: no prior workflow-rules findings.
+	// Fresh run: no prior workflow-rules findings on disk.
 	if _, err := os.Stat(reviewPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return Action{}, fmt.Errorf("handlePhaseFour: stat %s: %w", reviewPath, err)
@@ -328,11 +332,8 @@ func (*Engine) handlePhaseFour(st *state.State) (Action, error) {
 		), nil
 	}
 
-	// Revision path: workflow-rules emitted findings in review-tasks.md.
-	// Enforce the same retry limit handlePhaseFourB uses so a misbehaving
-	// decomposer cannot loop forever under --auto mode. The checkpoint name
-	// is distinct from the phase-4b "task-retry-limit" so logs and analytics
-	// can tell the two escalation sources apart.
+	// Revision run: enforce the same retry limit handlePhaseFourB uses so a
+	// misbehaving decomposer cannot loop forever under --auto mode.
 	if st.Revisions.TaskRevisions >= state.MaxRevisionRetries {
 		return NewCheckpointAction(
 			"task-workflow-rules-retry-limit",

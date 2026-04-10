@@ -655,6 +655,12 @@ func applyWorkflowRules(sm *state.StateManager, workspace, artifactWritten strin
 		return reportResultResponse{}, false, nil
 	}
 
+	// Order matters: write review-tasks.md FIRST, then bump TaskRevisions.
+	// If RevisionBump fails, the orchestrator still sees review-tasks.md on
+	// the next pipeline_next_action call and handlePhaseFour re-dispatches
+	// task-decomposer — we just lose one retry-limit tick, which is
+	// recoverable. Reversing the order would risk bumping the counter with
+	// no findings file on disk, which would waste a retry slot silently.
 	body := validation.FormatReviewFindings(violations)
 	if err := os.WriteFile(reviewPath, []byte(body), 0o600); err != nil {
 		return reportResultResponse{}, false, fmt.Errorf("write %s: %w", state.ArtifactReviewTasks, err)

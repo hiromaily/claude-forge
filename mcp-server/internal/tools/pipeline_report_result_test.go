@@ -679,17 +679,12 @@ func callPhase4Report(t *testing.T, sm *state.StateManager, workspace string) re
 	return parsePRRResponse(t, textContent(res))
 }
 
-// TestReportResult_Phase4WorkflowRulesViolation verifies that when a phase-4
-// tasks.md violates a rule in .specs/instructions.md, pipeline_report_result
-// writes review-tasks.md, returns revision_required, and does NOT mark
-// phase-4 as complete.
-func TestReportResult_Phase4WorkflowRulesViolation(t *testing.T) {
-	t.Parallel()
-
-	// Layout: tmpRoot/.specs/<spec>/ is the workspace; repo root is tmpRoot.
-	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-test-workflow-rules")
-
-	// Write .specs/instructions.md at the repo root.
+// writeProtoRuleViolationFixture writes a canonical .specs/instructions.md
+// with a single "proto-rule" (human_gate required for proto files) and a
+// tasks.md that violates it (a sequential proto task). Shared by the phase-4
+// workflow-rules tests so a rule-shape change only needs one update.
+func writeProtoRuleViolationFixture(t *testing.T, tmpRoot, workspace string) {
+	t.Helper()
 	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
 	instructionsBody := `---
 rules:
@@ -703,8 +698,6 @@ rules:
 	if err := os.WriteFile(instructionsPath, []byte(instructionsBody), 0o644); err != nil {
 		t.Fatalf("write instructions: %v", err)
 	}
-
-	// Write a tasks.md that violates the rule: proto file with mode: sequential.
 	tasksBody := `# Tasks
 
 ## Task 1: Update deal proto
@@ -718,6 +711,18 @@ files:
 	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
 		t.Fatalf("write tasks.md: %v", err)
 	}
+}
+
+// TestReportResult_Phase4WorkflowRulesViolation verifies that when a phase-4
+// tasks.md violates a rule in .specs/instructions.md, pipeline_report_result
+// writes review-tasks.md, returns revision_required, and does NOT mark
+// phase-4 as complete.
+func TestReportResult_Phase4WorkflowRulesViolation(t *testing.T) {
+	t.Parallel()
+
+	// Layout: tmpRoot/.specs/<spec>/ is the workspace; repo root is tmpRoot.
+	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-test-workflow-rules")
+	writeProtoRuleViolationFixture(t, tmpRoot, workspace)
 
 	resp := callPhase4Report(t, sm, workspace)
 
@@ -773,34 +778,7 @@ func TestReportResult_Phase4WorkflowRulesBumpsTaskRevisions(t *testing.T) {
 	t.Parallel()
 
 	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-bump-task-revisions")
-
-	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
-	instructionsBody := `---
-rules:
-  - id: proto-rule
-    when:
-      files_match: ["**/*.proto"]
-    require: human_gate
-    reason: "coordinate with proto repo"
----
-`
-	if err := os.WriteFile(instructionsPath, []byte(instructionsBody), 0o644); err != nil {
-		t.Fatalf("write instructions: %v", err)
-	}
-
-	tasksBody := `# Tasks
-
-## Task 1: Update deal proto
-
-Add a new field to the deal proto.
-
-mode: sequential
-files:
-- backend/pkg/api/deal.proto
-`
-	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
-		t.Fatalf("write tasks.md: %v", err)
-	}
+	writeProtoRuleViolationFixture(t, tmpRoot, workspace)
 
 	// First call: violation → revision_required, TaskRevisions == 1.
 	resp1 := callPhase4Report(t, sm, workspace)
