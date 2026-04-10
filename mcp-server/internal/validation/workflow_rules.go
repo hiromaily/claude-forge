@@ -179,3 +179,12 @@ func matchFiles(patterns, files []string) string {
 	}
 	return ""
 }
+
+// matchTitle reports whether the task title matches the pre-compiled regex.
+// A nil regex never matches (used by Conditions with no title_matches).
+func matchTitle(re *regexp.Regexp, title string) bool {
+	if re == nil {
+		return false
+	}
+	return re.MatchString(title)
+}

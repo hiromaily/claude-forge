@@ -3,6 +3,7 @@ package validation
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -193,4 +194,40 @@ func TestLoadRules_MissingFile(t *testing.T) {
 	if len(rules.Rules) != 0 {
 		t.Errorf("rule count = %d, want 0", len(rules.Rules))
 	}
+}
+
+func TestMatchTitle(t *testing.T) {
+	re := mustCompile(t, `(?i)drop\s+(table|column)`)
+	cases := []struct {
+		name  string
+		title string
+		want  bool
+	}{
+		{"match_upper", "DROP COLUMN users.legacy", true},
+		{"match_lower", "drop table old_events", true},
+		{"match_with_prefix", "[task 3] drop column", true},
+		{"no_match", "add column users.new", false},
+		{"nil_regex_no_match", "anything", false}, // see case below
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var useRegex *regexp.Regexp
+			if tc.name != "nil_regex_no_match" {
+				useRegex = re
+			}
+			got := matchTitle(useRegex, tc.title)
+			if got != tc.want {
+				t.Errorf("matchTitle() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func mustCompile(t *testing.T, pat string) *regexp.Regexp {
+	t.Helper()
+	re, err := regexp.Compile(pat)
+	if err != nil {
+		t.Fatalf("compile %q: %v", pat, err)
+	}
+	return re
 }
