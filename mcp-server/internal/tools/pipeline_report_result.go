@@ -627,7 +627,7 @@ func applyWorkflowRules(workspace, artifactWritten string) (reportResultResponse
 
 	body := validation.FormatReviewFindings(violations)
 	reviewPath := filepath.Join(workspace, "review-tasks.md")
-	if err := os.WriteFile(reviewPath, []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(reviewPath, []byte(body), 0o600); err != nil {
 		return reportResultResponse{}, false, fmt.Errorf("write review-tasks.md: %w", err)
 	}
 
