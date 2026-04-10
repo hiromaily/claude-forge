@@ -4,6 +4,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -310,6 +311,18 @@ func determineTransition(
 		}
 	}
 
+	// Phase-4 (task-decomposer) completion gate: apply deterministic workflow
+	// rules from .specs/instructions.md. If violations exist, write
+	// review-tasks.md and emit revision_required so the engine re-dispatches
+	// task-decomposer with the findings.
+	if in.phase == "phase-4" {
+		if resp, handled, err := applyWorkflowRules(in.workspace, artifactWritten); err != nil {
+			return reportResultResponse{}, err
+		} else if handled {
+			return resp, nil
+		}
+	}
+
 	if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
 		return reportResultResponse{}, err
 	}
@@ -572,4 +585,67 @@ func clearCompletedFailTasks(sm *state.StateManager, workspace string) error {
 		}
 		return nil
 	})
+}
+
+// applyWorkflowRules runs .specs/instructions.md rules against the phase-4
+// tasks.md output. Returns (handled=true, resp) when violations exist and
+// the caller should return without calling PhaseComplete. Returns
+// (handled=false, zero) when no rules file exists, no violations are found,
+// or the tasks.md cannot be located (the existing artifact validation will
+// already have caught that case).
+//
+// Why here and not in validation.ValidateArtifacts: that API only checks
+// file presence and verdict tokens — it does not take the parsed tasks
+// map or the repo root. This helper owns the specific phase-4 wiring.
+func applyWorkflowRules(workspace, artifactWritten string) (reportResultResponse, bool, error) {
+	tasksPath := filepath.Join(workspace, "tasks.md")
+	tasksData, err := os.ReadFile(tasksPath)
+	if err != nil {
+		// tasks.md missing: let the normal artifact validator handle it.
+		return reportResultResponse{}, false, nil
+	}
+
+	tasks, err := ParseTasksMd(string(tasksData))
+	if err != nil {
+		// Let the caller fail via artifact validation or parser errors.
+		return reportResultResponse{}, false, nil
+	}
+
+	// Repo root is two levels up from a .specs/<spec-name>/ workspace.
+	repoRoot := filepath.Dir(filepath.Dir(workspace))
+	rules, err := validation.LoadRules(repoRoot)
+	if err != nil {
+		// Rule file exists but is malformed. Surface as an error so the
+		// user sees the parse failure instead of silently skipping.
+		return reportResultResponse{}, false, fmt.Errorf("load workflow rules: %w", err)
+	}
+
+	violations := validation.Validate(tasks, rules)
+	if len(violations) == 0 {
+		return reportResultResponse{}, false, nil
+	}
+
+	body := validation.FormatReviewFindings(violations)
+	reviewPath := filepath.Join(workspace, "review-tasks.md")
+	if err := os.WriteFile(reviewPath, []byte(body), 0o644); err != nil {
+		return reportResultResponse{}, false, fmt.Errorf("write review-tasks.md: %w", err)
+	}
+
+	findings := make([]orchestrator.Finding, 0, len(violations))
+	for _, v := range violations {
+		findings = append(findings, orchestrator.Finding{
+			Severity: orchestrator.SeverityCritical,
+			Description: fmt.Sprintf("task %s (%s) violates rule %q: %s",
+				v.TaskKey, v.TaskTitle, v.RuleID, v.Reason),
+		})
+	}
+
+	return reportResultResponse{
+		StateUpdated:    true,
+		ArtifactWritten: artifactWritten,
+		VerdictParsed:   "REVISE",
+		Findings:        findings,
+		NextActionHint:  "revision_required",
+		Warning:         fmt.Sprintf("phase-4 workflow rules: %d violation(s) — see review-tasks.md", len(violations)),
+	}, true, nil
 }
