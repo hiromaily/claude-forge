@@ -314,7 +314,7 @@ func (*Engine) handleCheckpointA(st *state.State) (Action, error) {
 // distinct from the phase-4b "task-retry-limit", so logs and analytics can
 // tell the two escalation sources apart. This mirrors handlePhaseFourB's
 // REVISE path structurally.
-func (*Engine) handlePhaseFour(st *state.State) (Action, error) {
+func (e *Engine) handlePhaseFour(st *state.State) (Action, error) { //nolint:revive // e intentionally unused; dispatch table method
 	reviewPath := filepath.Join(st.Workspace, state.ArtifactReviewTasks)
 
 	// Fresh run: no prior workflow-rules findings on disk.
@@ -322,18 +322,30 @@ func (*Engine) handlePhaseFour(st *state.State) (Action, error) {
 		if !errors.Is(err, os.ErrNotExist) {
 			return Action{}, fmt.Errorf("handlePhaseFour: stat %s: %w", reviewPath, err)
 		}
-		return NewSpawnAgentAction(
-			agentTaskDecomposer,
-			"Decompose the design into implementation tasks.",
-			state.DefaultModel,
-			PhaseFour,
-			[]string{state.ArtifactDesign},
-			state.ArtifactTasks,
-		), nil
+		return phaseFourFreshAction(), nil
 	}
 
-	// Revision run: enforce the same retry limit handlePhaseFourB uses so a
-	// misbehaving decomposer cannot loop forever under --auto mode.
+	// Revision run: enforce retry limit, then re-spawn.
+	return phaseFourRevisionAction(st)
+}
+
+// phaseFourFreshAction returns the spawn action for a first-time phase-4 run.
+func phaseFourFreshAction() Action {
+	return NewSpawnAgentAction(
+		agentTaskDecomposer,
+		"Decompose the design into implementation tasks.",
+		state.DefaultModel,
+		PhaseFour,
+		[]string{state.ArtifactDesign},
+		state.ArtifactTasks,
+	)
+}
+
+// phaseFourRevisionAction handles the phase-4 revision run after a
+// workflow-rules violation. Enforces MaxRevisionRetries before re-spawning.
+func phaseFourRevisionAction(st *state.State) (Action, error) {
+	// Enforce the same retry limit handlePhaseFourB uses so a misbehaving
+	// decomposer cannot loop forever under --auto mode.
 	if st.Revisions.TaskRevisions >= state.MaxRevisionRetries {
 		return NewCheckpointAction(
 			"task-workflow-rules-retry-limit",

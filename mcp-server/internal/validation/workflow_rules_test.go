@@ -314,7 +314,7 @@ func TestFormatReviewFindings(t *testing.T) {
 		"REVISE",
 		"Task 1: Update deal proto",
 		"rule: main-proto",
-		"mail-proto coordination required",
+		"main-proto coordination required",
 		"mode: human_gate",
 		"Task 4: Drop column users.old",
 		"rule: drop-col",

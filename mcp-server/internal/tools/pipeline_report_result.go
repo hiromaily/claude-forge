@@ -613,36 +613,11 @@ func clearCompletedFailTasks(sm *state.StateManager, workspace string) error {
 // mirrors how VerdictRevise on phase-4b increments the same counter in
 // determineTransition.
 func applyWorkflowRules(sm *state.StateManager, workspace, artifactWritten string) (reportResultResponse, bool, error) {
-	tasksPath := filepath.Join(workspace, state.ArtifactTasks)
-	tasksData, err := os.ReadFile(tasksPath)
-	if err != nil {
-		// tasks.md missing: let the normal artifact validator handle it.
-		return reportResultResponse{}, false, nil
+	tasks, rules, reviewPath, ok, err := loadPhase4Context(workspace)
+	if !ok || err != nil {
+		return reportResultResponse{}, false, err
 	}
 
-	tasks, err := ParseTasksMd(string(tasksData))
-	if err != nil {
-		// Let the caller fail via artifact validation or parser errors.
-		return reportResultResponse{}, false, nil
-	}
-
-	// Workflow rules only apply when the workspace follows the
-	// .specs/<spec>/ layout. Any other layout (e.g. flat test fixtures)
-	// falls through silently — fail-open rather than mis-resolving the
-	// repo root into an unrelated directory.
-	if filepath.Base(filepath.Dir(workspace)) != ".specs" {
-		return reportResultResponse{}, false, nil
-	}
-	// Repo root is two levels up from a .specs/<spec-name>/ workspace.
-	repoRoot := filepath.Dir(filepath.Dir(workspace))
-	rules, err := validation.LoadRules(repoRoot)
-	if err != nil {
-		// Rule file exists but is malformed. Surface as an error so the
-		// user sees the parse failure instead of silently skipping.
-		return reportResultResponse{}, false, fmt.Errorf("load workflow rules: %w", err)
-	}
-
-	reviewPath := filepath.Join(workspace, state.ArtifactReviewTasks)
 	violations := validation.Validate(tasks, rules)
 	if len(violations) == 0 {
 		// Pass-through: ensure any stale review-tasks.md from an earlier
@@ -655,15 +630,61 @@ func applyWorkflowRules(sm *state.StateManager, workspace, artifactWritten strin
 		return reportResultResponse{}, false, nil
 	}
 
-	// Order matters: write review-tasks.md FIRST, then bump TaskRevisions.
-	// If RevisionBump fails, the orchestrator still sees review-tasks.md on
-	// the next pipeline_next_action call and handlePhaseFour re-dispatches
-	// task-decomposer — we just lose one retry-limit tick, which is
-	// recoverable. Reversing the order would risk bumping the counter with
-	// no findings file on disk, which would waste a retry slot silently.
-	body := validation.FormatReviewFindings(violations)
-	if err := os.WriteFile(reviewPath, []byte(body), 0o600); err != nil {
-		return reportResultResponse{}, false, fmt.Errorf("write %s: %w", state.ArtifactReviewTasks, err)
+	resp, err := writeViolationResponse(sm, workspace, reviewPath, artifactWritten, violations)
+	if err != nil {
+		return reportResultResponse{}, false, err
+	}
+	return resp, true, nil
+}
+
+// loadPhase4Context reads tasks.md, checks the workspace layout, and loads
+// workflow rules. Returns ok=false (no error) for silent pass-through cases
+// where workflow rules should not be applied.
+func loadPhase4Context(workspace string) (map[string]state.Task, *validation.WorkflowRules, string, bool, error) {
+	tasksData, err := os.ReadFile(filepath.Join(workspace, state.ArtifactTasks))
+	if err != nil {
+		// tasks.md missing: let the normal artifact validator handle it.
+		return nil, nil, "", false, nil
+	}
+
+	tasks, err := ParseTasksMd(string(tasksData))
+	if err != nil {
+		// Let the caller fail via artifact validation or parser errors.
+		return nil, nil, "", false, nil
+	}
+
+	// Workflow rules only apply when the workspace follows the
+	// .specs/<spec>/ layout. Any other layout (e.g. flat test fixtures)
+	// falls through silently — fail-open rather than mis-resolving the
+	// repo root into an unrelated directory.
+	if filepath.Base(filepath.Dir(workspace)) != ".specs" {
+		return nil, nil, "", false, nil
+	}
+	// Repo root is two levels up from a .specs/<spec-name>/ workspace.
+	repoRoot := filepath.Dir(filepath.Dir(workspace))
+	rules, err := validation.LoadRules(repoRoot)
+	if err != nil {
+		// Rule file exists but is malformed. Surface as an error so the
+		// user sees the parse failure instead of silently skipping.
+		return nil, nil, "", false, fmt.Errorf("load workflow rules: %w", err)
+	}
+
+	reviewPath := filepath.Join(workspace, state.ArtifactReviewTasks)
+	return tasks, rules, reviewPath, true, nil
+}
+
+// writeViolationResponse writes review-tasks.md, bumps TaskRevisions, and
+// builds the reportResultResponse for a workflow-rules violation.
+//
+// Order matters: write review-tasks.md FIRST, then bump TaskRevisions.
+// If RevisionBump fails, the orchestrator still sees review-tasks.md on
+// the next pipeline_next_action call and handlePhaseFour re-dispatches
+// task-decomposer — we just lose one retry-limit tick, which is
+// recoverable. Reversing the order would risk bumping the counter with
+// no findings file on disk, which would waste a retry slot silently.
+func writeViolationResponse(sm *state.StateManager, workspace, reviewPath, artifactWritten string, violations []validation.Violation) (reportResultResponse, error) {
+	if err := os.WriteFile(reviewPath, []byte(validation.FormatReviewFindings(violations)), 0o600); err != nil {
+		return reportResultResponse{}, fmt.Errorf("write %s: %w", state.ArtifactReviewTasks, err)
 	}
 
 	// Bump TaskRevisions so handlePhaseFour enforces MaxRevisionRetries on
@@ -671,7 +692,7 @@ func applyWorkflowRules(sm *state.StateManager, workspace, artifactWritten strin
 	// bumps the same counter when phase-4b parses a REVISE verdict — keeping
 	// the retry-limit enforcement in one place (the engine).
 	if err := sm.RevisionBump(workspace, state.RevTypeTasks); err != nil {
-		return reportResultResponse{}, false, fmt.Errorf("revision bump (tasks): %w", err)
+		return reportResultResponse{}, fmt.Errorf("revision bump (tasks): %w", err)
 	}
 
 	findings := make([]orchestrator.Finding, 0, len(violations))
@@ -691,5 +712,5 @@ func applyWorkflowRules(sm *state.StateManager, workspace, artifactWritten strin
 		NextActionHint:  "revision_required",
 		Warning: fmt.Sprintf("phase-4 workflow rules: %d violation(s) — see %s",
 			len(violations), state.ArtifactReviewTasks),
-	}, true, nil
+	}, nil
 }
