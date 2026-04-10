@@ -505,18 +505,18 @@ deterministic workflow rules at phase-4 completion. When a task matches a
 rule but is missing `mode: human_gate`, the engine automatically triggers
 REVISE and re-runs task-decomposer with the violation findings.
 
-### Quick example — dealon-app
+### Quick example — claude-forge
 
 ```markdown
 ---
 rules:
-  - id: akupara-proto
+  - id: main-proto
     when:
       files_match:
         - "backend/**/*.proto"
         - "backend/gen/proto/**"
     require: human_gate
-    reason: "akupara-proto の PR マージ状態を確認してください"
+    reason: "make sure PR for main-proto repository"
 
   - id: destructive-migration
     when:
@@ -524,7 +524,7 @@ rules:
         - "backend/migrations/**/*.sql"
       title_matches: "(?i)drop\\s+(table|column)"
     require: human_gate
-    reason: "破壊的マイグレーションのため stakeholder 確認が必要です"
+    reason: "Stakeholder verification is required for this destructive migration."
 ---
 ```
 

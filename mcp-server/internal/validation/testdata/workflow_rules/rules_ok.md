@@ -1,12 +1,12 @@
 ---
 rules:
-  - id: akupara-proto
+  - id: main-proto
     when:
       files_match:
         - "backend/**/*.proto"
         - "backend/gen/proto/**"
     require: human_gate
-    reason: "akupara-proto coordination required"
+    reason: "main-proto coordination required"
 
   - id: destructive-migration
     when:

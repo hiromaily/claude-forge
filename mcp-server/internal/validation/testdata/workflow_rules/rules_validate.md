@@ -1,11 +1,11 @@
 ---
 rules:
-  - id: akupara-proto
+  - id: main-proto
     when:
       files_match:
         - "backend/**/*.proto"
     require: human_gate
-    reason: "akupara-proto coordination required"
+    reason: "main-proto coordination required"
 
   - id: drop-col
     when:

@@ -35,8 +35,8 @@ func TestLoadRules_HappyPath(t *testing.T) {
 	}
 
 	r0 := rules.Rules[0]
-	if r0.ID != "akupara-proto" {
-		t.Errorf("rule[0].ID = %q, want %q", r0.ID, "akupara-proto")
+	if r0.ID != "main-proto" {
+		t.Errorf("rule[0].ID = %q, want %q", r0.ID, "main-proto")
 	}
 	if len(r0.When.FilesMatch) != 2 {
 		t.Errorf("rule[0].When.FilesMatch len = %d, want 2", len(r0.When.FilesMatch))
@@ -173,15 +173,15 @@ func TestValidate(t *testing.T) {
 
 	violations := validation.Validate(tasks, rules)
 
-	// Task 1 violates akupara-proto. Task 4 violates drop-col.
+	// Task 1 violates main-proto. Task 4 violates drop-col.
 	// Task 2 is clean. Task 3 is already human_gate.
 	if got := len(violations); got != 2 {
 		t.Fatalf("len(violations) = %d, want 2: %+v", got, violations)
 	}
 
 	// Validate returns violations in deterministic TaskKey order.
-	if violations[0].TaskKey != "1" || violations[0].RuleID != "akupara-proto" {
-		t.Errorf("violations[0] = %+v, want task 1 / akupara-proto", violations[0])
+	if violations[0].TaskKey != "1" || violations[0].RuleID != "main-proto" {
+		t.Errorf("violations[0] = %+v, want task 1 / main-proto", violations[0])
 	}
 	if violations[1].TaskKey != "4" || violations[1].RuleID != "drop-col" {
 		t.Errorf("violations[1] = %+v, want task 4 / drop-col", violations[1])
@@ -296,8 +296,8 @@ func TestFormatReviewFindings(t *testing.T) {
 		{
 			TaskKey:   "1",
 			TaskTitle: "Update deal proto",
-			RuleID:    "akupara-proto",
-			Reason:    "akupara-proto coordination required",
+			RuleID:    "main-proto",
+			Reason:    "main-proto coordination required",
 			MatchedBy: "files_match:backend/**/*.proto",
 		},
 		{
@@ -313,8 +313,8 @@ func TestFormatReviewFindings(t *testing.T) {
 	wantSubstrings := []string{
 		"REVISE",
 		"Task 1: Update deal proto",
-		"rule: akupara-proto",
-		"akupara-proto coordination required",
+		"rule: main-proto",
+		"mail-proto coordination required",
 		"mode: human_gate",
 		"Task 4: Drop column users.old",
 		"rule: drop-col",

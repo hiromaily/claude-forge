@@ -17,13 +17,13 @@ frontmatter is read by the validator; the markdown body is for human notes.
 ```markdown
 ---
 rules:
-  - id: akupara-proto
+  - id: main-proto
     when:
       files_match:
         - "backend/**/*.proto"
         - "backend/gen/proto/**"
     require: human_gate
-    reason: "akupara-proto の PR マージ状態を確認してください"
+    reason: "main-proto の PR マージ状態を確認してください"
 
   - id: destructive-migration
     when:
@@ -82,12 +82,12 @@ Any markdown after the closing `---` is free-form documentation for humans.
 | Rule with no `when` conditions | Hard error at load time |
 | Glob matches zero tasks | Not an error (rule is just not triggered) |
 
-## Example: dealon-app
+## Example: claude-forge
 
-In the dealon-app repository, two rules are most useful:
+In the claude-forge repository, two rules are most useful:
 
-1. **akupara-proto coordination** — any task touching `.proto` files needs
-   the external akupara-proto PR to be merged first.
+1. **main-proto coordination** — any task touching `.proto` files needs
+   the external main-proto PR to be merged first.
 2. **destructive migration approval** — any SQL migration containing
    `DROP TABLE` / `DROP COLUMN` needs stakeholder sign-off.
 
