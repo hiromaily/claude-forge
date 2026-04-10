@@ -717,6 +717,12 @@ files:
 	if len(resp.Findings) == 0 {
 		t.Error("Findings is empty, want at least one violation")
 	}
+	if !resp.StateUpdated {
+		t.Errorf("StateUpdated = false, want true")
+	}
+	if !strings.Contains(resp.Warning, "phase-4 workflow rules") {
+		t.Errorf("Warning = %q, want substring %q", resp.Warning, "phase-4 workflow rules")
+	}
 
 	// Assert: review-tasks.md was written and contains the expected tokens.
 	reviewPath := filepath.Join(workspace, "review-tasks.md")
