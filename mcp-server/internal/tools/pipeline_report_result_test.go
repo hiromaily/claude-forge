@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
@@ -637,5 +638,162 @@ func TestPipelineReportResult(t *testing.T) {
 				tc.checkState(t, dir)
 			}
 		})
+	}
+}
+
+// ---------- Phase-4 workflow rules integration tests ----------
+
+// TestReportResult_Phase4WorkflowRulesViolation verifies that when a phase-4
+// tasks.md violates a rule in .specs/instructions.md, pipeline_report_result
+// writes review-tasks.md, returns revision_required, and does NOT mark
+// phase-4 as complete.
+func TestReportResult_Phase4WorkflowRulesViolation(t *testing.T) {
+	t.Parallel()
+
+	// Layout: tmpRoot/.specs/<spec>/ is the workspace; repo root is tmpRoot.
+	tmpRoot := t.TempDir()
+	specName := "20260410-test-workflow-rules"
+	workspace := filepath.Join(tmpRoot, ".specs", specName)
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+
+	// Write .specs/instructions.md at the repo root.
+	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
+	instructionsBody := `---
+rules:
+  - id: proto-rule
+    when:
+      files_match: ["**/*.proto"]
+    require: human_gate
+    reason: "coordinate with proto repo"
+---
+`
+	if err := os.WriteFile(instructionsPath, []byte(instructionsBody), 0o644); err != nil {
+		t.Fatalf("write instructions: %v", err)
+	}
+
+	// Write a tasks.md that violates the rule: proto file with mode: sequential.
+	tasksBody := `# Tasks
+
+## Task 1: Update deal proto
+
+Add a new field to the deal proto.
+
+mode: sequential
+files:
+- backend/pkg/api/deal.proto
+`
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	// Initialise state in the workspace directly (matches existing test pattern).
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(workspace, specName); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
+	res := callTool(t, h, map[string]any{
+		"workspace":   workspace,
+		"phase":       "phase-4",
+		"tokens_used": 100,
+		"duration_ms": 500,
+		"model":       "sonnet",
+	})
+	if res.IsError {
+		t.Fatalf("unexpected MCP error: %s", textContent(res))
+	}
+
+	resp := parsePRRResponse(t, textContent(res))
+
+	if resp.NextActionHint != "revision_required" {
+		t.Errorf("NextActionHint = %q, want %q", resp.NextActionHint, "revision_required")
+	}
+	if resp.VerdictParsed != "REVISE" {
+		t.Errorf("VerdictParsed = %q, want %q", resp.VerdictParsed, "REVISE")
+	}
+	if len(resp.Findings) == 0 {
+		t.Error("Findings is empty, want at least one violation")
+	}
+
+	// Assert: review-tasks.md was written and contains the expected tokens.
+	reviewPath := filepath.Join(workspace, "review-tasks.md")
+	data, err := os.ReadFile(reviewPath)
+	if err != nil {
+		t.Fatalf("review-tasks.md not written: %v", err)
+	}
+	if !strings.Contains(string(data), "proto-rule") {
+		t.Errorf("review-tasks.md missing rule ID 'proto-rule':\n%s", data)
+	}
+	if !strings.Contains(string(data), "REVISE") {
+		t.Errorf("review-tasks.md missing 'REVISE' verdict:\n%s", data)
+	}
+
+	// Assert: phase-4 was NOT marked complete.
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 must NOT be in CompletedPhases after workflow rules violation; completed = %v", s.CompletedPhases)
+	}
+}
+
+// TestReportResult_Phase4NoInstructionsFile verifies that phase-4 completes
+// normally (no revision_required) when .specs/instructions.md is absent.
+func TestReportResult_Phase4NoInstructionsFile(t *testing.T) {
+	t.Parallel()
+
+	tmpRoot := t.TempDir()
+	specName := "20260410-no-rules"
+	workspace := filepath.Join(tmpRoot, ".specs", specName)
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	tasksBody := `# Tasks
+
+## Task 1: Do thing
+
+mode: sequential
+`
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(workspace, specName); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
+	res := callTool(t, h, map[string]any{
+		"workspace":   workspace,
+		"phase":       "phase-4",
+		"tokens_used": 10,
+		"duration_ms": 50,
+		"model":       "sonnet",
+	})
+	if res.IsError {
+		t.Fatalf("unexpected MCP error: %s", textContent(res))
+	}
+
+	resp := parsePRRResponse(t, textContent(res))
+	if resp.NextActionHint == "revision_required" {
+		t.Errorf("NextActionHint = revision_required without instructions.md, want proceed")
+	}
+	if resp.NextActionHint != "proceed" {
+		t.Errorf("NextActionHint = %q, want %q", resp.NextActionHint, "proceed")
+	}
+
+	// Phase-4 should be in CompletedPhases.
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if !slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 not in CompletedPhases; completed = %v", s.CompletedPhases)
 	}
 }
