@@ -76,3 +76,18 @@ func copyFixture(t *testing.T, src, dst string) error {
 func readFile(p string) ([]byte, error)  { return osReadFile(p) }
 func mkdirAll(p string) error            { return osMkdirAll(p, 0o755) }
 func writeFile(p string, b []byte) error { return osWriteFile(p, b, 0o644) }
+
+func TestLoadRules_MissingFile(t *testing.T) {
+	tmp := t.TempDir()
+	// No .specs/instructions.md created.
+	rules, err := LoadRules(tmp)
+	if err != nil {
+		t.Fatalf("LoadRules on missing file: unexpected error %v", err)
+	}
+	if rules == nil {
+		t.Fatal("LoadRules returned nil, want empty WorkflowRules{}")
+	}
+	if len(rules.Rules) != 0 {
+		t.Errorf("rule count = %d, want 0", len(rules.Rules))
+	}
+}
