@@ -303,13 +303,50 @@ func (*Engine) handleCheckpointA(st *state.State) (Action, error) {
 }
 
 // handlePhaseFour handles Phase 4 (task decomposer).
-func (*Engine) handlePhaseFour(_ *state.State) (Action, error) {
+//
+// Fresh run: no review-tasks.md → spawn task-decomposer with [design.md] only.
+//
+// Revision run: review-tasks.md exists (written by applyWorkflowRules on a
+// workflow-rules violation) → spawn task-decomposer with [design.md, review-tasks.md]
+// so the decomposer sees the findings, or emit a checkpoint if the revision
+// retry limit has been reached. This mirrors handlePhaseFourB's REVISE path.
+func (*Engine) handlePhaseFour(st *state.State) (Action, error) {
+	reviewPath := filepath.Join(st.Workspace, state.ArtifactReviewTasks)
+
+	// Fresh run: no prior workflow-rules findings.
+	if _, err := os.Stat(reviewPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return Action{}, fmt.Errorf("handlePhaseFour: stat %s: %w", reviewPath, err)
+		}
+		return NewSpawnAgentAction(
+			agentTaskDecomposer,
+			"Decompose the design into implementation tasks.",
+			state.DefaultModel,
+			PhaseFour,
+			[]string{state.ArtifactDesign},
+			state.ArtifactTasks,
+		), nil
+	}
+
+	// Revision path: workflow-rules emitted findings in review-tasks.md.
+	// Enforce the same retry limit handlePhaseFourB uses so a misbehaving
+	// decomposer cannot loop forever under --auto mode. The checkpoint name
+	// is distinct from the phase-4b "task-retry-limit" so logs and analytics
+	// can tell the two escalation sources apart.
+	if st.Revisions.TaskRevisions >= state.MaxRevisionRetries {
+		return NewCheckpointAction(
+			"task-workflow-rules-retry-limit",
+			fmt.Sprintf("Task revision limit reached (%d retries) from workflow-rules enforcement. Human review required.", state.MaxRevisionRetries),
+			[]string{"approve", "abandon"},
+		), nil
+	}
+
 	return NewSpawnAgentAction(
 		agentTaskDecomposer,
-		"Decompose the design into implementation tasks.",
+		"Revise task decomposition based on workflow-rules findings in review-tasks.md.",
 		state.DefaultModel,
 		PhaseFour,
-		[]string{state.ArtifactDesign},
+		[]string{state.ArtifactDesign, state.ArtifactReviewTasks},
 		state.ArtifactTasks,
 	), nil
 }
