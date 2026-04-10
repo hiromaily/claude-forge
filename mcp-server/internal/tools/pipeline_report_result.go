@@ -593,16 +593,21 @@ func clearCompletedFailTasks(sm *state.StateManager, workspace string) error {
 // (handled=false, zero) in any of these pass-through cases:
 //   - tasks.md cannot be read or parsed (the existing artifact validator
 //     will surface the failure).
+//   - workspace is not under a .specs/ directory (flat layout — workflow
+//     rules do not apply).
 //   - no violations were found. This also covers the "no rules file"
 //     case: validation.LoadRules returns an empty rule set when
 //     .specs/instructions.md is absent, so Validate yields zero
-//     violations and we proceed unchanged.
+//     violations and we proceed unchanged. On the pass-through, any
+//     stale review-tasks.md left behind by a previous workflow-rules
+//     iteration is removed so the phase-4b task-reviewer can write a
+//     fresh file.
 //
 // Why here and not in validation.ValidateArtifacts: that API only checks
 // file presence and verdict tokens — it does not take the parsed tasks
 // map or the repo root. This helper owns the specific phase-4 wiring.
 func applyWorkflowRules(workspace, artifactWritten string) (reportResultResponse, bool, error) {
-	tasksPath := filepath.Join(workspace, "tasks.md")
+	tasksPath := filepath.Join(workspace, state.ArtifactTasks)
 	tasksData, err := os.ReadFile(tasksPath)
 	if err != nil {
 		// tasks.md missing: let the normal artifact validator handle it.
@@ -631,15 +636,22 @@ func applyWorkflowRules(workspace, artifactWritten string) (reportResultResponse
 		return reportResultResponse{}, false, fmt.Errorf("load workflow rules: %w", err)
 	}
 
+	reviewPath := filepath.Join(workspace, state.ArtifactReviewTasks)
 	violations := validation.Validate(tasks, rules)
 	if len(violations) == 0 {
+		// Pass-through: ensure any stale review-tasks.md from an earlier
+		// workflow-rules iteration in the same pipeline is removed so the
+		// phase-4b task-reviewer (handlePhaseFourB) writes a fresh file
+		// instead of reading a stale REVISE verdict and looping.
+		if err := os.Remove(reviewPath); err != nil && !os.IsNotExist(err) {
+			return reportResultResponse{}, false, fmt.Errorf("remove stale %s: %w", state.ArtifactReviewTasks, err)
+		}
 		return reportResultResponse{}, false, nil
 	}
 
 	body := validation.FormatReviewFindings(violations)
-	reviewPath := filepath.Join(workspace, "review-tasks.md")
 	if err := os.WriteFile(reviewPath, []byte(body), 0o600); err != nil {
-		return reportResultResponse{}, false, fmt.Errorf("write review-tasks.md: %w", err)
+		return reportResultResponse{}, false, fmt.Errorf("write %s: %w", state.ArtifactReviewTasks, err)
 	}
 
 	findings := make([]orchestrator.Finding, 0, len(violations))
@@ -657,6 +669,7 @@ func applyWorkflowRules(workspace, artifactWritten string) (reportResultResponse
 		VerdictParsed:   "REVISE",
 		Findings:        findings,
 		NextActionHint:  "revision_required",
-		Warning:         fmt.Sprintf("phase-4 workflow rules: %d violation(s) — see review-tasks.md", len(violations)),
+		Warning: fmt.Sprintf("phase-4 workflow rules: %d violation(s) — see %s",
+			len(violations), state.ArtifactReviewTasks),
 	}, true, nil
 }

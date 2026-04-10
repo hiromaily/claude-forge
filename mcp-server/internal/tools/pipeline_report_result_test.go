@@ -643,6 +643,42 @@ func TestPipelineReportResult(t *testing.T) {
 
 // ---------- Phase-4 workflow rules integration tests ----------
 
+// setupPhase4SpecWorkspace creates a tmpRoot/.specs/<spec>/ layout and
+// initialises state for a phase-4 workflow-rules integration test.
+// Returns (tmpRoot, workspace, StateManager).
+func setupPhase4SpecWorkspace(t *testing.T, specName string) (string, string, *state.StateManager) {
+	t.Helper()
+	tmpRoot := t.TempDir()
+	workspace := filepath.Join(tmpRoot, ".specs", specName)
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(workspace, specName); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	return tmpRoot, workspace, sm
+}
+
+// callPhase4Report invokes PipelineReportResultHandler on phase-4 with a
+// minimal set of parameters and returns the parsed response. Callers must
+// write tasks.md (and any instructions.md) before calling this helper.
+func callPhase4Report(t *testing.T, sm *state.StateManager, workspace string) reportResultResponse {
+	t.Helper()
+	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
+	res := callTool(t, h, map[string]any{
+		"workspace":   workspace,
+		"phase":       "phase-4",
+		"tokens_used": 100,
+		"duration_ms": 500,
+		"model":       "sonnet",
+	})
+	if res.IsError {
+		t.Fatalf("unexpected MCP error: %s", textContent(res))
+	}
+	return parsePRRResponse(t, textContent(res))
+}
+
 // TestReportResult_Phase4WorkflowRulesViolation verifies that when a phase-4
 // tasks.md violates a rule in .specs/instructions.md, pipeline_report_result
 // writes review-tasks.md, returns revision_required, and does NOT mark
@@ -651,12 +687,7 @@ func TestReportResult_Phase4WorkflowRulesViolation(t *testing.T) {
 	t.Parallel()
 
 	// Layout: tmpRoot/.specs/<spec>/ is the workspace; repo root is tmpRoot.
-	tmpRoot := t.TempDir()
-	specName := "20260410-test-workflow-rules"
-	workspace := filepath.Join(tmpRoot, ".specs", specName)
-	if err := os.MkdirAll(workspace, 0o755); err != nil {
-		t.Fatalf("mkdir workspace: %v", err)
-	}
+	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-test-workflow-rules")
 
 	// Write .specs/instructions.md at the repo root.
 	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
@@ -688,25 +719,7 @@ files:
 		t.Fatalf("write tasks.md: %v", err)
 	}
 
-	// Initialise state in the workspace directly (matches existing test pattern).
-	sm := state.NewStateManager("dev")
-	if err := sm.Init(workspace, specName); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-
-	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
-	res := callTool(t, h, map[string]any{
-		"workspace":   workspace,
-		"phase":       "phase-4",
-		"tokens_used": 100,
-		"duration_ms": 500,
-		"model":       "sonnet",
-	})
-	if res.IsError {
-		t.Fatalf("unexpected MCP error: %s", textContent(res))
-	}
-
-	resp := parsePRRResponse(t, textContent(res))
+	resp := callPhase4Report(t, sm, workspace)
 
 	if resp.NextActionHint != "revision_required" {
 		t.Errorf("NextActionHint = %q, want %q", resp.NextActionHint, "revision_required")
@@ -752,12 +765,7 @@ files:
 func TestReportResult_Phase4NoInstructionsFile(t *testing.T) {
 	t.Parallel()
 
-	tmpRoot := t.TempDir()
-	specName := "20260410-no-rules"
-	workspace := filepath.Join(tmpRoot, ".specs", specName)
-	if err := os.MkdirAll(workspace, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
+	_, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-no-rules")
 
 	tasksBody := `# Tasks
 
@@ -769,24 +777,7 @@ mode: sequential
 		t.Fatalf("write tasks.md: %v", err)
 	}
 
-	sm := state.NewStateManager("dev")
-	if err := sm.Init(workspace, specName); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-
-	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
-	res := callTool(t, h, map[string]any{
-		"workspace":   workspace,
-		"phase":       "phase-4",
-		"tokens_used": 10,
-		"duration_ms": 50,
-		"model":       "sonnet",
-	})
-	if res.IsError {
-		t.Fatalf("unexpected MCP error: %s", textContent(res))
-	}
-
-	resp := parsePRRResponse(t, textContent(res))
+	resp := callPhase4Report(t, sm, workspace)
 	if resp.NextActionHint == "revision_required" {
 		t.Errorf("NextActionHint = revision_required without instructions.md, want proceed")
 	}
@@ -801,5 +792,174 @@ mode: sequential
 	}
 	if !slices.Contains(s.CompletedPhases, "phase-4") {
 		t.Errorf("phase-4 not in CompletedPhases; completed = %v", s.CompletedPhases)
+	}
+}
+
+// TestReportResult_Phase4MalformedInstructions verifies that a malformed
+// .specs/instructions.md surfaces as an MCP error at phase-4 completion
+// rather than being silently ignored. This catches typo'd or broken rule
+// files early instead of leaking through as "proceed".
+func TestReportResult_Phase4MalformedInstructions(t *testing.T) {
+	t.Parallel()
+
+	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-malformed-rules")
+
+	// Write a .specs/instructions.md with an unknown field ("requires" typo).
+	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
+	instructionsBody := `---
+rules:
+  - id: typo-rule
+    when:
+      files_match: ["**/*.go"]
+    requires: human_gate
+    reason: "typo test"
+---
+`
+	if err := os.WriteFile(instructionsPath, []byte(instructionsBody), 0o644); err != nil {
+		t.Fatalf("write instructions: %v", err)
+	}
+
+	// Valid tasks.md — violation should NOT be the failure mode; the load
+	// error should surface first.
+	tasksBody := `# Tasks
+
+## Task 1: Do thing
+
+mode: sequential
+files:
+- backend/pkg/foo.go
+`
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
+	res := callTool(t, h, map[string]any{
+		"workspace":   workspace,
+		"phase":       "phase-4",
+		"tokens_used": 10,
+		"duration_ms": 50,
+		"model":       "sonnet",
+	})
+	if !res.IsError {
+		t.Fatalf("expected MCP error for malformed instructions.md, got success: %s", textContent(res))
+	}
+	if !strings.Contains(textContent(res), "workflow rules") {
+		t.Errorf("error content = %q, want substring %q", textContent(res), "workflow rules")
+	}
+
+	// Phase-4 must NOT have advanced.
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 should NOT be in CompletedPhases on malformed rules; completed = %v", s.CompletedPhases)
+	}
+}
+
+// TestReportResult_Phase4RulesPresentNoViolations verifies the happy path
+// where .specs/instructions.md has rules but no task violates them: phase-4
+// completes normally and any stale review-tasks.md left behind by a previous
+// workflow-rules iteration is removed so phase-4b can write a fresh one.
+func TestReportResult_Phase4RulesPresentNoViolations(t *testing.T) {
+	t.Parallel()
+
+	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-rules-no-violations")
+
+	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
+	instructionsBody := `---
+rules:
+  - id: proto-rule
+    when:
+      files_match: ["**/*.proto"]
+    require: human_gate
+    reason: "coordinate with proto repo"
+---
+`
+	if err := os.WriteFile(instructionsPath, []byte(instructionsBody), 0o644); err != nil {
+		t.Fatalf("write instructions: %v", err)
+	}
+
+	// Task does NOT touch a .proto file — no violation.
+	tasksBody := `# Tasks
+
+## Task 1: Refactor helper
+
+mode: sequential
+files:
+- backend/pkg/util/helper.go
+`
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	// Pre-seed a stale review-tasks.md from a prior workflow-rules iteration
+	// (REVISE verdict). applyWorkflowRules must delete it on pass-through so
+	// handlePhaseFourB does not read a stale verdict.
+	stalePath := filepath.Join(workspace, "review-tasks.md")
+	stale := "# Stale\n\n**Verdict:** REVISE\n\nLeftover from previous iteration.\n"
+	if err := os.WriteFile(stalePath, []byte(stale), 0o644); err != nil {
+		t.Fatalf("write stale review-tasks.md: %v", err)
+	}
+
+	resp := callPhase4Report(t, sm, workspace)
+
+	if resp.NextActionHint != "proceed" {
+		t.Errorf("NextActionHint = %q, want %q", resp.NextActionHint, "proceed")
+	}
+
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if !slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 not in CompletedPhases; completed = %v", s.CompletedPhases)
+	}
+
+	// Stale review-tasks.md must have been removed so the phase-4b reviewer
+	// writes a fresh file.
+	if _, statErr := os.Stat(stalePath); !os.IsNotExist(statErr) {
+		t.Errorf("stale review-tasks.md should have been removed; Stat err = %v", statErr)
+	}
+}
+
+// TestReportResult_Phase4FlatWorkspace verifies that a flat workspace (not
+// under a .specs/ directory) falls through the workflow-rules check silently
+// and completes phase-4 normally — the repo-root sanity check must prevent
+// mis-resolving a repo root into an unrelated directory.
+func TestReportResult_Phase4FlatWorkspace(t *testing.T) {
+	t.Parallel()
+
+	// Flat layout: workspace is directly a TempDir, not under .specs/.
+	dir := t.TempDir()
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(dir, "flat-spec"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	tasksBody := `# Tasks
+
+## Task 1: Do thing
+
+mode: sequential
+files:
+- backend/pkg/api/deal.proto
+`
+	if err := os.WriteFile(filepath.Join(dir, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	resp := callPhase4Report(t, sm, dir)
+	if resp.NextActionHint != "proceed" {
+		t.Errorf("NextActionHint = %q, want %q (flat workspace should fall through)", resp.NextActionHint, "proceed")
+	}
+
+	s, err := state.ReadState(dir)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if !slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 should be in CompletedPhases for flat workspace; completed = %v", s.CompletedPhases)
 	}
 }
