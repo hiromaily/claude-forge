@@ -47,6 +47,7 @@ type PipelineInitResult struct {
 	SourceType  string             `json:"source_type,omitempty"`
 	SourceURL   string             `json:"source_url,omitempty"`
 	SourceID    string             `json:"source_id,omitempty"`
+	CoreText    string             `json:"core_text,omitempty"`
 	Flags       *PipelineInitFlags `json:"flags,omitempty"`
 	FetchNeeded *FetchNeeded       `json:"fetch_needed,omitempty"`
 	Errors      []string           `json:"errors,omitempty"`
@@ -58,6 +59,7 @@ type PipelineInitFlags struct {
 	Auto           bool    `json:"auto"`
 	SkipPR         bool    `json:"skip_pr"`
 	Debug          bool    `json:"debug"`
+	Discuss        bool    `json:"discuss"`
 	EffortOverride *string `json:"effort_override"`
 	CurrentBranch  string  `json:"current_branch,omitempty"`
 }
@@ -138,6 +140,7 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 			SourceType:  sourceType,
 			SourceURL:   sourceURL,
 			SourceID:    sourceID,
+			CoreText:    result.Parsed.CoreText,
 			Flags:       flags,
 			FetchNeeded: fetchNeeded,
 		})
@@ -176,6 +179,8 @@ func buildFlags(parsed validation.ParsedInput, currentBranch string) *PipelineIn
 			flags.SkipPR = true
 		case "debug":
 			flags.Debug = true
+		case "discuss":
+			flags.Discuss = true
 		}
 	}
 

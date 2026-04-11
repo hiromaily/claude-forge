@@ -1082,8 +1082,8 @@ func TestBuildRequestMDWithBody(t *testing.T) {
 			}
 			if tc.wantBody == "" {
 				// For empty body, verify the content only contains front matter.
-				lines := strings.Split(strings.TrimSpace(got), "\n")
-				for _, line := range lines {
+				lines := strings.SplitSeq(strings.TrimSpace(got), "\n")
+				for line := range lines {
 					if line != "---" && !strings.Contains(line, ":") && line != "" {
 						t.Errorf("buildRequestMDWithBody with empty body: unexpected non-frontmatter line %q; got:\n%s", line, got)
 					}

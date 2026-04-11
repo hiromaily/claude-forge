@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/validation"
 )
 
 // ---------- helpers ----------
@@ -1057,4 +1058,203 @@ func TestRefineWorkspacePath(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------- TestBuildFlagsDiscuss ----------
+// AC-1: buildFlags() with "discuss" in BareFlags sets Discuss = true.
+
+func TestBuildFlagsDiscuss(t *testing.T) {
+	t.Parallel()
+
+	t.Run("discuss_flag_sets_discuss_true", func(t *testing.T) {
+		t.Parallel()
+		parsed := validation.ParsedInput{
+			BareFlags: []string{"discuss"},
+			CoreText:  "implement login",
+		}
+		flags := buildFlags(parsed, "")
+		if flags == nil {
+			t.Fatalf("buildFlags returned nil")
+		}
+		if !flags.Discuss {
+			t.Errorf("Discuss: got false, want true when 'discuss' is in BareFlags")
+		}
+	})
+
+	t.Run("no_discuss_flag_leaves_discuss_false", func(t *testing.T) {
+		t.Parallel()
+		parsed := validation.ParsedInput{
+			BareFlags: []string{"auto"},
+			CoreText:  "implement login",
+		}
+		flags := buildFlags(parsed, "")
+		if flags == nil {
+			t.Fatalf("buildFlags returned nil")
+		}
+		if flags.Discuss {
+			t.Errorf("Discuss: got true, want false when 'discuss' is not in BareFlags")
+		}
+	})
+
+	t.Run("discuss_combined_with_auto", func(t *testing.T) {
+		t.Parallel()
+		parsed := validation.ParsedInput{
+			BareFlags: []string{"auto", "discuss"},
+			CoreText:  "implement login",
+		}
+		flags := buildFlags(parsed, "")
+		if flags == nil {
+			t.Fatalf("buildFlags returned nil")
+		}
+		if !flags.Discuss {
+			t.Errorf("Discuss: got false, want true when 'discuss' is in BareFlags")
+		}
+		if !flags.Auto {
+			t.Errorf("Auto: got false, want true when 'auto' is in BareFlags")
+		}
+	})
+}
+
+// ---------- TestPipelineInitFlagsDiscussJSONRoundTrip ----------
+// AC-1: PipelineInitFlags{Discuss: true} round-trips through JSON correctly.
+
+func TestPipelineInitFlagsDiscussJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	t.Run("discuss_true_serialises_as_discuss_json_key", func(t *testing.T) {
+		t.Parallel()
+		flags := PipelineInitFlags{
+			Discuss: true,
+		}
+		data, err := json.Marshal(flags)
+		if err != nil {
+			t.Fatalf("json.Marshal: %v", err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("json.Unmarshal: %v", err)
+		}
+		v, ok := m["discuss"]
+		if !ok {
+			t.Fatalf("discuss key missing from serialised PipelineInitFlags JSON")
+		}
+		if v != true {
+			t.Errorf("discuss value: got %v, want true", v)
+		}
+	})
+
+	t.Run("discuss_false_excluded_from_json", func(t *testing.T) {
+		t.Parallel()
+		flags := PipelineInitFlags{
+			Discuss: false,
+		}
+		data, err := json.Marshal(flags)
+		if err != nil {
+			t.Fatalf("json.Marshal: %v", err)
+		}
+		// discuss:false is still serialised (no omitempty on Discuss field).
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("json.Unmarshal: %v", err)
+		}
+		// Key should exist (the field has json:"discuss" without omitempty).
+		if _, ok := m["discuss"]; !ok {
+			t.Fatalf("discuss key missing from serialised PipelineInitFlags JSON (should be present even when false)")
+		}
+	})
+}
+
+// ---------- TestPipelineInitHandlerCoreText ----------
+// AC-2: PipelineInitHandler response JSON contains top-level "core_text" field.
+
+func TestPipelineInitHandlerCoreText(t *testing.T) {
+	t.Parallel()
+
+	sm := state.NewStateManager("dev")
+	h := PipelineInitHandler(sm)
+
+	t.Run("core_text_present_in_response", func(t *testing.T) {
+		t.Parallel()
+		res := callTool(t, h, map[string]any{
+			"arguments": "implement login feature --discuss",
+		})
+		if res.IsError {
+			t.Fatalf("handler returned MCP error: %v", textContent(res))
+		}
+
+		// Verify raw JSON has top-level "core_text" key (not nested under "parsed").
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(textContent(res)), &raw); err != nil {
+			t.Fatalf("json.Unmarshal: %v", err)
+		}
+		coreText, ok := raw["core_text"]
+		if !ok {
+			t.Fatalf("core_text key missing from top-level response JSON")
+		}
+		got, ok := coreText.(string)
+		if !ok {
+			t.Fatalf("core_text is not a string: %T", coreText)
+		}
+		// core_text should equal the input stripped of bare flags.
+		want := "implement login feature"
+		if got != want {
+			t.Errorf("core_text: got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("no_parsed_key_in_response", func(t *testing.T) {
+		t.Parallel()
+		res := callTool(t, h, map[string]any{
+			"arguments": "implement login feature --discuss",
+		})
+		if res.IsError {
+			t.Fatalf("handler returned MCP error: %v", textContent(res))
+		}
+
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(textContent(res)), &raw); err != nil {
+			t.Fatalf("json.Unmarshal: %v", err)
+		}
+		if _, ok := raw["parsed"]; ok {
+			t.Errorf("response JSON must NOT contain a top-level 'parsed' key; got one")
+		}
+	})
+
+	t.Run("core_text_non_empty_for_substantive_input", func(t *testing.T) {
+		t.Parallel()
+		res := callTool(t, h, map[string]any{
+			"arguments": "add user authentication",
+		})
+		if res.IsError {
+			t.Fatalf("handler returned MCP error: %v", textContent(res))
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		if r.CoreText == "" {
+			t.Errorf("core_text should be non-empty for substantive input")
+		}
+		if r.CoreText != "add user authentication" {
+			t.Errorf("core_text: got %q, want %q", r.CoreText, "add user authentication")
+		}
+	})
+
+	t.Run("discuss_flag_sets_discuss_in_handler_response", func(t *testing.T) {
+		t.Parallel()
+		res := callTool(t, h, map[string]any{
+			"arguments": "implement login --discuss",
+		})
+		if res.IsError {
+			t.Fatalf("handler returned MCP error: %v", textContent(res))
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		if r.Flags == nil {
+			t.Fatalf("flags is nil")
+		}
+		if !r.Flags.Discuss {
+			t.Errorf("flags.discuss: got false, want true for --discuss input")
+		}
+		// core_text should NOT contain "--discuss".
+		if strings.Contains(r.CoreText, "--discuss") {
+			t.Errorf("core_text %q should not contain '--discuss'", r.CoreText)
+		}
+	})
 }
