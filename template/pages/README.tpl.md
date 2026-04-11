@@ -36,4 +36,4 @@ Source: template/pages/README.tpl.md · Run `make docs` to regenerate.
 
 <!-- @include: ../sections/development/running-tests.md -->
 
-<!-- @include: ../sections/architecture/why-mcp-driven-pipeline-control-v2-vs-v1.md -->
+<!-- @include: ../sections/architecture/mcp-driven-pipeline-control.md -->

@@ -4,7 +4,7 @@
 
 <!-- @include: ../sections/architecture/how-it-works.md -->
 
-<!-- @include: ../sections/architecture/why-mcp-driven-pipeline-control-v2-vs-v1.md -->
+<!-- @include: ../sections/architecture/mcp-driven-pipeline-control.md -->
 
 <!-- @include: ../sections/architecture/how-the-pieces-connect.md -->
 
