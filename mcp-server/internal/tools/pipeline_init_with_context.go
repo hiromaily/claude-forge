@@ -184,8 +184,6 @@ func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFu
 // ---------- first call ----------
 
 func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFlags) (*mcp.CallToolResult, error) {
-	// When --discuss is active AND not --auto AND source is text (no GitHub/Jira fields),
-	// return needs_discussion so the orchestrator can collect answers before effort confirmation.
 	isTextSource := extCtx.GitHubTitle == "" && extCtx.GitHubBody == "" &&
 		extCtx.JiraIssueType == "" && extCtx.JiraSummary == "" && extCtx.JiraDescription == ""
 	if flags.Discuss && !flags.Auto && isTextSource {
@@ -222,11 +220,8 @@ func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags
 	currentBranch := flags.CurrentBranch
 	isMain := currentBranch == "" || currentBranch == "main" || currentBranch == "master"
 
-	// EnrichedRequestBody carries the body the orchestrator must echo back in
-	// user_confirmation.enriched_request_body on the next call so initWorkspace
-	// can write a non-empty request.md.
-	// For the discussion path this is already set; for plain text source it falls
-	// back to extCtx.TaskText so the original task description is preserved.
+	// Must be non-empty: the orchestrator echoes this back in user_confirmation.enriched_request_body
+	// so initWorkspace can write a non-empty request.md (task_text is not re-sent on the second call).
 	echoBody := enrichedBody
 	if echoBody == "" {
 		echoBody = extCtx.TaskText
@@ -382,8 +377,6 @@ func initWorkspace(
 	}
 
 	// Write request.md.
-	// When enrichedBody is non-empty (discussion path), use it directly.
-	// Otherwise use extCtx.TaskText (fixes pre-existing gap for text source pipelines).
 	body := enrichedBody
 	if body == "" {
 		body = extCtx.TaskText
@@ -558,8 +551,7 @@ func buildRequestMDWithBody(extCtx externalContext, body string) string {
 }
 
 // buildEnrichedRequestBody combines the original task text with the discussion answers
-// in a structured markdown format. Used by handleDiscussionCall to build the enriched
-// request.md body before workspace initialisation.
+// in a structured markdown format.
 func buildEnrichedRequestBody(taskText, discussionAnswers string) string {
 	return fmt.Sprintf("%s\n\n## Discussion Answers\n\n%s", taskText, discussionAnswers)
 }
