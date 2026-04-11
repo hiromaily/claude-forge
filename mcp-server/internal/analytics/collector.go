@@ -30,6 +30,7 @@ type PipelineSummary struct {
 	FlowTemplate     string        `json:"flow_template"`
 	TotalTokens      int           `json:"total_tokens"`
 	TotalDurationMs  int           `json:"total_duration_ms"`
+	TotalDuration    string        `json:"total_duration"`
 	EstimatedCostUSD float64       `json:"estimated_cost_usd"`
 	PhasesExecuted   int           `json:"phases_executed"`
 	PhasesSkipped    int           `json:"phases_skipped"`
@@ -79,6 +80,7 @@ func (c *Collector) Collect(workspace string) (*PipelineSummary, error) {
 		FlowTemplate:     derefString(s.FlowTemplate),
 		TotalTokens:      totalTokens,
 		TotalDurationMs:  totalDurationMs,
+		TotalDuration:    state.FormatDurationMs(totalDurationMs),
 		EstimatedCostUSD: float64(totalTokens) * costPerToken,
 		PhasesExecuted:   phasesExecuted,
 		PhasesSkipped:    phasesSkipped,
