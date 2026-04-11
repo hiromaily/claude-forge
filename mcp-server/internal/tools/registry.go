@@ -367,7 +367,10 @@ func RegisterAll(
 			// encoding them as strings. See existing usage in task_init.go for reference.
 			mcp.WithObject("user_confirmation", mcp.Description("Confirmed effort and workspace slug. Absent on first call; present on second call.")),
 			mcp.WithString("task_text", mcp.Description("Original task description for text-source pipelines. Pass result.core_text from pipeline_init on the first call.")),
-			mcp.WithString("discussion_answers", mcp.Description("Newline-separated Q&A collected from the user after needs_discussion is returned. Present on the discussion call; absent on all other calls.")),
+			mcp.WithString("discussion_answers", mcp.Description(
+				"Newline-separated Q&A collected from the user after needs_discussion is returned. "+
+					"Present on the discussion call; absent on all other calls.",
+			)),
 		),
 		PipelineInitWithContextHandler(sm),
 	)

@@ -1,0 +1,174 @@
+{
+  "version": 2,
+  "forge-state-mcp-version": "v2.7.0",
+  "specName": "add-forge-discussion-mode",
+  "workspace": ".specs/20260411-add-forge-discussion-mode",
+  "branch": "feature/add-forge-discussion-mode",
+  "effort": "L",
+  "flowTemplate": "full",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "branchClassified": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "setup",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "checkpoint-a",
+    "phase-4",
+    "phase-4b",
+    "checkpoint-b",
+    "phase-5",
+    "phase-7",
+    "final-verification",
+    "pr-creation",
+    "final-summary",
+    "post-to-source",
+    "final-commit"
+  ],
+  "revisions": {
+    "designRevisions": 2,
+    "taskRevisions": 0,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "needsBatchCommit": false,
+  "tasks": {},
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 84256,
+      "duration_ms": 229916,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T10:41:45.332834Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 85187,
+      "duration_ms": 152281,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T10:44:32.009579Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 57499,
+      "duration_ms": 122598,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T10:46:49.58375Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 57698,
+      "duration_ms": 124085,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T10:49:09.460735Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 59209,
+      "duration_ms": 248438,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T10:53:34.024922Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 70895,
+      "duration_ms": 247950,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T10:58:39.407619Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 59358,
+      "duration_ms": 132438,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:02:01.865066Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 45940,
+      "duration_ms": 76962,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:10:13.936009Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 47448,
+      "duration_ms": 84769,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:11:59.312051Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 117960,
+      "duration_ms": 263460,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:16:35.862134Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 76975,
+      "duration_ms": 115598,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:34:00.3117Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 76975,
+      "duration_ms": 115598,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:34:13.348209Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 47964,
+      "duration_ms": 97163,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:36:09.369483Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 47964,
+      "duration_ms": 97163,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:36:24.859713Z"
+    },
+    {
+      "phase": "pr-creation",
+      "tokens": 0,
+      "duration_ms": 5000,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:37:43.318546Z"
+    },
+    {
+      "phase": "final-summary",
+      "tokens": 50317,
+      "duration_ms": 82939,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T11:39:36.588589Z"
+    },
+    {
+      "phase": "final-commit",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-11T11:39:39.264099Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-04-11T10:37:31.364201Z",
+    "lastUpdated": "2026-04-11T11:39:39.264687Z",
+    "phaseStarted": null
+  },
+  "error": null
+}

@@ -511,13 +511,14 @@ func buildRequestMDWithBody(extCtx externalContext, body string) string {
 	sourceType := "text"
 	var resolvedBody string
 
-	if extCtx.GitHubTitle != "" || extCtx.GitHubBody != "" {
+	switch {
+	case extCtx.GitHubTitle != "" || extCtx.GitHubBody != "":
 		sourceType = "github_issue"
 		resolvedBody = strings.TrimSpace(extCtx.GitHubTitle + "\n\n" + extCtx.GitHubBody)
-	} else if extCtx.JiraIssueType != "" || extCtx.JiraSummary != "" || extCtx.JiraDescription != "" {
+	case extCtx.JiraIssueType != "" || extCtx.JiraSummary != "" || extCtx.JiraDescription != "":
 		sourceType = "jira_issue"
 		resolvedBody = strings.TrimSpace(extCtx.JiraSummary + "\n\n" + extCtx.JiraDescription)
-	} else {
+	default:
 		// text source: use the body parameter directly.
 		resolvedBody = body
 	}
