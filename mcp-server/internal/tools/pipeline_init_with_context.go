@@ -186,7 +186,8 @@ func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFu
 func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFlags) (*mcp.CallToolResult, error) {
 	// When --discuss is active AND not --auto AND source is text (no GitHub/Jira fields),
 	// return needs_discussion so the orchestrator can collect answers before effort confirmation.
-	isTextSource := extCtx.GitHubTitle == "" && extCtx.JiraSummary == "" && extCtx.JiraIssueType == ""
+	isTextSource := extCtx.GitHubTitle == "" && extCtx.GitHubBody == "" &&
+		extCtx.JiraIssueType == "" && extCtx.JiraSummary == "" && extCtx.JiraDescription == ""
 	if flags.Discuss && !flags.Auto && isTextSource {
 		result := PipelineInitWithContextResult{
 			NeedsDiscussion: &DiscussionPrompt{
@@ -373,10 +374,8 @@ func initWorkspace(
 	// Write request.md.
 	// When enrichedBody is non-empty (discussion path), use it directly.
 	// Otherwise use extCtx.TaskText (fixes pre-existing gap for text source pipelines).
-	var body string
-	if enrichedBody != "" {
-		body = enrichedBody
-	} else {
+	body := enrichedBody
+	if body == "" {
 		body = extCtx.TaskText
 	}
 	requestMD := buildRequestMDWithBody(extCtx, body)
@@ -552,11 +551,7 @@ func buildRequestMDWithBody(extCtx externalContext, body string) string {
 // in a structured markdown format. Used by handleDiscussionCall to build the enriched
 // request.md body before workspace initialisation.
 func buildEnrichedRequestBody(taskText, discussionAnswers string) string {
-	var sb strings.Builder
-	sb.WriteString(taskText)
-	sb.WriteString("\n\n## Discussion Answers\n\n")
-	sb.WriteString(discussionAnswers)
-	return sb.String()
+	return fmt.Sprintf("%s\n\n## Discussion Answers\n\n%s", taskText, discussionAnswers)
 }
 
 // defaultDiscussionQuestions returns the set of generic clarification questions
