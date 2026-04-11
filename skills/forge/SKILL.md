@@ -19,10 +19,35 @@ Example: `/forge 20260401-effort-only-flow`
    a. If `result.fetch_needed` is non-null: fetch the external data described by `result.fetch_needed`
       (GitHub issue fields or Jira issue fields), then call
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, source_id=result.source_id, source_url=result.source_url, flags=result.flags, external_context=<fetched data>)`.
+      (`task_text` is not applicable for GitHub/Jira sources — do not pass it.)
    b. If `result.fetch_needed` is null (plain text input): call
-      `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags)`.
-   In both cases, the response will contain `needs_user_confirmation`. Present **all** of the
-   following to the user in a **single prompt** (use AskUserQuestion with multiple questions):
+      `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags, task_text=result.core_text)`.
+      (`result.core_text` is a top-level field in the `pipeline_init` response — the task text with bare flags stripped.)
+
+   **After the first `pipeline_init_with_context` call**, check which field is present in the response:
+
+   **If `result.needs_discussion` is non-null** (triggered only when `--discuss` flag is present,
+   source is plain text, and `--auto` is absent):
+   1. Present each question in `result.needs_discussion.questions` to the user via AskUserQuestion
+      (single prompt listing all questions).
+   2. Collect the user's answers as a single freeform string
+      (e.g. `"Q1: <answer>\nQ2: <answer>\nQ3: <answer>"`).
+   3. Call `mcp__forge-state__pipeline_init_with_context` again (the discussion call) with:
+      `workspace=<same>, flags=<same>, task_text=<same>, discussion_answers=<collected answers string>`.
+      The response will contain `needs_user_confirmation` where
+      `needs_user_confirmation.enriched_request_body` is non-empty.
+   4. Proceed with the effort/branch confirmation step below using this `needs_user_confirmation`.
+      When calling `pipeline_init_with_context` with `user_confirmation`, pass back:
+      `user_confirmation={effort: <confirmed>, workspace_slug: <slug>, use_current_branch: <bool>, enriched_request_body: needs_user_confirmation.enriched_request_body}`.
+      This carries the enriched `request.md` body forward to workspace initialisation.
+
+   **If `result.needs_user_confirmation` is present directly** (`--discuss` absent, `--auto` set,
+   or GitHub/Jira source): proceed with the effort/branch confirmation step below
+   (no `enriched_request_body` to pass back).
+
+   **Effort/branch confirmation step** (applies after either path above):
+   Present **all** of the following to the user in a **single prompt** (use AskUserQuestion
+   with multiple questions):
    1. **Effort level**: the detected `detected_effort` and all three effort options from
       `effort_options` (S, M, L — each with their skipped phases, using the `label` field).
    2. **Branch decision**: based on `current_branch` and `is_main_branch` from the response:
@@ -34,6 +59,8 @@ Example: `/forge 20260401-effort-only-flow`
    the core intent into English for the slug.
    Then call `mcp__forge-state__pipeline_init_with_context` again with the same parameters plus
    `user_confirmation={effort: <confirmed>, workspace_slug: <slug>, use_current_branch: <bool>}`.
+   If `needs_user_confirmation.enriched_request_body` is non-empty (from the discussion path),
+   also include `enriched_request_body: <value>` inside `user_confirmation`.
    The response will contain `branch` (the branch name) and `create_branch` (boolean).
    If `create_branch` is true: run `git checkout -b <branch>` via Bash immediately.
    Use the `workspace` from the confirmed response for all subsequent calls.
@@ -96,6 +123,19 @@ Repeat until done:
    - `"revision_required"`: present findings to user.
    - `"setup_continue"`: immediately call `pipeline_next_action` again
      (the engine will return the next setup step or the real dispatch).
+
+## Supported Flags
+
+- `--auto`: Skips all human confirmation prompts; progresses the pipeline automatically.
+  Takes precedence over `--discuss`: when both flags are present, discussion mode is suppressed
+  and `needs_user_confirmation` is returned directly.
+- `--discuss`: Triggers a pre-pipeline clarification dialogue for plain text input pipelines.
+  The orchestrator presents targeted questions to the user, collects answers, and writes the
+  enriched task description into `request.md` before invoking any agents. Has no effect for
+  GitHub/Jira source pipelines (external context already provides structured content) or when
+  `--auto` is also set.
+- `--nopr`: Skips the PR creation phase at the end of the pipeline.
+- `--debug`: Enables debug mode in the pipeline state.
 
 ## Rules
 
