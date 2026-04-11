@@ -378,7 +378,7 @@ func TestNextAction(t *testing.T) {
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				sm := newTestStateManager(t, "phase-3b", func(s *state.State) error {
-					s.Revisions.DesignRevisions = 2
+					s.Revisions.DesignRevisions = state.MaxRevisionRetries
 					return nil
 				})
 				st, err := sm.GetState()
@@ -458,7 +458,7 @@ func TestNextAction(t *testing.T) {
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				sm := newTestStateManager(t, "phase-4", func(s *state.State) error {
-					s.Revisions.TaskRevisions = 2
+					s.Revisions.TaskRevisions = state.MaxRevisionRetries
 					return nil
 				})
 				st, err := sm.GetState()
@@ -536,7 +536,7 @@ func TestNextAction(t *testing.T) {
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
 				sm := newTestStateManager(t, "phase-4b", func(s *state.State) error {
-					s.Revisions.TaskRevisions = 2
+					s.Revisions.TaskRevisions = state.MaxRevisionRetries
 					return nil
 				})
 				st, err := sm.GetState()
@@ -795,7 +795,7 @@ func TestNextAction(t *testing.T) {
 							ExecutionMode: "sequential",
 							ImplStatus:    "completed",
 							ReviewStatus:  state.TaskStatusCompletedFail,
-							ImplRetries:   2,
+							ImplRetries:   state.MaxRevisionRetries,
 						},
 					}
 					return nil
