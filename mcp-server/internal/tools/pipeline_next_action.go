@@ -35,11 +35,14 @@ var outputVerdictHints = map[string]string{
 	state.ArtifactReviewTasks:  verdictHintApproveRevise,
 }
 
-// nextActionResponse wraps orchestrator.Action to add an optional Warning field.
-// The warning is set fail-open when enrichPrompt cannot find the agent .md file.
+// nextActionResponse wraps orchestrator.Action with optional Warning and DisplayMessage fields.
+// Warning is set fail-open when enrichPrompt cannot find the agent .md file.
+// DisplayMessage is a pre-formatted progress line the orchestrator should output verbatim
+// before executing the action (e.g. "▶ Phase 1 — Situation Analysis  ·  spawning …").
 type nextActionResponse struct {
 	orchestrator.Action
-	Warning string `json:"warning,omitempty"`
+	Warning        string `json:"warning,omitempty"`
+	DisplayMessage string `json:"display_message,omitempty"`
 }
 
 // maxDispatchIter is the maximum number of iterations for the P1 skip loop and the
@@ -280,6 +283,7 @@ func PipelineNextActionHandler(
 		}
 
 		resp.Action = action
+		resp.DisplayMessage = buildSpawnMessage(action)
 
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
 			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb, profiler); enrichErr != nil {

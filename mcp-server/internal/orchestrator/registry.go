@@ -40,15 +40,15 @@ type PhaseDescriptor struct {
 //     (the full template skips nothing).
 var phaseRegistry = []PhaseDescriptor{
 	{ID: PhaseSetup, Skippable: false},
-	{ID: PhaseOne, Skippable: true},
+	{ID: PhaseOne, Skippable: true, Label: "Situation Analysis"},
 	{
 		ID:            PhaseTwo,
 		Skippable:     true,
 		Label:         "Investigation",
 		TemplateSkips: map[string]bool{state.TemplateLight: true},
 	},
-	{ID: PhaseThree, Skippable: true},
-	{ID: PhaseThreeB, Skippable: true},
+	{ID: PhaseThree, Skippable: true, Label: "Design"},
+	{ID: PhaseThreeB, Skippable: true, Label: "Design Review"},
 	{ID: PhaseCheckpointA, Skippable: true, Label: "Design Checkpoint"},
 	{
 		ID:            PhaseFour,
@@ -74,19 +74,19 @@ var phaseRegistry = []PhaseDescriptor{
 			state.TemplateStandard: true,
 		},
 	},
-	{ID: PhaseFive, Skippable: true},
-	{ID: PhaseSix, Skippable: true},
+	{ID: PhaseFive, Skippable: true, Label: "Implementation"},
+	{ID: PhaseSix, Skippable: true, Label: "Code Review"},
 	{
 		ID:            PhaseSeven,
 		Skippable:     true,
 		Label:         "Comprehensive Review",
 		TemplateSkips: map[string]bool{state.TemplateLight: true},
 	},
-	{ID: PhaseFinalVerification, Skippable: true},
-	{ID: PhasePRCreation, Skippable: true},
-	{ID: PhaseFinalSummary, Skippable: true},
-	{ID: PhasePostToSource, Skippable: true},
-	{ID: PhaseFinalCommit, Skippable: true},
+	{ID: PhaseFinalVerification, Skippable: true, Label: "Final Verification"},
+	{ID: PhasePRCreation, Skippable: true, Label: "PR Creation"},
+	{ID: PhaseFinalSummary, Skippable: true, Label: "Final Summary"},
+	{ID: PhasePostToSource, Skippable: true, Label: "Post to Source"},
+	{ID: PhaseFinalCommit, Skippable: true, Label: "Final Commit"},
 	{ID: PhaseCompleted, Skippable: false},
 }
 
