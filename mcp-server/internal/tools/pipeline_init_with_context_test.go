@@ -799,6 +799,348 @@ func TestTopLevelSourceIDRefinement(t *testing.T) {
 	}
 }
 
+// ---------- TestDiscussionMode ----------
+
+// TestDiscussFirstCallTextSourceReturnsNeedsDiscussion verifies that handleFirstCall
+// returns needs_discussion (non-null) when --discuss is active, source is text (no GitHub/Jira
+// fields), and --auto is not set.
+func TestDiscussFirstCallTextSourceReturnsNeedsDiscussion(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace":        dir,
+		"task_text":        "implement login feature",
+		"external_context": map[string]any{},
+		"flags": map[string]any{
+			"discuss": true,
+		},
+		// no user_confirmation, no discussion_answers
+	})
+
+	if res.IsError {
+		t.Fatalf("first call with --discuss returned MCP error: %v", textContent(res))
+	}
+
+	result := parsePIWCResult(t, textContent(res))
+	if result.NeedsDiscussion == nil {
+		t.Fatalf("expected needs_discussion non-null; result=%+v", result)
+	}
+	if result.NeedsUserConfirmation != nil {
+		t.Errorf("needs_user_confirmation should be null when needs_discussion is returned")
+	}
+	if len(result.NeedsDiscussion.Questions) == 0 {
+		t.Errorf("needs_discussion.questions must not be empty")
+	}
+	if result.NeedsDiscussion.Message == "" {
+		t.Errorf("needs_discussion.message must not be empty")
+	}
+	// No filesystem I/O.
+	stateFile := filepath.Join(dir, "state.json")
+	if _, err := os.Stat(stateFile); err == nil {
+		t.Errorf("state.json should NOT be written on first call with --discuss")
+	}
+}
+
+// TestDiscussFirstCallAutoSuppressesDiscussion verifies that --auto suppresses
+// discussion even when --discuss is set; needs_user_confirmation is returned instead.
+func TestDiscussFirstCallAutoSuppressesDiscussion(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace":        dir,
+		"task_text":        "implement login feature",
+		"external_context": map[string]any{},
+		"flags": map[string]any{
+			"discuss": true,
+			"auto":    true,
+		},
+	})
+
+	if res.IsError {
+		t.Fatalf("first call with --discuss --auto returned MCP error: %v", textContent(res))
+	}
+
+	result := parsePIWCResult(t, textContent(res))
+	if result.NeedsDiscussion != nil {
+		t.Errorf("needs_discussion should be null when --auto is set, got: %+v", result.NeedsDiscussion)
+	}
+	if result.NeedsUserConfirmation == nil {
+		t.Fatalf("expected needs_user_confirmation when --auto suppresses discussion")
+	}
+}
+
+// TestDiscussFirstCallGitHubSourceSkipsDiscussion verifies that --discuss is ignored
+// for GitHub source pipelines; needs_user_confirmation is returned directly.
+func TestDiscussFirstCallGitHubSourceSkipsDiscussion(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace": dir,
+		"external_context": map[string]any{
+			"github_title": "Fix null pointer crash",
+			"github_body":  "application crashes on startup",
+		},
+		"flags": map[string]any{
+			"discuss": true,
+		},
+	})
+
+	if res.IsError {
+		t.Fatalf("first call with --discuss + GitHub source returned MCP error: %v", textContent(res))
+	}
+
+	result := parsePIWCResult(t, textContent(res))
+	if result.NeedsDiscussion != nil {
+		t.Errorf("needs_discussion should be null for GitHub source, got: %+v", result.NeedsDiscussion)
+	}
+	if result.NeedsUserConfirmation == nil {
+		t.Fatalf("expected needs_user_confirmation for GitHub source with --discuss")
+	}
+}
+
+// TestDiscussionCallReturnsEnrichedNeedsUserConfirmation verifies that sending
+// discussion_answers (without user_confirmation) returns needs_user_confirmation
+// with non-empty enriched_request_body and does not create workspace files.
+func TestDiscussionCallReturnsEnrichedNeedsUserConfirmation(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace":          dir,
+		"task_text":          "implement login feature",
+		"external_context":   map[string]any{},
+		"flags":              map[string]any{"discuss": true},
+		"discussion_answers": "Q1: users can log in\nQ2: no constraints\nQ3: use existing auth pkg",
+	})
+
+	if res.IsError {
+		t.Fatalf("discussion call returned MCP error: %v", textContent(res))
+	}
+
+	result := parsePIWCResult(t, textContent(res))
+	if result.NeedsUserConfirmation == nil {
+		t.Fatalf("discussion call: expected needs_user_confirmation, got nil; result=%+v", result)
+	}
+	nuc := result.NeedsUserConfirmation
+	if nuc.EnrichedRequestBody == "" {
+		t.Errorf("enriched_request_body must be non-empty after discussion call")
+	}
+	if !strings.Contains(nuc.EnrichedRequestBody, "implement login feature") {
+		t.Errorf("enriched_request_body should contain original task text; got: %s", nuc.EnrichedRequestBody)
+	}
+	if !strings.Contains(nuc.EnrichedRequestBody, "## Discussion Answers") {
+		t.Errorf("enriched_request_body should contain '## Discussion Answers' header; got: %s", nuc.EnrichedRequestBody)
+	}
+	if !strings.Contains(nuc.EnrichedRequestBody, "use existing auth pkg") {
+		t.Errorf("enriched_request_body should contain discussion answers; got: %s", nuc.EnrichedRequestBody)
+	}
+	// No filesystem I/O — state.json must NOT exist.
+	stateFile := filepath.Join(dir, "state.json")
+	if _, err := os.Stat(stateFile); err == nil {
+		t.Errorf("state.json should NOT be written on discussion call")
+	}
+}
+
+// TestDiscussionAndConfirmationBothPresentReturnsError verifies that providing
+// both discussion_answers and user_confirmation returns an error.
+func TestDiscussionAndConfirmationBothPresentReturnsError(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace":          dir,
+		"task_text":          "implement login feature",
+		"external_context":   map[string]any{},
+		"flags":              map[string]any{"discuss": true},
+		"discussion_answers": "Q1: definition of done",
+		"user_confirmation":  map[string]any{"effort": "M"},
+	})
+
+	if !res.IsError {
+		t.Errorf("expected MCP error when both discussion_answers and user_confirmation are present; got success: %v", textContent(res))
+	}
+	if !strings.Contains(textContent(res), "discussion_answers") {
+		t.Errorf("error message should mention discussion_answers; got: %v", textContent(res))
+	}
+}
+
+// TestThirdCallWithEnrichedBodyWritesRequestMD verifies that when user_confirmation
+// carries a non-empty enriched_request_body, the written request.md contains the enriched body.
+func TestThirdCallWithEnrichedBodyWritesRequestMD(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+	enrichedBody := "implement login feature\n\n## Discussion Answers\n\nQ1: users can log in"
+
+	h := PipelineInitWithContextHandler(sm)
+	res := callTool(t, h, map[string]any{
+		"workspace":        dir,
+		"task_text":        "implement login feature",
+		"external_context": map[string]any{},
+		"flags":            map[string]any{"discuss": true},
+		"user_confirmation": map[string]any{
+			"effort":                "M",
+			"use_current_branch":    true,
+			"workspace_slug":        "implement-login",
+			"enriched_request_body": enrichedBody,
+		},
+	})
+
+	if res.IsError {
+		t.Fatalf("third call returned MCP error: %v", textContent(res))
+	}
+
+	result := parsePIWCResult(t, textContent(res))
+	if !result.Ready {
+		t.Errorf("ready = false, want true")
+	}
+
+	reqPath := filepath.Join(result.Workspace, "request.md")
+	content, err := os.ReadFile(reqPath)
+	if err != nil {
+		t.Fatalf("ReadFile request.md: %v", err)
+	}
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "source_type: text") {
+		t.Errorf("request.md missing 'source_type: text' in front matter; content:\n%s", contentStr)
+	}
+	if !strings.Contains(contentStr, "## Discussion Answers") {
+		t.Errorf("request.md missing '## Discussion Answers' section; content:\n%s", contentStr)
+	}
+	if !strings.Contains(contentStr, "implement login feature") {
+		t.Errorf("request.md missing original task text; content:\n%s", contentStr)
+	}
+}
+
+// ---------- TestBuildRequestMDWithBody ----------
+
+func TestBuildRequestMDWithBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		extCtx     externalContext
+		body       string
+		wantSource string
+		wantBody   string
+	}{
+		{
+			name:       "text_source_with_body",
+			extCtx:     externalContext{},
+			body:       "implement login feature",
+			wantSource: "source_type: text",
+			wantBody:   "implement login feature",
+		},
+		{
+			name:       "text_source_empty_body",
+			extCtx:     externalContext{},
+			body:       "",
+			wantSource: "source_type: text",
+			wantBody:   "",
+		},
+		{
+			name: "github_source_ignores_body",
+			extCtx: externalContext{
+				GitHubTitle: "Fix crash",
+				GitHubBody:  "crashes on startup",
+			},
+			body:       "this body should be ignored",
+			wantSource: "source_type: github_issue",
+			wantBody:   "Fix crash",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := buildRequestMDWithBody(tc.extCtx, tc.body)
+			if !strings.Contains(got, tc.wantSource) {
+				t.Errorf("buildRequestMDWithBody: missing %q; got:\n%s", tc.wantSource, got)
+			}
+			if tc.wantBody != "" && !strings.Contains(got, tc.wantBody) {
+				t.Errorf("buildRequestMDWithBody: missing body %q; got:\n%s", tc.wantBody, got)
+			}
+			if tc.wantBody == "" {
+				// For empty body, verify the content only contains front matter.
+				lines := strings.Split(strings.TrimSpace(got), "\n")
+				for _, line := range lines {
+					if line != "---" && !strings.Contains(line, ":") && line != "" {
+						t.Errorf("buildRequestMDWithBody with empty body: unexpected non-frontmatter line %q; got:\n%s", line, got)
+					}
+				}
+			}
+		})
+	}
+}
+
+// ---------- TestBuildEnrichedRequestBody ----------
+
+func TestBuildEnrichedRequestBody(t *testing.T) {
+	t.Parallel()
+
+	taskText := "implement login feature"
+	answers := "Q1: users can log in\nQ2: no constraints"
+	got := buildEnrichedRequestBody(taskText, answers)
+
+	if !strings.Contains(got, taskText) {
+		t.Errorf("buildEnrichedRequestBody: missing task text %q; got: %s", taskText, got)
+	}
+	if !strings.Contains(got, "## Discussion Answers") {
+		t.Errorf("buildEnrichedRequestBody: missing '## Discussion Answers' header; got: %s", got)
+	}
+	if !strings.Contains(got, answers) {
+		t.Errorf("buildEnrichedRequestBody: missing answers %q; got: %s", answers, got)
+	}
+}
+
+// ---------- TestParseFlagsDiscussKeyConsistency ----------
+
+// TestParseFlagsDiscussKeyConsistency verifies that boolField(m, "discuss") reads the
+// same key ("discuss") that PipelineInitFlags.Discuss json:"discuss" serialises.
+// Round-trips a PipelineInitFlags{Discuss: true} through JSON and calls parseFlags on result.
+func TestParseFlagsDiscussKeyConsistency(t *testing.T) {
+	t.Parallel()
+
+	// Build a PipelineInitFlags with Discuss=true and JSON-serialize it.
+	initFlags := PipelineInitFlags{Discuss: true}
+	data, err := json.Marshal(initFlags)
+	if err != nil {
+		t.Fatalf("json.Marshal PipelineInitFlags: %v", err)
+	}
+
+	// Wrap it in the args map as "flags" and parse it.
+	args := map[string]any{
+		"flags": json.RawMessage(data),
+	}
+	flags, err := parseFlags(args)
+	if err != nil {
+		t.Fatalf("parseFlags: %v", err)
+	}
+	if !flags.Discuss {
+		t.Errorf("parseFlags: Discuss = false, want true after round-trip through PipelineInitFlags JSON")
+	}
+}
+
 // ---------- helpers ----------
 
 // stringSliceEqual compares two string slices for equality (both nil and empty are equal).
