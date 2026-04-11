@@ -36,16 +36,21 @@ claude-forge selects the pipeline template based on effort level (S / M / L) —
 
 A small task doesn't go through task review. A large one doesn't skip it. The workflow adapts to the effort, not the other way around.
 
-### 4. Deterministic guardrails — hooks, not just prompts
+### 4. MCP-driven determinism — engine and hooks, not just prompts
 
 LLM instructions are probabilistic. A well-prompted agent *usually* follows them. But "usually" isn't enough when the cost of a mistake is high.
 
-claude-forge enforces critical constraints at the shell level via Claude Code hooks:
+claude-forge removes phase-transition decisions from the LLM entirely. A Go engine (`forge-state-mcp`) owns all orchestration logic: which phase runs next, retry counts, skip conditions, artifact validation. The LLM executes typed actions returned by the engine — it cannot invent steps or skip them.
 
+This determinism runs at two layers:
+
+**Engine layer (MCP)** — all transition decisions are deterministic functions of `state.json`. Phase sequencing, artifact validation, retry limits, review verdict handling — none of it is subject to LLM interpretation.
+
+**Hook layer (shell)** — critical invariants enforced at the OS level:
 - **Read-only guard** — blocks source edits during analysis phases (exit 2)
 - **Commit guard** — prevents git commits during parallel task execution
-- **Checkpoint gate** — blocks progression until required artifacts exist and human approval is recorded
+- **Checkpoint gate** — blocks progression until human approval is recorded
 
-These aren't instructions the agent can misinterpret. They're hard stops.
+Neither layer depends on the LLM following instructions. They're hard stops.
 
 ---

@@ -29,10 +29,10 @@
 | sections/architecture/how-it-works.md | ARCHITECTURE, README |
 | sections/architecture/how-the-pieces-connect.md | ARCHITECTURE, CLAUDE |
 | sections/architecture/human-interaction.md | ARCHITECTURE, README |
+| sections/architecture/mcp-driven-pipeline-control.md | ARCHITECTURE, README |
 | sections/architecture/pipeline-flow.md | ARCHITECTURE, README |
 | sections/architecture/pipeline-phase-execution-by-effort-level.md | ARCHITECTURE, README |
 | sections/architecture/pipeline-phase-table.md | ARCHITECTURE, README |
-| sections/architecture/why-mcp-driven-pipeline-control-v2-vs-v1.md | ARCHITECTURE, README |
 | sections/development/before-you-start-working.md | CLAUDE |
 | sections/development/consistency-requirements.md | CLAUDE |
 | sections/development/development-constraints.md | CLAUDE |
@@ -103,6 +103,7 @@
 | sections/architecture/runtime-flow.md | Not referenced by any template |
 | sections/architecture/state-management.md | Not referenced by any template |
 | sections/architecture/technical-decisions.md | Not referenced by any template |
+| sections/architecture/why-mcp-driven-pipeline-control-v2-vs-v1.md | Not referenced by any template |
 | sections/ja/agents/architect.md | Not referenced by any template |
 | sections/ja/agents/comprehensive-reviewer.md | Not referenced by any template |
 | sections/ja/agents/design-reviewer.md | Not referenced by any template |
