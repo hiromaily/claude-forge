@@ -18,7 +18,6 @@ paths: ["docs/**/*.md", "template/**/*.md", "README.md", "CLAUDE.md"]
 - **Never edit `README.md` or `CLAUDE.md` directly** — changes are overwritten on next `make docs`.
 - To change structure, edit the template (`template/*.tpl.md`).
 - To change section content, edit the relevant file under `template/sections/`.
-- For sections that include from `docs/_partials/`, edit the partial — not the section file.
 
 ### Workflow
 

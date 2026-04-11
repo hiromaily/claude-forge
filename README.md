@@ -228,8 +228,6 @@ These aren't instructions the agent can misinterpret. They're hard stops.
 
 ---
 
-## Flow
-
 ## Pipeline flow
 
 ```mermaid
@@ -310,8 +308,6 @@ flowchart TD
 
 ---
 
----
-
 ## Pipeline Phase Table
 
 | Phase | Task                      | Agent                  | Input Artifact              | Output Artifact                 | Human Interaction |
@@ -374,8 +370,6 @@ Which phases run is primarily determined by effort level. ✅ = phase runs; blan
 
 ## Human interaction points
 
-## Human interaction points
-
 The pipeline pauses and returns control to the user at the following points. Points marked **blocking** require a response before the pipeline can continue; points marked **informational** present output with no further input needed.
 
 ### Input Validation
@@ -431,8 +425,6 @@ The pipeline pauses and returns control to the user at the following points. Poi
 ---
 
 > **Skipped checkpoints:** Checkpoint B is skipped for effort S and M (only effort L runs Checkpoint B). Phase 4b (task reviewer) is also skipped for effort S and M. Use `--auto` to allow the AI reviewer verdict to auto-approve Checkpoint A (not available with `full` template).
-
----
 
 ---
 
@@ -519,7 +511,7 @@ The pipeline is built on three core principles:
 2. **State on disk** — All progress is tracked in `state.json`, so pipelines survive context compaction and session restarts. Hooks read this state to enforce constraints.
 3. **Two-layer compliance** — Critical invariants (read-only analysis, no parallel commits, checkpoint gates) are enforced both by agent instructions (probabilistic) and hook scripts (deterministic, fail-open).
 
-For the full data flow, state machine, hook architecture, agent input/output matrix, and concurrency model, see [ARCHITECTURE.md](./ARCHITECTURE.md) (index) or browse [`docs/architecture/`](./docs/architecture) directly.
+For the full data flow, state machine, hook architecture, agent input/output matrix, and concurrency model, browse [`docs/architecture/`](./docs/architecture) directly.
 
 ---
 
