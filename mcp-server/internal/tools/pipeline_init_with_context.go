@@ -1,7 +1,18 @@
 // Package tools — pipeline_init_with_context MCP handler.
-// Implements the two-call confirmation flow.
-// First call (user_confirmation absent): detects effort and returns needs_user_confirmation.
-// Second call (user_confirmation present): validates, initialises workspace, writes state.json + request.md.
+// Implements the three-call confirmation flow.
+// First call (neither user_confirmation nor discussion_answers present): detects effort and returns
+//
+//	needs_user_confirmation (or needs_discussion when --discuss is active, source is text, and not --auto).
+//
+// Discussion call (discussion_answers non-empty, user_confirmation absent): enriches the task body,
+//
+//	returns needs_user_confirmation with enriched_request_body set. No filesystem writes.
+//
+// Confirmation call (user_confirmation present, discussion_answers absent): validates, initialises
+//
+//	workspace, writes state.json + request.md.
+//
+// DISCRIMINATOR ORDER: discussion_answers is checked BEFORE user_confirmation to prevent shadowing.
 package tools
 
 import (
@@ -20,6 +31,14 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
+// DiscussionPrompt is returned by handleFirstCall when --discuss is active
+// and source type is "text". The orchestrator presents Questions to the user,
+// collects answers, and calls back with discussion_answers set.
+type DiscussionPrompt struct {
+	Questions []string `json:"questions"`
+	Message   string   `json:"message"`
+}
+
 // PipelineInitWithContextResult is the response shape for pipeline_init_with_context.
 type PipelineInitWithContextResult struct {
 	Ready                 bool                    `json:"ready,omitempty"`
@@ -32,15 +51,17 @@ type PipelineInitWithContextResult struct {
 	CreateBranch          bool                    `json:"create_branch,omitempty"`
 	Warning               string                  `json:"warning,omitempty"`
 	NeedsUserConfirmation *UserConfirmationPrompt `json:"needs_user_confirmation,omitempty"`
+	NeedsDiscussion       *DiscussionPrompt       `json:"needs_discussion,omitempty"`
 }
 
 // UserConfirmationPrompt holds the detected values to present to the user.
 type UserConfirmationPrompt struct {
-	DetectedEffort string                              `json:"detected_effort"`
-	EffortOptions  map[string][]orchestrator.SkipLabel `json:"effort_options"`
-	CurrentBranch  string                              `json:"current_branch"`
-	IsMainBranch   bool                                `json:"is_main_branch"`
-	Message        string                              `json:"message"`
+	DetectedEffort      string                              `json:"detected_effort"`
+	EffortOptions       map[string][]orchestrator.SkipLabel `json:"effort_options"`
+	CurrentBranch       string                              `json:"current_branch"`
+	IsMainBranch        bool                                `json:"is_main_branch"`
+	Message             string                              `json:"message"`
+	EnrichedRequestBody string                              `json:"enriched_request_body,omitempty"`
 }
 
 // externalContext holds parsed GitHub/Jira context fields.
@@ -48,6 +69,9 @@ type externalContext struct {
 	// Source identifiers from pipeline_init result — used in request.md front matter.
 	SourceURL string
 	SourceID  string
+	// TaskText is the original task text for text source type pipelines.
+	// Populated from the top-level task_text MCP parameter (not from external_context map).
+	TaskText string
 	// GitHub fields
 	GitHubLabels []string
 	GitHubTitle  string
@@ -64,21 +88,33 @@ type pipelineFlags struct {
 	Auto           bool
 	SkipPR         bool
 	Debug          bool
+	Discuss        bool
 	EffortOverride string
 	CurrentBranch  string
 }
 
 // userConfirmation holds confirmed effort, branch decision, and optional workspace slug from the second call.
 type userConfirmation struct {
-	Effort           string
-	WorkspaceSlug    string // optional LLM-generated ASCII slug; overrides the auto-derived slug
-	UseCurrentBranch bool   // true = stay on current branch; false = create new branch from slug
+	Effort              string
+	WorkspaceSlug       string // optional LLM-generated ASCII slug; overrides the auto-derived slug
+	UseCurrentBranch    bool   // true = stay on current branch; false = create new branch from slug
+	EnrichedRequestBody string // carries enriched body from discussion call; "" means use defaults
 }
 
 // PipelineInitWithContextHandler handles the "pipeline_init_with_context" MCP tool.
-// First call (user_confirmation absent): detects effort and returns needs_user_confirmation.
-// Second call (user_confirmation present): finalizes workspace — creates directory, initialises
-// state, applies all setters, skips phases, writes request.md.
+// First call (neither user_confirmation nor discussion_answers present): detects effort and returns
+//
+//	needs_user_confirmation (or needs_discussion when --discuss+text+non-auto).
+//
+// Discussion call (discussion_answers non-empty, user_confirmation absent): builds enriched body,
+//
+//	returns needs_user_confirmation with enriched_request_body. No filesystem writes.
+//
+// Confirmation call (user_confirmation present, discussion_answers absent): finalizes workspace —
+//
+//	creates directory, initialises state, applies all setters, skips phases, writes request.md.
+//
+// DISCRIMINATOR ORDER: discussion_answers checked BEFORE user_confirmation to prevent shadowing.
 func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFunc {
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
@@ -104,34 +140,73 @@ func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFu
 			extCtx.SourceURL = topSourceURL
 		}
 
+		// task_text carries the original task text for text source type pipelines.
+		// It enables --discuss enrichment and fixes the pre-existing gap where request.md
+		// had an empty body for text source pipelines.
+		taskText := req.GetString("task_text", "")
+		extCtx.TaskText = taskText
+
 		// Parse flags object.
 		flags, err := parseFlags(args)
 		if err != nil {
 			return errorf("parse flags: %v", err)
 		}
 
-		// Check if user_confirmation is present.
+		// Three-call discriminator.
+		// IMPORTANT: discussion_answers must be checked BEFORE user_confirmation so the
+		// discussion path cannot be shadowed by the existing confirmation branch.
+		discussionAnswers := req.GetString("discussion_answers", "")
 		ucRaw, hasConfirmation := args["user_confirmation"]
-		if !hasConfirmation || ucRaw == nil {
+
+		// Guard: both fields present is ambiguous — return an error.
+		if discussionAnswers != "" && hasConfirmation && ucRaw != nil {
+			return errorf("discussion_answers and user_confirmation must not both be present")
+		}
+
+		switch {
+		case discussionAnswers != "":
+			// Discussion call: build enriched body, return needs_user_confirmation.
+			return handleDiscussionCall(workspace, extCtx, flags, discussionAnswers)
+		case hasConfirmation && ucRaw != nil:
+			// Confirmation call: validate effort, initialise workspace, write files.
+			uc, err := parseUserConfirmation(ucRaw)
+			if err != nil {
+				return errorf("parse user_confirmation: %v", err)
+			}
+			return handleSecondCall(sm, workspace, extCtx, flags, uc)
+		default:
+			// First call: detect effort, return needs_user_confirmation (or needs_discussion).
 			return handleFirstCall(workspace, extCtx, flags)
 		}
-
-		// Second call: extract user_confirmation.
-		uc, err := parseUserConfirmation(ucRaw)
-		if err != nil {
-			return errorf("parse user_confirmation: %v", err)
-		}
-
-		return handleSecondCall(sm, workspace, extCtx, flags, uc)
 	}
 }
 
 // ---------- first call ----------
 
 func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFlags) (*mcp.CallToolResult, error) {
+	isTextSource := extCtx.GitHubTitle == "" && extCtx.GitHubBody == "" &&
+		extCtx.JiraIssueType == "" && extCtx.JiraSummary == "" && extCtx.JiraDescription == ""
+	if flags.Discuss && !flags.Auto && isTextSource {
+		result := PipelineInitWithContextResult{
+			NeedsDiscussion: &DiscussionPrompt{
+				Questions: defaultDiscussionQuestions(),
+				Message:   "Please answer the following questions to help the pipeline understand your intent.",
+			},
+		}
+		_ = workspace // no I/O on first call
+		return okJSON(result)
+	}
+
+	// Standard path: detect effort and return needs_user_confirmation.
+	return buildUserConfirmationPrompt(workspace, extCtx, flags, "")
+}
+
+// buildUserConfirmationPrompt constructs a needs_user_confirmation response.
+// enrichedBody is set when called from handleDiscussionCall; "" otherwise.
+func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags pipelineFlags, enrichedBody string) (*mcp.CallToolResult, error) {
 	// Detect effort.
 	combinedText := strings.TrimSpace(extCtx.GitHubTitle + " " + extCtx.GitHubBody + " " +
-		extCtx.JiraSummary + " " + extCtx.JiraDescription)
+		extCtx.JiraSummary + " " + extCtx.JiraDescription + " " + extCtx.TaskText)
 	effort := orchestrator.DetectEffort(flags.EffortOverride, extCtx.JiraStoryPoints, combinedText)
 
 	// Build EffortOptions for all three valid efforts with human-readable labels.
@@ -145,11 +220,19 @@ func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFla
 	currentBranch := flags.CurrentBranch
 	isMain := currentBranch == "" || currentBranch == "main" || currentBranch == "master"
 
+	// Must be non-empty: the orchestrator echoes this back in user_confirmation.enriched_request_body
+	// so initWorkspace can write a non-empty request.md (task_text is not re-sent on the second call).
+	echoBody := enrichedBody
+	if echoBody == "" {
+		echoBody = extCtx.TaskText
+	}
+
 	nuc := &UserConfirmationPrompt{
-		DetectedEffort: effort,
-		EffortOptions:  effortOptions,
-		CurrentBranch:  currentBranch,
-		IsMainBranch:   isMain,
+		DetectedEffort:      effort,
+		EffortOptions:       effortOptions,
+		CurrentBranch:       currentBranch,
+		IsMainBranch:        isMain,
+		EnrichedRequestBody: echoBody,
 		Message: fmt.Sprintf(
 			"Detected effort=%q. Current branch=%q (is_main=%v). "+
 				"Please confirm by calling pipeline_init_with_context again with "+
@@ -164,6 +247,21 @@ func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFla
 	}
 	_ = workspace // workspace echoed only; no I/O on first call
 	return okJSON(result)
+}
+
+// ---------- discussion call ----------
+
+// handleDiscussionCall handles the second call when discussion_answers is present.
+// It builds the enriched request body and returns needs_user_confirmation with
+// EnrichedRequestBody set. No filesystem writes are performed.
+func handleDiscussionCall(
+	workspace string,
+	extCtx externalContext,
+	flags pipelineFlags,
+	discussionAnswers string,
+) (*mcp.CallToolResult, error) {
+	enrichedBody := buildEnrichedRequestBody(extCtx.TaskText, discussionAnswers)
+	return buildUserConfirmationPrompt(workspace, extCtx, flags, enrichedBody)
 }
 
 // ---------- second call ----------
@@ -205,7 +303,7 @@ func handleSecondCall(
 	}
 
 	// Create directory, initialise state, write request.md.
-	requestMD, err := initWorkspace(sm, workspace, specName, flags, uc, branchName, flowTemplate, skippedPhases, extCtx)
+	requestMD, err := initWorkspace(sm, workspace, specName, flags, uc, branchName, flowTemplate, skippedPhases, extCtx, uc.EnrichedRequestBody)
 	if err != nil {
 		return errorf("%v", err)
 	}
@@ -225,6 +323,8 @@ func handleSecondCall(
 // initWorkspace executes the 8-step I/O sequence for the second call.
 // It creates the workspace directory, initialises state, applies all configuration in
 // a single write via sm.Configure, and writes request.md.
+// enrichedBody is the pre-built request.md body from the discussion call; "" means use
+// buildRequestMDWithBody defaults (extCtx.TaskText for text source, GitHub/Jira content otherwise).
 // Returns the request.md content on success.
 func initWorkspace(
 	sm *state.StateManager,
@@ -235,6 +335,7 @@ func initWorkspace(
 	flowTemplate string,
 	skippedPhases []string,
 	extCtx externalContext,
+	enrichedBody string,
 ) (string, error) {
 	// Validate workspace path — reject non-ASCII characters so that
 	// multibyte input (e.g. Japanese) never produces an unreadable directory name.
@@ -276,7 +377,11 @@ func initWorkspace(
 	}
 
 	// Write request.md.
-	requestMD := buildRequestMD(extCtx)
+	body := enrichedBody
+	if body == "" {
+		body = extCtx.TaskText
+	}
+	requestMD := buildRequestMDWithBody(extCtx, body)
 	reqPath := filepath.Join(workspace, "request.md")
 	if err := os.WriteFile(reqPath, []byte(requestMD), 0o600); err != nil {
 		return "", fmt.Errorf("write request.md: %w", err)
@@ -370,6 +475,7 @@ func parseFlags(args map[string]any) (pipelineFlags, error) {
 	flags.Auto = boolField(m, "auto")
 	flags.SkipPR = boolField(m, "skip_pr")
 	flags.Debug = boolField(m, "debug")
+	flags.Discuss = boolField(m, "discuss")
 	flags.EffortOverride = stringField(m, "effort_override")
 	flags.CurrentBranch = stringField(m, "current_branch")
 
@@ -392,23 +498,31 @@ func parseUserConfirmation(raw any) (userConfirmation, error) {
 	uc.Effort = stringField(m, "effort")
 	uc.WorkspaceSlug = stringField(m, "workspace_slug")
 	uc.UseCurrentBranch = boolField(m, "use_current_branch")
+	uc.EnrichedRequestBody = stringField(m, "enriched_request_body")
 	return uc, nil
 }
 
-// buildRequestMD constructs the request.md content.
-func buildRequestMD(extCtx externalContext) string {
+// buildRequestMDWithBody constructs the request.md content.
+// For text source type: uses the body parameter directly (enables both task_text passthrough
+// and discussion-enriched body). For github_issue/jira_issue: ignores body and uses the
+// GitHub/Jira fields as before.
+func buildRequestMDWithBody(extCtx externalContext, body string) string {
 	var sb strings.Builder
 
 	// Determine source_type and body.
 	sourceType := "text"
-	var body string
+	var resolvedBody string
 
-	if extCtx.GitHubTitle != "" || extCtx.GitHubBody != "" {
+	switch {
+	case extCtx.GitHubTitle != "" || extCtx.GitHubBody != "":
 		sourceType = "github_issue"
-		body = strings.TrimSpace(extCtx.GitHubTitle + "\n\n" + extCtx.GitHubBody)
-	} else if extCtx.JiraIssueType != "" || extCtx.JiraSummary != "" || extCtx.JiraDescription != "" {
+		resolvedBody = strings.TrimSpace(extCtx.GitHubTitle + "\n\n" + extCtx.GitHubBody)
+	case extCtx.JiraIssueType != "" || extCtx.JiraSummary != "" || extCtx.JiraDescription != "":
 		sourceType = "jira_issue"
-		body = strings.TrimSpace(extCtx.JiraSummary + "\n\n" + extCtx.JiraDescription)
+		resolvedBody = strings.TrimSpace(extCtx.JiraSummary + "\n\n" + extCtx.JiraDescription)
+	default:
+		// text source: use the body parameter directly.
+		resolvedBody = body
 	}
 
 	sb.WriteString("---\n")
@@ -427,13 +541,29 @@ func buildRequestMD(extCtx externalContext) string {
 	}
 	sb.WriteString("---\n")
 
-	if body != "" {
+	if resolvedBody != "" {
 		sb.WriteString("\n")
-		sb.WriteString(body)
+		sb.WriteString(resolvedBody)
 		sb.WriteString("\n")
 	}
 
 	return sb.String()
+}
+
+// buildEnrichedRequestBody combines the original task text with the discussion answers
+// in a structured markdown format.
+func buildEnrichedRequestBody(taskText, discussionAnswers string) string {
+	return fmt.Sprintf("%s\n\n## Discussion Answers\n\n%s", taskText, discussionAnswers)
+}
+
+// defaultDiscussionQuestions returns the set of generic clarification questions
+// presented to the user when --discuss is active.
+func defaultDiscussionQuestions() []string {
+	return []string{
+		"What is the expected outcome or definition of done for this task?",
+		"Are there any constraints, non-goals, or out-of-scope items?",
+		"Are there any specific implementation details, preferences, or context the agent should know?",
+	}
 }
 
 // ---------- field extraction helpers ----------

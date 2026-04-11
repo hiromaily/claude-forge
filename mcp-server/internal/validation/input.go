@@ -32,16 +32,17 @@ const effortXS = "XS"
 // Key-value flags: --type=<val> and --effort=<val>.
 var reKeyValueFlag = regexp.MustCompile(`--(?:type|effort)=[^\s]+`)
 
-// Bare flags (word-boundary aware): --auto, --nopr, --debug.
+// Bare flags (word-boundary aware): --auto, --nopr, --debug, --discuss.
 // Each pattern matches the flag only when preceded by start-of-string or
 // whitespace and followed by end-of-string or whitespace.
 // --resume is stripped from input for backward compatibility but is NOT
 // added to BareFlags — resume is now auto-detected from .specs/ directory existence.
 var (
-	reBareAuto   = regexp.MustCompile(`(?:^|\s)--auto(?:\s|$)`)
-	reBareNopr   = regexp.MustCompile(`(?:^|\s)--nopr(?:\s|$)`)
-	reBareDebug  = regexp.MustCompile(`(?:^|\s)--debug(?:\s|$)`)
-	reBareResume = regexp.MustCompile(`(?:^|\s)--resume(?:\s|$)`)
+	reBareAuto    = regexp.MustCompile(`(?:^|\s)--auto(?:\s|$)`)
+	reBareNopr    = regexp.MustCompile(`(?:^|\s)--nopr(?:\s|$)`)
+	reBareDebug   = regexp.MustCompile(`(?:^|\s)--debug(?:\s|$)`)
+	reBareDiscuss = regexp.MustCompile(`(?:^|\s)--discuss(?:\s|$)`)
+	reBareResume  = regexp.MustCompile(`(?:^|\s)--resume(?:\s|$)`)
 )
 
 // Regexps for URL classification.
@@ -201,6 +202,9 @@ func parseFlags(trimmed string) (map[string]string, []string) {
 	if reBareDebug.MatchString(padded) {
 		bareFlags = append(bareFlags, "debug")
 	}
+	if reBareDiscuss.MatchString(padded) {
+		bareFlags = append(bareFlags, "discuss")
+	}
 	return flags, bareFlags
 }
 
@@ -216,6 +220,7 @@ func stripFlags(s string) string {
 	s = reBareAuto.ReplaceAllString(s, " ")
 	s = reBareNopr.ReplaceAllString(s, " ")
 	s = reBareDebug.ReplaceAllString(s, " ")
+	s = reBareDiscuss.ReplaceAllString(s, " ")
 	s = reBareResume.ReplaceAllString(s, " ") // strip for backward compat; not in BareFlags
 
 	return strings.TrimSpace(s)

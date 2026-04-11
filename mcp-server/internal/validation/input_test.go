@@ -305,3 +305,81 @@ func TestValidateInputResumeFlagStrippedButNotInBareFlags(t *testing.T) {
 		t.Errorf("CoreText = %q, want %q", result.Parsed.CoreText, "20260401-effort-only-flow")
 	}
 }
+
+// TestDiscussFlag verifies the three AC cases for the --discuss bare flag.
+func TestDiscussFlag(t *testing.T) {
+	t.Parallel()
+
+	// AC-1: --discuss alone appears in BareFlags
+	t.Run("discuss_alone_in_bare_flags", func(t *testing.T) {
+		t.Parallel()
+		result := validation.ValidateInput("implement login --discuss")
+		if !result.Valid {
+			t.Fatalf("expected valid, got errors: %v", result.Errors)
+		}
+		foundDiscuss := false
+		for _, f := range result.Parsed.BareFlags {
+			if f == "discuss" {
+				foundDiscuss = true
+			}
+		}
+		if !foundDiscuss {
+			t.Errorf("BareFlags should contain 'discuss', got %v", result.Parsed.BareFlags)
+		}
+	})
+
+	// AC-2: --discuss is stripped from core text; round-trip produces correct CoreText and BareFlags
+	t.Run("discuss_stripped_from_core_text", func(t *testing.T) {
+		t.Parallel()
+		result := validation.ValidateInput("implement login --discuss")
+		if !result.Valid {
+			t.Fatalf("expected valid, got errors: %v", result.Errors)
+		}
+		if strings.Contains(result.Parsed.CoreText, "--discuss") {
+			t.Errorf("CoreText %q should not contain --discuss after stripping", result.Parsed.CoreText)
+		}
+		if result.Parsed.CoreText != "implement login" {
+			t.Errorf("CoreText = %q, want %q", result.Parsed.CoreText, "implement login")
+		}
+		foundDiscuss := false
+		for _, f := range result.Parsed.BareFlags {
+			if f == "discuss" {
+				foundDiscuss = true
+			}
+		}
+		if !foundDiscuss {
+			t.Errorf("BareFlags should contain 'discuss', got %v", result.Parsed.BareFlags)
+		}
+	})
+
+	// AC-3: --discuss combined with --auto — both flags present in BareFlags
+	t.Run("discuss_combined_with_auto_in_bare_flags", func(t *testing.T) {
+		t.Parallel()
+		result := validation.ValidateInput("implement login --discuss --auto")
+		if !result.Valid {
+			t.Fatalf("expected valid, got errors: %v", result.Errors)
+		}
+		foundDiscuss := false
+		foundAuto := false
+		for _, f := range result.Parsed.BareFlags {
+			if f == "discuss" {
+				foundDiscuss = true
+			}
+			if f == "auto" {
+				foundAuto = true
+			}
+		}
+		if !foundDiscuss {
+			t.Errorf("BareFlags should contain 'discuss', got %v", result.Parsed.BareFlags)
+		}
+		if !foundAuto {
+			t.Errorf("BareFlags should contain 'auto', got %v", result.Parsed.BareFlags)
+		}
+		if strings.Contains(result.Parsed.CoreText, "--discuss") {
+			t.Errorf("CoreText %q should not contain --discuss after stripping", result.Parsed.CoreText)
+		}
+		if strings.Contains(result.Parsed.CoreText, "--auto") {
+			t.Errorf("CoreText %q should not contain --auto after stripping", result.Parsed.CoreText)
+		}
+	})
+}

@@ -353,17 +353,24 @@ func RegisterAll(
 	srv.AddTool(
 		mcp.NewTool("pipeline_init_with_context",
 			mcp.WithDescription("Complete pipeline initialization using fetched external context. "+
-				"First call (user_confirmation absent): runs decisions 6-13 and returns needs_user_confirmation. "+
-				"Second call (user_confirmation present): finalizes workspace, writes state.json and request.md."),
+				"First call (neither user_confirmation nor discussion_answers present): detects effort and returns needs_user_confirmation "+
+				"(or needs_discussion when --discuss is active, source is text, and not --auto). "+
+				"Discussion call (discussion_answers non-empty): builds enriched body, returns needs_user_confirmation with enriched_request_body. "+
+				"Confirmation call (user_confirmation present): finalizes workspace, writes state.json and request.md."),
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Workspace path from pipeline_init result")),
 			mcp.WithString("source_id", mcp.Description("Source identifier from pipeline_init (e.g. GitHub issue number or Jira key). Pass result.source_id to enable meaningful workspace naming.")),
 			mcp.WithString("source_url", mcp.Description("Source URL from pipeline_init (e.g. GitHub issue URL or Jira browse URL). Pass result.source_url to enable post-to-source at pipeline end.")),
 			mcp.WithObject("external_context", mcp.Description("GitHub or Jira context fields")),
-			mcp.WithObject("flags", mcp.Description("Parsed flags from pipeline_init: auto, skip_pr, debug, type_override, effort_override, current_branch")),
+			mcp.WithObject("flags", mcp.Description("Parsed flags from pipeline_init: auto, skip_pr, debug, discuss, type_override, effort_override, current_branch")),
 			// mcp.WithObject is the correct mechanism for complex nested parameters.
 			// It allows the orchestrator to pass structured JSON objects rather than
 			// encoding them as strings. See existing usage in task_init.go for reference.
 			mcp.WithObject("user_confirmation", mcp.Description("Confirmed effort and workspace slug. Absent on first call; present on second call.")),
+			mcp.WithString("task_text", mcp.Description("Original task description for text-source pipelines. Pass result.core_text from pipeline_init on the first call.")),
+			mcp.WithString("discussion_answers", mcp.Description(
+				"Newline-separated Q&A collected from the user after needs_discussion is returned. "+
+					"Present on the discussion call; absent on all other calls.",
+			)),
 		),
 		PipelineInitWithContextHandler(sm),
 	)
