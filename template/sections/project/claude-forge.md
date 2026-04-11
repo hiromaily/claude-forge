@@ -1,3 +1,7 @@
+<p align="center">
+<img src="./assets/claude-forge.svg" alt="claude-forge" width="100%" />
+</p>
+
 # claude-forge
 
 **The orchestration layer for spec-driven AI development.**

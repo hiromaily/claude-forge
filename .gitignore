@@ -6,6 +6,7 @@ bin/
 node_modules/
 
 docs/.vitepress/cache/
+__pycache__
 
 # build / generate output
 /target

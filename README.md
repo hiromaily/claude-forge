@@ -2,6 +2,10 @@
 ⚠️ AUTO-GENERATED FILE — DO NOT EDIT
 Source: template/pages/README.tpl.md · Run `make docs` to regenerate.
 -->
+<p align="center">
+<img src="./assets/claude-forge.svg" alt="claude-forge" width="100%" />
+</p>
+
 # claude-forge
 
 **The orchestration layer for spec-driven AI development.**
