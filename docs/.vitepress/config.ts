@@ -142,6 +142,10 @@ export default withMermaid(
                     text: "Environment Variables",
                     link: "/reference/env-vars",
                   },
+                  {
+                    text: "Workflow Instructions",
+                    link: "/reference/workflow-instructions",
+                  },
                 ],
               },
             ],
@@ -289,6 +293,10 @@ export default withMermaid(
                   { text: "MCPツール", link: "/ja/reference/mcp-tools" },
                   { text: "CLIフラグ", link: "/ja/reference/cli-flags" },
                   { text: "環境変数", link: "/ja/reference/env-vars" },
+                  {
+                    text: "ワークフロールール",
+                    link: "/ja/reference/workflow-instructions",
+                  },
                 ],
               },
             ],

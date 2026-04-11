@@ -123,7 +123,18 @@ sequenceDiagram
         TD-->>Orch: tasks output
         Orch->>FS: write tasks.md
         Orch->>SM: phase-log phase-4
-        Orch->>SM: phase-complete phase-4
+        Orch->>SM: pipeline_report_result phase-4
+        SM->>SM: ParseTasksMd
+        SM->>SM: LoadRules (.specs/instructions.md)
+        SM->>SM: Validate(tasks, rules)
+        alt workflow-rule violations exist
+            SM->>FS: write review-tasks.md
+            SM-->>Orch: next_action_hint=revision_required
+            Note over Orch,SM: Automatic REVISE — re-run task-decomposer
+        else no violations
+            SM->>SM: phase-complete phase-4
+            SM-->>Orch: next_action_hint=proceed
+        end
 
         Orch->>SM: phase-start phase-4b
         Orch->>TR: Agent(workspace)

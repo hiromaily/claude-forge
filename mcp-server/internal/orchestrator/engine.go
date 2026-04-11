@@ -302,14 +302,64 @@ func (*Engine) handleCheckpointA(st *state.State) (Action, error) {
 	), nil
 }
 
-// handlePhaseFour handles Phase 4 (task decomposer).
-func (*Engine) handlePhaseFour(_ *state.State) (Action, error) {
+// handlePhaseFour handles Phase 4 (task decomposer) with two entry modes:
+//
+//   - Fresh run (no review-tasks.md): spawn task-decomposer with [design.md].
+//   - Revision run (review-tasks.md present, written by applyWorkflowRules
+//     on a workflow-rules violation): spawn task-decomposer with
+//     [design.md, review-tasks.md] so the decomposer sees the findings, or
+//     emit a checkpoint if Revisions.TaskRevisions has hit MaxRevisionRetries.
+//
+// The retry-limit checkpoint name is "task-workflow-rules-retry-limit",
+// distinct from the phase-4b "task-retry-limit", so logs and analytics can
+// tell the two escalation sources apart. This mirrors handlePhaseFourB's
+// REVISE path structurally.
+func (e *Engine) handlePhaseFour(st *state.State) (Action, error) { //nolint:revive // e intentionally unused; dispatch table method
+	reviewPath := filepath.Join(st.Workspace, state.ArtifactReviewTasks)
+
+	// Fresh run: no prior workflow-rules findings on disk.
+	if _, err := os.Stat(reviewPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return Action{}, fmt.Errorf("handlePhaseFour: stat %s: %w", reviewPath, err)
+		}
+		return phaseFourFreshAction(), nil
+	}
+
+	// Revision run: enforce retry limit, then re-spawn.
+	return phaseFourRevisionAction(st)
+}
+
+// phaseFourFreshAction returns the spawn action for a first-time phase-4 run.
+func phaseFourFreshAction() Action {
 	return NewSpawnAgentAction(
 		agentTaskDecomposer,
 		"Decompose the design into implementation tasks.",
 		state.DefaultModel,
 		PhaseFour,
 		[]string{state.ArtifactDesign},
+		state.ArtifactTasks,
+	)
+}
+
+// phaseFourRevisionAction handles the phase-4 revision run after a
+// workflow-rules violation. Enforces MaxRevisionRetries before re-spawning.
+func phaseFourRevisionAction(st *state.State) (Action, error) {
+	// Enforce the same retry limit handlePhaseFourB uses so a misbehaving
+	// decomposer cannot loop forever under --auto mode.
+	if st.Revisions.TaskRevisions >= state.MaxRevisionRetries {
+		return NewCheckpointAction(
+			"task-workflow-rules-retry-limit",
+			fmt.Sprintf("Task revision limit reached (%d retries) from workflow-rules enforcement. Human review required.", state.MaxRevisionRetries),
+			[]string{"approve", "abandon"},
+		), nil
+	}
+
+	return NewSpawnAgentAction(
+		agentTaskDecomposer,
+		"Revise task decomposition based on workflow-rules findings in review-tasks.md.",
+		state.DefaultModel,
+		PhaseFour,
+		[]string{state.ArtifactDesign, state.ArtifactReviewTasks},
 		state.ArtifactTasks,
 	), nil
 }

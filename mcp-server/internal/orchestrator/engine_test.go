@@ -411,7 +411,7 @@ func TestNextAction(t *testing.T) {
 			wantType: ActionCheckpoint,
 		},
 
-		// ── Phase 4: task decomposer ──────────────────────────────────────────
+		// ── Phase 4: task decomposer (fresh run — no review-tasks.md) ────────
 		{
 			name: "phase4_task_decomposer",
 			setupSM: func(t *testing.T) *state.StateManager {
@@ -420,6 +420,57 @@ func TestNextAction(t *testing.T) {
 			},
 			wantType:  ActionSpawnAgent,
 			wantAgent: agentTaskDecomposer,
+		},
+
+		// ── Phase 4: revision run — workflow-rules wrote review-tasks.md ─────
+		// The engine must re-spawn task-decomposer with review-tasks.md in
+		// InputFiles so the decomposer sees the findings. Mirrors the
+		// phase-4b REVISE path in handlePhaseFourB.
+		{
+			name: "phase4_revision_run",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				sm := newTestStateManager(t, "phase-4", func(s *state.State) error {
+					s.Revisions.TaskRevisions = 1
+					return nil
+				})
+				st, err := sm.GetState()
+				if err != nil {
+					t.Fatalf("GetState: %v", err)
+				}
+				if err := writeFileForTest(st.Workspace+"/review-tasks.md", "## Verdict: REVISE\n\n- rule proto-rule violated\n"); err != nil {
+					t.Fatalf("writeFileForTest: %v", err)
+				}
+				return sm
+			},
+			wantType:          ActionSpawnAgent,
+			wantAgent:         agentTaskDecomposer,
+			wantInputContains: state.ArtifactReviewTasks,
+		},
+
+		// ── Phase 4: workflow-rules retry limit escalates to human ───────────
+		// When TaskRevisions already hit MaxRevisionRetries, handlePhaseFour
+		// emits a checkpoint named "task-workflow-rules-retry-limit" (distinct
+		// from the phase-4b "task-retry-limit") so logs and analytics can tell
+		// the two escalation sources apart.
+		{
+			name: "phase4_workflow_rules_retry_limit",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				sm := newTestStateManager(t, "phase-4", func(s *state.State) error {
+					s.Revisions.TaskRevisions = 2
+					return nil
+				})
+				st, err := sm.GetState()
+				if err != nil {
+					t.Fatalf("GetState: %v", err)
+				}
+				if err := writeFileForTest(st.Workspace+"/review-tasks.md", "## Verdict: REVISE\n"); err != nil {
+					t.Fatalf("writeFileForTest: %v", err)
+				}
+				return sm
+			},
+			wantType: ActionCheckpoint,
 		},
 
 		// ── Decision 19: task review — REVISE verdict re-spawns task decomposer
@@ -1240,6 +1291,83 @@ func TestPostToSource_CheckpointOptions(t *testing.T) {
 				t.Errorf("action.PresentToUser does not contain URL %q: %q", tc.wantURLInMsg, action.PresentToUser)
 			}
 		})
+	}
+}
+
+// TestHandlePhaseFour_WorkflowRulesRetryLimitCheckpoint verifies that when
+// TaskRevisions has reached MaxRevisionRetries and review-tasks.md exists,
+// handlePhaseFour emits a checkpoint with the workflow-rules-specific name
+// and the ["approve","abandon"] option set. The distinct name lets logs and
+// analytics differentiate this escalation from the phase-4b task-retry-limit.
+func TestHandlePhaseFour_WorkflowRulesRetryLimitCheckpoint(t *testing.T) {
+	t.Parallel()
+
+	sm := newTestStateManager(t, "phase-4", func(s *state.State) error {
+		s.Revisions.TaskRevisions = state.MaxRevisionRetries
+		return nil
+	})
+	st, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if err := writeFileForTest(st.Workspace+"/review-tasks.md", "## Verdict: REVISE\n"); err != nil {
+		t.Fatalf("writeFileForTest: %v", err)
+	}
+
+	action, err := defaultEng().NextAction(sm, "")
+	if err != nil {
+		t.Fatalf("NextAction: %v", err)
+	}
+	if action.Type != ActionCheckpoint {
+		t.Fatalf("action.Type = %q, want %q", action.Type, ActionCheckpoint)
+	}
+	if action.Name != "task-workflow-rules-retry-limit" {
+		t.Errorf("action.Name = %q, want %q", action.Name, "task-workflow-rules-retry-limit")
+	}
+	wantOptions := []string{"approve", "abandon"}
+	if !slices.Equal(action.Options, wantOptions) {
+		t.Errorf("action.Options = %v, want %v", action.Options, wantOptions)
+	}
+	if !strings.Contains(action.PresentToUser, "workflow-rules") {
+		t.Errorf("action.PresentToUser = %q, want substring %q", action.PresentToUser, "workflow-rules")
+	}
+}
+
+// TestHandlePhaseFour_RevisionRunIncludesReviewTasks verifies that when
+// review-tasks.md exists and TaskRevisions is still under the retry limit,
+// handlePhaseFour re-spawns task-decomposer with both design.md and
+// review-tasks.md in InputFiles so the decomposer sees the findings.
+func TestHandlePhaseFour_RevisionRunIncludesReviewTasks(t *testing.T) {
+	t.Parallel()
+
+	sm := newTestStateManager(t, "phase-4", func(s *state.State) error {
+		s.Revisions.TaskRevisions = 1
+		return nil
+	})
+	st, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if err := writeFileForTest(st.Workspace+"/review-tasks.md", "## Verdict: REVISE\n"); err != nil {
+		t.Fatalf("writeFileForTest: %v", err)
+	}
+
+	action, err := defaultEng().NextAction(sm, "")
+	if err != nil {
+		t.Fatalf("NextAction: %v", err)
+	}
+	if action.Type != ActionSpawnAgent {
+		t.Fatalf("action.Type = %q, want %q", action.Type, ActionSpawnAgent)
+	}
+	if action.Agent != agentTaskDecomposer {
+		t.Errorf("action.Agent = %q, want %q", action.Agent, agentTaskDecomposer)
+	}
+	wantInputs := []string{state.ArtifactDesign, state.ArtifactReviewTasks}
+	if !slices.Equal(action.InputFiles, wantInputs) {
+		t.Errorf("action.InputFiles = %v, want %v", action.InputFiles, wantInputs)
+	}
+	if !strings.Contains(action.Prompt, "workflow-rules") {
+		t.Errorf("action.Prompt = %q, want substring %q", action.Prompt, "workflow-rules")
 	}
 }
 

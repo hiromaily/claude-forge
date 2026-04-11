@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
@@ -637,5 +638,377 @@ func TestPipelineReportResult(t *testing.T) {
 				tc.checkState(t, dir)
 			}
 		})
+	}
+}
+
+// ---------- Phase-4 workflow rules integration tests ----------
+
+// setupPhase4SpecWorkspace creates a tmpRoot/.specs/<spec>/ layout and
+// initialises state for a phase-4 workflow-rules integration test.
+// Returns (tmpRoot, workspace, StateManager).
+func setupPhase4SpecWorkspace(t *testing.T, specName string) (string, string, *state.StateManager) {
+	t.Helper()
+	tmpRoot := t.TempDir()
+	workspace := filepath.Join(tmpRoot, ".specs", specName)
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(workspace, specName); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	return tmpRoot, workspace, sm
+}
+
+// callPhase4Report invokes PipelineReportResultHandler on phase-4 with a
+// minimal set of parameters and returns the parsed response. Callers must
+// write tasks.md (and any instructions.md) before calling this helper.
+func callPhase4Report(t *testing.T, sm *state.StateManager, workspace string) reportResultResponse {
+	t.Helper()
+	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
+	res := callTool(t, h, map[string]any{
+		"workspace":   workspace,
+		"phase":       "phase-4",
+		"tokens_used": 100,
+		"duration_ms": 500,
+		"model":       "sonnet",
+	})
+	if res.IsError {
+		t.Fatalf("unexpected MCP error: %s", textContent(res))
+	}
+	return parsePRRResponse(t, textContent(res))
+}
+
+// writeProtoRuleViolationFixture writes a canonical .specs/instructions.md
+// with a single "proto-rule" (human_gate required for proto files) and a
+// tasks.md that violates it (a sequential proto task). Shared by the phase-4
+// workflow-rules tests so a rule-shape change only needs one update.
+func writeProtoRuleViolationFixture(t *testing.T, tmpRoot, workspace string) {
+	t.Helper()
+	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
+	instructionsBody := `---
+rules:
+  - id: proto-rule
+    when:
+      files_match: ["**/*.proto"]
+    require: human_gate
+    reason: "coordinate with proto repo"
+---
+`
+	if err := os.WriteFile(instructionsPath, []byte(instructionsBody), 0o644); err != nil {
+		t.Fatalf("write instructions: %v", err)
+	}
+	tasksBody := `# Tasks
+
+## Task 1: Update deal proto
+
+Add a new field to the deal proto.
+
+mode: sequential
+files:
+- backend/pkg/api/deal.proto
+`
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+}
+
+// TestReportResult_Phase4WorkflowRulesViolation verifies that when a phase-4
+// tasks.md violates a rule in .specs/instructions.md, pipeline_report_result
+// writes review-tasks.md, returns revision_required, and does NOT mark
+// phase-4 as complete.
+func TestReportResult_Phase4WorkflowRulesViolation(t *testing.T) {
+	t.Parallel()
+
+	// Layout: tmpRoot/.specs/<spec>/ is the workspace; repo root is tmpRoot.
+	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-test-workflow-rules")
+	writeProtoRuleViolationFixture(t, tmpRoot, workspace)
+
+	resp := callPhase4Report(t, sm, workspace)
+
+	if resp.NextActionHint != "revision_required" {
+		t.Errorf("NextActionHint = %q, want %q", resp.NextActionHint, "revision_required")
+	}
+	if resp.VerdictParsed != "REVISE" {
+		t.Errorf("VerdictParsed = %q, want %q", resp.VerdictParsed, "REVISE")
+	}
+	if len(resp.Findings) == 0 {
+		t.Error("Findings is empty, want at least one violation")
+	}
+	if !resp.StateUpdated {
+		t.Errorf("StateUpdated = false, want true")
+	}
+	if !strings.Contains(resp.Warning, "phase-4 workflow rules") {
+		t.Errorf("Warning = %q, want substring %q", resp.Warning, "phase-4 workflow rules")
+	}
+
+	// Assert: review-tasks.md was written and contains the expected tokens.
+	reviewPath := filepath.Join(workspace, "review-tasks.md")
+	data, err := os.ReadFile(reviewPath)
+	if err != nil {
+		t.Fatalf("review-tasks.md not written: %v", err)
+	}
+	if !strings.Contains(string(data), "proto-rule") {
+		t.Errorf("review-tasks.md missing rule ID 'proto-rule':\n%s", data)
+	}
+	if !strings.Contains(string(data), "REVISE") {
+		t.Errorf("review-tasks.md missing 'REVISE' verdict:\n%s", data)
+	}
+
+	// Assert: phase-4 was NOT marked complete.
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 must NOT be in CompletedPhases after workflow rules violation; completed = %v", s.CompletedPhases)
+	}
+
+	// Assert: TaskRevisions was bumped so handlePhaseFour can enforce the
+	// retry limit on the next pipeline_next_action call.
+	if s.Revisions.TaskRevisions != 1 {
+		t.Errorf("Revisions.TaskRevisions = %d, want 1", s.Revisions.TaskRevisions)
+	}
+}
+
+// TestReportResult_Phase4WorkflowRulesBumpsTaskRevisions verifies that each
+// phase-4 workflow-rules violation increments Revisions.TaskRevisions so the
+// engine's MaxRevisionRetries guard (handlePhaseFour) eventually escalates.
+func TestReportResult_Phase4WorkflowRulesBumpsTaskRevisions(t *testing.T) {
+	t.Parallel()
+
+	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-bump-task-revisions")
+	writeProtoRuleViolationFixture(t, tmpRoot, workspace)
+
+	// First call: violation → revision_required, TaskRevisions == 1.
+	resp1 := callPhase4Report(t, sm, workspace)
+	if resp1.NextActionHint != "revision_required" {
+		t.Fatalf("first call: NextActionHint = %q, want %q", resp1.NextActionHint, "revision_required")
+	}
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if s.Revisions.TaskRevisions != 1 {
+		t.Errorf("after first violation: TaskRevisions = %d, want 1", s.Revisions.TaskRevisions)
+	}
+
+	// Second call: same violation → another bump, TaskRevisions == 2.
+	// This matches MaxRevisionRetries, at which point handlePhaseFour returns
+	// a checkpoint on the next pipeline_next_action call (covered in engine tests).
+	resp2 := callPhase4Report(t, sm, workspace)
+	if resp2.NextActionHint != "revision_required" {
+		t.Fatalf("second call: NextActionHint = %q, want %q", resp2.NextActionHint, "revision_required")
+	}
+	s, err = state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if s.Revisions.TaskRevisions != 2 {
+		t.Errorf("after second violation: TaskRevisions = %d, want 2", s.Revisions.TaskRevisions)
+	}
+}
+
+// TestReportResult_Phase4NoInstructionsFile verifies that phase-4 completes
+// normally (no revision_required) when .specs/instructions.md is absent.
+func TestReportResult_Phase4NoInstructionsFile(t *testing.T) {
+	t.Parallel()
+
+	_, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-no-rules")
+
+	tasksBody := `# Tasks
+
+## Task 1: Do thing
+
+mode: sequential
+`
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	resp := callPhase4Report(t, sm, workspace)
+	if resp.NextActionHint == "revision_required" {
+		t.Errorf("NextActionHint = revision_required without instructions.md, want proceed")
+	}
+	if resp.NextActionHint != "proceed" {
+		t.Errorf("NextActionHint = %q, want %q", resp.NextActionHint, "proceed")
+	}
+
+	// Phase-4 should be in CompletedPhases.
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if !slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 not in CompletedPhases; completed = %v", s.CompletedPhases)
+	}
+}
+
+// TestReportResult_Phase4MalformedInstructions verifies that a malformed
+// .specs/instructions.md surfaces as an MCP error at phase-4 completion
+// rather than being silently ignored. This catches typo'd or broken rule
+// files early instead of leaking through as "proceed".
+func TestReportResult_Phase4MalformedInstructions(t *testing.T) {
+	t.Parallel()
+
+	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-malformed-rules")
+
+	// Write a .specs/instructions.md with an unknown field ("requires" typo).
+	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
+	instructionsBody := `---
+rules:
+  - id: typo-rule
+    when:
+      files_match: ["**/*.go"]
+    requires: human_gate
+    reason: "typo test"
+---
+`
+	if err := os.WriteFile(instructionsPath, []byte(instructionsBody), 0o644); err != nil {
+		t.Fatalf("write instructions: %v", err)
+	}
+
+	// Valid tasks.md — violation should NOT be the failure mode; the load
+	// error should surface first.
+	tasksBody := `# Tasks
+
+## Task 1: Do thing
+
+mode: sequential
+files:
+- backend/pkg/foo.go
+`
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
+	res := callTool(t, h, map[string]any{
+		"workspace":   workspace,
+		"phase":       "phase-4",
+		"tokens_used": 10,
+		"duration_ms": 50,
+		"model":       "sonnet",
+	})
+	if !res.IsError {
+		t.Fatalf("expected MCP error for malformed instructions.md, got success: %s", textContent(res))
+	}
+	if !strings.Contains(textContent(res), "workflow rules") {
+		t.Errorf("error content = %q, want substring %q", textContent(res), "workflow rules")
+	}
+
+	// Phase-4 must NOT have advanced.
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 should NOT be in CompletedPhases on malformed rules; completed = %v", s.CompletedPhases)
+	}
+}
+
+// TestReportResult_Phase4RulesPresentNoViolations verifies the happy path
+// where .specs/instructions.md has rules but no task violates them: phase-4
+// completes normally and any stale review-tasks.md left behind by a previous
+// workflow-rules iteration is removed so phase-4b can write a fresh one.
+func TestReportResult_Phase4RulesPresentNoViolations(t *testing.T) {
+	t.Parallel()
+
+	tmpRoot, workspace, sm := setupPhase4SpecWorkspace(t, "20260410-rules-no-violations")
+
+	instructionsPath := filepath.Join(tmpRoot, ".specs", "instructions.md")
+	instructionsBody := `---
+rules:
+  - id: proto-rule
+    when:
+      files_match: ["**/*.proto"]
+    require: human_gate
+    reason: "coordinate with proto repo"
+---
+`
+	if err := os.WriteFile(instructionsPath, []byte(instructionsBody), 0o644); err != nil {
+		t.Fatalf("write instructions: %v", err)
+	}
+
+	// Task does NOT touch a .proto file — no violation.
+	tasksBody := `# Tasks
+
+## Task 1: Refactor helper
+
+mode: sequential
+files:
+- backend/pkg/util/helper.go
+`
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	// Pre-seed a stale review-tasks.md from a prior workflow-rules iteration
+	// (REVISE verdict). applyWorkflowRules must delete it on pass-through so
+	// handlePhaseFourB does not read a stale verdict.
+	stalePath := filepath.Join(workspace, "review-tasks.md")
+	stale := "# Stale\n\n**Verdict:** REVISE\n\nLeftover from previous iteration.\n"
+	if err := os.WriteFile(stalePath, []byte(stale), 0o644); err != nil {
+		t.Fatalf("write stale review-tasks.md: %v", err)
+	}
+
+	resp := callPhase4Report(t, sm, workspace)
+
+	if resp.NextActionHint != "proceed" {
+		t.Errorf("NextActionHint = %q, want %q", resp.NextActionHint, "proceed")
+	}
+
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if !slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 not in CompletedPhases; completed = %v", s.CompletedPhases)
+	}
+
+	// Stale review-tasks.md must have been removed so the phase-4b reviewer
+	// writes a fresh file.
+	if _, statErr := os.Stat(stalePath); !os.IsNotExist(statErr) {
+		t.Errorf("stale review-tasks.md should have been removed; Stat err = %v", statErr)
+	}
+}
+
+// TestReportResult_Phase4FlatWorkspace verifies that a flat workspace (not
+// under a .specs/ directory) falls through the workflow-rules check silently
+// and completes phase-4 normally — the repo-root sanity check must prevent
+// mis-resolving a repo root into an unrelated directory.
+func TestReportResult_Phase4FlatWorkspace(t *testing.T) {
+	t.Parallel()
+
+	// Flat layout: workspace is directly a TempDir, not under .specs/.
+	dir := t.TempDir()
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(dir, "flat-spec"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	tasksBody := `# Tasks
+
+## Task 1: Do thing
+
+mode: sequential
+files:
+- backend/pkg/api/deal.proto
+`
+	if err := os.WriteFile(filepath.Join(dir, "tasks.md"), []byte(tasksBody), 0o644); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	resp := callPhase4Report(t, sm, dir)
+	if resp.NextActionHint != "proceed" {
+		t.Errorf("NextActionHint = %q, want %q (flat workspace should fall through)", resp.NextActionHint, "proceed")
+	}
+
+	s, err := state.ReadState(dir)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if !slices.Contains(s.CompletedPhases, "phase-4") {
+		t.Errorf("phase-4 should be in CompletedPhases for flat workspace; completed = %v", s.CompletedPhases)
 	}
 }

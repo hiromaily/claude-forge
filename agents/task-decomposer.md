@@ -36,6 +36,11 @@ A numbered task list where each task includes:
 - Mark `[parallel]` only if the task does NOT depend on another task's output AND does not write to the same files as another parallel task
 - Mark `[sequential]` if it depends on a prior task or shares files with another task
 - Mark `[human_gate]` if the task requires human action that AI cannot perform — e.g. merging a PR in another repository, updating an external dependency after a release, manual approval from a stakeholder, or any step that blocks progress until a human completes it. The pipeline will pause deterministically and prompt the user.
+- If `.specs/instructions.md` exists in the repository, it contains deterministic
+  workflow rules that are enforced by the Go engine at phase-4 completion.
+  Read it before generating tasks and honour its conditions (e.g., files_match,
+  title_matches) so you emit `mode: human_gate` on the first pass. Missing
+  `mode: human_gate` on a rule-matching task will trigger an automatic REVISE.
 - Group parallel tasks by their dependency tier
 
 ## Output Format
