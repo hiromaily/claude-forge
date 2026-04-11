@@ -8,7 +8,7 @@ A Go MCP server (`forge-state-mcp`) owns all pipeline logic — which phase runs
 User → SKILL.md (LLM executes) → Go Engine (decides next phase) → MCP tools (state + guards)
 ```
 
-1. Call `pipeline_next_action` — receive a typed action: `spawn_agent`, `checkpoint`, `exec`, `write_file`, or `done`
+1. Call `pipeline_next_action` — receive a typed action: `spawn_agent`, `checkpoint`, `human_gate`, `exec`, `write_file`, or `done`
 2. Execute the action
 3. Call `pipeline_report_result` — Engine advances state
 

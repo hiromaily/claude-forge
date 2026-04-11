@@ -205,12 +205,12 @@ claude-forge removes phase-transition decisions from the LLM entirely. A Go engi
 
 This determinism runs at two layers:
 
-**Engine layer (MCP)** — all transition decisions are deterministic functions of `state.json`. Phase sequencing, artifact validation, retry limits, review verdict handling — none of it is subject to LLM interpretation.
+**Engine layer (MCP)** — all transition decisions are deterministic functions of `state.json`. Phase sequencing, artifact validation, retry limits, review verdict handling, and checkpoint gating — none of it is subject to LLM interpretation.
 
 **Hook layer (shell)** — critical invariants enforced at the OS level:
 - **Read-only guard** — blocks source edits during analysis phases (exit 2)
 - **Commit guard** — prevents git commits during parallel task execution
-- **Checkpoint gate** — blocks progression until human approval is recorded
+- **Stop guard** — prevents session termination while a pipeline is in progress (exit 2)
 
 Neither layer depends on the LLM following instructions. They're hard stops.
 
@@ -514,7 +514,7 @@ The pipeline is built on three core principles:
 
 1. **Files are the API** — Each phase writes a markdown artifact to `.specs/{date}-{name}/`. The next phase reads those files, never the conversation history. This keeps every agent's context small and focused.
 2. **State on disk** — All progress is tracked in `state.json`, so pipelines survive context compaction and session restarts. Hooks read this state to enforce constraints.
-3. **Engine-driven control** — The Go MCP server (`forge-state-mcp`) owns all orchestration decisions: which phase runs next, skip conditions, retry limits, artifact validation. The LLM follows typed actions returned by `pipeline_next_action` — it cannot invent or skip steps. Shell hooks enforce a complementary set of OS-level invariants (read-only analysis, no parallel commits, checkpoint gates) that hold regardless of the LLM's behavior.
+3. **Engine-driven control** — The Go MCP server (`forge-state-mcp`) owns all orchestration decisions: which phase runs next, skip conditions, retry limits, artifact validation, and checkpoint gating. The LLM follows typed actions returned by `pipeline_next_action` — it cannot invent or skip steps. Shell hooks enforce a complementary set of OS-level invariants (read-only analysis, no parallel commits, session stop guards) that hold regardless of the LLM's behavior.
 
 For the full data flow, state machine, hook architecture, agent input/output matrix, and concurrency model, browse [`docs/architecture/`](./docs/architecture) directly.
 
@@ -605,7 +605,7 @@ A Go MCP server (`forge-state-mcp`) owns all pipeline logic — which phase runs
 User → SKILL.md (LLM executes) → Go Engine (decides next phase) → MCP tools (state + guards)
 ```
 
-1. Call `pipeline_next_action` — receive a typed action: `spawn_agent`, `checkpoint`, `exec`, `write_file`, or `done`
+1. Call `pipeline_next_action` — receive a typed action: `spawn_agent`, `checkpoint`, `human_gate`, `exec`, `write_file`, or `done`
 2. Execute the action
 3. Call `pipeline_report_result` — Engine advances state
 

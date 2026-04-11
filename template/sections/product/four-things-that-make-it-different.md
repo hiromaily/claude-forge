@@ -44,12 +44,12 @@ claude-forge removes phase-transition decisions from the LLM entirely. A Go engi
 
 This determinism runs at two layers:
 
-**Engine layer (MCP)** — all transition decisions are deterministic functions of `state.json`. Phase sequencing, artifact validation, retry limits, review verdict handling — none of it is subject to LLM interpretation.
+**Engine layer (MCP)** — all transition decisions are deterministic functions of `state.json`. Phase sequencing, artifact validation, retry limits, review verdict handling, and checkpoint gating — none of it is subject to LLM interpretation.
 
 **Hook layer (shell)** — critical invariants enforced at the OS level:
 - **Read-only guard** — blocks source edits during analysis phases (exit 2)
 - **Commit guard** — prevents git commits during parallel task execution
-- **Checkpoint gate** — blocks progression until human approval is recorded
+- **Stop guard** — prevents session termination while a pipeline is in progress (exit 2)
 
 Neither layer depends on the LLM following instructions. They're hard stops.
 
