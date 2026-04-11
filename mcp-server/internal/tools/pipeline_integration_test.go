@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -354,14 +355,7 @@ func TestDiscussModeEndToEnd(t *testing.T) {
 	}
 	frontMatter := parts[1]
 	body := parts[2]
-	foundSourceType := false
-	for _, line := range strings.Split(frontMatter, "\n") {
-		if line == "source_type: text" {
-			foundSourceType = true
-			break
-		}
-	}
-	if !foundSourceType {
+	if !slices.Contains(strings.Split(frontMatter, "\n"), "source_type: text") {
 		t.Errorf("step 4 assertion 2: front matter does not contain exact line \"source_type: text\"; front matter:\n%s", frontMatter)
 	}
 
