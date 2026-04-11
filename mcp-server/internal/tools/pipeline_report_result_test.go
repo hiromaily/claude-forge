@@ -26,12 +26,12 @@ func initPRRWorkspace(t *testing.T, sm *state.StateManager) string {
 	return dir
 }
 
-// parsePRRResponse unmarshals reportResultResponse from a content string.
-func parsePRRResponse(t *testing.T, content string) reportResultResponse {
+// parsePRRResponse unmarshals reportResultOutcome from a content string.
+func parsePRRResponse(t *testing.T, content string) reportResultOutcome {
 	t.Helper()
-	var resp reportResultResponse
+	var resp reportResultOutcome
 	if err := json.Unmarshal([]byte(content), &resp); err != nil {
-		t.Fatalf("unmarshal reportResultResponse: %v (content: %s)", err, content)
+		t.Fatalf("unmarshal reportResultOutcome: %v (content: %s)", err, content)
 	}
 	return resp
 }
@@ -663,7 +663,7 @@ func setupPhase4SpecWorkspace(t *testing.T, specName string) (string, string, *s
 // callPhase4Report invokes PipelineReportResultHandler on phase-4 with a
 // minimal set of parameters and returns the parsed response. Callers must
 // write tasks.md (and any instructions.md) before calling this helper.
-func callPhase4Report(t *testing.T, sm *state.StateManager, workspace string) reportResultResponse {
+func callPhase4Report(t *testing.T, sm *state.StateManager, workspace string) reportResultOutcome {
 	t.Helper()
 	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
 	res := callTool(t, h, map[string]any{
