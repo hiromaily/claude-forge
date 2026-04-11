@@ -1,6 +1,28 @@
+<!--
+⚠️ AUTO-GENERATED FILE — DO NOT EDIT
+Source: template/pages/README.tpl.md · Run `make docs` to regenerate.
+-->
 # claude-forge
 
+**From `/forge` to PR — automated.**
+
+[![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-plugin-blueviolet?logo=anthropic&logoColor=white)](https://docs.anthropic.com/en/docs/claude-code)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **[📖 Documentation](https://hiromaily.github.io/claude-forge/)** | **[📖 ドキュメント (日本語)](https://hiromaily.github.io/claude-forge/ja/)**
+
+```text
+/forge "Add retry logic to the API client"
+    │
+    ├─ Phase 1-2  Situation Analysis + Investigation
+    ├─ Phase 3    Design  ──→  Design Review (APPROVE/REVISE)
+    ├─ ✋ Checkpoint A — human approval
+    ├─ Phase 4    Task Decomposition  ──→  Tasks Review
+    ├─ Phase 5-6  Implement + Code Review  (parallel per task)
+    ├─ Phase 7    Comprehensive Review
+    └─ ✅  Final Verification  →  PR created  →  Summary posted
+```
 
 ---
 
@@ -8,19 +30,116 @@ Spec-Driven Development got you most of the way there.
 
 You write the spec. AI does the implementation. You review. It works — until you realize you're still managing every handoff manually. You kick off analysis, wait for output, hand off context to the next prompt, watch for mistakes, review intermediate work, decide when to proceed — on every task, on every run.
 
-The bottleneck is no longer prompting. It's orchestration.
-
-You start caring about:
-- token efficiency
-- context isolation
-- reproducibility across runs
-- structuring artifacts so AI can actually use them
+**The bottleneck is no longer prompting. It's orchestration.**
 
 I built **claude-forge** to automate that layer.
 
 It's a Claude Code plugin that replaces ad-hoc AI development workflows with a structured, multi-phase pipeline — isolated subagents, deterministic guardrails, and state that survives restarts.
 
 Instead of writing better prompts, you build a system where AI development can run predictably.
+
+---
+
+> **Documentation** is managed as a Single Source of Truth using [docs-ssot](https://github.com/hiromaily/docs-ssot). Files such as `README.md`, `CLAUDE.md`, and `ARCHITECTURE.md` are auto-generated — edit the source files under `template/` and run `make docs` to regenerate.
+
+## Installation
+
+For the complete step-by-step guide, see [SETUP.md](./SETUP.md).
+
+### Quick start — Plugin users (recommended)
+
+```bash
+# Step 1: Register the marketplace (one-time)
+/plugin marketplace add hiromaily/claude-forge
+
+# Step 2: Install the plugin (binary downloaded automatically)
+/plugin install claude-forge
+/reload-plugins
+
+# Step 3: Restart Claude Code and verify
+/mcp   # forge-state should show as Connected
+```
+
+> **Note:** `/plugin marketplace add` only registers the source — you must also run `/plugin install` to activate the plugin and trigger the binary download.
+
+### Quick start — Local development
+
+For contributors building from source:
+
+```bash
+# From the claude-forge directory
+make setup
+
+# Restart Claude Code and verify
+/mcp   # forge-state should show as Connected
+```
+
+### Prerequisites
+
+- **Go** — required to build the MCP server binary
+- **jq** — required for state management and hook scripts. Install via `brew install jq` (macOS) or your package manager.
+
+### Environment variables
+
+Environment variables are configured automatically when using `make setup`. For manual setup, pass them via `claude mcp add --env`:
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `FORGE_AGENTS_PATH` | Yes | Absolute path to the `agents/` directory. Required for `pipeline_next_action` to resolve agent `.md` files at runtime. Set automatically by `make setup`. |
+| `FORGE_SPECS_DIR` | No | Override the default `.specs/` directory used by the engine. |
+| `FORGE_EVENTS_PORT` | No | Port for the SSE events endpoint (used by `subscribe_events`). |
+
+---
+
+## Quick start
+
+Invoke the skill from any Claude Code session where the plugin is installed:
+
+```text
+/forge <describe your task here>
+/forge https://github.com/org/repo/issues/123
+/forge https://myorg.atlassian.net/browse/PROJ-456
+```
+
+When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as context and posts the final summary back as a comment. Plain text input works too — it just skips the posting step.
+
+### Flags
+
+| Flag | Description |
+| --- | --- |
+| `--effort=<effort>` | Force an effort level: `S`, `M`, `L`. Determines flow template (light/standard/full). Skips heuristic detection. Default: `M`. XS is not supported. |
+| `--auto` | Skip human checkpoints when the AI reviewer verdict is APPROVE. REVISE verdicts still pause for human input. |
+| `--nopr` | Skip PR creation. Changes are committed and pushed to the feature branch, but no pull request is opened. |
+| `--debug` | Append a `## Debug Report` section to `summary.md` with execution flow diagnostics (token outliers, retries, revision cycles, missing phase-log entries). Note: `## Improvement Report` is always appended regardless of this flag. |
+| _(auto-detected)_ | Resume an interrupted pipeline by providing the spec directory name (e.g. `/forge 20260320-fix-auth-timeout`). If the directory exists under `.specs/`, resume is auto-detected. `--resume` is accepted for backward compatibility but has no effect. |
+
+```text
+/forge --effort=S --auto Fix the null pointer crash in auth middleware
+/forge --nopr Add retry logic to the API client
+/forge --debug Add a new validation layer
+```
+
+### Resume an interrupted pipeline
+
+Pass the spec directory name (the folder under `.specs/`). Resume is auto-detected:
+
+```text
+/forge 20260320-fix-auth-timeout
+```
+
+### Abandon a pipeline
+
+Use the MCP tool from Claude Code:
+
+```text
+mcp__forge-state__abandon with workspace: .specs/20260320-fix-auth-timeout
+```
+
+Or delete the state file manually:
+
+```bash
+rm .specs/20260320-fix-auth-timeout/state.json
+```
 
 ---
 
@@ -92,53 +211,6 @@ These aren't instructions the agent can misinterpret. They're hard stops.
 
 ---
 
-## Why MCP-driven pipeline control (v2 vs v1)
-
-claude-forge v1 used shell scripts (`state-manager.sh`) for state management and relied on SKILL.md prompt instructions for all orchestration decisions — which phase to run next, whether to retry, when to skip. The LLM was both the executor *and* the decision-maker.
-
-v2 replaced this with a Go MCP server (`forge-state-mcp`) that owns all pipeline logic. The LLM orchestrator now follows a strict **ask → execute → report** loop: it calls `pipeline_next_action` to get the next action, executes it, and calls `pipeline_report_result` to advance state. It never decides what to do next.
-
-### The shift: LLM as executor, not decision-maker
-
-```
-v1: User → SKILL.md (LLM decides next phase) → shell scripts (state I/O)
-v2: User → SKILL.md (LLM executes actions)  → Go Engine (decides next phase) → MCP tools (state + guards)
-```
-
-In v1, if the LLM misinterpreted a skip condition or forgot to call `phase-complete`, the pipeline broke silently. In v2, the Engine returns a typed action (`spawn_agent`, `checkpoint`, `exec`, `write_file`, `done`) — the LLM cannot invent steps or skip them.
-
-### Comparison
-
-| Aspect | v1 (Skill + shell scripts) | v2 (MCP Engine) |
-| --- | --- | --- |
-| **Who decides the next phase** | LLM interprets SKILL.md instructions | `Engine.NextAction()` in Go — deterministic |
-| **State management** | Shell script (`state-manager.sh`) with `jq` | Go `StateManager` with typed fields and mutex locking |
-| **Guard enforcement** | Shell hooks only (exit 2) | Two-layer: Go MCP handler guards + shell hooks |
-| **Phase transition reliability** | Probabilistic — LLM may skip or misordering | Deterministic — Engine enforces canonical PHASES order |
-| **Retry / revision logic** | SKILL.md prose ("if REVISE, re-run Phase 3") | Engine tracks `designRevisions`, `taskRevisions`, `implRetries` with hard limits |
-| **Artifact validation** | None — LLM checks file existence ad-hoc | `validation/artifact.go` — content rules per phase, blocking |
-| **Parallel task dispatch** | SKILL.md instructions + hook blocking | Engine returns `parallel_task_ids`; hook blocks git commit |
-| **Auto-approve logic** | SKILL.md conditional ("if --auto and APPROVE…") | Engine evaluates `autoApprove` + verdict + findings deterministically |
-| **Skip-phase computation** | LLM reads effort table and calls skip-phase | `SkipsForEffort()` returns canonical skip list |
-| **Resume** | LLM reads state.json and figures out where it was | `pipeline_next_action` reads state and returns the exact next step |
-| **Analytics** | None | `analytics.Collector`, `Estimator`, `Reporter` — token/cost/duration tracking |
-| **Cross-pipeline learning** | None | `history.HistoryIndex` (BM25), `KnowledgeBase` (patterns, friction) |
-| **Repo profiling** | None | `profile.RepoProfiler` — language, CI, linter detection for prompt enrichment |
-| **Tool count** | ~10 shell commands | 44 typed MCP tools |
-| **Error handling** | Shell exit codes, often swallowed | Go errors with typed responses (`IsError=true`) |
-
-### What this means in practice
-
-**Fewer pipeline failures.** v1's most common failure mode was the LLM misinterpreting a phase transition — skipping a checkpoint, forgetting to call `phase-complete`, or miscounting retry attempts. v2 eliminates this entire class of errors because the Engine makes all transition decisions.
-
-**Cheaper retries.** When a v1 pipeline stalled, resuming required the LLM to re-read state.json and reconstruct its understanding of where it was. v2's `pipeline_next_action` returns the exact next step — no interpretation needed.
-
-**Richer context for agents.** v2 injects historical data (past review patterns, similar implementations, repo profile) into agent prompts via MCP tools. v1 agents worked in isolation with no cross-pipeline knowledge.
-
-**Auditable decisions.** Every Engine decision is a deterministic function of `state.json`. You can reproduce any pipeline's control flow by replaying `NextAction()` calls against the saved state — something impossible with v1's LLM-driven decisions.
-
----
-
 ## Overview
 
 | Dimension | SDD / Single-conversation | claude-forge |
@@ -156,7 +228,7 @@ In v1, if the LLM misinterpreted a skip condition or forgot to call `phase-compl
 
 ---
 
-## Flow
+## Pipeline flow
 
 ```mermaid
 flowchart TD
@@ -298,11 +370,6 @@ Which phases run is primarily determined by effort level. ✅ = phase runs; blan
 
 ## Human interaction points
 
-<!-- SSOT: docs/_partials/human-interaction-points.md — edit that file, not this section.
-     This file is not VitePress-processed, so the @include directive cannot be used here.
-     Keep this in sync with docs/_partials/human-interaction-points.md manually.
-     The canonical version is also rendered at docs/architecture/human-interaction.md. -->
-
 The pipeline pauses and returns control to the user at the following points. Points marked **blocking** require a response before the pipeline can continue; points marked **informational** present output with no further input needed.
 
 ### Input Validation
@@ -383,107 +450,6 @@ The pipeline pauses and returns control to the user at the following points. Poi
 
 ---
 
-## Installation
-
-For the complete step-by-step guide, see [SETUP.md](SETUP.md).
-
-### Quick start — Plugin users (recommended)
-
-```bash
-# Step 1: Register the marketplace (one-time)
-/plugin marketplace add hiromaily/claude-forge
-
-# Step 2: Install the plugin (binary downloaded automatically)
-/plugin install claude-forge
-/reload-plugins
-
-# Step 3: Restart Claude Code and verify
-/mcp   # forge-state should show as Connected
-```
-
-> **Note:** `/plugin marketplace add` only registers the source — you must also run `/plugin install` to activate the plugin and trigger the binary download.
-
-### Quick start — Local development
-
-For contributors building from source:
-
-```bash
-# From the claude-forge directory
-make setup
-
-# Restart Claude Code and verify
-/mcp   # forge-state should show as Connected
-```
-
-### Prerequisites
-
-- **Go** — required to build the MCP server binary
-- **jq** — required for state management and hook scripts. Install via `brew install jq` (macOS) or your package manager.
-
-### Environment variables
-
-Environment variables are configured automatically when using `make setup`. For manual setup, pass them via `claude mcp add --env`:
-
-| Variable | Required | Description |
-| --- | --- | --- |
-| `FORGE_AGENTS_PATH` | Yes | Absolute path to the `agents/` directory. Required for `pipeline_next_action` to resolve agent `.md` files at runtime. Set automatically by `make setup`. |
-| `FORGE_SPECS_DIR` | No | Override the default `.specs/` directory used by the engine. |
-| `FORGE_EVENTS_PORT` | No | Port for the SSE events endpoint (used by `subscribe_events`). |
-
----
-
-## Quick start
-
-Invoke the skill from any Claude Code session where the plugin is installed:
-
-```text
-/forge <describe your task here>
-/forge https://github.com/org/repo/issues/123
-/forge https://myorg.atlassian.net/browse/PROJ-456
-```
-
-When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as context and posts the final summary back as a comment. Plain text input works too — it just skips the posting step.
-
-### Flags
-
-| Flag | Description |
-| --- | --- |
-| `--effort=<effort>` | Force an effort level: `S`, `M`, `L`. Determines flow template (light/standard/full). Skips heuristic detection. Default: `M`. XS is not supported. |
-| `--auto` | Skip human checkpoints when the AI reviewer verdict is APPROVE. REVISE verdicts still pause for human input. |
-| `--nopr` | Skip PR creation. Changes are committed and pushed to the feature branch, but no pull request is opened. |
-| `--debug` | Append a `## Debug Report` section to `summary.md` with execution flow diagnostics (token outliers, retries, revision cycles, missing phase-log entries). Note: `## Improvement Report` is always appended regardless of this flag. |
-| _(auto-detected)_ | Resume an interrupted pipeline by providing the spec directory name (e.g. `/forge 20260320-fix-auth-timeout`). If the directory exists under `.specs/`, resume is auto-detected. `--resume` is accepted for backward compatibility but has no effect. |
-
-```text
-/forge --effort=S --auto Fix the null pointer crash in auth middleware
-/forge --nopr Add retry logic to the API client
-/forge --debug Add a new validation layer
-```
-
-### Resume an interrupted pipeline
-
-Pass the spec directory name (the folder under `.specs/`). Resume is auto-detected:
-
-```text
-/forge 20260320-fix-auth-timeout
-```
-
-### Abandon a pipeline
-
-Use the MCP tool from Claude Code:
-
-```text
-mcp__forge-state__abandon with workspace: .specs/20260320-fix-auth-timeout
-```
-
-Or delete the state file manually:
-
-```bash
-rm .specs/20260320-fix-auth-timeout/state.json
-```
-
----
-
 ## Flow templates
 
 The effort level determines the flow template. XS effort is not supported; use S for small tasks.
@@ -532,7 +498,7 @@ rules:
 personal preferences. Keep those in `CLAUDE.md` / `AGENTS.md` /
 `.kiro/steering/`.
 
-See [`docs/reference/workflow-instructions.md`](docs/reference/workflow-instructions.md)
+See [`docs/reference/workflow-instructions.md`](./docs/reference/workflow-instructions.md)
 for the full schema, evaluation flow, and failure modes.
 
 ---
@@ -545,33 +511,55 @@ The pipeline is built on three core principles:
 2. **State on disk** — All progress is tracked in `state.json`, so pipelines survive context compaction and session restarts. Hooks read this state to enforce constraints.
 3. **Two-layer compliance** — Critical invariants (read-only analysis, no parallel commits, checkpoint gates) are enforced both by agent instructions (probabilistic) and hook scripts (deterministic, fail-open).
 
-For the full data flow, state machine, hook architecture, agent input/output matrix, and concurrency model, see [ARCHITECTURE.md](ARCHITECTURE.md) (index) or browse [`docs/architecture/`](docs/architecture/) directly.
+For the full data flow, state machine, hook architecture, agent input/output matrix, and concurrency model, browse [`docs/architecture/`](./docs/architecture) directly.
 
 ---
 
 ## Directory structure
 
-<!-- SSOT: docs/_partials/directory-structure.md — edit that file, not this section.
-     This file is not VitePress-processed, so the @include directive cannot be used here.
-     Keep this in sync with docs/_partials/directory-structure.md manually. -->
-
-```text
+```
 claude-forge/
-├── CLAUDE.md              AI agent guide (auto-loaded by Claude Code)
-├── ARCHITECTURE.md        Index (full docs in docs/architecture/)
-├── BACKLOG.md             Known issues, improvement candidates
-├── agents/                10 named agent definitions (.md files)
+├── CLAUDE.md              ← AI agent guide (auto-loaded by Claude Code)
+├── ARCHITECTURE.md        ← index (full docs in docs/architecture/)
+├── BACKLOG.md             ← known issues, improvement candidates
+├── README.md              ← project overview and quick start
+├── .claude-plugin/
+│   └── plugin.json        ← plugin metadata (name, version)
+├── .claude/
+│   └── rules/
+│       ├── git.md         ← Git practices enforced in this repo
+│       ├── shell-script.md ← Shell scripting conventions for *.sh files
+│       └── docs.md        ← Documentation rules (SSOT, bilingual, VitePress)
+├── agents/                ← 10 named agent definitions (.md files)
+│   ├── README.md          ← agent roster with roles
+│   ├── situation-analyst.md
+│   ├── investigator.md
+│   ├── architect.md
+│   ├── design-reviewer.md
+│   ├── task-decomposer.md
+│   ├── task-reviewer.md
+│   ├── implementer.md
+│   ├── impl-reviewer.md
+│   ├── comprehensive-reviewer.md
+│   └── verifier.md
 ├── docs/
-│   ├── _partials/         SSOT content fragments (included by docs/ files)
-│   └── architecture/      Architecture documentation (13 focused files)
-├── hooks/                 Hook definitions (hooks.json)
-├── mcp-server/            Go MCP server source (forge-state binary)
-├── scripts/               Hook scripts and test suite
-│   ├── pre-tool-hook.sh   Read-only guard, commit blocking, checkout blocking
-│   ├── post-agent-hook.sh Agent output quality validation
-│   ├── stop-hook.sh       Pipeline completion guard
-│   └── test-hooks.sh      Automated hook test suite (62 tests)
-└── skills/forge/SKILL.md  Orchestrator instructions (the main skill)
+│   ├── _partials/         ← SSOT content fragments (included by docs/)
+│   └── architecture/      ← architecture documentation (13 focused files)
+├── hooks/
+│   └── hooks.json         ← hook definitions (PreToolUse, PostToolUse, Stop)
+├── mcp-server/            ← Go MCP server source (forge-state binary)
+├── scripts/
+│   ├── common.sh          ← shared find_active_workspace helper
+│   ├── launch-mcp.sh      ← self-healing MCP launcher
+│   ├── pre-tool-hook.sh   ← read-only guard, commit blocking, checkout blocking
+│   ├── post-agent-hook.sh ← agent output quality validation
+│   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md (v1 legacy)
+│   ├── setup.sh           ← downloads forge-state-mcp binary from GitHub Releases
+│   ├── stop-hook.sh       ← pipeline completion guard
+│   └── test-hooks.sh      ← automated test suite (62 tests)
+└── skills/
+    └── forge/
+        └── SKILL.md       ← orchestrator instructions (the main skill)
 ```
 
 ---
@@ -584,7 +572,7 @@ Key choices that shape the plugin's architecture:
 - **The orchestrator never reads source code** — only small artifact files, keeping its context window lean.
 - **Parallel implementation with mkdir-based locking** — macOS lacks `flock`, so atomic `mkdir` is used instead. Parallel agents skip `git commit`; the orchestrator batch-commits after the group finishes.
 
-See [docs/architecture/technical-decisions.md](docs/architecture/technical-decisions.md) for full rationale on these and other decisions (fail-open hooks, file-based state, agent separation).
+See [docs/architecture/technical-decisions.md](./docs/architecture/technical-decisions.md) for full rationale on these and other decisions (fail-open hooks, file-based state, agent separation).
 
 ---
 
@@ -601,3 +589,50 @@ go test -race ./...
 ```
 
 The hook test suite covers all hook scripts (`pre-tool-hook.sh`, `post-agent-hook.sh`, `stop-hook.sh`, `post-bash-hook.sh`, `common.sh`), pre-tool-hook rules (read-only, commit blocking, main/master checkout block), and edge cases like abandoned pipelines and special characters in spec names. The Go test suite covers all 26 state-management commands and MCP-only tools.
+
+## Architecture: MCP-driven pipeline engine (v2)
+
+claude-forge v1 used shell scripts (`state-manager.sh`) for state management and relied on SKILL.md prompt instructions for all orchestration decisions — which phase to run next, whether to retry, when to skip. The LLM was both the executor *and* the decision-maker.
+
+v2 replaced this with a Go MCP server (`forge-state-mcp`) that owns all pipeline logic. The LLM orchestrator now follows a strict **ask → execute → report** loop: it calls `pipeline_next_action` to get the next action, executes it, and calls `pipeline_report_result` to advance state. It never decides what to do next.
+
+### The shift: LLM as executor, not decision-maker
+
+```
+v1: User → SKILL.md (LLM decides next phase) → shell scripts (state I/O)
+v2: User → SKILL.md (LLM executes actions)  → Go Engine (decides next phase) → MCP tools (state + guards)
+```
+
+In v1, if the LLM misinterpreted a skip condition or forgot to call `phase-complete`, the pipeline broke silently. In v2, the Engine returns a typed action (`spawn_agent`, `checkpoint`, `exec`, `write_file`, `done`) — the LLM cannot invent steps or skip them.
+
+### Comparison
+
+| Aspect | v1 (Skill + shell scripts) | v2 (MCP Engine) |
+| --- | --- | --- |
+| **Who decides the next phase** | LLM interprets SKILL.md instructions | `Engine.NextAction()` in Go — deterministic |
+| **State management** | Shell script (`state-manager.sh`) with `jq` | Go `StateManager` with typed fields and mutex locking |
+| **Guard enforcement** | Shell hooks only (exit 2) | Two-layer: Go MCP handler guards + shell hooks |
+| **Phase transition reliability** | Probabilistic — LLM may skip or misordering | Deterministic — Engine enforces canonical PHASES order |
+| **Retry / revision logic** | SKILL.md prose ("if REVISE, re-run Phase 3") | Engine tracks `designRevisions`, `taskRevisions`, `implRetries` with hard limits |
+| **Artifact validation** | None — LLM checks file existence ad-hoc | `validation/artifact.go` — content rules per phase, blocking |
+| **Parallel task dispatch** | SKILL.md instructions + hook blocking | Engine returns `parallel_task_ids`; hook blocks git commit |
+| **Auto-approve logic** | SKILL.md conditional ("if --auto and APPROVE…") | Engine evaluates `autoApprove` + verdict + findings deterministically |
+| **Skip-phase computation** | LLM reads effort table and calls skip-phase | `SkipsForEffort()` returns canonical skip list |
+| **Resume** | LLM reads state.json and figures out where it was | `pipeline_next_action` reads state and returns the exact next step |
+| **Analytics** | None | `analytics.Collector`, `Estimator`, `Reporter` — token/cost/duration tracking |
+| **Cross-pipeline learning** | None | `history.HistoryIndex` (BM25), `KnowledgeBase` (patterns, friction) |
+| **Repo profiling** | None | `profile.RepoProfiler` — language, CI, linter detection for prompt enrichment |
+| **Tool count** | ~10 shell commands | 44 typed MCP tools |
+| **Error handling** | Shell exit codes, often swallowed | Go errors with typed responses (`IsError=true`) |
+
+### What this means in practice
+
+**Fewer pipeline failures.** v1's most common failure mode was the LLM misinterpreting a phase transition — skipping a checkpoint, forgetting to call `phase-complete`, or miscounting retry attempts. v2 eliminates this entire class of errors because the Engine makes all transition decisions.
+
+**Cheaper retries.** When a v1 pipeline stalled, resuming required the LLM to re-read state.json and reconstruct its understanding of where it was. v2's `pipeline_next_action` returns the exact next step — no interpretation needed.
+
+**Richer context for agents.** v2 injects historical data (past review patterns, similar implementations, repo profile) into agent prompts via MCP tools. v1 agents worked in isolation with no cross-pipeline knowledge.
+
+**Auditable decisions.** Every Engine decision is a deterministic function of `state.json`. You can reproduce any pipeline's control flow by replaying `NextAction()` calls against the saved state — something impossible with v1's LLM-driven decisions.
+
+---

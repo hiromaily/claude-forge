@@ -66,7 +66,24 @@ clean:
 .PHONY: install-docs
 install-docs:
 	bun install
+	brew tap hiromaily/tap
+	brew install docs-ssot
 
+# docs: Generate README.md and CLAUDE.md from docs-ssot templates
+.PHONY: docs
+docs:
+	docs-ssot build
+	docs-ssot index
+
+# docs-validate: Validate all template includes without writing output
+.PHONY: docs-validate
+docs-validate:
+	docs-ssot validate
+
+# docs-check: Check for SSOT violations (near-duplicate sections)
+.PHONY: docs-check
+docs-check:
+	docs-ssot check --root docs
 
 #------------------------------------------------------------------------------
 # Release

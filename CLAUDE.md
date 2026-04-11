@@ -2,31 +2,54 @@
 
 This is a Claude Code plugin that orchestrates a multi-phase development pipeline using isolated subagents.
 
-## Directory Structure
-
-<!-- SSOT: docs/_partials/directory-structure.md — edit that file, not here.
-     This file is not VitePress-processed, so the @include directive cannot be used.
-     For the canonical, detailed directory tree read: docs/_partials/directory-structure.md -->
+## Directory structure
 
 ```
 claude-forge/
-├── CLAUDE.md              ← you are here (auto-loaded by Claude Code)
+├── CLAUDE.md              ← AI agent guide (auto-loaded by Claude Code)
 ├── ARCHITECTURE.md        ← index (full docs in docs/architecture/)
 ├── BACKLOG.md             ← known issues, improvement candidates
+├── README.md              ← project overview and quick start
 ├── .claude-plugin/
 │   └── plugin.json        ← plugin metadata (name, version)
 ├── .claude/
-│   └── rules/             ← git.md, shell-script.md, docs.md
+│   └── rules/
+│       ├── git.md         ← Git practices enforced in this repo
+│       ├── shell-script.md ← Shell scripting conventions for *.sh files
+│       └── docs.md        ← Documentation rules (SSOT, bilingual, VitePress)
 ├── agents/                ← 10 named agent definitions (.md files)
+│   ├── README.md          ← agent roster with roles
+│   ├── situation-analyst.md
+│   ├── investigator.md
+│   ├── architect.md
+│   ├── design-reviewer.md
+│   ├── task-decomposer.md
+│   ├── task-reviewer.md
+│   ├── implementer.md
+│   ├── impl-reviewer.md
+│   ├── comprehensive-reviewer.md
+│   └── verifier.md
 ├── docs/
-│   ├── _partials/         ← SSOT content fragments (included by docs/ files)
+│   ├── _partials/         ← SSOT content fragments (included by docs/)
 │   └── architecture/      ← architecture documentation (13 focused files)
 ├── hooks/
 │   └── hooks.json         ← hook definitions (PreToolUse, PostToolUse, Stop)
-├── mcp-server/            ← Go MCP server source
-├── scripts/               ← hook scripts + test suite (pre-tool-hook, stop-hook, etc.)
-└── skills/forge/SKILL.md  ← orchestrator instructions (the main skill)
+├── mcp-server/            ← Go MCP server source (forge-state binary)
+├── scripts/
+│   ├── common.sh          ← shared find_active_workspace helper
+│   ├── launch-mcp.sh      ← self-healing MCP launcher
+│   ├── pre-tool-hook.sh   ← read-only guard, commit blocking, checkout blocking
+│   ├── post-agent-hook.sh ← agent output quality validation
+│   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md (v1 legacy)
+│   ├── setup.sh           ← downloads forge-state-mcp binary from GitHub Releases
+│   ├── stop-hook.sh       ← pipeline completion guard
+│   └── test-hooks.sh      ← automated test suite (62 tests)
+└── skills/
+    └── forge/
+        └── SKILL.md       ← orchestrator instructions (the main skill)
 ```
+
+---
 
 ## How the Pieces Connect
 
@@ -44,15 +67,83 @@ SKILL.md (orchestrator)
        └── stop-hook.sh reads state.json → blocks premature stop
 ```
 
-## Rules for Modifying This Plugin
+## MCP Server Registration
 
-### Consistency requirements
+The `forge-state` MCP server is the sole state-management interface. All 26 state-management commands are typed MCP tool calls. See [SETUP.md](./SETUP.md) for the complete setup guide.
+
+### Auto-registration (plugin install)
+
+When installed as a plugin, the MCP server is registered automatically:
+
+1. `plugin.json` declares `"mcpServers": "./.mcp.json"`
+2. `.mcp.json` defines the `forge-state` server (stdio transport, `${CLAUDE_PLUGIN_ROOT}/bin/forge-state-mcp`)
+3. The `Setup` hook in `hooks/hooks.json` runs `scripts/setup.sh` to download the pre-built binary from GitHub Releases
+
+No manual `claude mcp add` is needed. See [SETUP.md](./SETUP.md) for details.
+
+---
+
+## MCP Local Development
+
+For contributors working on the MCP server source:
+
+```bash
+make setup-manual   # build + install + register via claude mcp add
+```
+
+After restarting, the `mcp__forge-state__*` tool calls in `SKILL.md` will route to the running server process. Verify with `/mcp` (should show `forge-state` as `Connected`).
+
+---
+
+## MCP Library Usage
+
+Key API surface used in `mcp-server/` (`github.com/mark3labs/mcp-go`):
+
+```go
+// Server construction and stdio transport
+srv := server.NewMCPServer("forge-state", "1.0.0")
+server.ServeStdio(srv)   // package-level function, not a method on srv
+
+// Registering a tool
+srv.AddTool(mcp.NewTool("tool_name",
+    mcp.WithDescription("..."),
+    mcp.WithString("param", mcp.Required(), mcp.Description("...")),
+    mcp.WithNumber("num_param", mcp.Description("...")),
+), HandlerFunc)
+
+// Reading parameters inside a handler
+workspace, err := req.RequireString("workspace")   // returns error if missing
+value := req.GetString("key", "default")           // returns default if missing
+num := req.GetInt("tokens", 0)
+flag := req.GetBool("validated", false)
+args := req.GetArguments()                         // map[string]any for complex params
+
+// Returning results
+mcp.NewToolResultText("ok")                        // success with text
+mcp.NewToolResultError("error message")            // IsError=true response
+```
+
+Tool names use underscores (`phase_complete`), not hyphens — MCP protocol requirement. The corresponding MCP tool call name is `mcp__forge-state__phase_complete`.
+
+---
+
+## Go Module Setup
+
+The MCP server lives in `mcp-server/` as a **separate Go module** (`go.mod` with its own `module` path). This keeps the Go build hermetic from the rest of the repo (which has no Go code). Run `go mod tidy` from inside `mcp-server/` after adding dependencies. The `make build` / `make install` targets handle this automatically.
+
+---
+
+## Consistency Requirements
+
 - When adding/changing an agent's input files → update BOTH the agent .md file AND the Agent Roster table in SKILL.md
 - When adding a new phase → add its ID to the Go MCP server state package and ensure `pipeline_next_action` recognises it
 - When changing hook behavior → verify the hook's exit code semantics (exit 0 = allow, exit 2 = block)
 - When changing state.json schema → ensure the Go MCP server (`mcp-server/state/`), all hook scripts, and SKILL.md are aligned
 
-### Testing
+---
+
+## Testing the Plugin
+
 - MCP state commands: use `cd mcp-server && go test ./state/...` to run the Go unit tests for all 26 state-management commands.
 - Hook scripts: pipe sample JSON to stdin and check exit code
   ```bash
@@ -68,14 +159,9 @@ SKILL.md (orchestrator)
   cd mcp-server && go test -race ./...
   ```
 
-### Key design decisions (see [docs/architecture/technical-decisions.md](docs/architecture/technical-decisions.md) for details)
-- All agents use `model: sonnet` — cost optimization. Change to `opus` for agents that need stronger reasoning.
-- Hooks are fail-open — if jq is missing or parsing fails, the action is allowed rather than blocked.
-- State is file-based (state.json) — survives context compaction and session restarts.
-- The orchestrator never reads source code — only small artifact files. This is a token economy rule.
-- **Prefer deterministic enforcement over prompt instructions.** The orchestrator (SKILL.md) is an LLM and may skip or misinterpret instructions non-deterministically. When adding or changing pipeline behavior, first consider whether a hook script can enforce it deterministically (exit 2 = block). Use prompt instructions only for behavior that cannot be expressed as a state-based guard. Examples: checkpoint guards (P10-3), artifact guards, read-only phase enforcement — all implemented as hooks, not just prose.
+---
 
-### Script structure conventions
+## Script Structure Conventions
 
 **pre-tool-hook.sh** — Enforces four rules: Rule 1 (read-only guard in phase-1/2 with workspace carve-out for artifact writes), Rule 2 (parallel phase-5 git commit block), Rule 3f (effort null warning on phase-start phase-1, non-blocking), Rule 5 (main/master checkout block). Sources `scripts/common.sh` for `find_active_workspace`.
 
@@ -136,88 +222,15 @@ SKILL.md (orchestrator)
 
 > `FORGE_AGENTS_PATH` must be set to the absolute path of the `agents/` directory in production for `pipeline_next_action` to resolve agent `.md` files correctly.
 
-### What NOT to do
+---
+
+## Development Constraints
+
 - Do NOT add `isolation: "worktree"` to any Agent tool call — breaks inter-task visibility
 - Do NOT duplicate agent instructions in SKILL.md prompts — agents have their own system prompts
 - Do NOT store state in memory/conversation — use state.json via the `mcp__forge-state__*` MCP tools
 - Do NOT use bare `flock` without a mkdir fallback — macOS lacks `flock` by default. Hook scripts use mkdir-based atomic locking; follow the same pattern if adding new shell scripts that need locking.
-- Do NOT reverse the Go package import direction: `tools` → `orchestrator` → `state`. Shared packages (`history`, `profile`, `prompt`, `validation`, `events`) may import `state` but never `orchestrator` or `tools`. Violating this causes an import cycle (caught by `import_cycle_test.go`). See [docs/architecture/go-package-layering.md](docs/architecture/go-package-layering.md) for the full rule set.
-
-## MCP Server Registration
-
-The `forge-state` MCP server is the sole state-management interface. All 26 state-management commands are typed MCP tool calls. See [SETUP.md](SETUP.md) for the complete setup guide.
-
-### Auto-registration (plugin install)
-
-When installed as a plugin, the MCP server is registered automatically:
-
-1. `plugin.json` declares `"mcpServers": "./.mcp.json"`
-2. `.mcp.json` defines the `forge-state` server (stdio transport, `${CLAUDE_PLUGIN_ROOT}/bin/forge-state-mcp`)
-3. The `Setup` hook in `hooks/hooks.json` runs `scripts/setup.sh` to download the pre-built binary from GitHub Releases
-
-No manual `claude mcp add` is needed. See [SETUP.md](SETUP.md) for details.
-
-### Local development
-
-For contributors working on the MCP server source:
-
-```bash
-make setup-manual   # build + install + register via claude mcp add
-```
-
-After restarting, the `mcp__forge-state__*` tool calls in `SKILL.md` will route to the running server process. Verify with `/mcp` (should show `forge-state` as `Connected`).
-
-### No shell fallback
-
-All 26 state-management commands are implemented exclusively in the Go MCP server (`mcp-server/`). There is no shell fallback for `search_patterns`, `validate_input`, or other MCP-only tools — use the MCP tools directly.
-
-### MCP library usage (`github.com/mark3labs/mcp-go`)
-
-Key API surface used in `mcp-server/`:
-
-```go
-// Server construction and stdio transport
-srv := server.NewMCPServer("forge-state", "1.0.0")
-server.ServeStdio(srv)   // package-level function, not a method on srv
-
-// Registering a tool
-srv.AddTool(mcp.NewTool("tool_name",
-    mcp.WithDescription("..."),
-    mcp.WithString("param", mcp.Required(), mcp.Description("...")),
-    mcp.WithNumber("num_param", mcp.Description("...")),
-), HandlerFunc)
-
-// Reading parameters inside a handler
-workspace, err := req.RequireString("workspace")   // returns error if missing
-value := req.GetString("key", "default")           // returns default if missing
-num := req.GetInt("tokens", 0)
-flag := req.GetBool("validated", false)
-args := req.GetArguments()                         // map[string]any for complex params
-
-// Returning results
-mcp.NewToolResultText("ok")                        // success with text
-mcp.NewToolResultError("error message")            // IsError=true response
-```
-
-Tool names use underscores (`phase_complete`), not hyphens — MCP protocol requirement. The corresponding MCP tool call name is `mcp__forge-state__phase_complete`.
-
-### Go module setup
-
-The MCP server lives in `mcp-server/` as a **separate Go module** (`go.mod` with its own `module` path). This keeps the Go build hermetic from the rest of the repo (which has no Go code). Run `go mod tidy` from inside `mcp-server/` after adding dependencies. The `make build` / `make install` targets handle this automatically.
-
-### Go package layering
-
-The `mcp-server/internal/` packages form a strict one-way import DAG enforced by `import_cycle_test.go`:
-
-```
-tools → orchestrator → state
-```
-
-- `state` must never import `orchestrator` or `tools`
-- `orchestrator` must never import `tools`
-- Shared packages (`history`, `profile`, `prompt`, `validation`, `events`) may import `state` but not `orchestrator` or `tools`
-
-See [`docs/architecture/go-package-layering.md`](docs/architecture/go-package-layering.md) for the full rule set and rationale.
+- Do NOT reverse the Go package import direction: `tools` → `orchestrator` → `state`. Shared packages (`history`, `profile`, `prompt`, `validation`, `events`) may import `state` but never `orchestrator` or `tools`. Violating this causes an import cycle (caught by `import_cycle_test.go`). See [docs/architecture/go-package-layering.md](./docs/architecture/go-package-layering.md) for the full rule set.
 
 ---
 
@@ -229,4 +242,4 @@ See [`docs/architecture/go-package-layering.md`](docs/architecture/go-package-la
 4. See the Canonical command list above for available MCP tools (all 26 state commands are in the Go MCP server)
 5. Read `.claude/rules/git.md` for Git branch and commit conventions
 6. Read `.claude/rules/shell-script.md` for Bash scripting conventions before editing any `.sh` file
-7. Read [`docs/architecture/go-package-layering.md`](docs/architecture/go-package-layering.md) before editing any Go code in `mcp-server/` — the one-way import DAG (`tools → orchestrator → state`) is enforced by a compile-time test and violations cause import cycles
+7. Read [`docs/architecture/go-package-layering.md`](./docs/architecture/go-package-layering.md) before editing any Go code in `mcp-server/` — the one-way import DAG (`tools → orchestrator → state`) is enforced by a compile-time test and violations cause import cycles
