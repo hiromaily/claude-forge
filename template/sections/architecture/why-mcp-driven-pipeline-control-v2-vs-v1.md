@@ -1,4 +1,4 @@
-## Why MCP-driven pipeline control (v2 vs v1)
+## Architecture: MCP-driven pipeline engine (v2)
 
 claude-forge v1 used shell scripts (`state-manager.sh`) for state management and relied on SKILL.md prompt instructions for all orchestration decisions — which phase to run next, whether to retry, when to skip. The LLM was both the executor *and* the decision-maker.
 

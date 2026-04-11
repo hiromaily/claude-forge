@@ -1,10 +1,16 @@
+<!--
+⚠️ AUTO-GENERATED FILE — DO NOT EDIT
+Source: template/README.tpl.md · Run `make docs` to regenerate.
+-->
 <!-- @include: sections/project/claude-forge.md -->
+
+<!-- @include: sections/development/installation.md -->
+
+<!-- @include: sections/product/quick-start.md -->
 
 <!-- @include: sections/product/the-problem-with-sdd-today.md -->
 
 <!-- @include: sections/product/four-things-that-make-it-different.md -->
-
-<!-- @include: sections/architecture/why-mcp-driven-pipeline-control-v2-vs-v1.md -->
 
 <!-- @include: sections/project/overview.md -->
 
@@ -18,10 +24,6 @@
 
 <!-- @include: sections/product/feature-list.md -->
 
-<!-- @include: sections/development/installation.md -->
-
-<!-- @include: sections/product/quick-start.md -->
-
 <!-- @include: sections/product/flow-templates.md -->
 
 <!-- @include: sections/product/repository-workflow-rules-specs-instructions-md.md -->
@@ -33,3 +35,5 @@
 <!-- @include: sections/architecture/design-decisions.md -->
 
 <!-- @include: sections/development/running-tests.md -->
+
+<!-- @include: sections/architecture/why-mcp-driven-pipeline-control-v2-vs-v1.md -->
