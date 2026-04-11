@@ -113,7 +113,10 @@ const (
 // ---------- Retry limits ----------
 
 const (
-	MaxRevisionRetries = 2
+	// MaxRevisionRetries is the maximum number of review/revision cycles before
+	// the engine escalates to a human checkpoint. Increase this value to allow
+	// more automated retries before human intervention is required.
+	MaxRevisionRetries = 5
 )
 
 // ---------- Verdict values ----------
