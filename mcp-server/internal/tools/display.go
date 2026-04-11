@@ -47,7 +47,11 @@ func phaseDisplayLabel(id string) string {
 }
 
 // formatTokens formats n as a comma-separated integer string (e.g. 12345 → "12,345").
+// Negative values are formatted as "-" followed by the formatted absolute value.
 func formatTokens(n int) string {
+	if n < 0 {
+		return "-" + formatTokens(-n)
+	}
 	s := strconv.Itoa(n)
 	if len(s) <= 3 {
 		return s
