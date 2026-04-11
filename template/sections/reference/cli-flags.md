@@ -40,6 +40,12 @@ Append a `## Debug Report` section to `summary.md` with execution flow diagnosti
 
 Note: `## Improvement Report` is always appended regardless of this flag.
 
+### `--discuss`
+
+Trigger a pre-pipeline clarification dialogue for plain-text input. Before the pipeline starts, the orchestrator asks up to five clarifying questions and collects your answers. The answers are then passed into `pipeline_init_with_context` to produce a richer task description.
+
+Only applies to plain-text input — ignored for GitHub Issue and Jira URLs. When combined with `--auto`, discussion mode is suppressed.
+
 ### Resume (auto-detected)
 
 To resume an interrupted pipeline, supply the spec directory name as input.
@@ -65,6 +71,9 @@ No special flag is needed. The orchestrator proceeds directly without confirmati
 
 # Large task with debug output
 /forge --effort=L --debug Add a new validation layer
+
+# Plain-text input with pre-pipeline clarification dialogue
+/forge --discuss Add caching to the search endpoint
 
 # From GitHub Issue
 /forge https://github.com/org/repo/issues/123

@@ -4,10 +4,6 @@ Source: template/pages/README.tpl.md · Run `make docs` to regenerate.
 -->
 # claude-forge
 
-<p align="center">
-  <img src="./assets/claude-forge.svg" alt="claude-forge" width="100%" />
-</p>
-
 **The orchestration layer for spec-driven AI development.**
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-plugin-blueviolet?logo=anthropic&logoColor=white)](https://docs.anthropic.com/en/docs/claude-code)
@@ -115,12 +111,14 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details as
 | `--auto` | Skip human checkpoints when the AI reviewer verdict is APPROVE. REVISE verdicts still pause for human input. |
 | `--nopr` | Skip PR creation. Changes are committed and pushed to the feature branch, but no pull request is opened. |
 | `--debug` | Append a `## Debug Report` section to `summary.md` with execution flow diagnostics (token outliers, retries, revision cycles, missing phase-log entries). Note: `## Improvement Report` is always appended regardless of this flag. |
+| `--discuss` | Trigger a pre-pipeline clarification dialogue for plain-text input. Ignored for GitHub Issue and Jira URLs. Suppressed when combined with `--auto`. |
 | _(auto-detected)_ | Resume an interrupted pipeline by providing the spec directory name (e.g. `/forge 20260320-fix-auth-timeout`). If the directory exists under `.specs/`, resume is auto-detected. `--resume` is accepted for backward compatibility but has no effect. |
 
 ```text
 /forge --effort=S --auto Fix the null pointer crash in auth middleware
 /forge --nopr Add retry logic to the API client
 /forge --debug Add a new validation layer
+/forge --discuss Add caching to the search endpoint
 ```
 
 ### Resume an interrupted pipeline
@@ -167,7 +165,7 @@ claude-forge is built for phase 3.
 
 ### 1. SDD is still manual — claude-forge isn't
 
-SDD tells you _what_ to do at each phase. It doesn't _run_ the phases. You still decide when to move from analysis to design, when to approve, when to iterate.
+SDD tells you *what* to do at each phase. It doesn't *run* the phases. You still decide when to move from analysis to design, when to approve, when to iterate.
 
 claude-forge automates the full handoff chain. Each phase writes a markdown artifact. The next phase reads it. No context sharing, no conversation history — just structured files as the API between agents.
 
@@ -203,7 +201,7 @@ A small task doesn't go through task review. A large one doesn't skip it. The wo
 
 ### 4. MCP-driven determinism — engine and hooks, not just prompts
 
-LLM instructions are probabilistic. A well-prompted agent _usually_ follows them. But "usually" isn't enough when the cost of a mistake is high.
+LLM instructions are probabilistic. A well-prompted agent *usually* follows them. But "usually" isn't enough when the cost of a mistake is high.
 
 claude-forge removes phase-transition decisions from the LLM entirely. A Go engine (`forge-state-mcp`) owns all orchestration logic: which phase runs next, retry counts, skip conditions, artifact validation. The LLM executes typed actions returned by the engine — it cannot invent steps or skip them.
 
@@ -212,7 +210,6 @@ This determinism runs at two layers:
 **Engine layer (MCP)** — all transition decisions are deterministic functions of `state.json`. Phase sequencing, artifact validation, retry limits, review verdict handling, and checkpoint gating — none of it is subject to LLM interpretation.
 
 **Hook layer (shell)** — critical invariants enforced at the OS level:
-
 - **Read-only guard** — blocks source edits during analysis phases (exit 2)
 - **Commit guard** — prevents git commits during parallel task execution
 - **Stop guard** — prevents session termination while a pipeline is in progress (exit 2)

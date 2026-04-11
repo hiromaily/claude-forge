@@ -33,6 +33,7 @@ When given a GitHub Issue or Jira URL, the pipeline fetches the issue details an
 | `--auto` | Skip human checkpoints when AI verdict is APPROVE. REVISE still pauses. |
 | `--nopr` | Skip PR creation. Changes committed and pushed but no PR opened. |
 | `--debug` | Append Debug Report to `summary.md` with execution diagnostics. |
+| `--discuss` | Trigger a pre-pipeline clarification dialogue for plain-text input. |
 | _(auto-detected)_ | Resume by providing the spec directory name. No flag needed. |
 
 ## Resume an Interrupted Pipeline
