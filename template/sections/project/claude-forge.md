@@ -35,3 +35,5 @@ It's a Claude Code plugin that replaces ad-hoc AI development workflows with a s
 Instead of writing better prompts, you build a system where AI development can run predictably.
 
 ---
+
+> **Documentation** is managed as a Single Source of Truth using [docs-ssot](https://github.com/hiromaily/docs-ssot). Files such as `README.md`, `CLAUDE.md`, and `ARCHITECTURE.md` are auto-generated — edit the source files under `template/` and run `make docs` to regenerate.

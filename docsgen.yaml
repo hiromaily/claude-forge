@@ -1,5 +1,42 @@
+index:
+  output: template/INDEX.md
+
 targets:
-  - input: template/README.tpl.md
+  - input: template/pages/README.tpl.md
     output: README.md
-  - input: template/CLAUDE.tpl.md
+
+  - input: template/pages/CLAUDE.tpl.md
     output: CLAUDE.md
+
+  - input: template/pages/ARCHITECTURE.tpl.md
+    output: ARCHITECTURE.md
+
+  - input: template/pages/SETUP.tpl.md
+    output: SETUP.md
+
+  # Claude Code: rules
+  - input: template/pages/ai-agents/claude/rules/docs.tpl.md
+    output: .claude/rules/docs.md
+
+  - input: template/pages/ai-agents/claude/rules/git.tpl.md
+    output: .claude/rules/git.md
+
+  - input: template/pages/ai-agents/claude/rules/go-test.tpl.md
+    output: .claude/rules/go-test.md
+
+  - input: template/pages/ai-agents/claude/rules/golang.tpl.md
+    output: .claude/rules/golang.md
+
+  - input: template/pages/ai-agents/claude/rules/shell-script.tpl.md
+    output: .claude/rules/shell-script.md
+
+  - input: template/pages/ai-agents/claude/rules/testing.tpl.md
+    output: .claude/rules/testing.md
+
+  # Claude Code: commands
+  - input: template/pages/ai-agents/claude/commands/fix-pr-reviews.tpl.md
+    output: .claude/commands/fix-pr-reviews.md
+
+  # Claude Code: skills
+  - input: template/pages/ai-agents/claude/skills/docs-ssot/SKILL.tpl.md
+    output: .claude/skills/docs-ssot/SKILL.md

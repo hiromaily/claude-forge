@@ -22,3 +22,11 @@ pre-push:
     hook-tests:
       glob: "scripts/*.sh"
       run: bash scripts/test-hooks.sh
+    docs-check:
+      glob: "{template/**/*.md,docsgen.yaml}"
+      run: |
+        make docs
+        if ! git diff --quiet README.md CLAUDE.md ARCHITECTURE.md SETUP.md .claude/ template/INDEX.md; then
+          echo "ERROR: Generated files are out of date. Run 'make docs' and commit the changes." >&2
+          exit 1
+        fi

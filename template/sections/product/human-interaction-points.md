@@ -1,5 +1,5 @@
 ## Human interaction points
 
-<!-- @include: ../../../docs/_partials/human-interaction-points.md -->
+<!-- @include: ../architecture/human-interaction.md -->
 
 ---

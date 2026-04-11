@@ -1,5 +1,5 @@
 ## Flow
 
-<!-- @include: ../../../docs/_partials/pipeline-flow.md -->
+<!-- @include: ../architecture/pipeline-flow.md -->
 
 ---
