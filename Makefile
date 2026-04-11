@@ -67,6 +67,26 @@ clean:
 install-docs:
 	bun install
 
+# docs: Generate README.md and CLAUDE.md from docs-ssot templates
+.PHONY: docs
+docs:
+	docs-ssot build
+
+# docs-validate: Validate all template includes without writing output
+.PHONY: docs-validate
+docs-validate:
+	docs-ssot validate
+
+# docs-check: Check for SSOT violations (near-duplicate sections)
+.PHONY: docs-check
+docs-check:
+	docs-ssot check --root docs
+
+# docs-index: Print include relationships and orphan detection
+.PHONY: docs-index
+docs-index:
+	docs-ssot index
+
 
 #------------------------------------------------------------------------------
 # Release

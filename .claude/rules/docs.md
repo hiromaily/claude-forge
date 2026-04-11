@@ -1,8 +1,35 @@
 ---
-paths: ["docs/**/*.md"]
+paths: ["docs/**/*.md", "template/**/*.md", "README.md", "CLAUDE.md"]
 ---
 
 # Documentation Rules
+
+## Generated Files (docs-ssot)
+
+`README.md` and `CLAUDE.md` are **generated files** — do not edit them directly.
+
+- Edit source templates under `template/` and run `make docs` to regenerate.
+- Templates live at `template/README.tpl.md` and `template/CLAUDE.tpl.md`.
+- Section files live under `template/sections/`.
+- Configuration: `docsgen.yaml`
+
+### Critical rules
+
+- **Never edit `README.md` or `CLAUDE.md` directly** — changes are overwritten on next `make docs`.
+- To change structure, edit the template (`template/*.tpl.md`).
+- To change section content, edit the relevant file under `template/sections/`.
+- For sections that include from `docs/_partials/`, edit the partial — not the section file.
+
+### Workflow
+
+```sh
+make docs           # regenerate README.md and CLAUDE.md
+make docs-validate  # dry-run: check all includes resolve
+make docs-check     # detect near-duplicate sections
+make docs-index     # print include relationship graph
+```
+
+---
 
 ## Bilingual Documentation
 

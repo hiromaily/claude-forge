@@ -1,7 +1,7 @@
-<!-- SSOT: claude-forge pipeline phase execution.
-     Included by:
-       README.md,
-     Edit only this file when the directory structure changes.
+<!-- SSOT: claude-forge pipeline phase execution by effort level (for README.md).
+     Included by (docs-ssot → generates README.md):
+       template/sections/architecture/pipeline-phase-execution-by-effort-level.md
+     Edit only this file when the phase execution table changes.
 -->
 
 Which phases run is primarily determined by effort level. ✅ = phase runs; blank = skipped.

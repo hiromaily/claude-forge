@@ -1,7 +1,8 @@
 <!-- SSOT: Pipeline human interaction points — all places where the pipeline pauses for user input.
-     Included by:
-       docs/architecture/human-interaction.md,
-       README.md (reference only — not VitePress-processed)
+     Included by (VitePress):
+       docs/architecture/human-interaction.md
+     Included by (docs-ssot → generates README.md):
+       template/sections/product/human-interaction-points.md
      Edit only this file when interaction points change.
 
      Note for Claude Code: This file is included via VitePress <!--@include:--> directives
@@ -59,5 +60,7 @@ The pipeline pauses and returns control to the user at the following points. Poi
 | # | Trigger | What the user sees | Blocking |
 |---|---------|-------------------|---------|
 | 15 | `summary.md` written successfully | Full contents of `summary.md` displayed (request, branch, PR, task table, improvement report, execution stats). Sound notification plays. | No — informational |
+
+---
 
 > **Skipped checkpoints:** Checkpoint B is skipped for effort S and M (only effort L runs Checkpoint B). Phase 4b (task reviewer) is also skipped for effort S and M. Use `--auto` to allow the AI reviewer verdict to auto-approve Checkpoint A (not available with `full` template).

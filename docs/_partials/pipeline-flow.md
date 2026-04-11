@@ -1,7 +1,8 @@
-<!-- SSOT: claude-forge pipeline phase execution.
-     Included by:
-       README.md,
-     Edit only this file when the directory structure changes.
+<!-- SSOT: claude-forge pipeline flow diagram (emoji-rich, for README.md).
+     Note: docs/guide/pipeline-flow.md is a separate, more detailed reference page — not the same content.
+     Included by (docs-ssot → generates README.md):
+       template/sections/product/flow.md
+     Edit only this file when the pipeline flow changes.
 -->
 
 ```mermaid
