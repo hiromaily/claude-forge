@@ -1,6 +1,6 @@
 # claude-forge
 
-**From `/forge` to PR — automated.**
+**The orchestration layer for spec-driven AI development.**
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-plugin-blueviolet?logo=anthropic&logoColor=white)](https://docs.anthropic.com/en/docs/claude-code)
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)](https://go.dev/)

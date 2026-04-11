@@ -1,0 +1,100 @@
+<svg width="1200" height="320" viewBox="0 0 1200 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">claude-forge</title>
+  <desc id="desc">Claude-inspired warm, minimal SVG banner for claude-forge</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C1815"/>
+      <stop offset="1" stop-color="#26211D"/>
+    </linearGradient>
+
+    <radialGradient id="wash1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(240 84) rotate(12) scale(320 180)">
+      <stop stop-color="#D7B08A" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#D7B08A" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="wash2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(940 250) rotate(-8) scale(340 190)">
+      <stop stop-color="#8E6C4F" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#8E6C4F" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="textFill" x1="290" y1="92" x2="900" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5EEE6"/>
+      <stop offset="0.55" stop-color="#E9DDD0"/>
+      <stop offset="1" stop-color="#DDBA93"/>
+    </linearGradient>
+
+    <linearGradient id="rule" x1="320" y1="0" x2="880" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8E6C4F" stop-opacity="0"/>
+      <stop offset="0.18" stop-color="#B98A61"/>
+      <stop offset="0.5" stop-color="#D7B08A"/>
+      <stop offset="0.82" stop-color="#B98A61"/>
+      <stop offset="1" stop-color="#8E6C4F" stop-opacity="0"/>
+    </linearGradient>
+
+    <pattern id="grain" width="140" height="140" patternUnits="userSpaceOnUse">
+      <circle cx="18" cy="22" r="0.9" fill="#FFFFFF" fill-opacity="0.035"/>
+      <circle cx="64" cy="40" r="0.8" fill="#FFFFFF" fill-opacity="0.03"/>
+      <circle cx="112" cy="28" r="0.7" fill="#FFFFFF" fill-opacity="0.025"/>
+      <circle cx="34" cy="96" r="0.8" fill="#FFFFFF" fill-opacity="0.03"/>
+      <circle cx="86" cy="118" r="0.9" fill="#FFFFFF" fill-opacity="0.025"/>
+      <circle cx="126" cy="90" r="0.7" fill="#FFFFFF" fill-opacity="0.03"/>
+    </pattern>
+
+    <filter id="softText" x="-10%" y="-30%" width="120%" height="160%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="320" rx="28" fill="url(#bg)"/>
+  <rect width="1200" height="320" rx="28" fill="url(#grain)"/>
+  <ellipse cx="240" cy="84" rx="320" ry="180" fill="url(#wash1)"/>
+  <ellipse cx="940" cy="250" rx="340" ry="190" fill="url(#wash2)"/>
+
+  <rect x="148" y="54" width="904" height="212" rx="24" fill="#FFFFFF" fill-opacity="0.025"/>
+  <rect x="148.5" y="54.5" width="903" height="211" rx="23.5" stroke="#E8D8C7" stroke-opacity="0.08"/>
+
+  <text
+    x="600"
+    y="156"
+    text-anchor="middle"
+    fill="url(#textFill)"
+    font-size="78"
+    font-weight="700"
+    letter-spacing="-2.2"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+    filter="url(#softText)"
+  >
+    claude-forge
+  </text>
+
+  <text
+    x="600"
+    y="205"
+    text-anchor="middle"
+    fill="#D8C6B4"
+    font-size="19"
+    font-weight="500"
+    letter-spacing="0.6"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+  >
+    Spec-driven orchestration for AI development
+  </text>
+
+  <line x1="320" y1="228" x2="880" y2="228" stroke="url(#rule)" stroke-width="2"/>
+
+  <text
+    x="600"
+    y="253"
+    text-anchor="middle"
+    fill="#A8927E"
+    font-size="14"
+    font-weight="500"
+    letter-spacing="1.1"
+    font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+  >
+    multi-phase workflows • isolated agents • reliable guardrails • persistent state
+  </text>
+</svg>
