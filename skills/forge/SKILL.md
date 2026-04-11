@@ -46,7 +46,8 @@ Repeat until done:
 
 1. Call `mcp__forge-state__pipeline_next_action(workspace=<workspace>)`.
 2. Execute the action based on `action.type`:
-   - `spawn_agent`: Call Agent tool with `action.prompt`. Use `action.agent` as description.
+   - `spawn_agent`: If `action.display_message` is non-empty, output it verbatim.
+     Then call Agent tool with `action.prompt`. Use `action.agent` as description.
      - If `action.parallel_task_ids` is non-empty: spawn one Agent call per task ID in
        parallel; wait for all to complete before calling report_result.
    - `checkpoint`: **Before presenting anything to the user**, call
@@ -90,6 +91,7 @@ Repeat until done:
    `mcp__forge-state__pipeline_report_result(workspace, phase=action.phase,
    tokens_used=<tokens>, duration_ms=<ms>, model=<model>,
    setup_only=action.setup_only)`.  (Omit `setup_only` when false/absent.)
+   If `result.display_message` is non-empty, output it verbatim.
    Check `result.next_action_hint`:
    - `"revision_required"`: present findings to user.
    - `"setup_continue"`: immediately call `pipeline_next_action` again

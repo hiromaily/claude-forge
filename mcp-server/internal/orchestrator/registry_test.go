@@ -135,12 +135,22 @@ func TestPhaseRegistryLabels(t *testing.T) {
 	t.Parallel()
 
 	wantLabels := map[string]string{
-		state.PhaseTwo:         "Investigation",
-		state.PhaseFour:        "Task Decomposition",
-		state.PhaseFourB:       "Tasks AI Review",
-		state.PhaseCheckpointA: "Design Checkpoint",
-		state.PhaseCheckpointB: "Tasks Checkpoint",
-		state.PhaseSeven:       "Comprehensive Review",
+		state.PhaseOne:               "Situation Analysis",
+		state.PhaseTwo:               "Investigation",
+		state.PhaseThree:             "Design",
+		state.PhaseThreeB:            "Design Review",
+		state.PhaseCheckpointA:       "Design Checkpoint",
+		state.PhaseFour:              "Task Decomposition",
+		state.PhaseFourB:             "Tasks AI Review",
+		state.PhaseCheckpointB:       "Tasks Checkpoint",
+		state.PhaseFive:              "Implementation",
+		state.PhaseSix:               "Code Review",
+		state.PhaseSeven:             "Comprehensive Review",
+		state.PhaseFinalVerification: "Final Verification",
+		state.PhasePRCreation:        "PR Creation",
+		state.PhaseFinalSummary:      "Final Summary",
+		state.PhasePostToSource:      "Post to Source",
+		state.PhaseFinalCommit:       "Final Commit",
 	}
 
 	for _, d := range phaseRegistry {

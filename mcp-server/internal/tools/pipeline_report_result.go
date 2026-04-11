@@ -45,6 +45,9 @@ var phaseAgentName = map[string]string{
 }
 
 // reportResultResponse is the structured response returned by PipelineReportResultHandler.
+// DisplayMessage is a pre-formatted completion line the orchestrator should output verbatim
+// after a phase finishes (e.g. "  ✓ Complete  ·  1,847 tokens · 0:23").
+// It is only set when NextActionHint is "proceed" and setup_only is false.
 type reportResultResponse struct {
 	StateUpdated    bool                   `json:"state_updated"`
 	ArtifactWritten string                 `json:"artifact_written"`
@@ -52,6 +55,7 @@ type reportResultResponse struct {
 	Findings        []orchestrator.Finding `json:"findings"`
 	NextActionHint  string                 `json:"next_action_hint"`
 	Warning         string                 `json:"warning,omitempty"`
+	DisplayMessage  string                 `json:"display_message,omitempty"`
 }
 
 // reportResultInput collects parsed parameters from the MCP request.
@@ -141,6 +145,12 @@ func handleReportResult(sm *state.StateManager, kb *history.KnowledgeBase, in re
 		warnings = append(warnings, resp.Warning)
 	}
 	resp.Warning = strings.Join(warnings, "; ")
+
+	// Attach a display message when the phase completed successfully.
+	if resp.NextActionHint == "proceed" && !in.setupOnly {
+		resp.DisplayMessage = buildCompleteMessage(in.tokensUsed, in.durationMs)
+	}
+
 	return okJSON(resp)
 }
 
