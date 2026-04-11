@@ -1002,6 +1002,7 @@ func (m *StateManager) PhaseLog(workspace, phase string, tokens, durationMs int,
 type PhaseStatsResult struct {
 	TotalTokens     int             `json:"totalTokens"`
 	TotalDurationMs int             `json:"totalDurationMs"`
+	TotalDuration   string          `json:"totalDuration"`
 	Entries         []PhaseLogEntry `json:"entries"`
 }
 
@@ -1025,6 +1026,7 @@ func (m *StateManager) PhaseStats(workspace string) (*PhaseStatsResult, error) {
 		result.TotalTokens += entry.Tokens
 		result.TotalDurationMs += entry.DurationMs
 	}
+	result.TotalDuration = formatDurationMs(result.TotalDurationMs)
 	return result, nil
 }
 
@@ -1175,4 +1177,20 @@ func appendUnique(slice []string, s string) []string {
 		return slice
 	}
 	return append(slice, s)
+}
+
+// formatDurationMs formats a duration in milliseconds as a human-readable string.
+// Examples: 0 → "0s", 18000 → "18s", 90000 → "1m 30s", 3661000 → "1h 1m 1s".
+func formatDurationMs(ms int) string {
+	total := ms / 1000
+	h := total / 3600
+	m := (total % 3600) / 60
+	s := total % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm %ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
 }

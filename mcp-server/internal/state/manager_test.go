@@ -1075,6 +1075,9 @@ func TestPhaseStats_EmptyLog_ReturnsZeroes(t *testing.T) {
 	if result.TotalDurationMs != 0 {
 		t.Errorf("totalDurationMs: got %d, want 0", result.TotalDurationMs)
 	}
+	if result.TotalDuration != "0s" {
+		t.Errorf("totalDuration: got %q, want %q", result.TotalDuration, "0s")
+	}
 	if len(result.Entries) != 0 {
 		t.Errorf("entries: got %d, want 0", len(result.Entries))
 	}
@@ -1107,6 +1110,9 @@ func TestPhaseStats_AggregatesCorrectly(t *testing.T) {
 	}
 	if result.TotalDurationMs != 60000 {
 		t.Errorf("totalDurationMs: got %d, want 60000", result.TotalDurationMs)
+	}
+	if result.TotalDuration != "1m 0s" {
+		t.Errorf("totalDuration: got %q, want %q", result.TotalDuration, "1m 0s")
 	}
 	if len(result.Entries) != 3 {
 		t.Errorf("entries count: got %d, want 3", len(result.Entries))

@@ -80,6 +80,10 @@ func TestCollect_BasicAggregation(t *testing.T) {
 		t.Errorf("TotalDurationMs = %d, want 18000", summary.TotalDurationMs)
 	}
 
+	if summary.TotalDuration != "18s" {
+		t.Errorf("TotalDuration = %q, want %q", summary.TotalDuration, "18s")
+	}
+
 	wantCost := float64(3500) * 0.000006
 	if summary.EstimatedCostUSD != wantCost {
 		t.Errorf("EstimatedCostUSD = %f, want %f", summary.EstimatedCostUSD, wantCost)
@@ -239,6 +243,10 @@ func TestCollect_EmptyPhaseLog(t *testing.T) {
 
 	if summary.TotalDurationMs != 0 {
 		t.Errorf("TotalDurationMs = %d, want 0", summary.TotalDurationMs)
+	}
+
+	if summary.TotalDuration != "0s" {
+		t.Errorf("TotalDuration = %q, want %q", summary.TotalDuration, "0s")
 	}
 
 	if summary.EstimatedCostUSD != 0 {
