@@ -222,12 +222,22 @@ func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags
 	currentBranch := flags.CurrentBranch
 	isMain := currentBranch == "" || currentBranch == "main" || currentBranch == "master"
 
+	// EnrichedRequestBody carries the body the orchestrator must echo back in
+	// user_confirmation.enriched_request_body on the next call so initWorkspace
+	// can write a non-empty request.md.
+	// For the discussion path this is already set; for plain text source it falls
+	// back to extCtx.TaskText so the original task description is preserved.
+	echoBody := enrichedBody
+	if echoBody == "" {
+		echoBody = extCtx.TaskText
+	}
+
 	nuc := &UserConfirmationPrompt{
 		DetectedEffort:      effort,
 		EffortOptions:       effortOptions,
 		CurrentBranch:       currentBranch,
 		IsMainBranch:        isMain,
-		EnrichedRequestBody: enrichedBody,
+		EnrichedRequestBody: echoBody,
 		Message: fmt.Sprintf(
 			"Detected effort=%q. Current branch=%q (is_main=%v). "+
 				"Please confirm by calling pipeline_init_with_context again with "+

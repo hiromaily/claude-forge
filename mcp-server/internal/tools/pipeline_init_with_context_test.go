@@ -1032,6 +1032,74 @@ func TestThirdCallWithEnrichedBodyWritesRequestMD(t *testing.T) {
 	}
 }
 
+// TestTextSourceRequestMDContainsTaskText is a regression test for the bug where
+// request.md was written with an empty body for plain-text source pipelines.
+// The first call must echo task_text as enriched_request_body in needs_user_confirmation,
+// and the second call must write it into request.md.
+func TestTextSourceRequestMDContainsTaskText(t *testing.T) {
+	t.Parallel()
+
+	const taskText = "add caching to the search endpoint"
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+	h := PipelineInitWithContextHandler(sm)
+
+	// First call: plain text source, no discussion, no user_confirmation.
+	res1 := callTool(t, h, map[string]any{
+		"workspace":        dir,
+		"task_text":        taskText,
+		"external_context": map[string]any{},
+		"flags":            map[string]any{},
+	})
+	if res1.IsError {
+		t.Fatalf("first call returned MCP error: %v", textContent(res1))
+	}
+	result1 := parsePIWCResult(t, textContent(res1))
+	if result1.NeedsUserConfirmation == nil {
+		t.Fatalf("first call: expected needs_user_confirmation, got nil")
+	}
+	// enriched_request_body must carry task_text so the orchestrator can echo it back.
+	nuc := result1.NeedsUserConfirmation
+	if nuc.EnrichedRequestBody == "" {
+		t.Errorf("first call: enriched_request_body is empty; task_text must be echoed back")
+	}
+	if !strings.Contains(nuc.EnrichedRequestBody, taskText) {
+		t.Errorf("first call: enriched_request_body = %q, want it to contain %q", nuc.EnrichedRequestBody, taskText)
+	}
+
+	// Second call: orchestrator echoes enriched_request_body in user_confirmation.
+	// task_text is NOT re-sent — this is the exact failure scenario from the bug.
+	res2 := callTool(t, h, map[string]any{
+		"workspace":        dir,
+		"external_context": map[string]any{},
+		"flags":            map[string]any{},
+		"user_confirmation": map[string]any{
+			"effort":                "M",
+			"use_current_branch":    true,
+			"enriched_request_body": nuc.EnrichedRequestBody,
+		},
+	})
+	if res2.IsError {
+		t.Fatalf("second call returned MCP error: %v", textContent(res2))
+	}
+
+	result2 := parsePIWCResult(t, textContent(res2))
+	if !result2.Ready {
+		t.Errorf("second call: ready = false, want true")
+	}
+
+	reqPath := filepath.Join(result2.Workspace, "request.md")
+	content, err := os.ReadFile(reqPath)
+	if err != nil {
+		t.Fatalf("ReadFile request.md: %v", err)
+	}
+	contentStr := string(content)
+	if !strings.Contains(contentStr, taskText) {
+		t.Errorf("request.md body is missing task text %q; content:\n%s", taskText, contentStr)
+	}
+}
+
 // ---------- TestBuildRequestMDWithBody ----------
 
 func TestBuildRequestMDWithBody(t *testing.T) {
