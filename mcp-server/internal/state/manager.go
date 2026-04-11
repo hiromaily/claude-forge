@@ -1026,7 +1026,7 @@ func (m *StateManager) PhaseStats(workspace string) (*PhaseStatsResult, error) {
 		result.TotalTokens += entry.Tokens
 		result.TotalDurationMs += entry.DurationMs
 	}
-	result.TotalDuration = formatDurationMs(result.TotalDurationMs)
+	result.TotalDuration = FormatDurationMs(result.TotalDurationMs)
 	return result, nil
 }
 
@@ -1179,9 +1179,9 @@ func appendUnique(slice []string, s string) []string {
 	return append(slice, s)
 }
 
-// formatDurationMs formats a duration in milliseconds as a human-readable string.
+// FormatDurationMs formats a duration in milliseconds as a human-readable string.
 // Examples: 0 → "0s", 18000 → "18s", 90000 → "1m 30s", 3661000 → "1h 1m 1s".
-func formatDurationMs(ms int) string {
+func FormatDurationMs(ms int) string {
 	total := ms / 1000
 	h := total / 3600
 	m := (total % 3600) / 60

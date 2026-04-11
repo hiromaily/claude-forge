@@ -3,7 +3,6 @@
 package analytics
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
@@ -81,7 +80,7 @@ func (c *Collector) Collect(workspace string) (*PipelineSummary, error) {
 		FlowTemplate:     derefString(s.FlowTemplate),
 		TotalTokens:      totalTokens,
 		TotalDurationMs:  totalDurationMs,
-		TotalDuration:    formatDurationMs(totalDurationMs),
+		TotalDuration:    state.FormatDurationMs(totalDurationMs),
 		EstimatedCostUSD: float64(totalTokens) * costPerToken,
 		PhasesExecuted:   phasesExecuted,
 		PhasesSkipped:    phasesSkipped,
@@ -130,20 +129,4 @@ func derefString(s *string) string {
 	}
 
 	return *s
-}
-
-// formatDurationMs formats a duration in milliseconds as a human-readable string.
-// Examples: 0 → "0s", 18000 → "18s", 90000 → "1m 30s", 3661000 → "1h 1m 1s".
-func formatDurationMs(ms int) string {
-	total := ms / 1000
-	h := total / 3600
-	m := (total % 3600) / 60
-	s := total % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh %dm %ds", h, m, s)
-	}
-	if m > 0 {
-		return fmt.Sprintf("%dm %ds", m, s)
-	}
-	return fmt.Sprintf("%ds", s)
 }
