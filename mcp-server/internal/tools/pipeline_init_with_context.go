@@ -206,7 +206,7 @@ func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFla
 func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags pipelineFlags, enrichedBody string) (*mcp.CallToolResult, error) {
 	// Detect effort.
 	combinedText := strings.TrimSpace(extCtx.GitHubTitle + " " + extCtx.GitHubBody + " " +
-		extCtx.JiraSummary + " " + extCtx.JiraDescription)
+		extCtx.JiraSummary + " " + extCtx.JiraDescription + " " + extCtx.TaskText)
 	effort := orchestrator.DetectEffort(flags.EffortOverride, extCtx.JiraStoryPoints, combinedText)
 
 	// Build EffortOptions for all three valid efforts with human-readable labels.

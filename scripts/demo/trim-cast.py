@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-trim-cast.py — Shorten an asciinema v3 cast file.
+trim-cast.py — Shorten an asciinema cast file (v2 or v3).
 
 Strategy:
-  1. Cap any idle gap > MAX_GAP seconds (default 1.0s)
-  2. Scale all timestamps by 1/SPEED (default 65x)
+  1. Normalise timestamps to relative deltas (v2 uses absolute timestamps;
+     v3 already uses deltas — both are handled automatically).
+  2. Cap any idle gap > MAX_GAP seconds (default 1.0s).
+  3. Scale all timestamps by 1/SPEED (default 65x).
+  4. Write output in v3 (relative timestamp) format.
 
 Usage:
   python3 demo/trim-cast.py [input.cast] [output.cast] [--cap SECONDS] [--speed FACTOR]
@@ -38,19 +41,35 @@ def trim(input_path, output_path, max_gap, speed):
         print("ERROR: no header found", file=sys.stderr)
         sys.exit(1)
 
-    # Update header: remove idle_time_limit (already baked in), note new duration
-    out_header = dict(header)
-    out_header.pop('idle_time_limit', None)
+    version = header.get('version', 2)
 
-    total_in = sum(e[0] for e in events)
-    total_out = sum(min(e[0], max_gap) / speed for e in events)
-    print(f"Input:  {total_in:.1f}s = {total_in/60:.1f} min  ({len(events)} events)")
-    print(f"Output: {total_out:.1f}s = {total_out/60:.2f} min  (cap={max_gap}s, speed={speed}x)")
+    # v2 stores absolute timestamps; convert to relative deltas so the cap
+    # and speed multiplier operate on inter-event gaps, not wall-clock times.
+    if version == 2:
+        deltas = []
+        prev = 0.0
+        for e in events:
+            deltas.append(e[0] - prev)
+            prev = e[0]
+    else:
+        # v3 already stores relative deltas.
+        deltas = [e[0] for e in events]
+
+    total_in = sum(deltas)
+    total_out = sum(min(d, max_gap) / speed for d in deltas)
+    print(f"Input:  {total_in:.1f}s = {total_in/60:.1f} min  ({len(events)} events, v{version})")
+    print(f"Output: {total_out:.1f}s = {total_out/60:.2f} min  (cap={max_gap}s, speed={speed}x, v3)")
+
+    # Output header: always v3 (relative timestamps), drop idle_time_limit
+    # since gaps are already baked in.
+    out_header = dict(header)
+    out_header['version'] = 3
+    out_header.pop('idle_time_limit', None)
 
     with open(output_path, 'w') as f:
         f.write(json.dumps(out_header) + '\n')
-        for e in events:
-            new_ts = round(min(e[0], max_gap) / speed, 6)
+        for delta, e in zip(deltas, events):
+            new_ts = round(min(delta, max_gap) / speed, 6)
             f.write(json.dumps([new_ts] + e[1:]) + '\n')
 
     print(f"Written: {output_path}")
