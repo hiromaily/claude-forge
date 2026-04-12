@@ -119,8 +119,10 @@ Repeat until done:
      for the next `pipeline_next_action` call. Pass `previous_setup_only=true` if
      `action.setup_only` is true. There is no model to record for exec actions; omit
      `previous_model` or pass it as an empty string.
+     Also pass `previous_action_complete=true` (see Rules below).
    - `write_file`: Write `action.content` to `action.path`. Record the duration for the
      next `pipeline_next_action` call. Omit `previous_model` or pass it as an empty string.
+     Also pass `previous_action_complete=true` (see Rules below).
    - `human_gate`: A task requires human action (e.g. merge an external PR, update dependencies).
      Present `action.present_to_user` to the user using AskUserQuestion with `action.options`.
      - If the user chooses **"done"** or **"skip"**: call `pipeline_next_action` again
