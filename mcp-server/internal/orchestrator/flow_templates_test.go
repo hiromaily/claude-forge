@@ -21,7 +21,7 @@ func TestSkipsForTemplate(t *testing.T) {
 		{
 			name:     "light template",
 			template: TemplateLight,
-			want:     []string{PhaseTwo, PhaseFour, PhaseFourB, PhaseCheckpointB, PhaseSeven},
+			want:     []string{PhaseTwo, PhaseFour, PhaseFourB, PhaseCheckpointB, PhaseSix},
 		},
 		{
 			name:     "full template",
@@ -66,7 +66,7 @@ func TestSkipsForEffort(t *testing.T) {
 		{
 			name:   "S returns light skips",
 			effort: "S",
-			want:   []string{PhaseTwo, PhaseFour, PhaseFourB, PhaseCheckpointB, PhaseSeven},
+			want:   []string{PhaseTwo, PhaseFour, PhaseFourB, PhaseCheckpointB, PhaseSix},
 		},
 		{
 			name:   "M returns standard skips",

@@ -16,8 +16,8 @@ Which phases run is primarily determined by effort level. ✅ = phase runs; blan
 | 9 | Tasks Review | | | ✅ |
 | 10 | Checkpoint B | | | ✅ |
 | 11 | Implementation | ✅ | ✅ | ✅ |
-| 12 | Code Review | ✅ | ✅ | ✅ |
-| 13 | Comprehensive Review | | ✅ | ✅ |
+| 12 | Code Review | | ✅ | ✅ |
+| 13 | Comprehensive Review | ✅ | ✅ | ✅ |
 | 14 | Final Verification | ✅ | ✅ | ✅ |
 | 15 | PR Creation | ✅ | ✅ | ✅ |
 | 16 | Final Summary | ✅ | ✅ | ✅ |
