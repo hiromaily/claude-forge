@@ -561,6 +561,10 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 //     dispatch implementer retry using review file (idempotent via state guard)
 //   - ReviewStatus "completed_pass"/"completed_pass_with_notes" → skip (done)
 func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
+	if len(st.Tasks) == 0 {
+		return Action{}, errors.New("handlePhaseSix: Tasks map is empty; " +
+			"cannot review implementations with no tasks (state corruption detected)")
+	}
 	// Decision 23 — Phase 6 PASS/FAIL retry
 	taskKeys := sortedTaskKeys(st.Tasks)
 
