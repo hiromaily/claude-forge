@@ -1,0 +1,152 @@
+{
+  "version": 2,
+  "forge-state-mcp-version": "v2.9.1",
+  "specName": "add-pipeline-e2e-integration-test",
+  "workspace": ".specs/20260412-add-pipeline-e2e-integration-test",
+  "branch": "feature/add-pipeline-e2e-integration-test",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "branchClassified": false,
+  "debug": false,
+  "skippedPhases": [
+    "phase-4b",
+    "checkpoint-b"
+  ],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "setup",
+    "checkpoint-a",
+    "phase-4",
+    "phase-4b",
+    "checkpoint-b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "final-verification",
+    "pr-creation",
+    "final-summary",
+    "post-to-source",
+    "final-commit"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "needsBatchCommit": false,
+  "tasks": {
+    "1": {
+      "title": "Implement pipeline_e2e_test.go [sequential]",
+      "executionMode": "sequential",
+      "depends_on": null,
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/mcp-server/internal/tools/pipeline_e2e_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Verify full test suite still passes [sequential]",
+      "executionMode": "sequential",
+      "depends_on": [
+        1
+      ],
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/mcp-server/internal/tools/pipeline_e2e_test.go"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-4",
+      "tokens": 42132,
+      "duration_ms": 38763,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T08:57:45.286206Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 97355,
+      "duration_ms": 449074,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T09:05:54.814122Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 22760,
+      "duration_ms": 38595,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T09:06:50.340243Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 36912,
+      "duration_ms": 82661,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T09:08:29.539826Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 22147,
+      "duration_ms": 27124,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T09:09:09.961191Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 44739,
+      "duration_ms": 92540,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T09:10:57.318843Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 44591,
+      "duration_ms": 100813,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T09:12:58.888278Z"
+    },
+    {
+      "phase": "pr-creation",
+      "tokens": 0,
+      "duration_ms": 15000,
+      "model": "",
+      "timestamp": "2026-04-12T09:13:42.573419Z"
+    },
+    {
+      "phase": "final-summary",
+      "tokens": 34412,
+      "duration_ms": 60967,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T09:15:12.667227Z"
+    },
+    {
+      "phase": "final-commit",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-12T09:15:12.669628Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-04-12T08:10:32.152285Z",
+    "lastUpdated": "2026-04-12T09:15:12.67023Z",
+    "phaseStarted": null
+  },
+  "error": null
+}
