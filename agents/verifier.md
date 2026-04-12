@@ -48,7 +48,7 @@ mcp__forge-state__analytics_pipeline_summary(workspace: "{workspace}")
 Include the following fields from the response in the summary document under a `## Pipeline Statistics` section:
 
 - `total_tokens` — total tokens consumed across all phases
-- `total_duration_ms` — total wall-clock duration in milliseconds
+- `total_duration` — total wall-clock duration as a human-readable string (e.g., "14m 4s")
 - `estimated_cost_usd` — estimated cost in USD
 - `phases_executed` — number of phases that were executed
 - `phases_skipped` — number of phases that were skipped
@@ -112,7 +112,7 @@ Skip this section entirely when the input artifacts do not include `analysis.md`
 
 ## Pipeline Statistics
 - Total tokens: {total_tokens}
-- Total duration: {total_duration_ms} ms
+- Total duration: {total_duration}
 - Estimated cost: ${estimated_cost_usd}
 - Phases executed: {phases_executed}
 - Phases skipped: {phases_skipped}
