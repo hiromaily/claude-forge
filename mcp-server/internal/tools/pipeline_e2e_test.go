@@ -64,7 +64,7 @@ func setupE2EWorkspace(
 	eng := orchestrator.NewEngine("", "")
 	kb := history.NewKnowledgeBase("")
 	nextActionH = PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
-	reportResultH = PipelineReportResultHandler(state.NewStateManager("dev"), kb)
+	reportResultH = PipelineReportResultHandler(sm, kb)
 
 	return dir, nextActionH, reportResultH
 }
@@ -178,7 +178,7 @@ func runE2EPipeline(
 		case orchestrator.ActionExec:
 			// no mock artifact write needed; reportResult call below records phase-log
 		default:
-			t.Logf("runE2EPipeline: unhandled action type %q for phase %q", resp.Action.Type, resp.Action.Phase)
+			t.Fatalf("runE2EPipeline: unhandled action type %q for phase %q", resp.Action.Type, resp.Action.Phase)
 		}
 
 		// Single post-switch reportResult call for ALL action types.
