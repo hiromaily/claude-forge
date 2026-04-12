@@ -113,7 +113,7 @@ func reportResultCore(sm *state.StateManager, kb *history.KnowledgeBase, in repo
 	// Step 2: Load state for duplicate-log check (before PhaseLog).
 	s, err := loadState(in.workspace)
 	if err != nil {
-		return reportResultOutcome{}, fmt.Errorf("read state: %v", err)
+		return reportResultOutcome{}, fmt.Errorf("read state: %w", err)
 	}
 	if w := Warn3dPhaseLogDuplicate(in.phase, s); w != "" {
 		warnings = append(warnings, w)
@@ -121,7 +121,7 @@ func reportResultCore(sm *state.StateManager, kb *history.KnowledgeBase, in repo
 
 	// Step 3: Record phase-log entry.
 	if err := sm.PhaseLog(in.workspace, in.phase, in.tokensUsed, in.durationMs, in.model); err != nil {
-		return reportResultOutcome{}, fmt.Errorf("phase_log: %v", err)
+		return reportResultOutcome{}, fmt.Errorf("phase_log: %w", err)
 	}
 
 	// Step 4: Validate artifacts for this phase.
