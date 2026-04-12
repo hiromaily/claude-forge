@@ -12,6 +12,70 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
+// TestPRBodyFileWithClosingRef verifies that prBodyFileWithClosingRef returns
+// the original path when closingRef is empty, and creates a combined temp file
+// with the closing reference appended when closingRef is non-empty.
+func TestPRBodyFileWithClosingRef(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		summaryContent string
+		closingRef     string
+		wantSamePath   bool   // true = returned path must equal summaryPath
+		wantContains   string // substring that must appear in file content
+	}{
+		{
+			name:           "no_closing_ref",
+			summaryContent: "# Summary\n\nSome content.\n",
+			closingRef:     "",
+			wantSamePath:   true,
+			wantContains:   "# Summary",
+		},
+		{
+			name:           "with_closing_ref",
+			summaryContent: "# Summary\n\nSome content.\n",
+			closingRef:     "\n\nCloses #42",
+			wantSamePath:   false,
+			wantContains:   "Closes #42",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			summaryPath := filepath.Join(dir, "summary.md")
+			if err := os.WriteFile(summaryPath, []byte(tc.summaryContent), 0o600); err != nil {
+				t.Fatalf("write summary.md: %v", err)
+			}
+
+			got, err := prBodyFileWithClosingRef(summaryPath, tc.closingRef)
+			if err != nil {
+				t.Fatalf("prBodyFileWithClosingRef: %v", err)
+			}
+			if got != summaryPath {
+				defer func() { _ = os.Remove(got) }()
+			}
+
+			if tc.wantSamePath && got != summaryPath {
+				t.Errorf("expected same path %q, got %q", summaryPath, got)
+			}
+			if !tc.wantSamePath && got == summaryPath {
+				t.Errorf("expected temp file path, got original summary path %q", got)
+			}
+
+			content, err := os.ReadFile(got)
+			if err != nil {
+				t.Fatalf("ReadFile(%q): %v", got, err)
+			}
+			if !strings.Contains(string(content), tc.wantContains) {
+				t.Errorf("file content %q does not contain %q", string(content), tc.wantContains)
+			}
+		})
+	}
+}
+
 // initGitRepo initialises a bare git repository in dir so that repoRoot and
 // git commands work correctly.  A dummy initial commit is created so that
 // `git diff --name-only HEAD` does not fail with "no commits yet".

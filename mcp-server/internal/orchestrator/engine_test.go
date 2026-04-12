@@ -155,6 +155,78 @@ func TestReadSourceType(t *testing.T) {
 	}
 }
 
+// TestClosingRef groups tests for the ClosingRef exported helper.
+func TestClosingRef(t *testing.T) {
+	t.Parallel()
+
+	writeRequest := func(t *testing.T, content string) string {
+		t.Helper()
+		dir := t.TempDir()
+		if err := writeFileForTest(dir+"/request.md", content); err != nil {
+			t.Fatalf("writeFileForTest: %v", err)
+		}
+		return dir
+	}
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) string
+		want  string
+	}{
+		{
+			name: "github_with_id",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeRequest(t, "---\nsource_type: github_issue\nsource_id: 42\n---\n")
+			},
+			want: "\n\nCloses #42",
+		},
+		{
+			name: "github_no_id",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeRequest(t, "---\nsource_type: github_issue\n---\n")
+			},
+			want: "",
+		},
+		{
+			name: "text_source",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeRequest(t, "---\nsource_type: text\nsource_id: 99\n---\n")
+			},
+			want: "",
+		},
+		{
+			name: "jira_source",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeRequest(t, "---\nsource_type: jira_issue\nsource_id: 10\n---\n")
+			},
+			want: "",
+		},
+		{
+			name: "missing_request_md",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			want: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := tc.setup(t)
+			got := ClosingRef(dir)
+			if got != tc.want {
+				t.Errorf("ClosingRef(%q) = %q, want %q", dir, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestSortedTaskKeys groups tests for the sortedTaskKeys helper.
 func TestSortedTaskKeys(t *testing.T) {
 	t.Parallel()
@@ -214,14 +286,16 @@ type nextActionTestCase struct {
 	// eng overrides; if nil, a default stub engine (approve + text) is used.
 	engFn func() *Engine
 	// assertions on the returned action
-	wantErr           bool // true: expect non-nil error from NextAction
-	wantType          string
-	wantAgent         string
-	wantSummary       string
-	wantPhase         string   // non-empty: assert action.Phase equals this value
-	wantParallelIDs   []string // nil means "do not check"; empty slice means "assert len==0"
-	wantInputContains string   // non-empty: assert InputFiles contains this value
-	wantSetupOnly     *bool    // non-nil: assert action.SetupOnly equals *wantSetupOnly
+	wantErr                bool // true: expect non-nil error from NextAction
+	wantType               string
+	wantAgent              string
+	wantSummary            string
+	wantPhase              string   // non-empty: assert action.Phase equals this value
+	wantParallelIDs        []string // nil means "do not check"; empty slice means "assert len==0"
+	wantInputContains      string   // non-empty: assert InputFiles contains this value
+	wantSetupOnly          *bool    // non-nil: assert action.SetupOnly equals *wantSetupOnly
+	wantCommandContains    string   // non-empty: assert any Commands element contains this value
+	wantCommandNotContains string   // non-empty: assert no Commands element contains this value
 }
 
 // defaultEng returns an Engine with stubbed readers (approve + text).
@@ -894,6 +968,48 @@ func TestNextAction(t *testing.T) {
 			wantSummary: SkipSummaryPrefix + "pr-creation",
 		},
 
+		// ── Decision 24: github_issue source adds Closes #N to PR body ───────
+		{
+			name: "pr_creation_github_issue_closes",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "pr-creation", nil)
+			},
+			engFn: func() *Engine {
+				return &Engine{
+					agentDir:         "/test/agents",
+					specsDir:         "/test/specs",
+					verdictReader:    stubVerdictReader(VerdictApprove),
+					sourceTypeReader: stubSourceTypeReader(state.SourceTypeGitHub),
+					sourceIDReader:   func(_ string) string { return "42" },
+				}
+			},
+			wantType:            ActionExec,
+			wantPhase:           PhasePRCreation,
+			wantCommandContains: "Closes #42",
+		},
+
+		// ── Decision 24: non-github source does NOT add Closes to PR body ────
+		{
+			name: "pr_creation_text_source_no_closes",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "pr-creation", nil)
+			},
+			engFn: func() *Engine {
+				return &Engine{
+					agentDir:         "/test/agents",
+					specsDir:         "/test/specs",
+					verdictReader:    stubVerdictReader(VerdictApprove),
+					sourceTypeReader: stubSourceTypeReader("text"),
+					sourceIDReader:   func(_ string) string { return "42" },
+				}
+			},
+			wantType:               ActionExec,
+			wantPhase:              PhasePRCreation,
+			wantCommandNotContains: "Closes #",
+		},
+
 		// ── Decision 25: final-summary uses fixed input file list ───────────
 		{
 			name: "final_summary_fixed_inputs",
@@ -1075,6 +1191,28 @@ func TestNextAction(t *testing.T) {
 			if tc.wantSetupOnly != nil {
 				if action.SetupOnly != *tc.wantSetupOnly {
 					t.Errorf("action.SetupOnly = %v, want %v", action.SetupOnly, *tc.wantSetupOnly)
+				}
+			}
+
+			if tc.wantCommandContains != "" {
+				found := false
+				for _, cmd := range action.Commands {
+					if strings.Contains(cmd, tc.wantCommandContains) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Commands = %v; expected one element to contain %q", action.Commands, tc.wantCommandContains)
+				}
+			}
+
+			if tc.wantCommandNotContains != "" {
+				for _, cmd := range action.Commands {
+					if strings.Contains(cmd, tc.wantCommandNotContains) {
+						t.Errorf("Commands = %v; expected no element to contain %q", action.Commands, tc.wantCommandNotContains)
+						break
+					}
 				}
 			}
 		})

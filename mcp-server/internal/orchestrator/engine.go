@@ -58,6 +58,7 @@ type Engine struct {
 	verdictReader    func(path string) (Verdict, []Finding, error)
 	sourceTypeReader func(workspace string) string
 	sourceURLReader  func(workspace string) string
+	sourceIDReader   func(workspace string) string
 }
 
 // NewEngine constructs a ready-to-use Engine with production I/O implementations.
@@ -69,6 +70,7 @@ func NewEngine(agentDir, specsDir string) *Engine {
 		verdictReader:    ParseVerdict,
 		sourceTypeReader: readSourceType,
 		sourceURLReader:  readSourceURL,
+		sourceIDReader:   readSourceID,
 	}
 }
 
@@ -685,7 +687,7 @@ func (*Engine) handleFinalVerification(_ *state.State) (Action, error) {
 //	the PR number. A placeholder body is used here; executeFinalCommit updates
 //	the PR body with the full summary.md via `gh pr edit` after final-summary
 //	completes. See executeFinalCommit in git_ops.go for the body-update step.
-func (*Engine) handlePRCreation(st *state.State) (Action, error) {
+func (e *Engine) handlePRCreation(st *state.State) (Action, error) {
 	// Decision 24 — PR skip (runtime SkipPr flag)
 	// Note: Decision 14 already handles the case where pr-creation is in SkippedPhases.
 	if st.SkipPr {
@@ -695,6 +697,12 @@ func (*Engine) handlePRCreation(st *state.State) (Action, error) {
 	title := derivePRTitle(st)
 
 	body := "[forge] Pipeline summary will be generated shortly.\n\nSpec: " + st.SpecName
+
+	if e.sourceTypeReader(st.Workspace) == state.SourceTypeGitHub {
+		if issueNum := e.sourceIDReader(st.Workspace); issueNum != "" {
+			body += "\n\nCloses #" + issueNum
+		}
+	}
 
 	return NewExecAction(PhasePRCreation, []string{
 		"gh", "pr", "create",
@@ -851,6 +859,27 @@ func readSourceType(workspace string) string {
 // Returns "" when the field is absent or the file is unreadable.
 func readSourceURL(workspace string) string {
 	return readFrontMatterField(workspace, "source_url", "")
+}
+
+// readSourceID reads the source_id field from {workspace}/request.md front matter.
+// Returns "" when the field is absent or the file is unreadable.
+func readSourceID(workspace string) string {
+	return readFrontMatterField(workspace, "source_id", "")
+}
+
+// ClosingRef returns the GitHub issue closing reference for the given workspace,
+// e.g. "\n\nCloses #42", or "" if the pipeline was not started from a GitHub issue
+// or if no source_id is present.  Used by executeFinalCommit to persist the
+// closing reference in the final PR body after summary.md replaces the placeholder.
+func ClosingRef(workspace string) string {
+	if readSourceType(workspace) != state.SourceTypeGitHub {
+		return ""
+	}
+	issueNum := readSourceID(workspace)
+	if issueNum == "" {
+		return ""
+	}
+	return "\n\nCloses #" + issueNum
 }
 
 // DeriveBranchName generates a deterministic branch name from the spec name.
