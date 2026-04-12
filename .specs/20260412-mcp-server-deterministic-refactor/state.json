@@ -1,0 +1,188 @@
+{
+  "version": 2,
+  "forge-state-mcp-version": "v2.8.0",
+  "specName": "mcp-server-deterministic-refactor",
+  "workspace": ".specs/20260412-mcp-server-deterministic-refactor",
+  "branch": "feature/mcp-server-deterministic-refactor",
+  "effort": "L",
+  "flowTemplate": "full",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": true,
+  "branchClassified": false,
+  "debug": false,
+  "skippedPhases": [],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "setup",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "checkpoint-a",
+    "phase-4",
+    "phase-4b",
+    "checkpoint-b",
+    "phase-5",
+    "phase-7",
+    "final-verification",
+    "pr-creation",
+    "final-summary",
+    "post-to-source",
+    "final-commit"
+  ],
+  "revisions": {
+    "designRevisions": 1,
+    "taskRevisions": 1,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "needsBatchCommit": false,
+  "tasks": {},
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 71860,
+      "duration_ms": 244227,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:00:01.169013Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 108518,
+      "duration_ms": 256364,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:04:35.642391Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 77713,
+      "duration_ms": 216135,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:08:34.050721Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 56883,
+      "duration_ms": 274417,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:13:30.651686Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 52386,
+      "duration_ms": 217485,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:17:42.116592Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 55871,
+      "duration_ms": 231804,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:22:21.36382Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 41846,
+      "duration_ms": 188548,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:26:13.167471Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 39286,
+      "duration_ms": 193090,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:30:24.34813Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 38797,
+      "duration_ms": 79787,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:33:05.56945Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 34914,
+      "duration_ms": 75310,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:36:43.747787Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 36070,
+      "duration_ms": 55447,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:37:57.15079Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 27260,
+      "duration_ms": 64349,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:39:21.199706Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 36784,
+      "duration_ms": 69110,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:40:48.974686Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 58709,
+      "duration_ms": 135914,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:45:45.133125Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 43558,
+      "duration_ms": 46463,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:47:12.847344Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 44592,
+      "duration_ms": 73648,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:49:09.010209Z"
+    },
+    {
+      "phase": "pr-creation",
+      "tokens": 0,
+      "duration_ms": 15000,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:49:36.879993Z"
+    },
+    {
+      "phase": "final-summary",
+      "tokens": 29243,
+      "duration_ms": 84711,
+      "model": "sonnet",
+      "timestamp": "2026-04-11T16:51:45.036995Z"
+    },
+    {
+      "phase": "final-commit",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-11T16:51:46.854399Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-04-11T15:55:31.033611Z",
+    "lastUpdated": "2026-04-11T16:51:46.854696Z",
+    "phaseStarted": null
+  },
+  "error": null
+}

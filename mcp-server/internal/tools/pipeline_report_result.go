@@ -44,11 +44,13 @@ var phaseAgentName = map[string]string{
 	"phase-4b": "task-reviewer",
 }
 
-// reportResultResponse is the structured response returned by PipelineReportResultHandler.
+// reportResultOutcome is the typed result of the report-result core logic.
+// It is returned by reportResultCore and consumed by both PipelineReportResultHandler
+// (via handleReportResult) and PipelineNextActionHandler (P5 embedding).
 // DisplayMessage is a pre-formatted completion line the orchestrator should output verbatim
 // after a phase finishes (e.g. "  ✓ Complete  ·  1,847 tokens · 0:23").
 // It is only set when NextActionHint is "proceed" and setup_only is false.
-type reportResultResponse struct {
+type reportResultOutcome struct {
 	StateUpdated    bool                   `json:"state_updated"`
 	ArtifactWritten string                 `json:"artifact_written"`
 	VerdictParsed   string                 `json:"verdict_parsed"`
@@ -79,6 +81,16 @@ func PipelineReportResultHandler(sm *state.StateManager, kb *history.KnowledgeBa
 			return result, err
 		}
 
+		// Per-call StateManager: load fresh from disk to avoid stale-cache conflicts
+		// with task state written by PipelineNextActionHandler's own per-call sm2
+		// (e.g. executeTaskInit writes tasks via sm2, but the global sm cache predates
+		// that write and would overwrite the tasks on the first sm.Update call).
+		// This mirrors the pattern in PipelineNextActionHandler.
+		sm2 := state.NewStateManager(sm.Version())
+		if loadErr := sm2.LoadFromFile(workspace); loadErr != nil {
+			return errorf("load state: %v", loadErr)
+		}
+
 		in := reportResultInput{
 			workspace:  workspace,
 			phase:      phase,
@@ -88,19 +100,20 @@ func PipelineReportResultHandler(sm *state.StateManager, kb *history.KnowledgeBa
 			setupOnly:  req.GetBool("setup_only", false),
 		}
 
-		return handleReportResult(sm, kb, in)
+		return handleReportResult(sm2, kb, in)
 	}
 }
 
-// handleReportResult performs the core logic of PipelineReportResultHandler.
-// Extracted to a named function for testability.
-func handleReportResult(sm *state.StateManager, kb *history.KnowledgeBase, in reportResultInput) (*mcp.CallToolResult, error) {
+// reportResultCore performs the core report-result logic.
+// Returns a typed outcome for callers that need to inspect NextActionHint
+// without deserializing a JSON wire response.
+func reportResultCore(sm *state.StateManager, kb *history.KnowledgeBase, in reportResultInput) (reportResultOutcome, error) {
 	var warnings []string
 
 	// Step 2: Load state for duplicate-log check (before PhaseLog).
 	s, err := loadState(in.workspace)
 	if err != nil {
-		return errorf("read state: %v", err)
+		return reportResultOutcome{}, fmt.Errorf("read state: %w", err)
 	}
 	if w := Warn3dPhaseLogDuplicate(in.phase, s); w != "" {
 		warnings = append(warnings, w)
@@ -108,7 +121,7 @@ func handleReportResult(sm *state.StateManager, kb *history.KnowledgeBase, in re
 
 	// Step 3: Record phase-log entry.
 	if err := sm.PhaseLog(in.workspace, in.phase, in.tokensUsed, in.durationMs, in.model); err != nil {
-		return errorf("phase_log: %v", err)
+		return reportResultOutcome{}, fmt.Errorf("phase_log: %w", err)
 	}
 
 	// Step 4: Validate artifacts for this phase.
@@ -125,7 +138,7 @@ func handleReportResult(sm *state.StateManager, kb *history.KnowledgeBase, in re
 		// Block only when there is an error string (file missing, no verdict token found).
 		// ParseVerdict is the authoritative mechanism for PASS/FAIL decisions in phase-6.
 		if !result.Valid && result.Error != "" {
-			return errorf("artifact invalid for %s: %s", in.phase, result.Error)
+			return reportResultOutcome{}, fmt.Errorf("artifact invalid for %s: %s", in.phase, result.Error)
 		}
 		// Step 6: Set artifactWritten from the first result with a File field.
 		if i == 0 && result.File != "" {
@@ -134,24 +147,34 @@ func handleReportResult(sm *state.StateManager, kb *history.KnowledgeBase, in re
 	}
 
 	// Steps 7–9: Determine state transition based on phase.
-	resp, err := determineTransition(sm, kb, in, results, artifactWritten, &warnings)
+	out, err := determineTransition(sm, kb, in, results, artifactWritten, &warnings)
 	if err != nil {
-		return errorf("%v", err)
+		return reportResultOutcome{}, err
 	}
 
 	// Merge any warning from the transition handler (e.g. completion gate)
 	// into the accumulated warnings before building the final response.
-	if resp.Warning != "" {
-		warnings = append(warnings, resp.Warning)
+	if out.Warning != "" {
+		warnings = append(warnings, out.Warning)
 	}
-	resp.Warning = strings.Join(warnings, "; ")
+	out.Warning = strings.Join(warnings, "; ")
 
 	// Attach a display message when the phase completed successfully.
-	if resp.NextActionHint == "proceed" && !in.setupOnly {
-		resp.DisplayMessage = buildCompleteMessage(in.tokensUsed, in.durationMs)
+	if out.NextActionHint == "proceed" && !in.setupOnly {
+		out.DisplayMessage = buildCompleteMessage(in.tokensUsed, in.durationMs)
 	}
 
-	return okJSON(resp)
+	return out, nil
+}
+
+// handleReportResult serializes reportResultCore output to the MCP wire format.
+// Retained for backward compatibility with existing tests.
+func handleReportResult(sm *state.StateManager, kb *history.KnowledgeBase, in reportResultInput) (*mcp.CallToolResult, error) {
+	out, err := reportResultCore(sm, kb, in)
+	if err != nil {
+		return errorf("%v", err)
+	}
+	return okJSON(out)
 }
 
 // determineTransition decides the correct state transition and returns a partial response.
@@ -164,16 +187,16 @@ func determineTransition(
 	results []validation.ArtifactResult,
 	artifactWritten string,
 	warnings *[]string,
-) (reportResultResponse, error) {
+) (reportResultOutcome, error) {
 	// Step 7: Review phases (phase-3b, phase-4b) — parse verdict and decide.
 	if revType, ok := phaseRevType[in.phase]; ok {
 		artifactFile, knownFile := reviewArtifactFile[in.phase]
 		if !knownFile {
 			// Fallback: complete the phase without verdict parsing.
 			if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
-				return reportResultResponse{}, err
+				return reportResultOutcome{}, err
 			}
-			return reportResultResponse{
+			return reportResultOutcome{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
 				NextActionHint:  "proceed",
@@ -182,7 +205,7 @@ func determineTransition(
 
 		verdict, findings, err := orchestrator.ParseVerdict(filepath.Join(in.workspace, artifactFile))
 		if err != nil {
-			return reportResultResponse{}, err
+			return reportResultOutcome{}, err
 		}
 
 		findings = nonNilSlice(findings)
@@ -196,9 +219,9 @@ func determineTransition(
 		switch verdict {
 		case orchestrator.VerdictRevise:
 			if err := sm.RevisionBump(in.workspace, revType); err != nil {
-				return reportResultResponse{}, err
+				return reportResultOutcome{}, err
 			}
-			return reportResultResponse{
+			return reportResultOutcome{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
 				VerdictParsed:   string(verdict),
@@ -208,9 +231,9 @@ func determineTransition(
 		default:
 			// APPROVE, APPROVE_WITH_NOTES, or UNKNOWN — all advance the phase.
 			if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
-				return reportResultResponse{}, err
+				return reportResultOutcome{}, err
 			}
-			return reportResultResponse{
+			return reportResultOutcome{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
 				VerdictParsed:   string(verdict),
@@ -227,7 +250,7 @@ func determineTransition(
 
 	// Step 9: All other phases — advance unless setup_only.
 	if in.setupOnly {
-		return reportResultResponse{
+		return reportResultOutcome{
 			StateUpdated:    true,
 			ArtifactWritten: artifactWritten,
 			NextActionHint:  "setup_continue",
@@ -264,13 +287,13 @@ func determineTransition(
 			}
 			return nil
 		}); updateErr != nil {
-			return reportResultResponse{}, updateErr
+			return reportResultOutcome{}, updateErr
 		}
 
 		// Re-read state after potential updates.
 		s, err := sm.GetState()
 		if err != nil {
-			return reportResultResponse{}, err
+			return reportResultOutcome{}, err
 		}
 		hasPending := false
 		for _, t := range s.Tasks {
@@ -282,7 +305,7 @@ func determineTransition(
 		// Also hold in phase-5 if a batch commit is pending (e.g. last parallel
 		// batch just completed — all tasks done but git commit not yet run).
 		if hasPending || s.NeedsBatchCommit {
-			return reportResultResponse{
+			return reportResultOutcome{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
 				NextActionHint:  "setup_continue",
@@ -304,9 +327,9 @@ func determineTransition(
 				}
 				return nil
 			}); updateErr != nil {
-				return reportResultResponse{}, updateErr
+				return reportResultOutcome{}, updateErr
 			}
-			return reportResultResponse{
+			return reportResultOutcome{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
 				NextActionHint:  "setup_continue",
@@ -317,7 +340,7 @@ func determineTransition(
 		// All tasks complete — clear any completed_fail retry state so the
 		// engine dispatches fresh reviewers after the retry implementer ran.
 		if err := clearCompletedFailTasks(sm, in.workspace); err != nil {
-			return reportResultResponse{}, err
+			return reportResultOutcome{}, err
 		}
 	}
 
@@ -327,16 +350,16 @@ func determineTransition(
 	// task-decomposer with the findings.
 	if in.phase == "phase-4" {
 		if resp, handled, err := applyWorkflowRules(sm, in.workspace, artifactWritten); err != nil {
-			return reportResultResponse{}, err
+			return reportResultOutcome{}, err
 		} else if handled {
 			return resp, nil
 		}
 	}
 
 	if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
-		return reportResultResponse{}, err
+		return reportResultOutcome{}, err
 	}
-	return reportResultResponse{
+	return reportResultOutcome{
 		StateUpdated:    true,
 		ArtifactWritten: artifactWritten,
 		NextActionHint:  "proceed",
@@ -357,7 +380,7 @@ func handlePhase6Transition(
 	in reportResultInput,
 	results []validation.ArtifactResult,
 	artifactWritten string,
-) (reportResultResponse, error) {
+) (reportResultOutcome, error) {
 	allFindings := []orchestrator.Finding{}
 	var verdictParsed string
 	anyFail := false
@@ -410,9 +433,9 @@ func handlePhase6Transition(
 			}
 			return nil
 		}); updateErr != nil {
-			return reportResultResponse{}, updateErr
+			return reportResultOutcome{}, updateErr
 		}
-		return reportResultResponse{
+		return reportResultOutcome{
 			StateUpdated:    true,
 			ArtifactWritten: artifactWritten,
 			VerdictParsed:   verdictParsed,
@@ -427,7 +450,7 @@ func handlePhase6Transition(
 	// Read verdicts outside the lock to avoid I/O inside a critical section.
 	s, err := sm.GetState()
 	if err != nil {
-		return reportResultResponse{}, err
+		return reportResultOutcome{}, err
 	}
 	type verdictUpdate struct {
 		key    string
@@ -466,14 +489,14 @@ func handlePhase6Transition(
 			}
 			return nil
 		}); updateErr != nil {
-			return reportResultResponse{}, updateErr
+			return reportResultOutcome{}, updateErr
 		}
 	}
 
 	// Check whether any task still needs a review.
 	s, err = sm.GetState()
 	if err != nil {
-		return reportResultResponse{}, err
+		return reportResultOutcome{}, err
 	}
 	for _, t := range s.Tasks {
 		if t.ImplStatus != state.TaskStatusCompleted {
@@ -482,7 +505,7 @@ func handlePhase6Transition(
 		if t.ReviewStatus != state.TaskStatusCompletedPass &&
 			t.ReviewStatus != state.TaskStatusCompletedPassNote {
 			// Task needs review — hold in phase-6.
-			return reportResultResponse{
+			return reportResultOutcome{
 				StateUpdated:    true,
 				ArtifactWritten: artifactWritten,
 				VerdictParsed:   verdictParsed,
@@ -505,9 +528,9 @@ func handlePhase6Transition(
 			}
 			return nil
 		}); updateErr != nil {
-			return reportResultResponse{}, updateErr
+			return reportResultOutcome{}, updateErr
 		}
-		return reportResultResponse{
+		return reportResultOutcome{
 			StateUpdated:    true,
 			ArtifactWritten: artifactWritten,
 			VerdictParsed:   verdictParsed,
@@ -518,9 +541,9 @@ func handlePhase6Transition(
 	}
 
 	if err := sm.PhaseComplete(in.workspace, in.phase); err != nil {
-		return reportResultResponse{}, err
+		return reportResultOutcome{}, err
 	}
-	return reportResultResponse{
+	return reportResultOutcome{
 		StateUpdated:    true,
 		ArtifactWritten: artifactWritten,
 		VerdictParsed:   verdictParsed,
@@ -622,10 +645,10 @@ func clearCompletedFailTasks(sm *state.StateManager, workspace string) error {
 // enforce MaxRevisionRetries on the next pipeline_next_action call. This
 // mirrors how VerdictRevise on phase-4b increments the same counter in
 // determineTransition.
-func applyWorkflowRules(sm *state.StateManager, workspace, artifactWritten string) (reportResultResponse, bool, error) {
+func applyWorkflowRules(sm *state.StateManager, workspace, artifactWritten string) (reportResultOutcome, bool, error) {
 	tasks, rules, reviewPath, ok, err := loadPhase4Context(workspace)
 	if !ok || err != nil {
-		return reportResultResponse{}, false, err
+		return reportResultOutcome{}, false, err
 	}
 
 	violations := validation.Validate(tasks, rules)
@@ -635,14 +658,14 @@ func applyWorkflowRules(sm *state.StateManager, workspace, artifactWritten strin
 		// phase-4b task-reviewer (handlePhaseFourB) writes a fresh file
 		// instead of reading a stale REVISE verdict and looping.
 		if err := os.Remove(reviewPath); err != nil && !os.IsNotExist(err) {
-			return reportResultResponse{}, false, fmt.Errorf("remove stale %s: %w", state.ArtifactReviewTasks, err)
+			return reportResultOutcome{}, false, fmt.Errorf("remove stale %s: %w", state.ArtifactReviewTasks, err)
 		}
-		return reportResultResponse{}, false, nil
+		return reportResultOutcome{}, false, nil
 	}
 
 	resp, err := writeViolationResponse(sm, workspace, reviewPath, artifactWritten, violations)
 	if err != nil {
-		return reportResultResponse{}, false, err
+		return reportResultOutcome{}, false, err
 	}
 	return resp, true, nil
 }
@@ -684,7 +707,7 @@ func loadPhase4Context(workspace string) (map[string]state.Task, *validation.Wor
 }
 
 // writeViolationResponse writes review-tasks.md, bumps TaskRevisions, and
-// builds the reportResultResponse for a workflow-rules violation.
+// builds the reportResultOutcome for a workflow-rules violation.
 //
 // Order matters: write review-tasks.md FIRST, then bump TaskRevisions.
 // If RevisionBump fails, the orchestrator still sees review-tasks.md on
@@ -692,9 +715,9 @@ func loadPhase4Context(workspace string) (map[string]state.Task, *validation.Wor
 // task-decomposer — we just lose one retry-limit tick, which is
 // recoverable. Reversing the order would risk bumping the counter with
 // no findings file on disk, which would waste a retry slot silently.
-func writeViolationResponse(sm *state.StateManager, workspace, reviewPath, artifactWritten string, violations []validation.Violation) (reportResultResponse, error) {
+func writeViolationResponse(sm *state.StateManager, workspace, reviewPath, artifactWritten string, violations []validation.Violation) (reportResultOutcome, error) {
 	if err := os.WriteFile(reviewPath, []byte(validation.FormatReviewFindings(violations)), 0o600); err != nil {
-		return reportResultResponse{}, fmt.Errorf("write %s: %w", state.ArtifactReviewTasks, err)
+		return reportResultOutcome{}, fmt.Errorf("write %s: %w", state.ArtifactReviewTasks, err)
 	}
 
 	// Bump TaskRevisions so handlePhaseFour enforces MaxRevisionRetries on
@@ -702,7 +725,7 @@ func writeViolationResponse(sm *state.StateManager, workspace, reviewPath, artif
 	// bumps the same counter when phase-4b parses a REVISE verdict — keeping
 	// the retry-limit enforcement in one place (the engine).
 	if err := sm.RevisionBump(workspace, state.RevTypeTasks); err != nil {
-		return reportResultResponse{}, fmt.Errorf("revision bump (tasks): %w", err)
+		return reportResultOutcome{}, fmt.Errorf("revision bump (tasks): %w", err)
 	}
 
 	findings := make([]orchestrator.Finding, 0, len(violations))
@@ -714,7 +737,7 @@ func writeViolationResponse(sm *state.StateManager, workspace, reviewPath, artif
 		})
 	}
 
-	return reportResultResponse{
+	return reportResultOutcome{
 		StateUpdated:    true,
 		ArtifactWritten: artifactWritten,
 		VerdictParsed:   "REVISE",
