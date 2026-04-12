@@ -534,6 +534,61 @@ func TestPipelineReportResult(t *testing.T) {
 			},
 		},
 		{
+			// Regression: stale-cache bug where PipelineReportResultHandler was
+			// passed a global StateManager whose in-memory cache predated the
+			// TaskInit call made inside PipelineNextActionHandler (P2 absorption).
+			// With a stale cache of 0 tasks, the old code called sm.Update (via
+			// PhaseLog) which overwrote disk with 0 tasks, making hasPending=false
+			// and advancing phase-5 prematurely after only 1 task was implemented.
+			// The fix creates a per-call sm2 inside PipelineReportResultHandler so
+			// it always loads fresh state from disk, regardless of the global sm.
+			name:  "phase5_stale_cache_does_not_advance_with_pending_tasks",
+			phase: "phase-5",
+			setup: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				// Simulate executeTaskInit: write 3 tasks via a *different* StateManager
+				// (sm2), leaving the test's "global" sm with a stale empty cache.
+				sm2 := state.NewStateManager("dev")
+				if err := sm2.LoadFromFile(dir); err != nil {
+					t.Fatalf("sm2.LoadFromFile: %v", err)
+				}
+				tasks := map[string]state.Task{
+					"1": {Title: "Task 1"},
+					"2": {Title: "Task 2"},
+					"3": {Title: "Task 3"},
+				}
+				if err := sm2.TaskInit(dir, tasks); err != nil {
+					t.Fatalf("sm2.TaskInit: %v", err)
+				}
+				// Only impl-1.md exists — tasks 2 and 3 are still pending.
+				if err := os.WriteFile(filepath.Join(dir, "impl-1.md"), []byte("content"), 0o644); err != nil {
+					t.Fatalf("WriteFile impl-1.md: %v", err)
+				}
+				// sm (the "global" handler sm) is NOT updated — its in-memory cache
+				// still has 0 tasks, reproducing the stale-cache scenario.
+			},
+			wantIsError:     false,
+			wantStateUpdate: true,
+			wantHint:        "setup_continue", // must NOT advance to "proceed"
+			checkState: func(t *testing.T, dir string) {
+				t.Helper()
+				s, err := state.ReadState(dir)
+				if err != nil {
+					t.Fatalf("ReadState: %v", err)
+				}
+				// Tasks must survive — the handler must not overwrite with 0 tasks.
+				if len(s.Tasks) != 3 {
+					t.Fatalf("Tasks count = %d after phase-5 report, want 3 (stale cache must not overwrite tasks)", len(s.Tasks))
+				}
+				// phase-5 must NOT be completed.
+				for _, p := range s.CompletedPhases {
+					if p == "phase-5" {
+						t.Error("phase-5 must NOT be in CompletedPhases while tasks 2 and 3 are pending")
+					}
+				}
+			},
+		},
+		{
 			// Phase 6 completion gate: all tasks reviewed (PASS) but review-2.md
 			// missing on disk — must block phase completion and reset ReviewStatus
 			// so the engine re-dispatches reviewers.

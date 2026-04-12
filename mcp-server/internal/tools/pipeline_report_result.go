@@ -81,6 +81,16 @@ func PipelineReportResultHandler(sm *state.StateManager, kb *history.KnowledgeBa
 			return result, err
 		}
 
+		// Per-call StateManager: load fresh from disk to avoid stale-cache conflicts
+		// with task state written by PipelineNextActionHandler's own per-call sm2
+		// (e.g. executeTaskInit writes tasks via sm2, but the global sm cache predates
+		// that write and would overwrite the tasks on the first sm.Update call).
+		// This mirrors the pattern in PipelineNextActionHandler.
+		sm2 := state.NewStateManager(sm.Version())
+		if loadErr := sm2.LoadFromFile(workspace); loadErr != nil {
+			return errorf("load state: %v", loadErr)
+		}
+
 		in := reportResultInput{
 			workspace:  workspace,
 			phase:      phase,
@@ -90,7 +100,7 @@ func PipelineReportResultHandler(sm *state.StateManager, kb *history.KnowledgeBa
 			setupOnly:  req.GetBool("setup_only", false),
 		}
 
-		return handleReportResult(sm, kb, in)
+		return handleReportResult(sm2, kb, in)
 	}
 }
 
