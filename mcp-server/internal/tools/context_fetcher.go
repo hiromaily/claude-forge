@@ -35,14 +35,9 @@ func parseExternalContext(args map[string]any) (externalContext, error) {
 		return extCtx, nil
 	}
 
-	// Round-trip through JSON to normalize types.
-	data, err := json.Marshal(raw)
-	if err != nil {
-		return extCtx, fmt.Errorf("marshal external_context: %w", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return extCtx, fmt.Errorf("unmarshal external_context: %w", err)
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return extCtx, fmt.Errorf("external_context must be an object, got %T", raw)
 	}
 
 	extCtx.SourceURL = stringField(m, "source_url")

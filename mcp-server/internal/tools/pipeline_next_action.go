@@ -36,8 +36,9 @@ var outputVerdictHints = map[string]string{
 }
 
 // previousResult captures optional metrics from the action the orchestrator just completed.
-// When non-zero (tokensUsed > 0 or model != ""), PipelineNextActionHandler calls
-// reportResultCore before eng.NextAction.
+// When non-zero (tokensUsed > 0, model != "", or durationMs > 0), PipelineNextActionHandler
+// calls reportResultCore before eng.NextAction. durationMs > 0 catches exec/write_file
+// actions that have no token count or model identifier.
 type previousResult struct {
 	tokensUsed int
 	durationMs int
@@ -125,7 +126,7 @@ func PipelineNextActionHandler(
 		// the next action. This merges pipeline_report_result into the pipeline_next_action
 		// call, reducing the main loop from 3 calls to 2 calls per cycle.
 		prev := parsePreviousResult(req)
-		if prev.tokensUsed > 0 || prev.model != "" {
+		if prev.tokensUsed > 0 || prev.model != "" || prev.durationMs > 0 {
 			st, stErr := sm2.GetState()
 			if stErr != nil {
 				return errorf("get state for report: %v", stErr)

@@ -180,7 +180,12 @@ func handlePhase6Transition(
 					continue
 				}
 				if t, ok := st.Tasks[taskKey]; ok {
-					t.ImplRetries++
+					// Guard against double-increment: only bump ImplRetries on first FAIL
+					// transition. Subsequent pipeline_next_action calls before the phase
+					// advances must not re-increment an already-failed task's counter.
+					if t.ReviewStatus != state.TaskStatusCompletedFail {
+						t.ImplRetries++
+					}
 					t.ReviewStatus = state.TaskStatusCompletedFail
 					st.Tasks[taskKey] = t
 				}

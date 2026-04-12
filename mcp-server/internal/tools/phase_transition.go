@@ -34,7 +34,23 @@ func handlePhase5Transition(
 		// Auto-mark tasks as completed when their impl-N.md artifact exists.
 		// The implementer agent writes impl-N.md but may not call task_update
 		// explicitly, so we reconcile task status from artifact presence.
-		// Batch all updates in a single transaction to avoid O(N) disk I/O.
+		// Pre-compute which tasks have impl files outside the lock to avoid
+		// holding the state lock during disk I/O.
+		preState, psErr := sm.GetState()
+		if psErr != nil {
+			return reportResultOutcome{}, psErr
+		}
+		implFileExists := make(map[string]bool, len(preState.Tasks))
+		for k, t := range preState.Tasks {
+			if t.ImplStatus == "completed" {
+				continue
+			}
+			implFile := filepath.Join(in.workspace, "impl-"+k+".md")
+			if _, statErr := os.Stat(implFile); statErr == nil {
+				implFileExists[k] = true
+			}
+		}
+		// Batch all updates in a single transaction; no I/O inside the lock.
 		// Also detect parallel batch completion and set NeedsBatchCommit flag.
 		if updateErr := sm.Update(func(st *state.State) error {
 			newlyCompleted := 0
@@ -42,8 +58,7 @@ func handlePhase5Transition(
 				if t.ImplStatus == "completed" {
 					continue
 				}
-				implFile := filepath.Join(in.workspace, "impl-"+k+".md")
-				if _, statErr := os.Stat(implFile); statErr == nil {
+				if implFileExists[k] {
 					if t.ExecutionMode == "parallel" {
 						newlyCompleted++
 					}
@@ -141,15 +156,28 @@ func handlePhase5Transition(
 // tasks in the "completed_fail" state. Called from the phase-5 handler after a
 // retry implementer run so the engine dispatches a fresh reviewer on the next call.
 func clearCompletedFailTasks(sm *state.StateManager, workspace string) error {
+	// Identify stale review files before acquiring the lock.
+	st, err := sm.GetState()
+	if err != nil {
+		return err
+	}
+	var filesToRemove []string
+	for k, t := range st.Tasks {
+		if t.ReviewStatus == state.TaskStatusCompletedFail {
+			filesToRemove = append(filesToRemove, filepath.Join(workspace, "review-"+k+".md"))
+		}
+	}
+	// Delete stale review files outside the lock so the engine dispatches fresh reviewers.
+	for _, f := range filesToRemove {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	// Update state in a single transaction; no I/O inside the lock.
 	return sm.Update(func(st *state.State) error {
 		for k, t := range st.Tasks {
 			if t.ReviewStatus != state.TaskStatusCompletedFail {
 				continue
-			}
-			// Delete the stale review file so the engine dispatches a fresh reviewer.
-			reviewFile := filepath.Join(workspace, "review-"+k+".md")
-			if err := os.Remove(reviewFile); err != nil && !os.IsNotExist(err) {
-				return err
 			}
 			t.ReviewStatus = ""
 			st.Tasks[k] = t
