@@ -94,7 +94,7 @@ func TestPhaseRegistryTemplateSkipsData(t *testing.T) {
 		state.PhaseFour:        true,
 		state.PhaseFourB:       true,
 		state.PhaseCheckpointB: true,
-		state.PhaseSeven:       true,
+		state.PhaseSix:         true,
 	}
 
 	// Expected: phases skipped by the "standard" template.
