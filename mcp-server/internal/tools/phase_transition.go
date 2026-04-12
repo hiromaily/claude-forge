@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
@@ -34,18 +35,19 @@ func handlePhase5Transition(
 		// Auto-mark tasks as completed when their impl-N.md artifact exists.
 		// The implementer agent writes impl-N.md but may not call task_update
 		// explicitly, so we reconcile task status from artifact presence.
-		// Pre-compute which tasks have impl files outside the lock to avoid
-		// holding the state lock during disk I/O.
+		// Pre-scan impl-{k}.md existence for ALL non-human-gate tasks upfront to
+		// avoid a second disk pass in the completion-gate check below.
 		preState, psErr := sm.GetState()
 		if psErr != nil {
 			return reportResultOutcome{}, psErr
 		}
 		implFileExists := make(map[string]bool, len(preState.Tasks))
 		for k, t := range preState.Tasks {
-			if t.ImplStatus == "completed" {
+			if t.ExecutionMode == state.ExecModeHumanGate {
 				continue
 			}
 			implFile := filepath.Join(in.workspace, "impl-"+k+".md")
+			implFileExists[k] = false
 			if _, statErr := os.Stat(implFile); statErr == nil {
 				implFileExists[k] = true
 			}
@@ -102,7 +104,18 @@ func handlePhase5Transition(
 		// completed, the actual impl-{N}.md files must exist for every task.
 		// When missing files are found, reset ImplStatus so the engine
 		// re-dispatches implementers on the next pipeline_next_action call.
-		if missing := missingImplFiles(in.workspace, s.Tasks); len(missing) > 0 {
+		// Use the pre-fetched file-existence map to avoid a second disk scan.
+		var missing []string
+		for k, t := range s.Tasks {
+			if t.ExecutionMode == state.ExecModeHumanGate {
+				continue
+			}
+			if !implFileExists[k] {
+				missing = append(missing, k)
+			}
+		}
+		sort.Strings(missing)
+		if len(missing) > 0 {
 			if updateErr := sm.Update(func(st *state.State) error {
 				for _, k := range missing {
 					if t, ok := st.Tasks[k]; ok {

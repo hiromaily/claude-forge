@@ -72,6 +72,7 @@ Example: `/forge 20260401-effort-only-flow`
 Repeat until done:
 
 1. Call `mcp__forge-state__pipeline_next_action(workspace=<workspace>,
+   previous_action_complete=true,
    previous_tokens=<tokens from last action>,
    previous_duration_ms=<ms from last action>,
    previous_model=<model from last action>,
@@ -111,9 +112,9 @@ Repeat until done:
           c. Report success or failure to the user.
        3. If the user chooses **"skip"**: do nothing.
      Call `mcp__forge-state__phase_complete(workspace, phase=action.name)`.
-     On the next `pipeline_next_action` call, pass `previous_tokens=0,
-     previous_duration_ms=0` and omit `previous_model` and `previous_setup_only`
-     (checkpoints have no agent cost; `previous_tokens=0` causes the P5 block to be skipped).
+     On the next `pipeline_next_action` call, omit `previous_action_complete` (or pass false),
+     and pass `previous_tokens=0, previous_duration_ms=0` with no `previous_model` or `previous_setup_only`
+     (checkpoints have no agent cost; omitting `previous_action_complete` causes the P5 block to be skipped).
    - `exec`: Run `action.commands` via Bash. Record the duration and `action.setup_only`
      for the next `pipeline_next_action` call. Pass `previous_setup_only=true` if
      `action.setup_only` is true. There is no model to record for exec actions; omit
@@ -145,6 +146,6 @@ Repeat until done:
 ## Rules
 
 - Never make orchestration decisions independently — follow action.type exactly.
-- Always pass `previous_tokens`, `previous_duration_ms`, `previous_model`, and `previous_setup_only` on every `pipeline_next_action` call after the first (after any `spawn_agent`, `exec`, or `write_file` action completes).
+- Always pass `previous_action_complete=true`, `previous_tokens`, `previous_duration_ms`, `previous_model`, and `previous_setup_only` on every `pipeline_next_action` call after the first (after any `spawn_agent`, `exec`, or `write_file` action completes). Do NOT pass `previous_action_complete=true` after a checkpoint — it must remain false (or omitted) to skip the P5 report block.
 - Never pass `isolation: "worktree"` to any Agent call.
 - On MCP error: surface the error to the user and stop.

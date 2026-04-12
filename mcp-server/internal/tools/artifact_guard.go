@@ -42,15 +42,6 @@ func missingArtifactFiles(workspace, prefix string, tasks map[string]state.Task)
 	return missing
 }
 
-// missingImplFiles returns task keys whose impl-{key}.md file does not exist on disk.
-// Used as a deterministic completion gate for Phase 5 — prevents the phase from
-// advancing when some tasks lack implementation artifacts, regardless of task status.
-// Human-gate tasks are excluded because they are completed by user acknowledgement
-// and intentionally produce no impl file.
-func missingImplFiles(workspace string, tasks map[string]state.Task) []string {
-	return missingArtifactFiles(workspace, "impl-", tasks)
-}
-
 // missingReviewFiles returns task keys whose review-{key}.md file does not exist on disk.
 // Used as a deterministic completion gate for Phase 6 — prevents the phase from
 // advancing when some tasks lack review artifacts.

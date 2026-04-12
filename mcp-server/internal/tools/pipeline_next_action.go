@@ -36,14 +36,15 @@ var outputVerdictHints = map[string]string{
 }
 
 // previousResult captures optional metrics from the action the orchestrator just completed.
-// When non-zero (tokensUsed > 0, model != "", or durationMs > 0), PipelineNextActionHandler
-// calls reportResultCore before eng.NextAction. durationMs > 0 catches exec/write_file
-// actions that have no token count or model identifier.
+// The P5 report block fires when actionComplete is true OR when any metric is non-zero
+// (tokensUsed > 0, model != "", or durationMs > 0). actionComplete is the preferred
+// signal — it handles fast exec/write_file actions where all numeric metrics may be zero.
 type previousResult struct {
-	tokensUsed int
-	durationMs int
-	model      string
-	setupOnly  bool
+	tokensUsed     int
+	durationMs     int
+	model          string
+	setupOnly      bool
+	actionComplete bool
 }
 
 // reportResultEmbedded carries the report-result outcome inside nextActionResponse
@@ -71,10 +72,11 @@ type nextActionResponse struct {
 // parsePreviousResult extracts the optional previous_* parameters from the MCP request.
 func parsePreviousResult(req mcp.CallToolRequest) previousResult {
 	return previousResult{
-		tokensUsed: req.GetInt("previous_tokens", 0),
-		durationMs: req.GetInt("previous_duration_ms", 0),
-		model:      req.GetString("previous_model", ""),
-		setupOnly:  req.GetBool("previous_setup_only", false),
+		tokensUsed:     req.GetInt("previous_tokens", 0),
+		durationMs:     req.GetInt("previous_duration_ms", 0),
+		model:          req.GetString("previous_model", ""),
+		setupOnly:      req.GetBool("previous_setup_only", false),
+		actionComplete: req.GetBool("previous_action_complete", false),
 	}
 }
 
@@ -126,7 +128,7 @@ func PipelineNextActionHandler(
 		// the next action. This merges pipeline_report_result into the pipeline_next_action
 		// call, reducing the main loop from 3 calls to 2 calls per cycle.
 		prev := parsePreviousResult(req)
-		if prev.tokensUsed > 0 || prev.model != "" || prev.durationMs > 0 {
+		if prev.actionComplete || prev.tokensUsed > 0 || prev.model != "" || prev.durationMs > 0 {
 			st, stErr := sm2.GetState()
 			if stErr != nil {
 				return errorf("get state for report: %v", stErr)

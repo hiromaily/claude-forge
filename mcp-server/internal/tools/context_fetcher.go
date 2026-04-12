@@ -7,6 +7,36 @@ import (
 	"strings"
 )
 
+// parseStoryPoints extracts a numeric story-points value from an external_context map.
+// Accepts "jira_story_points" with "story_points" as a fallback alias.
+// Handles float64, int, and json.Number types; json.Number falls back from Int64 to Float64
+// to handle decimal inputs (e.g. "1.5" → 1).
+func parseStoryPoints(m map[string]any) int {
+	if _, ok := m["jira_story_points"]; !ok {
+		if sp, ok2 := m["story_points"]; ok2 {
+			m["jira_story_points"] = sp
+		}
+	}
+	spRaw, ok := m["jira_story_points"]
+	if !ok {
+		return 0
+	}
+	switch v := spRaw.(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return int(n)
+		}
+		if f, err := v.Float64(); err == nil {
+			return int(f)
+		}
+	}
+	return 0
+}
+
 // externalContext holds parsed GitHub/Jira context fields.
 type externalContext struct {
 	// Source identifiers from pipeline_init result — used in request.md front matter.
@@ -63,22 +93,7 @@ func parseExternalContext(args map[string]any) (externalContext, error) {
 	}
 
 	// Parse jira_story_points (number), with "story_points" as fallback alias.
-	if _, ok := m["jira_story_points"]; !ok {
-		if sp, ok2 := m["story_points"]; ok2 {
-			m["jira_story_points"] = sp
-		}
-	}
-	if spRaw, ok := m["jira_story_points"]; ok {
-		switch v := spRaw.(type) {
-		case float64:
-			extCtx.JiraStoryPoints = int(v)
-		case int:
-			extCtx.JiraStoryPoints = v
-		case json.Number:
-			n, _ := v.Int64()
-			extCtx.JiraStoryPoints = int(n)
-		}
-	}
+	extCtx.JiraStoryPoints = parseStoryPoints(m)
 
 	return extCtx, nil
 }
