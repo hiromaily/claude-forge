@@ -271,12 +271,12 @@ func prBodyFileWithClosingRef(summaryPath, closingRef string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("prBodyFileWithClosingRef read: %w", err)
 	}
-	combined := append(content, []byte(closingRef)...)
+	content = append(content, []byte(closingRef)...)
 	tmp, err := os.CreateTemp("", "forge-pr-body-*.md")
 	if err != nil {
 		return "", fmt.Errorf("prBodyFileWithClosingRef tempfile: %w", err)
 	}
-	if _, err := tmp.Write(combined); err != nil {
+	if _, err := tmp.Write(content); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmp.Name())
 		return "", fmt.Errorf("prBodyFileWithClosingRef write: %w", err)
