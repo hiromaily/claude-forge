@@ -208,19 +208,35 @@ func runE2EPipeline(
 	return false // unreachable; satisfies compiler
 }
 
+// phaseLogSet returns a set of phase IDs that appear in s.PhaseLog.
+// Only phases that were actually dispatched (agent spawned, exec run, or checkpoint
+// reported) have PhaseLog entries; pre-configured skipped phases are absent.
+func phaseLogSet(s *state.State) map[string]bool {
+	set := make(map[string]bool, len(s.PhaseLog))
+	for _, entry := range s.PhaseLog {
+		set[entry.Phase] = true
+	}
+	return set
+}
+
 // TestE2E_Templates is a table-driven test covering three template variants.
-// Each subtest drives the full pipeline to completion and asserts currentPhase == completed.
+// Each subtest drives the full pipeline to completion and asserts:
+//   - currentPhase == completed
+//   - phase-6 (Code Review) ran only for standard and full templates
+//   - phase-7 (Comprehensive Review) ran for all templates
 func TestE2E_Templates(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		template string
-		effort   string
+		name          string
+		template      string
+		effort        string
+		wantPhase6Run bool // Code Review expected to run
+		wantPhase7Run bool // Comprehensive Review expected to run
 	}{
-		{name: "standard_template", template: state.TemplateStandard, effort: state.EffortM},
-		{name: "light_template", template: state.TemplateLight, effort: state.EffortS},
-		{name: "full_template", template: state.TemplateFull, effort: state.EffortL},
+		{name: "standard_template", template: state.TemplateStandard, effort: state.EffortM, wantPhase6Run: true, wantPhase7Run: true},
+		{name: "light_template", template: state.TemplateLight, effort: state.EffortS, wantPhase6Run: false, wantPhase7Run: true},
+		{name: "full_template", template: state.TemplateFull, effort: state.EffortL, wantPhase6Run: true, wantPhase7Run: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -235,6 +251,14 @@ func TestE2E_Templates(t *testing.T) {
 			}
 			if s.CurrentPhase != state.PhaseCompleted {
 				t.Errorf("currentPhase = %q, want %q", s.CurrentPhase, state.PhaseCompleted)
+			}
+
+			logged := phaseLogSet(s)
+			if got := logged[state.PhaseSix]; got != tc.wantPhase6Run {
+				t.Errorf("phase-6 (Code Review) logged = %v, want %v (template=%s)", got, tc.wantPhase6Run, tc.template)
+			}
+			if got := logged[state.PhaseSeven]; got != tc.wantPhase7Run {
+				t.Errorf("phase-7 (Comprehensive Review) logged = %v, want %v (template=%s)", got, tc.wantPhase7Run, tc.template)
 			}
 		})
 	}
