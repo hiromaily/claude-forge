@@ -772,8 +772,6 @@ func TestPipelineNextAction(t *testing.T) {
 }
 
 // callNextActionWithPrev invokes PipelineNextActionHandler with previous_* parameters set.
-//
-//nolint:unparam // model is a conceptually variable parameter even if test cases share the same value
 func callNextActionWithPrev(
 	t *testing.T,
 	handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error),
@@ -782,16 +780,21 @@ func callNextActionWithPrev(
 	durationMs int,
 	model string,
 	setupOnly bool,
+	actionComplete bool,
 ) (*mcp.CallToolResult, error) {
 	t.Helper()
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
+	args := map[string]any{
 		"workspace":            workspace,
 		"previous_tokens":      float64(tokensUsed),
 		"previous_duration_ms": float64(durationMs),
 		"previous_model":       model,
 		"previous_setup_only":  setupOnly,
 	}
+	if actionComplete {
+		args["previous_action_complete"] = true
+	}
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = args
 	return handler(t.Context(), req)
 }
 
@@ -811,7 +814,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
 
 		// Call with previous_tokens=500 to trigger P5 block.
-		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false)
+		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false, false)
 		if err != nil {
 			t.Fatalf("handler returned error: %v", err)
 		}
@@ -859,7 +862,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 
 		// Use previous_model="" to confirm it does NOT trigger P5.
 		// Then call with previous_model set to confirm it does.
-		result, err := callNextActionWithPrev(t, handler, workspace, 0, 0, "claude-sonnet-4-6", false)
+		result, err := callNextActionWithPrev(t, handler, workspace, 0, 0, "claude-sonnet-4-6", false, false)
 		if err != nil {
 			t.Fatalf("handler returned error: %v", err)
 		}
@@ -941,7 +944,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		eng := orchestrator.NewEngine("", "")
 		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
 
-		result, err := callNextActionWithPrev(t, handler, workspace, 800, 2000, "claude-sonnet-4-6", false)
+		result, err := callNextActionWithPrev(t, handler, workspace, 800, 2000, "claude-sonnet-4-6", false, false)
 		if err != nil {
 			t.Fatalf("handler returned error: %v", err)
 		}
@@ -999,7 +1002,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 
 		// setup_only=true should produce "setup_continue" from reportResultCore
 		// for a non-review phase like phase-1.
-		result, err := callNextActionWithPrev(t, handler, workspace, 100, 500, "claude-sonnet-4-6", true)
+		result, err := callNextActionWithPrev(t, handler, workspace, 100, 500, "claude-sonnet-4-6", true, false)
 		if err != nil {
 			t.Fatalf("handler returned error: %v", err)
 		}
@@ -1037,7 +1040,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		eng := orchestrator.NewEngine("", "")
 		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
 
-		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false)
+		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false, false)
 		if err != nil {
 			t.Fatalf("handler returned Go error: %v", err)
 		}
@@ -1071,7 +1074,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		eng := orchestrator.NewEngine("", "")
 		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
 
-		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false)
+		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false, false)
 		if err != nil {
 			t.Fatalf("handler returned Go error: %v", err)
 		}
@@ -1090,6 +1093,60 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		}
 		if len(s.PhaseLog) != 0 {
 			t.Errorf("PhaseLog should be empty when P5 guard skips 'completed' phase, got %d entries", len(s.PhaseLog))
+		}
+	})
+
+	t.Run("action_complete_triggers_p5_for_exec_phase", func(t *testing.T) {
+		// When previous_action_complete=true and tokens=0, model="", P5 block should still
+		// trigger (exec/write_file actions complete without spending tokens).
+		// This exercises the scenario where an exec or write_file phase completes with
+		// durationMs=0 and tokensUsed=0 but the orchestrator correctly passes
+		// previous_action_complete=true.
+		t.Parallel()
+
+		// Use phase-1 (non-review, non-setup) so reportResultCore returns "proceed".
+		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
+		kb := history.NewKnowledgeBase("")
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+
+		// Call with actionComplete=true, tokens=0, model="" — P5 must fire via actionComplete flag.
+		result, err := callNextActionWithPrev(t, handler, workspace, 0, 0, "", false, true)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		// P5 should have run reportResultCore (phase-1 logged and completed),
+		// received "proceed", and fallen through to eng.NextAction — returning
+		// the spawn_agent action for phase-2 (investigator).
+		// This is not a stuck/infinite loop result (which would re-return phase-1 action).
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q (actionComplete=true should trigger P5 and advance phase)",
+				resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if resp.Action.Agent != "investigator" {
+			t.Errorf("action.Agent = %q, want %q (should have advanced past phase-1)", resp.Action.Agent, "investigator")
+		}
+		// ReportResult should be nil when outcome is "proceed".
+		if resp.ReportResult != nil {
+			t.Errorf("ReportResult should be nil for proceed outcome, got %+v", resp.ReportResult)
+		}
+
+		// Verify phase-1 was logged and completed in state (P5 fired).
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if len(s.PhaseLog) == 0 {
+			t.Errorf("PhaseLog should have at least one entry after P5 fired via actionComplete=true")
 		}
 	})
 }

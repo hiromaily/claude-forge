@@ -834,6 +834,19 @@ func TestNextAction(t *testing.T) {
 			wantSummary: SkipSummaryPrefix + PhaseSix,
 		},
 
+		// ── Decision 23: phase-6 empty Tasks skips the phase (edge case, mirrors phase-5) ─
+		{
+			name: "phase6_empty_tasks_skips",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-6", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{}
+					return nil
+				})
+			},
+			wantType: ActionDone,
+		},
+
 		// ── Phase 7: comprehensive reviewer ──────────────────────────────────
 		{
 			name: "phase7_comprehensive_reviewer",
