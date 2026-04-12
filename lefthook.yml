@@ -19,6 +19,10 @@ pre-push:
       root: "mcp-server"
       glob: "**/*.go"
       run: make go-lint
+    go-test:
+      root: "mcp-server"
+      glob: "**/*.go"
+      run: make go-test
     hook-tests:
       glob: "scripts/*.sh"
       run: bash scripts/test-hooks.sh
