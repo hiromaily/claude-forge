@@ -214,14 +214,16 @@ type nextActionTestCase struct {
 	// eng overrides; if nil, a default stub engine (approve + text) is used.
 	engFn func() *Engine
 	// assertions on the returned action
-	wantErr           bool // true: expect non-nil error from NextAction
-	wantType          string
-	wantAgent         string
-	wantSummary       string
-	wantPhase         string   // non-empty: assert action.Phase equals this value
-	wantParallelIDs   []string // nil means "do not check"; empty slice means "assert len==0"
-	wantInputContains string   // non-empty: assert InputFiles contains this value
-	wantSetupOnly     *bool    // non-nil: assert action.SetupOnly equals *wantSetupOnly
+	wantErr                bool // true: expect non-nil error from NextAction
+	wantType               string
+	wantAgent              string
+	wantSummary            string
+	wantPhase              string   // non-empty: assert action.Phase equals this value
+	wantParallelIDs        []string // nil means "do not check"; empty slice means "assert len==0"
+	wantInputContains      string   // non-empty: assert InputFiles contains this value
+	wantSetupOnly          *bool    // non-nil: assert action.SetupOnly equals *wantSetupOnly
+	wantCommandContains    string   // non-empty: assert any Commands element contains this value
+	wantCommandNotContains string   // non-empty: assert no Commands element contains this value
 }
 
 // defaultEng returns an Engine with stubbed readers (approve + text).
@@ -894,6 +896,48 @@ func TestNextAction(t *testing.T) {
 			wantSummary: SkipSummaryPrefix + "pr-creation",
 		},
 
+		// ── Decision 24: github_issue source adds Closes #N to PR body ───────
+		{
+			name: "pr_creation_github_issue_closes",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "pr-creation", nil)
+			},
+			engFn: func() *Engine {
+				return &Engine{
+					agentDir:         "/test/agents",
+					specsDir:         "/test/specs",
+					verdictReader:    stubVerdictReader(VerdictApprove),
+					sourceTypeReader: stubSourceTypeReader(state.SourceTypeGitHub),
+					sourceIDReader:   func(_ string) string { return "42" },
+				}
+			},
+			wantType:            ActionExec,
+			wantPhase:           PhasePRCreation,
+			wantCommandContains: "Closes #42",
+		},
+
+		// ── Decision 24: non-github source does NOT add Closes to PR body ────
+		{
+			name: "pr_creation_text_source_no_closes",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "pr-creation", nil)
+			},
+			engFn: func() *Engine {
+				return &Engine{
+					agentDir:         "/test/agents",
+					specsDir:         "/test/specs",
+					verdictReader:    stubVerdictReader(VerdictApprove),
+					sourceTypeReader: stubSourceTypeReader("text"),
+					sourceIDReader:   func(_ string) string { return "42" },
+				}
+			},
+			wantType:               ActionExec,
+			wantPhase:              PhasePRCreation,
+			wantCommandNotContains: "Closes #",
+		},
+
 		// ── Decision 25: final-summary uses fixed input file list ───────────
 		{
 			name: "final_summary_fixed_inputs",
@@ -1075,6 +1119,28 @@ func TestNextAction(t *testing.T) {
 			if tc.wantSetupOnly != nil {
 				if action.SetupOnly != *tc.wantSetupOnly {
 					t.Errorf("action.SetupOnly = %v, want %v", action.SetupOnly, *tc.wantSetupOnly)
+				}
+			}
+
+			if tc.wantCommandContains != "" {
+				found := false
+				for _, cmd := range action.Commands {
+					if strings.Contains(cmd, tc.wantCommandContains) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Commands = %v; expected one element to contain %q", action.Commands, tc.wantCommandContains)
+				}
+			}
+
+			if tc.wantCommandNotContains != "" {
+				for _, cmd := range action.Commands {
+					if strings.Contains(cmd, tc.wantCommandNotContains) {
+						t.Errorf("Commands = %v; expected no element to contain %q", action.Commands, tc.wantCommandNotContains)
+						break
+					}
 				}
 			}
 		})
