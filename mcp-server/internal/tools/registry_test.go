@@ -234,6 +234,67 @@ func TestRegisterAllSubscribeEventsRegistered(t *testing.T) {
 	}
 }
 
+// TestPipelineNextActionToolSchemaOptionalParams verifies that the pipeline_next_action
+// tool schema includes the four optional previous_* parameters added in Task 3.
+func TestPipelineNextActionToolSchemaOptionalParams(t *testing.T) {
+	t.Parallel()
+
+	srv := server.NewMCPServer("forge-state", "1.0.0")
+	sm := state.NewStateManager("dev")
+	bus := events.NewEventBus()
+	slack := events.NewSlackNotifier("")
+	RegisterAll(srv, sm, bus, slack, "", orchestrator.NewEngine("", ""), "",
+		history.New(""), history.NewKnowledgeBase(""), profile.New("", ""),
+		(*analytics.Collector)(nil), (*analytics.Estimator)(nil), (*analytics.Reporter)(nil))
+
+	msg := srv.HandleMessage(t.Context(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	var resp struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				InputSchema struct {
+					Properties map[string]any `json:"properties"`
+					Required   []string       `json:"required"`
+				} `json:"inputSchema"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	raw, _ := json.Marshal(msg)
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("unmarshal tools/list: %v", err)
+	}
+
+	wantOptional := []string{
+		"previous_tokens",
+		"previous_duration_ms",
+		"previous_model",
+		"previous_setup_only",
+	}
+
+	for _, tool := range resp.Result.Tools {
+		if tool.Name != "pipeline_next_action" {
+			continue
+		}
+		for _, param := range wantOptional {
+			if _, ok := tool.InputSchema.Properties[param]; !ok {
+				t.Errorf("pipeline_next_action schema missing optional param %q", param)
+			}
+		}
+		// Verify that none of the four params are in the required list.
+		required := make(map[string]bool, len(tool.InputSchema.Required))
+		for _, r := range tool.InputSchema.Required {
+			required[r] = true
+		}
+		for _, param := range wantOptional {
+			if required[param] {
+				t.Errorf("pipeline_next_action param %q should be optional, but found in required list", param)
+			}
+		}
+		return
+	}
+	t.Error("pipeline_next_action tool not found in registered tools")
+}
+
 // TestRegisterAllBusPassedToHandlers verifies that the bus passed to RegisterAll
 // is used by event-emitting handlers (not a fresh NewEventBus() instance).
 func TestRegisterAllBusPassedToHandlers(t *testing.T) {
