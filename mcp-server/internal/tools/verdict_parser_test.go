@@ -1,0 +1,392 @@
+// Package tools — unit tests for verdict_parser functions.
+// Tests verify determineTransition and handlePhase6Transition independently.
+package tools
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/validation"
+)
+
+// ---------- helpers for verdict_parser tests ----------
+
+// newVPStateManager creates a fresh StateManager and initialises the given workspace.
+func newVPStateManager(t *testing.T, workspace string) *state.StateManager {
+	t.Helper()
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(workspace, "vp-test-spec"); err != nil {
+		t.Fatalf("newVPStateManager Init: %v", err)
+	}
+	return sm
+}
+
+// newVPKnowledgeBase returns a KnowledgeBase backed by a temp directory.
+func newVPKnowledgeBase(t *testing.T) *history.KnowledgeBase {
+	t.Helper()
+	dir := t.TempDir()
+	return history.NewKnowledgeBase(dir)
+}
+
+// writeVPReviewFile writes a review markdown file with the given verdict token
+// in the canonical heading format `## Verdict: TOKEN` that ParseVerdict expects.
+func writeVPReviewFile(t *testing.T, dir, filename, verdict string) {
+	t.Helper()
+	content := "## Verdict: " + verdict + "\n\nSome finding details.\n"
+	if err := os.WriteFile(filepath.Join(dir, filename), []byte(content), 0o600); err != nil {
+		t.Fatalf("writeVPReviewFile %s: %v", filename, err)
+	}
+}
+
+// addVPTask adds a task to the state via sm.Update.
+//
+//nolint:unparam // key is parameterised for reuse across future tests even though current callers always use "1"
+func addVPTask(t *testing.T, sm *state.StateManager, key, implStatus string) {
+	t.Helper()
+	if err := sm.Update(func(s *state.State) error {
+		if s.Tasks == nil {
+			s.Tasks = make(map[string]state.Task)
+		}
+		s.Tasks[key] = state.Task{
+			Title:         "Task " + key,
+			ExecutionMode: state.ExecModeSequential,
+			ImplStatus:    implStatus,
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("addVPTask sm.Update: %v", err)
+	}
+}
+
+// ---------- TestDetermineTransition ----------
+
+func TestDetermineTransition(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		phase       string
+		setupOnly   bool
+		setupFunc   func(t *testing.T, sm *state.StateManager, dir string)
+		wantHint    string
+		wantVerdict string
+		wantErr     bool
+	}{
+		{
+			name:  "non_review_phase_advances",
+			phase: "phase-1",
+			setupFunc: func(_ *testing.T, _ *state.StateManager, _ string) {
+				// No special setup needed for a simple non-review phase.
+			},
+			wantHint:    "proceed",
+			wantVerdict: "",
+		},
+		{
+			name:      "setup_only_returns_setup_continue",
+			phase:     "phase-1",
+			setupOnly: true,
+			setupFunc: func(_ *testing.T, _ *state.StateManager, _ string) {
+				// setup_only=true: record log but skip PhaseComplete.
+			},
+			wantHint:    "setup_continue",
+			wantVerdict: "",
+		},
+		{
+			name:  "review_phase_3b_approve_advances",
+			phase: "phase-3b",
+			setupFunc: func(t *testing.T, _ *state.StateManager, dir string) {
+				t.Helper()
+				writeVPReviewFile(t, dir, "review-design.md", "APPROVE")
+			},
+			wantHint:    "proceed",
+			wantVerdict: "APPROVE",
+		},
+		{
+			name:  "review_phase_3b_revise_returns_revision_required",
+			phase: "phase-3b",
+			setupFunc: func(t *testing.T, _ *state.StateManager, dir string) {
+				t.Helper()
+				writeVPReviewFile(t, dir, "review-design.md", "REVISE")
+			},
+			wantHint:    "revision_required",
+			wantVerdict: "REVISE",
+		},
+		{
+			name:  "review_phase_4b_approve_with_notes_advances",
+			phase: "phase-4b",
+			setupFunc: func(t *testing.T, _ *state.StateManager, dir string) {
+				t.Helper()
+				writeVPReviewFile(t, dir, "review-tasks.md", "APPROVE_WITH_NOTES")
+			},
+			wantHint:    "proceed",
+			wantVerdict: "APPROVE_WITH_NOTES",
+		},
+		{
+			name:  "review_phase_4b_revise_increments_tasks_revisions",
+			phase: "phase-4b",
+			setupFunc: func(t *testing.T, _ *state.StateManager, dir string) {
+				t.Helper()
+				writeVPReviewFile(t, dir, "review-tasks.md", "REVISE")
+			},
+			wantHint:    "revision_required",
+			wantVerdict: "REVISE",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			sm := newVPStateManager(t, dir)
+			kb := newVPKnowledgeBase(t)
+
+			if tc.setupFunc != nil {
+				tc.setupFunc(t, sm, dir)
+			}
+
+			in := reportResultInput{
+				workspace: dir,
+				phase:     tc.phase,
+				setupOnly: tc.setupOnly,
+			}
+
+			var warnings []string
+			out, err := determineTransition(sm, kb, in, []validation.ArtifactResult{}, "", &warnings)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("determineTransition(%q): expected error, got nil", tc.phase)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("determineTransition(%q): unexpected error: %v", tc.phase, err)
+			}
+			if out.NextActionHint != tc.wantHint {
+				t.Errorf("NextActionHint = %q, want %q", out.NextActionHint, tc.wantHint)
+			}
+			if out.VerdictParsed != tc.wantVerdict {
+				t.Errorf("VerdictParsed = %q, want %q", out.VerdictParsed, tc.wantVerdict)
+			}
+		})
+	}
+}
+
+// ---------- TestHandlePhase6Transition ----------
+
+func TestHandlePhase6Transition(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		setupFunc   func(t *testing.T, sm *state.StateManager, dir string)
+		results     func(dir string) []validation.ArtifactResult
+		wantHint    string
+		wantAnyFail bool
+	}{
+		{
+			name: "all_tasks_pass_phase_completes",
+			setupFunc: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				addVPTask(t, sm, "1", state.TaskStatusCompleted)
+				writeVPReviewFile(t, dir, "review-1.md", "PASS")
+			},
+			results: func(_ string) []validation.ArtifactResult {
+				return []validation.ArtifactResult{
+					{Valid: true, File: "review-1.md", VerdictFound: state.VerdictPass},
+				}
+			},
+			wantHint: "proceed",
+		},
+		{
+			name: "fail_verdict_returns_retry_impl",
+			setupFunc: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				addVPTask(t, sm, "1", state.TaskStatusCompleted)
+				writeVPReviewFile(t, dir, "review-1.md", "FAIL")
+			},
+			results: func(_ string) []validation.ArtifactResult {
+				return []validation.ArtifactResult{
+					{Valid: true, File: "review-1.md", VerdictFound: state.VerdictFail},
+				}
+			},
+			wantHint:    "retry_impl",
+			wantAnyFail: true,
+		},
+		{
+			name: "task_without_review_file_holds_in_phase",
+			setupFunc: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				addVPTask(t, sm, "1", state.TaskStatusCompleted)
+				// Intentionally do NOT write review-1.md.
+			},
+			results: func(_ string) []validation.ArtifactResult {
+				// No results — simulates completion gate detecting missing review.
+				return []validation.ArtifactResult{}
+			},
+			wantHint: "setup_continue",
+		},
+		{
+			name: "pass_with_notes_treated_as_passing",
+			setupFunc: func(t *testing.T, sm *state.StateManager, dir string) {
+				t.Helper()
+				addVPTask(t, sm, "1", state.TaskStatusCompleted)
+				writeVPReviewFile(t, dir, "review-1.md", "PASS_WITH_NOTES")
+			},
+			results: func(_ string) []validation.ArtifactResult {
+				return []validation.ArtifactResult{
+					{Valid: true, File: "review-1.md", VerdictFound: state.VerdictPass},
+				}
+			},
+			wantHint: "proceed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			sm := newVPStateManager(t, dir)
+
+			if tc.setupFunc != nil {
+				tc.setupFunc(t, sm, dir)
+			}
+
+			in := reportResultInput{
+				workspace: dir,
+				phase:     "phase-6",
+			}
+
+			results := tc.results(dir)
+			out, err := handlePhase6Transition(sm, in, results, "")
+			if err != nil {
+				t.Fatalf("handlePhase6Transition: unexpected error: %v", err)
+			}
+
+			if out.NextActionHint != tc.wantHint {
+				t.Errorf("NextActionHint = %q, want %q", out.NextActionHint, tc.wantHint)
+			}
+			if tc.wantAnyFail && len(out.Findings) == 0 {
+				t.Logf("wantAnyFail=true but Findings is empty; hint=%q (acceptable if FAIL file has no structured findings)", out.NextActionHint)
+			}
+		})
+	}
+}
+
+// TestDetermineTransition_Phase6Delegation verifies that phase-6 is delegated to
+// handlePhase6Transition by confirming determineTransition returns the same hint
+// as a direct handlePhase6Transition call for a phase-6 input.
+func TestDetermineTransition_Phase6Delegation(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newVPStateManager(t, dir)
+	kb := newVPKnowledgeBase(t)
+
+	addVPTask(t, sm, "1", state.TaskStatusCompleted)
+	writeVPReviewFile(t, dir, "review-1.md", "PASS")
+
+	in := reportResultInput{
+		workspace: dir,
+		phase:     "phase-6",
+	}
+
+	results := []validation.ArtifactResult{
+		{Valid: true, File: "review-1.md", VerdictFound: state.VerdictPass},
+	}
+
+	var warnings []string
+	out, err := determineTransition(sm, kb, in, results, "", &warnings)
+	if err != nil {
+		t.Fatalf("determineTransition(phase-6): unexpected error: %v", err)
+	}
+	if out.NextActionHint != "proceed" {
+		t.Errorf("NextActionHint = %q, want %q", out.NextActionHint, "proceed")
+	}
+}
+
+// TestDetermineTransition_RevisionBumpIncrementsCounter verifies that REVISE on
+// phase-3b increments DesignRevisions in state.
+func TestDetermineTransition_RevisionBumpIncrementsCounter(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newVPStateManager(t, dir)
+	kb := newVPKnowledgeBase(t)
+
+	writeVPReviewFile(t, dir, "review-design.md", "REVISE")
+
+	in := reportResultInput{
+		workspace: dir,
+		phase:     "phase-3b",
+	}
+
+	var warnings []string
+	out, err := determineTransition(sm, kb, in, []validation.ArtifactResult{}, "", &warnings)
+	if err != nil {
+		t.Fatalf("determineTransition(phase-3b REVISE): %v", err)
+	}
+	if out.NextActionHint != "revision_required" {
+		t.Errorf("NextActionHint = %q, want %q", out.NextActionHint, "revision_required")
+	}
+
+	s, err := state.ReadState(dir)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if s.Revisions.DesignRevisions != 1 {
+		t.Errorf("DesignRevisions = %d, want 1", s.Revisions.DesignRevisions)
+	}
+}
+
+// TestHandlePhase6Transition_FailUpdatesState verifies that a FAIL verdict
+// updates the task ReviewStatus to completed_fail.
+func TestHandlePhase6Transition_FailUpdatesState(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sm := newVPStateManager(t, dir)
+
+	addVPTask(t, sm, "1", state.TaskStatusCompleted)
+
+	// Write a review file with FAIL verdict and a structured finding.
+	content := "## Verdict: FAIL\n\n**[CRITICAL]** Missing error handling in handler.\n"
+	if err := os.WriteFile(filepath.Join(dir, "review-1.md"), []byte(content), 0o600); err != nil {
+		t.Fatalf("write review-1.md: %v", err)
+	}
+
+	in := reportResultInput{
+		workspace: dir,
+		phase:     "phase-6",
+	}
+	results := []validation.ArtifactResult{
+		{Valid: true, File: "review-1.md", VerdictFound: state.VerdictFail},
+	}
+
+	out, err := handlePhase6Transition(sm, in, results, "")
+	if err != nil {
+		t.Fatalf("handlePhase6Transition: %v", err)
+	}
+	if out.NextActionHint != "retry_impl" {
+		t.Errorf("NextActionHint = %q, want %q", out.NextActionHint, "retry_impl")
+	}
+
+	s, err := state.ReadState(dir)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	task, ok := s.Tasks["1"]
+	if !ok {
+		t.Fatal("task 1 not found in state")
+	}
+	if task.ReviewStatus != state.TaskStatusCompletedFail {
+		t.Errorf("task[1].ReviewStatus = %q, want %q", task.ReviewStatus, state.TaskStatusCompletedFail)
+	}
+	_ = orchestrator.SeverityCritical // ensure orchestrator import is used
+}

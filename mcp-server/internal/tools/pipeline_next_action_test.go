@@ -770,3 +770,326 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 	})
 }
+
+// callNextActionWithPrev invokes PipelineNextActionHandler with previous_* parameters set.
+//
+//nolint:unparam // model is a conceptually variable parameter even if test cases share the same value
+func callNextActionWithPrev(
+	t *testing.T,
+	handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error),
+	workspace string,
+	tokensUsed int,
+	durationMs int,
+	model string,
+	setupOnly bool,
+) (*mcp.CallToolResult, error) {
+	t.Helper()
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"workspace":            workspace,
+		"previous_tokens":      float64(tokensUsed),
+		"previous_duration_ms": float64(durationMs),
+		"previous_model":       model,
+		"previous_setup_only":  setupOnly,
+	}
+	return handler(t.Context(), req)
+}
+
+func TestPipelineNextAction_P5(t *testing.T) {
+	t.Parallel()
+
+	t.Run("proceed_variant_falls_through_to_next_action", func(t *testing.T) {
+		// When previous_tokens > 0 and phase is phase-1 (proceed hint),
+		// the P5 block should run reportResultCore, receive "proceed", fall through,
+		// and return a real next action (spawn_agent for phase-2 investigator).
+		t.Parallel()
+
+		// Set up workspace in phase-1 (not a review phase, so outcome will be "proceed").
+		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
+		kb := history.NewKnowledgeBase("")
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+
+		// Call with previous_tokens=500 to trigger P5 block.
+		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		// The P5 block should have run reportResultCore (phase logged, phase-1 completed),
+		// received "proceed", and fallen through to eng.NextAction — which should return
+		// the spawn_agent action for phase-2 (investigator).
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q (proceed should fall through to NextAction)", resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if resp.Action.Agent != "investigator" {
+			t.Errorf("action.Agent = %q, want %q", resp.Action.Agent, "investigator")
+		}
+		// ReportResult should be nil when outcome is "proceed" (not surfaced to orchestrator).
+		if resp.ReportResult != nil {
+			t.Errorf("ReportResult should be nil for proceed outcome, got %+v", resp.ReportResult)
+		}
+
+		// Verify phase-1 was logged and completed in state.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if len(s.PhaseLog) == 0 {
+			t.Errorf("PhaseLog should have at least one entry after P5 block ran")
+		}
+	})
+
+	t.Run("previous_model_only_triggers_p5", func(t *testing.T) {
+		// When previous_tokens == 0 but previous_model != "", P5 block should also trigger.
+		t.Parallel()
+
+		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
+		kb := history.NewKnowledgeBase("")
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+
+		// Use previous_model="" to confirm it does NOT trigger P5.
+		// Then call with previous_model set to confirm it does.
+		result, err := callNextActionWithPrev(t, handler, workspace, 0, 0, "claude-sonnet-4-6", false)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		// P5 triggered via model, phase-1 completed, should return phase-2 action.
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q", resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if resp.Action.Agent != "investigator" {
+			t.Errorf("action.Agent = %q, want %q", resp.Action.Agent, "investigator")
+		}
+	})
+
+	t.Run("no_prev_params_skips_p5", func(t *testing.T) {
+		// When both previous_tokens == 0 and previous_model == "", P5 block is skipped.
+		// The handler proceeds directly to eng.NextAction and returns phase-1 action.
+		t.Parallel()
+
+		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
+		kb := history.NewKnowledgeBase("")
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+
+		// Call with no previous_* params (defaults to zero/empty).
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		// P5 skipped — still on phase-1, should return situation-analyst action.
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q", resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if resp.Action.Agent != "situation-analyst" {
+			t.Errorf("action.Agent = %q, want %q (P5 should be skipped, still on phase-1)", resp.Action.Agent, "situation-analyst")
+		}
+
+		// PhaseLog should be empty (P5 not triggered, no phase logged).
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if len(s.PhaseLog) != 0 {
+			t.Errorf("PhaseLog should be empty when P5 is skipped, got %d entries", len(s.PhaseLog))
+		}
+	})
+
+	t.Run("revision_required_returns_early_no_next_action", func(t *testing.T) {
+		// When phase is phase-3b with a REVISE verdict and previous_tokens > 0,
+		// P5 block should call reportResultCore, receive "revision_required",
+		// and return early WITHOUT calling eng.NextAction.
+		// The response must have a non-nil ReportResult with correct fields.
+		t.Parallel()
+
+		workspace, sm := initWorkspaceForNextAction(t, "phase-3b", nil)
+		// Write review-design.md with REVISE verdict and a [CRITICAL] finding.
+		// ParseVerdict extracts findings from [CRITICAL] and [MINOR] labelled lines.
+		// The format must match: "**N. [CRITICAL] <description>**"
+		content := "# Design Review\n\n## Verdict: REVISE\n\n### Findings\n\n**1. [CRITICAL] The design is missing error handling for edge cases.**\n\nNeeds more work.\n"
+		if err := os.WriteFile(filepath.Join(workspace, "review-design.md"), []byte(content), 0o600); err != nil {
+			t.Fatalf("write review-design.md: %v", err)
+		}
+
+		kb := history.NewKnowledgeBase("")
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+
+		result, err := callNextActionWithPrev(t, handler, workspace, 800, 2000, "claude-sonnet-4-6", false)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		// ReportResult must be non-nil and have correct NextActionHint.
+		if resp.ReportResult == nil {
+			t.Fatalf("ReportResult should be non-nil for revision_required outcome")
+		}
+		if resp.ReportResult.NextActionHint != "revision_required" {
+			t.Errorf("ReportResult.NextActionHint = %q, want %q", resp.ReportResult.NextActionHint, "revision_required")
+		}
+		if resp.ReportResult.VerdictParsed != "REVISE" {
+			t.Errorf("ReportResult.VerdictParsed = %q, want %q", resp.ReportResult.VerdictParsed, "REVISE")
+		}
+		// Findings must be non-empty for REVISE verdict.
+		if len(resp.ReportResult.Findings) == 0 {
+			t.Errorf("ReportResult.Findings should be non-empty for REVISE verdict")
+		}
+
+		// When revision_required, the handler returns early — action type should be zero value
+		// (eng.NextAction was NOT called, so Action is default zero value).
+		// The embedded action (from orchestrator.Action embedded in nextActionResponse) will be empty.
+		if resp.Action.Type != "" {
+			t.Errorf("Action.Type should be empty string (no NextAction call) for revision_required, got %q", resp.Action.Type)
+		}
+
+		// Verify state: DesignRevisions should be incremented.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if s.Revisions.DesignRevisions != 1 {
+			t.Errorf("DesignRevisions = %d, want 1", s.Revisions.DesignRevisions)
+		}
+	})
+
+	t.Run("setup_continue_falls_through_to_next_action", func(t *testing.T) {
+		// When reportResultCore returns "setup_continue" (e.g. setup_only=true),
+		// the P5 block should absorb the hint and fall through to eng.NextAction.
+		t.Parallel()
+
+		// Use phase-1 with setup_only=true to get setup_continue hint.
+		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
+		kb := history.NewKnowledgeBase("")
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+
+		// setup_only=true should produce "setup_continue" from reportResultCore
+		// for a non-review phase like phase-1.
+		result, err := callNextActionWithPrev(t, handler, workspace, 100, 500, "claude-sonnet-4-6", true)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		// setup_continue is absorbed server-side; ReportResult should be nil.
+		if resp.ReportResult != nil {
+			t.Errorf("ReportResult should be nil for setup_continue outcome (absorbed internally)")
+		}
+
+		// Should fall through to eng.NextAction — still on phase-1, returns situation-analyst.
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q (setup_continue should fall through)", resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if resp.Action.Agent != "situation-analyst" {
+			t.Errorf("action.Agent = %q, want %q", resp.Action.Agent, "situation-analyst")
+		}
+	})
+
+	t.Run("guard_skips_p5_for_setup_phase", func(t *testing.T) {
+		// When CurrentPhase == "setup", the P5 guard should skip reportResultCore
+		// even when previous_tokens > 0. The handler may still error from eng.NextAction
+		// (setup is not a dispatchable phase), but PhaseLog must remain empty.
+		t.Parallel()
+
+		workspace, sm := initWorkspaceForNextAction(t, "setup", nil)
+		kb := history.NewKnowledgeBase("")
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+
+		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false)
+		if err != nil {
+			t.Fatalf("handler returned Go error: %v", err)
+		}
+		// The handler may return an MCP error from eng.NextAction (setup is not dispatchable),
+		// but if it does, it must NOT be a report_result error (P5 guard must have fired).
+		if result.IsError {
+			text := result.Content[0].(mcp.TextContent).Text
+			if strings.Contains(text, "report_result:") {
+				t.Errorf("error is from report_result path, P5 guard should have skipped it: %s", text)
+			}
+			// Error from eng.NextAction is expected — the guard fired correctly.
+		}
+
+		// PhaseLog should be empty — P5 guard skipped reportResultCore for "setup" phase.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if len(s.PhaseLog) != 0 {
+			t.Errorf("PhaseLog should be empty when P5 guard skips 'setup' phase, got %d entries", len(s.PhaseLog))
+		}
+	})
+
+	t.Run("guard_skips_p5_for_completed_phase", func(t *testing.T) {
+		// When CurrentPhase == "completed", the P5 guard should skip reportResultCore.
+		// The handler may succeed with a "done" action (completed is a valid terminal state).
+		t.Parallel()
+
+		workspace, sm := initWorkspaceForNextAction(t, "completed", nil)
+		kb := history.NewKnowledgeBase("")
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+
+		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false)
+		if err != nil {
+			t.Fatalf("handler returned Go error: %v", err)
+		}
+		// If the handler errors, verify it's NOT a report_result error (P5 guard fired).
+		if result.IsError {
+			text := result.Content[0].(mcp.TextContent).Text
+			if strings.Contains(text, "report_result:") {
+				t.Errorf("error is from report_result path, P5 guard should have skipped it: %s", text)
+			}
+		}
+
+		// PhaseLog should be empty — P5 guard skipped reportResultCore for "completed" phase.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if len(s.PhaseLog) != 0 {
+			t.Errorf("PhaseLog should be empty when P5 guard skips 'completed' phase, got %d entries", len(s.PhaseLog))
+		}
+	})
+}

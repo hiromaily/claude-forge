@@ -380,6 +380,14 @@ func RegisterAll(
 			mcp.WithDescription("Get the next pipeline action to execute (delegates to Engine.NextAction with prompt enrichment)."),
 			mcp.WithString("workspace", mcp.Required(), mcp.Description("Absolute path to the workspace directory")),
 			mcp.WithString("user_response", mcp.Description("User response to a checkpoint prompt")),
+			mcp.WithNumber("previous_tokens", mcp.Description("Token count used by the action just completed")),
+			mcp.WithNumber("previous_duration_ms", mcp.Description("Wall-clock duration in milliseconds for the action just completed")),
+			mcp.WithString("previous_model", mcp.Description("Model identifier used for the action just completed, e.g. sonnet")),
+			mcp.WithBoolean("previous_setup_only", mcp.Description("Pass true when the previous action had setup_only semantics")),
+			mcp.WithBoolean("previous_action_complete", mcp.Description(
+				"Pass true to explicitly trigger report-result processing; catches fast exec/write_file "+
+					"actions where all numeric metrics may be zero. Omit (or pass false) for checkpoints.",
+			)),
 		),
 		PipelineNextActionHandler(sm, eng, agentDir, histIdx, kb, profiler),
 	)

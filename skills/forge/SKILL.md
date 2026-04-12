@@ -71,12 +71,25 @@ Example: `/forge 20260401-effort-only-flow`
 
 Repeat until done:
 
-1. Call `mcp__forge-state__pipeline_next_action(workspace=<workspace>)`.
-2. Execute the action based on `action.type`:
+1. Call `mcp__forge-state__pipeline_next_action(workspace=<workspace>,
+   previous_action_complete=true,
+   previous_tokens=<tokens from last action>,
+   previous_duration_ms=<ms from last action>,
+   previous_model=<model from last action>,
+   previous_setup_only=<setup_only from last action>)`.
+   On the very first call, omit the `previous_*` parameters.
+
+2. If `result.report_result` is non-null:
+   - If `result.report_result.next_action_hint == "revision_required"`:
+     present `result.report_result.findings` to the user, then continue the loop.
+   (`setup_continue` is handled server-side — the handler re-enters NextAction automatically.)
+
+3. Execute the action based on `action.type`:
    - `spawn_agent`: If `action.display_message` is non-empty, output it verbatim.
      Then call Agent tool with `action.prompt`. Use `action.agent` as description.
+     Record the tokens, duration, and model for the next `pipeline_next_action` call.
      - If `action.parallel_task_ids` is non-empty: spawn one Agent call per task ID in
-       parallel; wait for all to complete before calling report_result.
+       parallel; wait for all to complete before calling `pipeline_next_action` again.
    - `checkpoint`: **Before presenting anything to the user**, call
      `mcp__forge-state__checkpoint(workspace, phase=action.name)`.
      This is mandatory — it registers the pause so the pipeline can exit safely if
@@ -99,30 +112,23 @@ Repeat until done:
           c. Report success or failure to the user.
        3. If the user chooses **"skip"**: do nothing.
      Call `mcp__forge-state__phase_complete(workspace, phase=action.name)`.
-     Do NOT call pipeline_report_result for checkpoints.
-   - `exec`: Run `action.commands` via Bash.
-     Then call `pipeline_report_result` with `phase=action.phase`.
-     If `action.setup_only` is true, pass `setup_only=true` to `pipeline_report_result`.
-     (action.phase is always populated for exec actions.)
-   - `write_file`: Write `action.content` to `action.path`. Then call
-     `pipeline_report_result` with `phase=action.phase`. (action.phase always populated.)
+     On the next `pipeline_next_action` call, omit `previous_action_complete` (or pass false),
+     and pass `previous_tokens=0, previous_duration_ms=0` with no `previous_model` or `previous_setup_only`
+     (checkpoints have no agent cost; omitting `previous_action_complete` causes the P5 block to be skipped).
+   - `exec`: Run `action.commands` via Bash. Record the duration and `action.setup_only`
+     for the next `pipeline_next_action` call. Pass `previous_setup_only=true` if
+     `action.setup_only` is true. There is no model to record for exec actions; omit
+     `previous_model` or pass it as an empty string.
+   - `write_file`: Write `action.content` to `action.path`. Record the duration for the
+     next `pipeline_next_action` call. Omit `previous_model` or pass it as an empty string.
    - `human_gate`: A task requires human action (e.g. merge an external PR, update dependencies).
      Present `action.present_to_user` to the user using AskUserQuestion with `action.options`.
-     - If the user chooses **"done"** or **"skip"**: call `pipeline_next_action` again.
+     - If the user chooses **"done"** or **"skip"**: call `pipeline_next_action` again
+       with no `previous_*` parameters (no agent ran).
        The handler automatically marks the task as completed.
      - If the user chooses **"abandon"**: call `mcp__forge-state__abandon(workspace)`.
      Do NOT call `checkpoint` or `phase_complete` for human_gate actions.
-     Do NOT call `pipeline_report_result` for human_gate actions.
    - `done`: Pipeline complete. Stop.
-3. For `spawn_agent`, `exec`, and `write_file`: call
-   `mcp__forge-state__pipeline_report_result(workspace, phase=action.phase,
-   tokens_used=<tokens>, duration_ms=<ms>, model=<model>,
-   setup_only=action.setup_only)`.  (Omit `setup_only` when false/absent.)
-   If `result.display_message` is non-empty, output it verbatim.
-   Check `result.next_action_hint`:
-   - `"revision_required"`: present findings to user.
-   - `"setup_continue"`: immediately call `pipeline_next_action` again
-     (the engine will return the next setup step or the real dispatch).
 
 ## Supported Flags
 
@@ -140,6 +146,6 @@ Repeat until done:
 ## Rules
 
 - Never make orchestration decisions independently — follow action.type exactly.
-- Never skip pipeline_report_result for spawn_agent, exec, or write_file actions.
+- Always pass `previous_action_complete=true`, `previous_tokens`, `previous_duration_ms`, `previous_model`, and `previous_setup_only` on every `pipeline_next_action` call after the first (after any `spawn_agent`, `exec`, or `write_file` action completes). Do NOT pass `previous_action_complete=true` after a checkpoint — it must remain false (or omitted) to skip the P5 report block.
 - Never pass `isolation: "worktree"` to any Agent call.
 - On MCP error: surface the error to the user and stop.

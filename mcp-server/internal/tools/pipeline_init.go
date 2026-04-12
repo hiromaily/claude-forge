@@ -265,18 +265,6 @@ func slugify(text string) string {
 	return result
 }
 
-// deriveSpecName extracts the spec name from the workspace path.
-// It takes the base name and strips the YYYYMMDD- prefix.
-// If no hyphen is found, it returns the full base name.
-func deriveSpecName(workspace string) string {
-	base := filepath.Base(workspace)
-	_, after, ok := strings.Cut(base, "-")
-	if !ok {
-		return base
-	}
-	return after
-}
-
 // refineWorkspacePath replaces a URL-derived workspace path with a meaningful one
 // when external context provides a source ID and/or summary (Jira or GitHub).
 // For Jira with ID: ".specs/20260330-soa-2883-skip-minutes-job-without-integration"

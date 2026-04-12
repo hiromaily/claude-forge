@@ -35,14 +35,49 @@ var outputVerdictHints = map[string]string{
 	state.ArtifactReviewTasks:  verdictHintApproveRevise,
 }
 
+// previousResult captures optional metrics from the action the orchestrator just completed.
+// The P5 report block fires when actionComplete is true OR when any metric is non-zero
+// (tokensUsed > 0, model != "", or durationMs > 0). actionComplete is the preferred
+// signal — it handles fast exec/write_file actions where all numeric metrics may be zero.
+type previousResult struct {
+	tokensUsed     int
+	durationMs     int
+	model          string
+	setupOnly      bool
+	actionComplete bool
+}
+
+// reportResultEmbedded carries the report-result outcome inside nextActionResponse
+// when previous_* parameters triggered a non-proceed transition.
+type reportResultEmbedded struct {
+	NextActionHint string                 `json:"next_action_hint"`
+	VerdictParsed  string                 `json:"verdict_parsed,omitempty"`
+	Findings       []orchestrator.Finding `json:"findings,omitempty"`
+	Warning        string                 `json:"warning,omitempty"`
+	DisplayMessage string                 `json:"display_message,omitempty"`
+}
+
 // nextActionResponse wraps orchestrator.Action with optional Warning and DisplayMessage fields.
 // Warning is set fail-open when enrichPrompt cannot find the agent .md file.
 // DisplayMessage is a pre-formatted progress line the orchestrator should output verbatim
 // before executing the action (e.g. "▶ Phase 1 — Situation Analysis  ·  spawning …").
+// ReportResult is present when previous_* params triggered a non-proceed transition.
 type nextActionResponse struct {
 	orchestrator.Action
-	Warning        string `json:"warning,omitempty"`
-	DisplayMessage string `json:"display_message,omitempty"`
+	Warning        string                `json:"warning,omitempty"`
+	DisplayMessage string                `json:"display_message,omitempty"`
+	ReportResult   *reportResultEmbedded `json:"report_result,omitempty"`
+}
+
+// parsePreviousResult extracts the optional previous_* parameters from the MCP request.
+func parsePreviousResult(req mcp.CallToolRequest) previousResult {
+	return previousResult{
+		tokensUsed:     req.GetInt("previous_tokens", 0),
+		durationMs:     req.GetInt("previous_duration_ms", 0),
+		model:          req.GetString("previous_model", ""),
+		setupOnly:      req.GetBool("previous_setup_only", false),
+		actionComplete: req.GetBool("previous_action_complete", false),
+	}
 }
 
 // maxDispatchIter is the maximum number of iterations for the P1 skip loop and the
@@ -87,6 +122,48 @@ func PipelineNextActionHandler(
 		sm2 := state.NewStateManager(sm.Version())
 		if err := sm2.LoadFromFile(workspace); err != nil {
 			return errorf("load state: %v", err)
+		}
+
+		// P5: If previous_* parameters are supplied, run reportResultCore before computing
+		// the next action. This merges pipeline_report_result into the pipeline_next_action
+		// call, reducing the main loop from 3 calls to 2 calls per cycle.
+		prev := parsePreviousResult(req)
+		if prev.actionComplete || prev.tokensUsed > 0 || prev.model != "" || prev.durationMs > 0 {
+			st, stErr := sm2.GetState()
+			if stErr != nil {
+				return errorf("get state for report: %v", stErr)
+			}
+			// Guard: skip reportResultCore for non-reportable phases.
+			if st.CurrentPhase != "setup" && st.CurrentPhase != "completed" {
+				rIn := reportResultInput{
+					workspace:  workspace,
+					phase:      st.CurrentPhase,
+					tokensUsed: prev.tokensUsed,
+					durationMs: prev.durationMs,
+					model:      prev.model,
+					setupOnly:  prev.setupOnly,
+				}
+				outcome, rErr := reportResultCore(sm2, kb, rIn)
+				if rErr != nil {
+					return errorf("report_result: %v", rErr)
+				}
+				switch outcome.NextActionHint {
+				case "revision_required":
+					// Surface to orchestrator; do NOT call eng.NextAction.
+					return okJSON(nextActionResponse{
+						ReportResult: &reportResultEmbedded{
+							NextActionHint: outcome.NextActionHint,
+							VerdictParsed:  outcome.VerdictParsed,
+							Findings:       outcome.Findings,
+							Warning:        outcome.Warning,
+						},
+					})
+				case "setup_continue":
+					// Absorbed internally; fall through to eng.NextAction.
+				default:
+					// "proceed" or unknown: fall through to eng.NextAction.
+				}
+			}
 		}
 
 		// P0: Resolve pending human gate from a previous call.
