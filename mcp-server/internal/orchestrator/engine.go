@@ -867,6 +867,21 @@ func readSourceID(workspace string) string {
 	return readFrontMatterField(workspace, "source_id", "")
 }
 
+// ClosingRef returns the GitHub issue closing reference for the given workspace,
+// e.g. "\n\nCloses #42", or "" if the pipeline was not started from a GitHub issue
+// or if no source_id is present.  Used by executeFinalCommit to persist the
+// closing reference in the final PR body after summary.md replaces the placeholder.
+func ClosingRef(workspace string) string {
+	if readSourceType(workspace) != state.SourceTypeGitHub {
+		return ""
+	}
+	issueNum := readSourceID(workspace)
+	if issueNum == "" {
+		return ""
+	}
+	return "\n\nCloses #" + issueNum
+}
+
 // DeriveBranchName generates a deterministic branch name from the spec name.
 // It strips the date prefix (e.g., "20260330-") and truncates to 60 characters
 // to produce readable branch names like "feature/soa-2899-task-status-options".

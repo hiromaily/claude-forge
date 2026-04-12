@@ -155,6 +155,78 @@ func TestReadSourceType(t *testing.T) {
 	}
 }
 
+// TestClosingRef groups tests for the ClosingRef exported helper.
+func TestClosingRef(t *testing.T) {
+	t.Parallel()
+
+	writeRequest := func(t *testing.T, content string) string {
+		t.Helper()
+		dir := t.TempDir()
+		if err := writeFileForTest(dir+"/request.md", content); err != nil {
+			t.Fatalf("writeFileForTest: %v", err)
+		}
+		return dir
+	}
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) string
+		want  string
+	}{
+		{
+			name: "github_with_id",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeRequest(t, "---\nsource_type: github_issue\nsource_id: 42\n---\n")
+			},
+			want: "\n\nCloses #42",
+		},
+		{
+			name: "github_no_id",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeRequest(t, "---\nsource_type: github_issue\n---\n")
+			},
+			want: "",
+		},
+		{
+			name: "text_source",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeRequest(t, "---\nsource_type: text\nsource_id: 99\n---\n")
+			},
+			want: "",
+		},
+		{
+			name: "jira_source",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return writeRequest(t, "---\nsource_type: jira_issue\nsource_id: 10\n---\n")
+			},
+			want: "",
+		},
+		{
+			name: "missing_request_md",
+			setup: func(t *testing.T) string {
+				t.Helper()
+				return t.TempDir()
+			},
+			want: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := tc.setup(t)
+			got := ClosingRef(dir)
+			if got != tc.want {
+				t.Errorf("ClosingRef(%q) = %q, want %q", dir, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestSortedTaskKeys groups tests for the sortedTaskKeys helper.
 func TestSortedTaskKeys(t *testing.T) {
 	t.Parallel()

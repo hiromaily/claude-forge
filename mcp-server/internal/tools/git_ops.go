@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
@@ -193,14 +194,29 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 	// later in the final-summary phase. Now that summary.md exists, replace the
 	// PR body with the complete version. `gh pr edit` targets the PR on the
 	// current branch — no explicit PR number needed.
+	// If this is a GitHub issue pipeline, append "Closes #N" so that the reference
+	// persists in the final PR body (the initial placeholder body added it, but
+	// --body-file would overwrite it without this step).
 	// Best-effort: if `gh` is not available or the edit fails (e.g. CI, test env),
 	// log a warning and continue — the PR body will retain the placeholder but
 	// the commit and push must still succeed.
 	summaryPath := filepath.Join(workspace, "summary.md")
 	if _, statErr := os.Stat(summaryPath); statErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: executeFinalCommit: summary.md not found, skipping PR body update\n")
-	} else if err := runCommand(repo, "gh", "pr", "edit", "--body-file", summaryPath); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: executeFinalCommit: gh pr edit failed (non-fatal): %v\n", err)
+	} else {
+		bodyFile, closingRefErr := prBodyFileWithClosingRef(summaryPath, orchestrator.ClosingRef(workspace))
+		if closingRefErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: executeFinalCommit: failed to build PR body: %v\n", closingRefErr)
+		} else {
+			defer func() {
+				if bodyFile != summaryPath {
+					_ = os.Remove(bodyFile)
+				}
+			}()
+			if err := runCommand(repo, "gh", "pr", "edit", "--body-file", bodyFile); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: executeFinalCommit: gh pr edit failed (non-fatal): %v\n", err)
+			}
+		}
 	}
 
 	// Step 4: Force-add workspace artifacts (state.json and summary.md if it exists).
@@ -240,6 +256,36 @@ func executeFinalCommit(workspace string, sm *state.StateManager, kb *history.Kn
 	}
 
 	return nil
+}
+
+// prBodyFileWithClosingRef returns the path to a file suitable for `gh pr edit --body-file`.
+// When closingRef is empty the original summaryPath is returned unchanged.
+// When closingRef is non-empty the summary content is combined with the closing
+// reference into a temp file and that temp file path is returned; the caller is
+// responsible for deleting it.
+func prBodyFileWithClosingRef(summaryPath, closingRef string) (string, error) {
+	if closingRef == "" {
+		return summaryPath, nil
+	}
+	content, err := os.ReadFile(summaryPath)
+	if err != nil {
+		return "", fmt.Errorf("prBodyFileWithClosingRef read: %w", err)
+	}
+	combined := append(content, []byte(closingRef)...)
+	tmp, err := os.CreateTemp("", "forge-pr-body-*.md")
+	if err != nil {
+		return "", fmt.Errorf("prBodyFileWithClosingRef tempfile: %w", err)
+	}
+	if _, err := tmp.Write(combined); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return "", fmt.Errorf("prBodyFileWithClosingRef write: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return "", fmt.Errorf("prBodyFileWithClosingRef close: %w", err)
+	}
+	return tmp.Name(), nil
 }
 
 // runCommand executes a non-git command with the given working directory.
