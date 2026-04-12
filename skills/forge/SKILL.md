@@ -82,6 +82,9 @@ Repeat until done:
 2. If `result.report_result` is non-null:
    - If `result.report_result.next_action_hint == "revision_required"`:
      present `result.report_result.findings` to the user, then continue the loop.
+     On the next `pipeline_next_action` call, omit `previous_action_complete` (or pass false),
+     and pass `previous_tokens=0, previous_duration_ms=0` with no `previous_model` or
+     `previous_setup_only` — no new agent ran during this step, so P5 must not fire again.
    (`setup_continue` is handled server-side — the handler re-enters NextAction automatically.)
 
 3. Execute the action based on `action.type`:
