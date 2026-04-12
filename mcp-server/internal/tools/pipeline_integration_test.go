@@ -465,7 +465,7 @@ func TestIntegration_P5_PreviousResultMerge(t *testing.T) {
 	// Step 2: call pipeline_next_action with previous_* params to trigger P5.
 	// P5 runs reportResultCore for phase-1, receives "proceed", falls through.
 	// P1 skip loop absorbs all remaining skipped phases → reaches completed → ActionDone.
-	result2, err := callNextActionWithPrev(t, handler, workspace, 1500, 3000, "claude-sonnet-4-6", false)
+	result2, err := callNextActionWithPrev(t, handler, workspace, 1500, 3000, "claude-sonnet-4-6", false, false)
 	if err != nil {
 		t.Fatalf("step 2: handler returned Go error: %v", err)
 	}
@@ -541,7 +541,7 @@ func TestIntegration_P5_RevisionRequired(t *testing.T) {
 	// Step 1: call pipeline_next_action with previous_tokens set.
 	// P5 block runs reportResultCore for phase-3b, reads REVISE verdict,
 	// returns early with revision_required (does NOT call eng.NextAction).
-	result1, err := callNextActionWithPrev(t, handler, workspace, 800, 2000, "claude-sonnet-4-6", false)
+	result1, err := callNextActionWithPrev(t, handler, workspace, 800, 2000, "claude-sonnet-4-6", false, false)
 	if err != nil {
 		t.Fatalf("step 1: handler returned Go error: %v", err)
 	}
