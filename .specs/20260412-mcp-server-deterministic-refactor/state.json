@@ -172,16 +172,51 @@
       "timestamp": "2026-04-11T16:51:45.036995Z"
     },
     {
+      "phase": "phase-5",
+      "tokens": 63397,
+      "duration_ms": 152650,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T02:46:50.226136Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 69544,
+      "duration_ms": 164221,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T02:49:55.413399Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 43755,
+      "duration_ms": 153548,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T02:52:48.562097Z"
+    },
+    {
+      "phase": "pr-creation",
+      "tokens": 0,
+      "duration_ms": 1000,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T02:53:12.370598Z"
+    },
+    {
+      "phase": "final-summary",
+      "tokens": 34426,
+      "duration_ms": 99885,
+      "model": "sonnet",
+      "timestamp": "2026-04-12T02:55:13.107357Z"
+    },
+    {
       "phase": "final-commit",
       "tokens": 0,
       "duration_ms": 0,
       "model": "",
-      "timestamp": "2026-04-11T16:51:46.854399Z"
+      "timestamp": "2026-04-12T02:55:15.41374Z"
     }
   ],
   "timestamps": {
     "created": "2026-04-11T15:55:31.033611Z",
-    "lastUpdated": "2026-04-11T16:51:46.854696Z",
+    "lastUpdated": "2026-04-12T02:55:15.414153Z",
     "phaseStarted": null
   },
   "error": null

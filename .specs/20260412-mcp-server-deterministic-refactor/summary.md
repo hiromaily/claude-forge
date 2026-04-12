@@ -24,10 +24,10 @@ Source: https://github.com/hiromaily/claude-forge/issues/145
 - **Task 9**: Full verification pass — `go test -race ./...`, `bash scripts/test-hooks.sh`, `TestRegisterAllCount`.
 
 ## Pipeline Statistics
-- Total tokens: 825,047
-- Total duration: 2,437,098 ms (40m 37s)
-- Estimated cost: $4.95
-- Phases executed: 13
+- Total tokens: 1,030,986
+- Total duration: 2,993,228 ms (49m 53s)
+- Estimated cost: $6.19
+- Phases executed: 14
 - Phases skipped: 0
 - Retries: 0
 - Review findings: 0 critical, 6 minor
