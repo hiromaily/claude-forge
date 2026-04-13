@@ -1,6 +1,7 @@
-// Package tools — git operations for batch and final commit absorption.
+// git operations for batch and final commit absorption.
 // These functions are called internally by PipelineNextActionHandler to execute
 // git operations that were previously delegated to the orchestrator via exec actions.
+
 package tools
 
 import (

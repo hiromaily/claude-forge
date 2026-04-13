@@ -60,6 +60,10 @@ export default withMermaid(
                     link: "/architecture/runtime-flow",
                   },
                   {
+                    text: "MCP Data Contracts",
+                    link: "/architecture/mcp-data-contracts",
+                  },
+                  {
                     text: "Pipeline Sequence",
                     link: "/architecture/pipeline-sequence",
                   },
@@ -206,6 +210,10 @@ export default withMermaid(
                   {
                     text: "ランタイムフロー",
                     link: "/ja/architecture/runtime-flow",
+                  },
+                  {
+                    text: "MCPデータコントラクト",
+                    link: "/ja/architecture/mcp-data-contracts",
                   },
                   {
                     text: "パイプラインシーケンス",

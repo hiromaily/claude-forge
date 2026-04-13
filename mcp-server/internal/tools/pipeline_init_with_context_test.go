@@ -129,14 +129,23 @@ func TestPipelineInitWithContextFirstCallEffortOptions(t *testing.T) {
 			wantS := orchestrator.SkipsWithLabelsForEffort("S")
 			wantM := orchestrator.SkipsWithLabelsForEffort("M")
 			wantL := orchestrator.SkipsWithLabelsForEffort("L")
-			if !skipLabelSliceEqual(nuc.EffortOptions["S"], wantS) {
-				t.Errorf("effort_options[S] = %v, want %v", nuc.EffortOptions["S"], wantS)
+			if !skipLabelSliceEqual(nuc.EffortOptions["S"].SkippedPhases, wantS) {
+				t.Errorf("effort_options[S].skipped_phases = %v, want %v", nuc.EffortOptions["S"].SkippedPhases, wantS)
 			}
-			if !skipLabelSliceEqual(nuc.EffortOptions["M"], wantM) {
-				t.Errorf("effort_options[M] = %v, want %v", nuc.EffortOptions["M"], wantM)
+			if !skipLabelSliceEqual(nuc.EffortOptions["M"].SkippedPhases, wantM) {
+				t.Errorf("effort_options[M].skipped_phases = %v, want %v", nuc.EffortOptions["M"].SkippedPhases, wantM)
 			}
-			if !skipLabelSliceEqual(nuc.EffortOptions["L"], wantL) {
-				t.Errorf("effort_options[L] = %v, want %v", nuc.EffortOptions["L"], wantL)
+			if !skipLabelSliceEqual(nuc.EffortOptions["L"].SkippedPhases, wantL) {
+				t.Errorf("effort_options[L].skipped_phases = %v, want %v", nuc.EffortOptions["L"].SkippedPhases, wantL)
+			}
+
+			// Verify recommended flag matches detected_effort
+			for _, key := range []string{"S", "M", "L"} {
+				opt := nuc.EffortOptions[key]
+				wantRec := key == tc.wantEffort
+				if opt.Recommended != wantRec {
+					t.Errorf("effort_options[%s].recommended = %v, want %v", key, opt.Recommended, wantRec)
+				}
 			}
 
 			if nuc.Message == "" {
@@ -796,6 +805,95 @@ func TestTopLevelSourceIDRefinement(t *testing.T) {
 	}
 	if s.SpecName != "42-fix-auth-timeout-in-middleware" {
 		t.Errorf("SpecName = %q, want %q", s.SpecName, "42-fix-auth-timeout-in-middleware")
+	}
+}
+
+// ---------- TestSourceIDPrependedToWorkspaceSlug ----------
+
+func TestSourceIDPrependedToWorkspaceSlug(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		sourceID      string
+		slug          string
+		extCtx        map[string]any
+		wantSpecName  string
+		wantBranch    string
+	}{
+		{
+			name:     "github_issue_with_slug",
+			sourceID: "42",
+			slug:     "fix-auth-timeout",
+			extCtx: map[string]any{
+				"github_title": "Fix auth timeout",
+				"github_body":  "requests timeout",
+			},
+			wantSpecName: "42-fix-auth-timeout",
+			wantBranch:   "feature/42-fix-auth-timeout",
+		},
+		{
+			name:     "jira_issue_with_slug",
+			sourceID: "SOA-2883",
+			slug:     "skip-minutes-job",
+			extCtx: map[string]any{
+				"jira_summary":     "Skip minutes job without integration",
+				"jira_description": "desc",
+			},
+			wantSpecName: "soa-2883-skip-minutes-job",
+			wantBranch:   "feature/soa-2883-skip-minutes-job",
+		},
+		{
+			name:     "text_source_no_source_id",
+			sourceID: "",
+			slug:     "add-user-auth",
+			extCtx:   map[string]any{},
+			wantSpecName: "add-user-auth",
+			wantBranch:   "feature/add-user-auth",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			parentDir := t.TempDir()
+			wsDir := filepath.Join(parentDir, "20260330-placeholder")
+
+			sm := newPIWCSM()
+			h := PipelineInitWithContextHandler(sm)
+
+			args := map[string]any{
+				"workspace":        wsDir,
+				"external_context": tc.extCtx,
+				"flags":            map[string]any{},
+				"user_confirmation": map[string]any{
+					"effort":         "S",
+					"workspace_slug": tc.slug,
+				},
+			}
+			if tc.sourceID != "" {
+				args["source_id"] = tc.sourceID
+			}
+
+			res := callTool(t, h, args)
+			if res.IsError {
+				t.Fatalf("unexpected MCP error: %v", textContent(res))
+			}
+
+			result := parsePIWCResult(t, textContent(res))
+
+			s, err := state.ReadState(result.Workspace)
+			if err != nil {
+				t.Fatalf("ReadState: %v", err)
+			}
+			if s.SpecName != tc.wantSpecName {
+				t.Errorf("SpecName = %q, want %q", s.SpecName, tc.wantSpecName)
+			}
+			if result.Branch != tc.wantBranch {
+				t.Errorf("Branch = %q, want %q", result.Branch, tc.wantBranch)
+			}
+		})
 	}
 }
 

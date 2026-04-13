@@ -1,6 +1,7 @@
-// Package state implements the StateManager that provides all state mutation
+// implements the StateManager that provides all state mutation
 // and query operations for the forge-state MCP server. All 26 state-management
 // commands are implemented here, using a sync.RWMutex for concurrent access.
+
 package state
 
 import (

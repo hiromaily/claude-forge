@@ -1,5 +1,6 @@
-// Package tools — task_ops.go implements ParseTasksMd and executeTaskInit
+// task_ops.go implements ParseTasksMd and executeTaskInit
 // for absorbing the task_init action type inside PipelineNextActionHandler (P2).
+
 package tools
 
 import (

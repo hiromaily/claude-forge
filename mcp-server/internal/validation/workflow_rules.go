@@ -1,10 +1,11 @@
-// Package validation — workflow_rules.go implements .specs/instructions.md
+// workflow_rules.go implements .specs/instructions.md
 // loading and validation for phase-4 task-decomposer output.
 //
 // See docs/superpowers/specs/2026-04-10-workflow-instructions-design.md for
 // the design rationale. The evaluator runs at phase-4 completion (before
 // PhaseComplete) and returns Violations for tasks that match a rule's
 // `when` conditions but do not have mode: human_gate set.
+
 package validation
 
 import (

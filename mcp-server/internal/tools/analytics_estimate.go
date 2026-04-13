@@ -1,6 +1,7 @@
-// Package tools — analytics_estimate MCP handler.
+// analytics_estimate MCP handler.
 // AnalyticsEstimateHandler returns P50/P90 predictions for tokens, duration,
 // and cost for a given effort level.
+
 package tools
 
 import (

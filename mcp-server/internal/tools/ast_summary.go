@@ -1,7 +1,8 @@
-// Package tools — ast_summary MCP handler.
+// ast_summary MCP handler.
 // AstSummaryHandler exposes the ast.Summarize function as an MCP tool.
 // It accepts a file_path and an optional language parameter (auto-detected
 // from the file extension when omitted).
+
 package tools
 
 import (

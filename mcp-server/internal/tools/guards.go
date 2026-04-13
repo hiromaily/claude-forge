@@ -1,7 +1,8 @@
-// Package tools implements guard functions that re-implement the blocking and
+// implements guard functions that re-implement the blocking and
 // warning guards from scripts/pre-tool-hook.sh (Rules 3a–3j) inside the Go MCP
 // tool handlers.  Blocking guards return a non-nil error; warning-only guards
 // return a non-empty string message and never return an error.
+
 package tools
 
 import (

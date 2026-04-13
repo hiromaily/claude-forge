@@ -1,6 +1,7 @@
-// Package tools — analytics_pipeline_summary MCP handler.
+// analytics_pipeline_summary MCP handler.
 // AnalyticsPipelineSummaryHandler returns token, duration, cost, and
 // review-finding statistics for a single pipeline run.
+
 package tools
 
 import (

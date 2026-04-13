@@ -1,6 +1,7 @@
-// Package tools — history_get_friction_map MCP handler.
+// history_get_friction_map MCP handler.
 // HistoryGetFrictionMapHandler exposes the FrictionMap query as an MCP tool.
 // It returns accumulated friction points extracted from improvement reports.
+
 package tools
 
 import (

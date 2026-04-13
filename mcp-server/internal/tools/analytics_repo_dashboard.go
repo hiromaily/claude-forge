@@ -1,7 +1,8 @@
-// Package tools — analytics_repo_dashboard MCP handler.
+// analytics_repo_dashboard MCP handler.
 // AnalyticsRepoDashboardHandler returns aggregate statistics across all
 // pipeline runs in .specs/ (counts, averages, cost, review pass rate,
 // common findings).
+
 package tools
 
 import (

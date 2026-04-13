@@ -1,6 +1,7 @@
-// Package tools — profile_get MCP handler.
+// profile_get MCP handler.
 // ProfileGetHandler returns the repository profile as JSON.
 // The profile is computed once at server startup and cached for 7 days.
+
 package tools
 
 import (

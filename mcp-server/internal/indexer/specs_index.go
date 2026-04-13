@@ -1,6 +1,7 @@
-// Package indexer implements the pure-Go replacement for build-specs-index.sh.
+// implements the pure-Go replacement for build-specs-index.sh.
 // It scans a .specs/ directory, extracts metadata from each workspace, and writes
 // an index.json file used by the BM25 search_patterns MCP tool.
+
 package indexer
 
 import (

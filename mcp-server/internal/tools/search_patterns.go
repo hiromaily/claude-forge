@@ -1,7 +1,8 @@
-// Package tools — search_patterns MCP handler.
+// search_patterns MCP handler.
 // SearchPatternsHandler exposes BM25 scoring of .specs/index.json as an MCP tool.
 // It reads the workspace's request.md as the query, strips YAML frontmatter,
 // calls search.Score, and formats results as structured markdown.
+
 package tools
 
 import (

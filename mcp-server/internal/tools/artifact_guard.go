@@ -1,6 +1,7 @@
-// Package tools — artifact presence guards for pipeline_report_result.
+// artifact presence guards for pipeline_report_result.
 // Contains functions that check for missing impl/review artifact files
 // to enforce deterministic phase completion gates.
+
 package tools
 
 import (

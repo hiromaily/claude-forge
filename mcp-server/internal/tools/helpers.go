@@ -1,6 +1,7 @@
-// Package tools — shared helper functions for MCP tool handlers.
+// shared helper functions for MCP tool handlers.
 // These helpers eliminate repeated parameter extraction, state loading,
 // and nil-safety patterns across handler files.
+
 package tools
 
 import (

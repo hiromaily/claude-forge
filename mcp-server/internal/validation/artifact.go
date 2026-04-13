@@ -1,5 +1,6 @@
-// Package validation implements input and artifact validation logic for
+// implements input and artifact validation logic for
 // the forge-state MCP server.
+
 package validation
 
 import (

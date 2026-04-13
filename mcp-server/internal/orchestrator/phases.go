@@ -1,5 +1,6 @@
-// Package orchestrator provides pure-logic building blocks for the pipeline engine.
+// provides pure-logic building blocks for the pipeline engine.
 // It may import the state/ package for state types used by the engine.
+
 package orchestrator
 
 import "github.com/hiromaily/claude-forge/mcp-server/internal/state"

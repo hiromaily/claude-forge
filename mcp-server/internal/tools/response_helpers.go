@@ -1,8 +1,9 @@
-// Package tools — response construction helpers and low-level utilities used by
+// response construction helpers and low-level utilities used by
 // MCP tool handlers.
 //
 // Extracted from handlers.go to keep that file focused on the 26 *Handler
 // functions only.
+
 package tools
 
 import (

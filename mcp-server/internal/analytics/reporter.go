@@ -1,4 +1,5 @@
-// Package analytics provides pipeline analytics: Collector, Estimator, and Reporter.
+// provides pipeline analytics: Collector, Estimator, and Reporter.
+
 package analytics
 
 import (

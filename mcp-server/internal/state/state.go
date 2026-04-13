@@ -1,6 +1,7 @@
-// Package state defines the State data model for the forge-state MCP server.
+// defines the State data model for the forge-state MCP server.
 // The Go struct field json tags must remain in 1:1 correspondence with the
 // state.json schema managed by the Go MCP server state package.
+
 package state
 
 // ValidPhases enumerates all legal phase identifiers.

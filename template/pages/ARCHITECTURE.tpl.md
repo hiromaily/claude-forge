@@ -6,6 +6,8 @@
 
 <!-- @include: ../sections/architecture/mcp-driven-pipeline-control.md -->
 
+<!-- @include: ../sections/architecture/mcp-data-contracts.md -->
+
 <!-- @include: ../sections/architecture/how-the-pieces-connect.md -->
 
 <!-- @include: ../sections/architecture/pipeline-flow.md -->

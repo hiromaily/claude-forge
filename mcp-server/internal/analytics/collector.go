@@ -1,5 +1,6 @@
-// Package analytics aggregates pipeline history into cost/time predictions
+// aggregates pipeline history into cost/time predictions
 // and per-pipeline summaries.
+
 package analytics
 
 import (

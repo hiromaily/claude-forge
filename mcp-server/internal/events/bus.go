@@ -1,4 +1,5 @@
-// Package events provides an in-process event bus for pipeline phase transition notifications.
+// provides an in-process event bus for pipeline phase transition notifications.
+
 package events
 
 import (
