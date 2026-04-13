@@ -11,9 +11,6 @@ Ordered by priority. Higher rows should be tackled first.
 
 | # | ID | Issue | Title | Type | Effort | Why now |
 |---|-----|-------|-------|------|--------|---------|
-| 1 | ~~**B2**~~ | — | ~~Final summary output filename inconsistency: engine writes `final-summary.md` but spec says `summary.md`~~ | Bug | XS | **FIXED** — Canonical name is `summary.md`. All `final-summary.md` references in `engine.go`, `artifact.go`, `SKILL.md`, and tests replaced with `summary.md`. `guards.go` already used `summary.md`. Branch: `fix/final-commit-step`. |
-| 2 | ~~**B4**~~ | — | ~~v2 (MCP-driven) flow missing final commit step for summary.md + state.json~~ | Bug | S | **FIXED** — `AllPhases` reordered to `pr-creation → final-summary → final-commit`; Engine dispatches `final_commit` exec action; SKILL.md updated; `post-bash-hook.sh` marked v1-only legacy. Branch: `fix/final-commit-step`. |
-| 3 | ~~**B3**~~ | — | ~~`pipeline_next_action` response too large — triggers "Large MCP response" error~~ | Bug | S | **FIXED** — `enrichPrompt` no longer embeds artifact file contents (Layer 2). Instead, it returns absolute file paths for the agent to read via the Read tool. Reduces response size from ~50 KB to ~1–2 KB. Branch: `fix/final-commit-step`. |
 | 4 | **F10** | [#12](https://github.com/hiromaily/claude-forge/issues/12) | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
 | 5 | **F9** | [#13](https://github.com/hiromaily/claude-forge/issues/13) | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
 | 6 | **F12** | [#14](https://github.com/hiromaily/claude-forge/issues/14) | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
