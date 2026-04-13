@@ -52,14 +52,20 @@ type PipelineInitWithContextResult struct {
 	NeedsDiscussion       *DiscussionPrompt       `json:"needs_discussion,omitempty"`
 }
 
+// EffortOption describes a single effort level with its skip list and recommended flag.
+type EffortOption struct {
+	SkippedPhases []orchestrator.SkipLabel `json:"skipped_phases"`
+	Recommended   bool                     `json:"recommended"`
+}
+
 // UserConfirmationPrompt holds the detected values to present to the user.
 type UserConfirmationPrompt struct {
-	DetectedEffort      string                              `json:"detected_effort"`
-	EffortOptions       map[string][]orchestrator.SkipLabel `json:"effort_options"`
-	CurrentBranch       string                              `json:"current_branch"`
-	IsMainBranch        bool                                `json:"is_main_branch"`
-	Message             string                              `json:"message"`
-	EnrichedRequestBody string                              `json:"enriched_request_body,omitempty"`
+	DetectedEffort      string                  `json:"detected_effort"`
+	EffortOptions       map[string]EffortOption  `json:"effort_options"`
+	CurrentBranch       string                  `json:"current_branch"`
+	IsMainBranch        bool                    `json:"is_main_branch"`
+	Message             string                  `json:"message"`
+	EnrichedRequestBody string                  `json:"enriched_request_body,omitempty"`
 }
 
 // pipelineFlags holds parsed flag fields from the flags parameter.
@@ -189,10 +195,11 @@ func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags
 	effort := orchestrator.DetectEffort(flags.EffortOverride, extCtx.JiraStoryPoints, combinedText)
 
 	// Build EffortOptions for all three valid efforts with human-readable labels.
-	effortOptions := map[string][]orchestrator.SkipLabel{
-		"S": orchestrator.SkipsWithLabelsForEffort("S"),
-		"M": orchestrator.SkipsWithLabelsForEffort("M"),
-		"L": orchestrator.SkipsWithLabelsForEffort("L"),
+	// The detected effort is marked as recommended so the orchestrator renders it deterministically.
+	effortOptions := map[string]EffortOption{
+		"S": {SkippedPhases: orchestrator.SkipsWithLabelsForEffort("S"), Recommended: effort == "S"},
+		"M": {SkippedPhases: orchestrator.SkipsWithLabelsForEffort("M"), Recommended: effort == "M"},
+		"L": {SkippedPhases: orchestrator.SkipsWithLabelsForEffort("L"), Recommended: effort == "L"},
 	}
 
 	// Determine branch state for the user confirmation prompt.

@@ -129,14 +129,23 @@ func TestPipelineInitWithContextFirstCallEffortOptions(t *testing.T) {
 			wantS := orchestrator.SkipsWithLabelsForEffort("S")
 			wantM := orchestrator.SkipsWithLabelsForEffort("M")
 			wantL := orchestrator.SkipsWithLabelsForEffort("L")
-			if !skipLabelSliceEqual(nuc.EffortOptions["S"], wantS) {
-				t.Errorf("effort_options[S] = %v, want %v", nuc.EffortOptions["S"], wantS)
+			if !skipLabelSliceEqual(nuc.EffortOptions["S"].SkippedPhases, wantS) {
+				t.Errorf("effort_options[S].skipped_phases = %v, want %v", nuc.EffortOptions["S"].SkippedPhases, wantS)
 			}
-			if !skipLabelSliceEqual(nuc.EffortOptions["M"], wantM) {
-				t.Errorf("effort_options[M] = %v, want %v", nuc.EffortOptions["M"], wantM)
+			if !skipLabelSliceEqual(nuc.EffortOptions["M"].SkippedPhases, wantM) {
+				t.Errorf("effort_options[M].skipped_phases = %v, want %v", nuc.EffortOptions["M"].SkippedPhases, wantM)
 			}
-			if !skipLabelSliceEqual(nuc.EffortOptions["L"], wantL) {
-				t.Errorf("effort_options[L] = %v, want %v", nuc.EffortOptions["L"], wantL)
+			if !skipLabelSliceEqual(nuc.EffortOptions["L"].SkippedPhases, wantL) {
+				t.Errorf("effort_options[L].skipped_phases = %v, want %v", nuc.EffortOptions["L"].SkippedPhases, wantL)
+			}
+
+			// Verify recommended flag matches detected_effort
+			for _, key := range []string{"S", "M", "L"} {
+				opt := nuc.EffortOptions[key]
+				wantRec := key == tc.wantEffort
+				if opt.Recommended != wantRec {
+					t.Errorf("effort_options[%s].recommended = %v, want %v", key, opt.Recommended, wantRec)
+				}
 			}
 
 			if nuc.Message == "" {
