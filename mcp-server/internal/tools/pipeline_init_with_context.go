@@ -263,9 +263,15 @@ func handleSecondCall(
 
 	// Derive specName and optionally rename workspace for better readability.
 	// Priority order: external context (Jira/GitHub) > LLM-provided slug > auto-derived slug.
+	// When LLM slug is provided alongside a source_id (GitHub issue number or Jira key),
+	// prepend the source_id to the slug so it appears in the branch name and PR title.
 	workspace = refineWorkspacePath(workspace, extCtx)
 	if uc.WorkspaceSlug != "" {
-		workspace = applyWorkspaceSlug(workspace, uc.WorkspaceSlug)
+		slug := uc.WorkspaceSlug
+		if extCtx.SourceID != "" {
+			slug = extCtx.SourceID + "-" + slug
+		}
+		workspace = applyWorkspaceSlug(workspace, slug)
 	}
 	specName := deriveSpecName(workspace)
 

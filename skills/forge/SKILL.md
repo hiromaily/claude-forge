@@ -57,6 +57,8 @@ Example: `/forge 20260401-effort-only-flow`
    ASCII only) that summarises the task — e.g. `"add-user-auth-endpoint"` or
    `"fix-report-export-timeout"`. If the input is in a non-English language, translate
    the core intent into English for the slug.
+   **Do not include the issue number** (GitHub `#N` or Jira `PROJ-123`) in the slug —
+   the server prepends `source_id` automatically when present.
    Then call `mcp__forge-state__pipeline_init_with_context` again with the same parameters plus
    `user_confirmation={effort: <confirmed>, workspace_slug: <slug>, use_current_branch: <bool>}`.
    If `needs_user_confirmation.enriched_request_body` is non-empty (from the discussion path),
