@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | pages/README.tpl.md | README.md | 20 |
 | pages/CLAUDE.tpl.md | CLAUDE.md | 12 |
-| pages/ARCHITECTURE.tpl.md | ARCHITECTURE.md | 9 |
+| pages/ARCHITECTURE.tpl.md | ARCHITECTURE.md | 10 |
 | pages/SETUP.tpl.md | SETUP.md | 2 |
 | pages/ai-agents/claude/rules/docs.tpl.md | .claude/rules/docs.md | 1 |
 | pages/ai-agents/claude/rules/git.tpl.md | .claude/rules/git.md | 1 |
@@ -29,6 +29,7 @@
 | sections/architecture/how-it-works.md | ARCHITECTURE, README |
 | sections/architecture/how-the-pieces-connect.md | ARCHITECTURE, CLAUDE |
 | sections/architecture/human-interaction.md | ARCHITECTURE, README |
+| sections/architecture/mcp-data-contracts.md | ARCHITECTURE |
 | sections/architecture/mcp-driven-pipeline-control.md | ARCHITECTURE, README |
 | sections/architecture/pipeline-flow.md | ARCHITECTURE, README |
 | sections/architecture/pipeline-phase-execution-by-effort-level.md | ARCHITECTURE, README |
@@ -124,6 +125,7 @@
 | sections/ja/architecture/guard-catalogue.md | Not referenced by any template |
 | sections/ja/architecture/hooks.md | Not referenced by any template |
 | sections/ja/architecture/human-interaction.md | Not referenced by any template |
+| sections/ja/architecture/mcp-data-contracts.md | Not referenced by any template |
 | sections/ja/architecture/overview-content.md | Not referenced by any template |
 | sections/ja/architecture/pipeline-flow-guide.md | Not referenced by any template |
 | sections/ja/architecture/pipeline-flow.md | Not referenced by any template |
