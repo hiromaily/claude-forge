@@ -89,6 +89,12 @@ Skip this section entirely when the input artifacts do not include `analysis.md`
 ## Output Format
 
 ```
+## Summary
+
+(A concise description of what was implemented and why, written for PR reviewers.
+Derive from request.md and design.md. Use bullet points for key changes.
+This section is the primary content of the PR body — make it informative.)
+
 ## Verification Report
 
 ### Part A: Build Verification

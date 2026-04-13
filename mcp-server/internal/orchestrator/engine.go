@@ -747,7 +747,9 @@ func derivePRTitle(st *state.State) string {
 // analysis.md and investigation.md are included (when present) to provide
 // context for the Improvement Report epilogue.
 func (*Engine) handleFinalSummary(st *state.State) (Action, error) {
-	inputs := []string{state.ArtifactDesign, state.ArtifactTasks}
+	// request.md is included so the verifier can generate a Summary section
+	// describing what was implemented (used as the PR body).
+	inputs := []string{state.ArtifactRequest, state.ArtifactDesign, state.ArtifactTasks}
 	if !slices.Contains(st.SkippedPhases, PhaseSeven) {
 		inputs = append([]string{state.ArtifactComprehensiveReview}, inputs...)
 	}
