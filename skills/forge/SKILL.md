@@ -48,8 +48,10 @@ Example: `/forge 20260401-effort-only-flow`
    **Effort/branch confirmation step** (applies after either path above):
    Present **all** of the following to the user in a **single prompt** (use AskUserQuestion
    with multiple questions):
-   1. **Effort level**: the detected `detected_effort` and all three effort options from
-      `effort_options` (S, M, L — each with their skipped phases, using the `label` field).
+   1. **Effort level**: present all three effort options from `effort_options`
+      (S, M, L — each with their skipped phases, using the `label` field).
+      Mark **only** the option matching `detected_effort` as "(Recommended)".
+      Do not mark any other option as recommended.
    2. **Branch decision**: based on `current_branch` and `is_main_branch` from the response:
       - If `is_main_branch` is true: inform the user a new branch will be created (no question needed).
       - If `is_main_branch` is false: ask whether to use the current branch or create a new one.
