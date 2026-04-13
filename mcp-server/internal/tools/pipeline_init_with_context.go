@@ -1,4 +1,4 @@
-// Package tools — pipeline_init_with_context MCP handler.
+// pipeline_init_with_context MCP handler.
 // Implements the three-call confirmation flow.
 // First call (neither user_confirmation nor discussion_answers present): detects effort and returns
 //
@@ -13,6 +13,7 @@
 //	workspace, writes state.json + request.md.
 //
 // DISCRIMINATOR ORDER: discussion_answers is checked BEFORE user_confirmation to prevent shadowing.
+
 package tools
 
 import (

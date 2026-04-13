@@ -1,5 +1,6 @@
-// Package tools — pipeline_report_result MCP handler.
+// pipeline_report_result MCP handler.
 // Records phase-log entry, validates artifacts, parses verdict, and advances state.
+
 package tools
 
 import (

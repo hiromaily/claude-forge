@@ -1,4 +1,5 @@
-// Package orchestrator provides pure-logic pipeline orchestration for the forge-state MCP server.
+// provides pure-logic pipeline orchestration for the forge-state MCP server.
+
 package orchestrator
 
 import "strings"

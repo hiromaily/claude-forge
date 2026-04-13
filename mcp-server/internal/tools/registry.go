@@ -1,5 +1,6 @@
-// Package tools registers all 44 MCP tool handlers with the MCP server.
+// registers all 44 MCP tool handlers with the MCP server.
 // Tool names use underscores (MCP protocol requirement; hyphens are not permitted).
+
 package tools
 
 import (

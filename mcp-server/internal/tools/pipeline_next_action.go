@@ -1,6 +1,7 @@
-// Package tools — pipeline_next_action MCP handler.
+// pipeline_next_action MCP handler.
 // Delegates to Engine.NextAction() and enriches spawn_agent prompts
 // with agent .md file contents and input artifact file paths (not contents).
+
 package tools
 
 import (

@@ -1,4 +1,5 @@
-// Package ast provides tree-sitter-based AST parsing and code summarization.
+// provides tree-sitter-based AST parsing and code summarization.
+
 package ast
 
 import (

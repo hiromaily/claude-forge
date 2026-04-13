@@ -1,4 +1,5 @@
-// Package tools — workspace initialisation helpers.
+// workspace initialisation helpers.
+
 package tools
 
 import (

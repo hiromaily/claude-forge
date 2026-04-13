@@ -1,6 +1,7 @@
-// Package prompt assembles the 4-layer prompt passed to each pipeline agent.
+// assembles the 4-layer prompt passed to each pipeline agent.
 // It integrates agent base instructions, input artifacts, repository profile
 // context (Layer 3), and data flywheel history context (Layer 4).
+
 package prompt
 
 import (

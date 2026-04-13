@@ -1,6 +1,7 @@
-// Package profile detects and caches repository metadata (languages, CI system,
+// detects and caches repository metadata (languages, CI system,
 // linter configs, build commands, etc.) for injection into agent prompts as
 // Layer 3 context.
+
 package profile
 
 import (

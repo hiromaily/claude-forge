@@ -1,5 +1,6 @@
-// Package search implements BM25 scoring for pattern index entries.
+// implements BM25 scoring for pattern index entries.
 // No external imports beyond Go stdlib (math, sort, strings, unicode).
+
 package search
 
 import (

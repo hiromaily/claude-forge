@@ -1,6 +1,7 @@
-// Package tools — ast_dependency_graph MCP tool handler.
+// ast_dependency_graph MCP tool handler.
 // AstDependencyGraphHandler walks a source tree and returns a file-level
 // import graph as JSON. It does not import or depend on the state package.
+
 package tools
 
 import (

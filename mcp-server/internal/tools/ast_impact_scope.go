@@ -1,7 +1,8 @@
-// Package tools — ast_impact_scope MCP tool handler.
+// ast_impact_scope MCP tool handler.
 // AstImpactScopeHandler identifies all files in a source tree that call a given
 // symbol, using a two-pass import-filter + call-site scan for Go and Bash, and
 // a single-pass call-site scan for TypeScript and Python.
+
 package tools
 
 import (

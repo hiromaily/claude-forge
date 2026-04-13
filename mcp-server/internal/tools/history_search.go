@@ -1,7 +1,8 @@
-// Package tools — history_search MCP handler.
+// history_search MCP handler.
 // HistorySearchHandler exposes the history index search as an MCP tool.
 // It queries past pipeline runs from the history index using BM25 scoring
 // and returns ranked results with metadata and design excerpts.
+
 package tools
 
 import (

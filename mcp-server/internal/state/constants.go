@@ -1,7 +1,8 @@
-// Package state defines centralized constants for the forge-state pipeline.
+// defines centralized constants for the forge-state pipeline.
 // All phase identifiers, status values, task fields, artifact filenames, and
 // other magic strings are defined here to prevent typo-induced bugs and to
 // make rename operations safe (change once, compile-check everywhere).
+
 package state
 
 // ---------- Phase identifiers ----------

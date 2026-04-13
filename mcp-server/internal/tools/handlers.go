@@ -1,8 +1,9 @@
-// Package tools implements MCP tool handlers that delegate to StateManager
+// implements MCP tool handlers that delegate to StateManager
 // methods and enforce guard preconditions.
 //
 // Blocking guards return an MCP error response (IsError = true).
 // Non-blocking warnings are included as a "warning" key in the JSON content.
+
 package tools
 
 import (

@@ -1,4 +1,5 @@
-// Package history implements the history index and search over past pipeline runs.
+// implements the history index and search over past pipeline runs.
+
 package history
 
 import (

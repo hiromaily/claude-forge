@@ -1,7 +1,8 @@
-// Package tools — validate_input MCP handler.
+// validate_input MCP handler.
 // ValidateInputHandler exposes validation.ValidateInput as an MCP tool.
 // It always returns a JSON-serialised InputResult via okJSON, never an MCP error,
 // even when the input is empty or invalid.
+
 package tools
 
 import (

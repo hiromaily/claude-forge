@@ -1,7 +1,8 @@
-// Package tools — validate_artifact MCP handler.
+// validate_artifact MCP handler.
 // ValidateArtifactHandler exposes validation.ValidateArtifacts as an MCP tool.
 // It always returns the result slice serialised as a JSON array via okJSON.
 // Missing workspace or phase parameters return an errorf response.
+
 package tools
 
 import (

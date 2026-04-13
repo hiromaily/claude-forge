@@ -1,4 +1,5 @@
-// Package tools — external context parsing and request.md construction.
+// external context parsing and request.md construction.
+
 package tools
 
 import (

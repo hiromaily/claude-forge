@@ -1,6 +1,7 @@
-// Package tools — verdict parsing helpers for pipeline_report_result.
+// verdict parsing helpers for pipeline_report_result.
 // Contains lookup maps and the functions that determine state transitions
 // based on review phase verdicts.
+
 package tools
 
 import (

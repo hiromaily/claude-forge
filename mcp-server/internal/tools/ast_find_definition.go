@@ -1,6 +1,7 @@
-// Package tools — ast_find_definition MCP tool handler.
+// ast_find_definition MCP tool handler.
 // AstFindDefinitionHandler searches for a named symbol declaration in a source file
 // using tree-sitter AST parsing. It does not import or depend on the state package.
+
 package tools
 
 import (

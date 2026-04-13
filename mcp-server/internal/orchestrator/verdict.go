@@ -1,4 +1,5 @@
-// Package orchestrator provides pure-logic building blocks for the pipeline engine.
+// provides pure-logic building blocks for the pipeline engine.
+
 package orchestrator
 
 import (

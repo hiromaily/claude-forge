@@ -1,7 +1,8 @@
-// Package history provides a history index over completed/abandoned pipeline runs
+// provides a history index over completed/abandoned pipeline runs
 // stored in .specs/ directories. It scans state.json and request.md files,
 // builds IndexEntry records, persists them to .specs/history-index.json, and
 // supports incremental (differential) updates using an indexedAt watermark.
+
 package history
 
 import (

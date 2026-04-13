@@ -1,6 +1,7 @@
-// Package validation provides input and artifact validation logic for the
+// provides input and artifact validation logic for the
 // claude-forge MCP server. It replaces the shell-script validate-input.sh and
 // the pre-tool-hook artifact checks with typed Go functions.
+
 package validation
 
 import (

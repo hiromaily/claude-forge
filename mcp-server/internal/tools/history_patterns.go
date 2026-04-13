@@ -1,6 +1,7 @@
-// Package tools — history_get_patterns MCP handler.
+// history_get_patterns MCP handler.
 // HistoryGetPatternsHandler exposes the PatternAccumulator query as an MCP tool.
 // It returns accumulated review finding patterns filtered by agent and/or severity.
+
 package tools
 
 import (

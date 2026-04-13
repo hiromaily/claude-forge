@@ -1,7 +1,8 @@
-// Package tools — pipeline_init MCP handler.
+// pipeline_init MCP handler.
 // PipelineInitHandler is a pure detection tool: it parses the raw arguments string
 // and returns structured data about the pipeline to initialize. It has no side effects
 // on StateManager — no sm.Init or setter calls are made.
+
 package tools
 
 import (

@@ -1,7 +1,8 @@
-// Package tools — subscribe_events MCP tool handler.
+// subscribe_events MCP tool handler.
 // SubscribeEventsHandler is a discovery-only tool that returns the SSE endpoint
 // URL when the events server is configured, or an informational message otherwise.
 // It does not import or depend on the state package.
+
 package tools
 
 import (

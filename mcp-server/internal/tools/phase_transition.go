@@ -1,6 +1,7 @@
-// Package tools — phase transition helpers for pipeline_report_result.
+// phase transition helpers for pipeline_report_result.
 // Contains phase-5 and phase-4 specific transition logic extracted from
 // determineTransition for focused readability.
+
 package tools
 
 import (
