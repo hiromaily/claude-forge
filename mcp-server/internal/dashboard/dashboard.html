@@ -253,16 +253,28 @@
 
       // postIntervention POSTs JSON to a same-origin intervention endpoint
       // and resolves with { ok, status, data }. Network failures reject.
+      //
+      // A 10-second AbortController guards against a hung server keeping the
+      // UI button in its loading state forever. The intervention endpoints
+      // only update state.json, so 10s is generous; an aborted request
+      // surfaces as a normal catch() with err.name === "AbortError".
+      var INTERVENTION_TIMEOUT_MS = 10_000;
+
       function postIntervention(path, body) {
+        var ctrl = new AbortController();
+        var timer = setTimeout(function () { ctrl.abort(); }, INTERVENTION_TIMEOUT_MS);
         return fetch(path, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
+          body: JSON.stringify(body),
+          signal: ctrl.signal
         }).then(function (resp) {
           return resp.json().then(
             function (data) { return { ok: resp.ok, status: resp.status, data: data }; },
             function () { return { ok: resp.ok, status: resp.status, data: {} }; }
           );
+        }).finally(function () {
+          clearTimeout(timer);
         });
       }
 
@@ -387,16 +399,18 @@
         // currently awaiting human input. The server-side handler enforces
         // the same precondition (CurrentPhase==phase + status==awaiting_human),
         // so a stale row that the user clicks late safely 409s.
+        //
+        // No closure capture is needed: ev is the local parameter of
+        // renderEvent, so each call has its own binding that the click
+        // handler safely closes over.
         if (ev.event === "checkpoint" && ev.outcome === "awaiting_human" && ev.workspace && ev.phase) {
           var approveBtn = document.createElement("button");
           approveBtn.type = "button";
           approveBtn.className = "action-btn";
           approveBtn.textContent = "approve";
-          (function (workspace, phase) {
-            approveBtn.addEventListener("click", function () {
-              approveCheckpoint(workspace, phase, approveBtn);
-            });
-          })(ev.workspace, ev.phase);
+          approveBtn.addEventListener("click", function () {
+            approveCheckpoint(ev.workspace, ev.phase, approveBtn);
+          });
           meta.appendChild(approveBtn);
         }
 
