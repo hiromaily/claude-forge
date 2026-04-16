@@ -44,6 +44,10 @@ export default withMermaid(
                     text: "Human Interaction Points",
                     link: "/guide/human-interaction",
                   },
+                  {
+                    text: "Real-time Dashboard",
+                    link: "/guide/dashboard",
+                  },
                 ],
               },
             ],
@@ -207,6 +211,10 @@ export default withMermaid(
                   {
                     text: "ヒューマンインタラクション",
                     link: "/ja/guide/human-interaction",
+                  },
+                  {
+                    text: "リアルタイムダッシュボード",
+                    link: "/ja/guide/dashboard",
                   },
                 ],
               },
