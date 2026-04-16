@@ -91,7 +91,7 @@ Environment variables are configured automatically when using `make setup`. For 
 | --- | --- | --- |
 | `FORGE_AGENTS_PATH` | Yes | Absolute path to the `agents/` directory. Required for `pipeline_next_action` to resolve agent `.md` files at runtime. Set automatically by `make setup`. |
 | `FORGE_SPECS_DIR` | No | Override the default `.specs/` directory used by the engine. |
-| `FORGE_EVENTS_PORT` | No | Port for the SSE events endpoint (used by `subscribe_events`). |
+| `FORGE_EVENTS_PORT` | No | Port for the SSE events endpoint (`/events`) and the bundled web dashboard (`/`). |
 
 ---
 

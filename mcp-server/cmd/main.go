@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log"
 	"net"
@@ -24,6 +25,13 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/tools"
 )
+
+// dashboardHTML is the static HTML/CSS/JS dashboard served at GET /.
+// It is a zero-dependency client that subscribes to GET /events via
+// EventSource and renders a real-time pipeline timeline.
+//
+//go:embed dashboard.html
+var dashboardHTML []byte
 
 var appVersion = "dev"
 
@@ -73,10 +81,31 @@ func resolveAgentDir() string {
 	return "agents"
 }
 
-// startSSEServer attempts to bind an HTTP server for the SSE /events endpoint on
-// the given address. It returns the started *http.Server on success, or nil when
-// the port cannot be bound (the error is logged to stderr and execution continues).
-// A nil return means SSE is disabled but the MCP stdio transport is unaffected.
+// dashboardHandler serves the embedded dashboard HTML at GET /.
+// It returns 404 for any other path so the SSE endpoint and future routes
+// are not shadowed.
+func dashboardHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write(dashboardHTML)
+	}
+}
+
+// startSSEServer attempts to bind an HTTP server on the given address.
+// It exposes:
+//   - GET /events  — Server-Sent Events stream of pipeline phase transitions
+//   - GET /        — embedded zero-dependency dashboard HTML
+//
+// It returns the started *http.Server on success, or nil when the port cannot
+// be bound (the error is logged to stderr and execution continues).
+// A nil return means the dashboard and SSE are disabled but the MCP stdio
+// transport is unaffected.
 func startSSEServer(addr string, bus *events.EventBus) *http.Server {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -85,6 +114,7 @@ func startSSEServer(addr string, bus *events.EventBus) *http.Server {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /events", events.SSEHandler(bus))
+	mux.Handle("GET /", dashboardHandler())
 	srv := &http.Server{Handler: mux}
 	go func() {
 		if serveErr := srv.Serve(ln); serveErr != nil && serveErr != http.ErrServerClosed {

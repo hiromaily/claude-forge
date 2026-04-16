@@ -18,9 +18,14 @@ Default: `.specs/` (relative to the project root)
 
 ### `FORGE_EVENTS_PORT`
 
-Port for the SSE events endpoint. When set, the `subscribe_events` MCP tool returns the SSE URL for real-time pipeline event monitoring.
+Port for the SSE events endpoint **and** the bundled web dashboard. When set, the MCP server starts a local HTTP listener that serves:
 
-Default: not set (SSE disabled)
+- `GET /events` — Server-Sent Events stream consumed by the `subscribe_events` MCP tool
+- `GET /` — zero-dependency dashboard (single embedded HTML page) that subscribes to `/events` and renders pipeline phase transitions in real time
+
+Open `http://localhost:<port>/` in a browser after starting any pipeline. The dashboard auto-reconnects on stream drop and supports per-workspace filtering.
+
+Default: not set (HTTP listener disabled, MCP stdio transport unaffected)
 
 ## Setup
 

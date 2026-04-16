@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>claude-forge dashboard</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0e1116;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --ok: #3fb950;
+      --warn: #d29922;
+      --bad: #f85149;
+      --info: #a371f7;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --panel: #f6f8fa;
+        --border: #d0d7de;
+        --text: #1f2328;
+        --muted: #636c76;
+        --accent: #0969da;
+        --ok: #1a7f37;
+        --warn: #9a6700;
+        --bad: #cf222e;
+        --info: #8250df;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .badge.live::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ok);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .badge.disconnected::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--bad);
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-left: auto;
+    }
+    select, button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    main {
+      padding: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .empty {
+      text-align: center;
+      padding: 48px;
+      color: var(--muted);
+    }
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .event {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 12px 16px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .event.kind-phase-start { border-left-color: var(--info); }
+    .event.kind-phase-complete { border-left-color: var(--ok); }
+    .event.kind-phase-fail { border-left-color: var(--bad); }
+    .event.kind-checkpoint { border-left-color: var(--warn); }
+    .event.kind-abandon { border-left-color: var(--bad); opacity: 0.7; }
+    .event-kind {
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .event-meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .event-time {
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .event-spec {
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+    .event-outcome {
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .out-completed { background: rgba(63, 185, 80, 0.15); color: var(--ok); }
+    .out-in_progress { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
+    .out-failed { background: rgba(248, 81, 73, 0.15); color: var(--bad); }
+    .out-awaiting_human { background: rgba(210, 153, 34, 0.15); color: var(--warn); }
+    .out-abandoned { background: rgba(139, 148, 158, 0.15); color: var(--muted); }
+    footer {
+      padding: 12px 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>claude-forge</h1>
+    <span id="status" class="badge disconnected">disconnected</span>
+    <span id="event-count" class="badge">0 events</span>
+    <div class="controls">
+      <label for="ws-filter" class="badge" style="border:none;">workspace</label>
+      <select id="ws-filter">
+        <option value="">all workspaces</option>
+      </select>
+      <button id="clear-btn" type="button">clear</button>
+    </div>
+  </header>
+  <main>
+    <div id="empty" class="empty">
+      Waiting for pipeline events…<br>
+      <small>Run <code>/forge &lt;task&gt;</code> in Claude Code to see phase transitions appear here in real time.</small>
+    </div>
+    <div id="timeline" class="timeline"></div>
+  </main>
+  <footer>
+    Server-Sent Events from <code>/events</code>. Reconnects automatically on drop. Events are not persisted; reload restarts the stream.
+  </footer>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var statusEl = document.getElementById("status");
+      var countEl = document.getElementById("event-count");
+      var emptyEl = document.getElementById("empty");
+      var timelineEl = document.getElementById("timeline");
+      var wsFilter = document.getElementById("ws-filter");
+      var clearBtn = document.getElementById("clear-btn");
+
+      var es = null;
+      var count = 0;
+      var workspaces = new Set();
+
+      function setStatus(connected) {
+        if (connected) {
+          statusEl.textContent = "live";
+          statusEl.className = "badge live";
+        } else {
+          statusEl.textContent = "disconnected";
+          statusEl.className = "badge disconnected";
+        }
+      }
+
+      function fmtTime(iso) {
+        if (!iso) return "";
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+
+      function shortWorkspace(ws) {
+        if (!ws) return "";
+        var parts = ws.split("/");
+        return parts.slice(-2).join("/");
+      }
+
+      function refreshWorkspaceOptions() {
+        var current = wsFilter.value;
+        // Remove all options except the first ("all").
+        while (wsFilter.options.length > 1) wsFilter.remove(1);
+        Array.from(workspaces).sort().forEach(function (ws) {
+          var opt = document.createElement("option");
+          opt.value = ws;
+          opt.textContent = shortWorkspace(ws);
+          wsFilter.appendChild(opt);
+        });
+        if (current && workspaces.has(current)) wsFilter.value = current;
+      }
+
+      function renderEvent(ev) {
+        if (ev.workspace) {
+          if (!workspaces.has(ev.workspace)) {
+            workspaces.add(ev.workspace);
+            refreshWorkspaceOptions();
+          }
+        }
+
+        var div = document.createElement("div");
+        div.className = "event kind-" + (ev.event || "unknown");
+
+        var kind = document.createElement("div");
+        kind.className = "event-kind";
+        kind.textContent = ev.event || "(unknown)";
+        if (ev.phase) {
+          var phaseSpan = document.createElement("span");
+          phaseSpan.className = "event-meta";
+          phaseSpan.textContent = " · " + ev.phase;
+          kind.appendChild(phaseSpan);
+        }
+
+        var meta = document.createElement("div");
+        meta.className = "event-meta";
+        var spec = document.createElement("span");
+        spec.className = "event-spec";
+        spec.textContent = ev.specName || shortWorkspace(ev.workspace) || "(no spec)";
+        meta.appendChild(spec);
+        if (ev.outcome) {
+          meta.appendChild(document.createTextNode(" "));
+          var out = document.createElement("span");
+          out.className = "event-outcome out-" + ev.outcome;
+          out.textContent = ev.outcome;
+          meta.appendChild(out);
+        }
+
+        var time = document.createElement("div");
+        time.className = "event-time";
+        time.textContent = fmtTime(ev.timestamp);
+        time.title = ev.timestamp || "";
+
+        div.appendChild(kind);
+        div.appendChild(meta);
+        div.appendChild(time);
+
+        timelineEl.insertBefore(div, timelineEl.firstChild);
+        emptyEl.style.display = "none";
+        count++;
+        countEl.textContent = count + " event" + (count === 1 ? "" : "s");
+      }
+
+      function connect() {
+        if (es) {
+          es.close();
+          es = null;
+        }
+        var url = "/events";
+        var ws = wsFilter.value;
+        if (ws) url += "?workspace=" + encodeURIComponent(ws);
+        es = new EventSource(url);
+        es.onopen = function () { setStatus(true); };
+        es.onerror = function () { setStatus(false); };
+        es.onmessage = function (e) {
+          try {
+            var ev = JSON.parse(e.data);
+            renderEvent(ev);
+          } catch (err) {
+            console.error("dashboard: failed to parse event", err, e.data);
+          }
+        };
+      }
+
+      wsFilter.addEventListener("change", connect);
+      clearBtn.addEventListener("click", function () {
+        timelineEl.innerHTML = "";
+        count = 0;
+        countEl.textContent = "0 events";
+        emptyEl.style.display = "";
+      });
+
+      connect();
+    })();
+  </script>
+</body>
+</html>
