@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -163,6 +165,81 @@ func TestStartSSEServer_ShutdownPath(t *testing.T) {
 	_, err := http.Get(fmt.Sprintf("http://localhost%s/events", addr))
 	if err == nil {
 		t.Fatal("expected connection refused after shutdown, got success")
+	}
+}
+
+// TestDashboardURL_FormatsLocalhostURL verifies the user-facing URL format.
+// Pure function — safe to run in parallel.
+func TestDashboardURL_FormatsLocalhostURL(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		port int
+		want string
+	}{
+		{name: "common_port", port: 9876, want: "http://localhost:9876/"},
+		{name: "low_port", port: 1, want: "http://localhost:1/"},
+		{name: "high_port", port: 65535, want: "http://localhost:65535/"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := dashboardURL(tc.port)
+			if got != tc.want {
+				t.Errorf("dashboardURL(%d) = %q, want %q", tc.port, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestStartSSEServer_LogsDashboardURLOnStartup verifies that startSSEServer
+// prints a click-through dashboard URL to stderr after a successful bind.
+//
+// This test mutates os.Stderr (an OS-level global), so it cannot run in
+// parallel with anything else that reads or writes stderr. Per the
+// go-test.md exception clause, t.Parallel() is intentionally omitted.
+func TestStartSSEServer_LogsDashboardURLOnStartup(t *testing.T) {
+	port := freePort(t)
+	addr := ":" + port
+	bus := events.NewEventBus()
+
+	// Redirect os.Stderr to a pipe so we can read what startSSEServer writes.
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = origStderr })
+
+	srv := startSSEServer(addr, bus)
+	if srv == nil {
+		t.Fatal("startSSEServer returned nil")
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	})
+
+	// Close the writer so the read side sees EOF after startSSEServer
+	// finishes its synchronous logging. The Serve goroutine writes nothing
+	// in the success path, so closing here is safe.
+	_ = w.Close()
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("read stderr pipe: %v", err)
+	}
+	logged := buf.String()
+
+	wantPort := "http://localhost:" + port + "/"
+	if !strings.Contains(logged, wantPort) {
+		t.Errorf("stderr does not contain %q (got: %q)", wantPort, logged)
+	}
+	if !strings.Contains(logged, "dashboard ready at") {
+		t.Errorf("stderr does not contain user-facing label %q (got: %q)", "dashboard ready at", logged)
 	}
 }
 

@@ -81,6 +81,14 @@ func resolveAgentDir() string {
 	return "agents"
 }
 
+// dashboardURL formats the user-facing URL printed at startup.
+// Always uses "localhost" rather than the bind interface so the line is
+// click-through in any modern terminal regardless of which host the
+// listener bound to (commonly "[::]:<port>" on dual-stack systems).
+func dashboardURL(port int) string {
+	return fmt.Sprintf("http://localhost:%d/", port)
+}
+
 // dashboardHandler serves the embedded dashboard HTML at GET /.
 // It returns 404 for any other path so the SSE endpoint and future routes
 // are not shadowed.
@@ -102,6 +110,10 @@ func dashboardHandler() http.HandlerFunc {
 //   - GET /events  — Server-Sent Events stream of pipeline phase transitions
 //   - GET /        — embedded zero-dependency dashboard HTML
 //
+// On successful bind it logs the dashboard URL to stderr so users can
+// click straight through to the live timeline. The log goes to stderr —
+// never stdout — so it never interferes with the MCP stdio transport.
+//
 // It returns the started *http.Server on success, or nil when the port cannot
 // be bound (the error is logged to stderr and execution continues).
 // A nil return means the dashboard and SSE are disabled but the MCP stdio
@@ -112,6 +124,11 @@ func startSSEServer(addr string, bus *events.EventBus) *http.Server {
 		fmt.Fprintf(os.Stderr, "forge-state: SSE HTTP server could not bind %s: %v (continuing without SSE)\n", addr, err)
 		return nil
 	}
+	// Resolve the actual bound port — handles the FORGE_EVENTS_PORT=0 case
+	// where the kernel assigns a random free port and addr would otherwise
+	// be misleading.
+	port := ln.Addr().(*net.TCPAddr).Port
+	fmt.Fprintf(os.Stderr, "forge-state: dashboard ready at %s  (events stream: /events)\n", dashboardURL(port))
 	mux := http.NewServeMux()
 	mux.Handle("GET /events", events.SSEHandler(bus))
 	mux.Handle("GET /", dashboardHandler())
