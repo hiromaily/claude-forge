@@ -160,6 +160,30 @@
     .out-failed { background: rgba(248, 81, 73, 0.15); color: var(--bad); }
     .out-awaiting_human { background: rgba(210, 153, 34, 0.15); color: var(--warn); }
     .out-abandoned { background: rgba(139, 148, 158, 0.15); color: var(--muted); }
+    .action-btn {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 8px;
+      vertical-align: baseline;
+    }
+    .action-btn:hover:not(:disabled) {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .action-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+    .action-btn.danger:hover:not(:disabled) {
+      background: var(--bad);
+      border-color: var(--bad);
+    }
     footer {
       padding: 12px 24px;
       border-top: 1px solid var(--border);
@@ -180,7 +204,9 @@
       <select id="ws-filter">
         <option value="">all workspaces</option>
       </select>
-      <button id="clear-btn" type="button">clear</button>
+      <button id="clear-btn" class="action-btn" type="button">clear</button>
+      <button id="abandon-btn" class="action-btn danger" type="button" disabled
+              title="Select a workspace to enable abandon">abandon</button>
     </div>
   </header>
   <main>
@@ -204,6 +230,7 @@
       var timelineEl = document.getElementById("timeline");
       var wsFilter = document.getElementById("ws-filter");
       var clearBtn = document.getElementById("clear-btn");
+      var abandonBtn = document.getElementById("abandon-btn");
 
       var es = null;
       var count = 0;
@@ -222,6 +249,67 @@
 
       function safeClassFragment(value, allowlist, fallback) {
         return allowlist.indexOf(value) === -1 ? fallback : value;
+      }
+
+      // postIntervention POSTs JSON to a same-origin intervention endpoint
+      // and resolves with { ok, status, data }. Network failures reject.
+      function postIntervention(path, body) {
+        return fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }).then(function (resp) {
+          return resp.json().then(
+            function (data) { return { ok: resp.ok, status: resp.status, data: data }; },
+            function () { return { ok: resp.ok, status: resp.status, data: {} }; }
+          );
+        });
+      }
+
+      function approveCheckpoint(workspace, phase, btn) {
+        if (!confirm("Approve " + phase + " for " + (shortWorkspace(workspace) || workspace) + "?")) return;
+        btn.disabled = true;
+        btn.textContent = "approving…";
+        postIntervention("/api/checkpoint/approve", { workspace: workspace, phase: phase })
+          .then(function (r) {
+            if (r.ok) {
+              btn.textContent = "approved";
+            } else {
+              btn.disabled = false;
+              btn.textContent = "approve";
+              alert("Approve failed: " + ((r.data && r.data.error) || ("HTTP " + r.status)));
+            }
+          })
+          .catch(function (err) {
+            btn.disabled = false;
+            btn.textContent = "approve";
+            alert("Network error: " + err.message);
+          });
+      }
+
+      function abandonPipeline(workspace) {
+        if (!confirm("Abandon pipeline for " + (shortWorkspace(workspace) || workspace) + "?\nThis cannot be undone.")) return;
+        abandonBtn.disabled = true;
+        postIntervention("/api/pipeline/abandon", { workspace: workspace })
+          .then(function (r) {
+            if (r.ok) {
+              alert("Pipeline abandoned.");
+            } else {
+              alert("Abandon failed: " + ((r.data && r.data.error) || ("HTTP " + r.status)));
+            }
+          })
+          .catch(function (err) {
+            alert("Network error: " + err.message);
+          })
+          .then(syncAbandonButton);
+      }
+
+      function syncAbandonButton() {
+        var ws = wsFilter.value;
+        abandonBtn.disabled = !ws;
+        abandonBtn.title = ws
+          ? "Abandon pipeline for " + (shortWorkspace(ws) || ws)
+          : "Select a workspace to enable abandon";
       }
 
       function setStatus(connected) {
@@ -295,6 +383,23 @@
           meta.appendChild(out);
         }
 
+        // Inline Approve button: shown only on a checkpoint event that is
+        // currently awaiting human input. The server-side handler enforces
+        // the same precondition (CurrentPhase==phase + status==awaiting_human),
+        // so a stale row that the user clicks late safely 409s.
+        if (ev.event === "checkpoint" && ev.outcome === "awaiting_human" && ev.workspace && ev.phase) {
+          var approveBtn = document.createElement("button");
+          approveBtn.type = "button";
+          approveBtn.className = "action-btn";
+          approveBtn.textContent = "approve";
+          (function (workspace, phase) {
+            approveBtn.addEventListener("click", function () {
+              approveCheckpoint(workspace, phase, approveBtn);
+            });
+          })(ev.workspace, ev.phase);
+          meta.appendChild(approveBtn);
+        }
+
         var time = document.createElement("div");
         time.className = "event-time";
         time.textContent = fmtTime(ev.timestamp);
@@ -351,9 +456,15 @@
         // newly-filtered stream.
         resetTimeline();
         connect();
+        syncAbandonButton();
       });
       clearBtn.addEventListener("click", resetTimeline);
+      abandonBtn.addEventListener("click", function () {
+        var ws = wsFilter.value;
+        if (ws) abandonPipeline(ws);
+      });
 
+      syncAbandonButton();
       connect();
     })();
   </script>

@@ -68,6 +68,13 @@ func TestDashboardHandler_ServesEmbeddedHTMLAtRoot(t *testing.T) {
 		"safeClassFragment",
 		"KNOWN_EVENTS",
 		"KNOWN_OUTCOMES",
+		// Intervention API wiring — fail if the buttons or their endpoints
+		// are accidentally removed from the dashboard.
+		"/api/checkpoint/approve",
+		"/api/pipeline/abandon",
+		"approveCheckpoint",
+		"abandonPipeline",
+		`id="abandon-btn"`,
 	}
 	for _, want := range wantSubstrings {
 		if !strings.Contains(body, want) {
