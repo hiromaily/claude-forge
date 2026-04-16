@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
+	"net/url"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
@@ -137,10 +137,13 @@ func abandonHandler(sm *state.StateManager) http.HandlerFunc {
 //
 // A request passes when:
 //   - Its remote address is a loopback IP (covers curl from the host shell), AND
-//   - It either has no Origin header OR carries one that points at this listener.
+//   - It either has no Origin header OR carries one whose scheme and hostname
+//     point at this listener (http + localhost / 127.0.0.1).
 //
 // Browsers always set Origin on cross-origin or fetch-API requests, so the
-// Origin allowlist is sufficient CSRF protection without a token.
+// Origin allowlist is sufficient CSRF protection without a token. The Origin
+// is parsed structurally rather than prefix-matched so a crafted value such
+// as "http://127.0.0.1:9876@evil.com" cannot satisfy the check.
 func isLocalRequest(r *http.Request) bool {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -156,8 +159,15 @@ func isLocalRequest(r *http.Request) bool {
 		// The loopback check has already established the caller is local.
 		return true
 	}
-	return strings.HasPrefix(origin, "http://localhost:") ||
-		strings.HasPrefix(origin, "http://127.0.0.1:")
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if u.Scheme != "http" {
+		return false
+	}
+	hostname := u.Hostname()
+	return hostname == "localhost" || hostname == "127.0.0.1"
 }
 
 // decodeRequest reads and parses the JSON body. On parse failure it writes a

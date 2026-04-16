@@ -1,7 +1,6 @@
 package main
 
 import (
-	"net/http"
 	"testing"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/dashboard"
@@ -19,11 +18,8 @@ import (
 func TestDashboardStart_NoopWhenPortEmpty(t *testing.T) {
 	t.Parallel()
 
-	bus := events.NewEventBus()
-	sm := state.NewStateManager("test")
-
-	var httpSrv *http.Server = dashboard.Start("", bus, sm)
+	httpSrv := dashboard.Start("", events.NewEventBus(), state.NewStateManager("test"))
 	if httpSrv != nil {
-		t.Fatal("expected dashboard.Start(\"\", ...) to return nil")
+		t.Fatal(`expected dashboard.Start("", ...) to return nil`)
 	}
 }

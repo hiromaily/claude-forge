@@ -76,6 +76,14 @@ func TestIsLocalRequest(t *testing.T) {
 		{name: "loopback_but_https_origin", remoteAddr: "127.0.0.1:54321", origin: "https://localhost:9876", want: false},
 		{name: "loopback_but_file_origin", remoteAddr: "127.0.0.1:54321", origin: "file://", want: false},
 		{name: "malformed_remote_addr_rejected", remoteAddr: "not-a-host", origin: "", want: false},
+		// Host-suffix attack: a prefix-only check would accept this because
+		// the string starts with "http://127.0.0.1:". Structural parsing
+		// rejects it because the hostname resolves to "evil.example.com".
+		{name: "loopback_but_userinfo_host_attack", remoteAddr: "127.0.0.1:54321", origin: "http://127.0.0.1:9876@evil.example.com", want: false},
+		// Subdomain attack: "localhost.evil.example" must not be confused with "localhost".
+		{name: "loopback_but_subdomain_attack", remoteAddr: "127.0.0.1:54321", origin: "http://localhost.evil.example", want: false},
+		// Malformed Origin (unparseable) must be rejected, not accepted.
+		{name: "malformed_origin_rejected", remoteAddr: "127.0.0.1:54321", origin: "://no-scheme", want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

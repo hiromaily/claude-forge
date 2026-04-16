@@ -5,10 +5,16 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
+
+// readHeaderTimeout caps the time a client may take to send the request line
+// and headers. Five seconds is generous for localhost traffic and shuts the
+// door on slowloris-style header drips.
+const readHeaderTimeout = 5 * time.Second
 
 // Start binds an HTTP listener on ":<eventsPort>" and serves:
 //
@@ -55,7 +61,10 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager) *htt
 	mux.Handle("POST /api/checkpoint/approve", approveCheckpointHandler(sm))
 	mux.Handle("POST /api/pipeline/abandon", abandonHandler(sm))
 
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: readHeaderTimeout,
+	}
 	go func() {
 		if serveErr := srv.Serve(ln); serveErr != nil && serveErr != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "forge-state: SSE HTTP server error: %v\n", serveErr)
