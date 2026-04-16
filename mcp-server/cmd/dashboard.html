@@ -209,6 +209,21 @@
       var count = 0;
       var workspaces = new Set();
 
+      // Maximum number of event rows kept in the DOM. Older rows are dropped
+      // from the bottom of the timeline once this cap is reached, so a
+      // long-running pipeline does not grow the DOM without bound.
+      var MAX_TIMELINE_ROWS = 500;
+
+      // Allowlist of CSS class fragments derivable from server data.
+      // Anything outside the allowlist falls back to a generic "unknown"
+      // class so the data path can never inject arbitrary CSS class names.
+      var KNOWN_EVENTS = ["phase-start", "phase-complete", "phase-fail", "checkpoint", "abandon"];
+      var KNOWN_OUTCOMES = ["completed", "in_progress", "failed", "awaiting_human", "abandoned"];
+
+      function safeClassFragment(value, allowlist, fallback) {
+        return allowlist.indexOf(value) === -1 ? fallback : value;
+      }
+
       function setStatus(connected) {
         if (connected) {
           statusEl.textContent = "live";
@@ -254,7 +269,7 @@
         }
 
         var div = document.createElement("div");
-        div.className = "event kind-" + (ev.event || "unknown");
+        div.className = "event kind-" + safeClassFragment(ev.event, KNOWN_EVENTS, "unknown");
 
         var kind = document.createElement("div");
         kind.className = "event-kind";
@@ -275,7 +290,7 @@
         if (ev.outcome) {
           meta.appendChild(document.createTextNode(" "));
           var out = document.createElement("span");
-          out.className = "event-outcome out-" + ev.outcome;
+          out.className = "event-outcome out-" + safeClassFragment(ev.outcome, KNOWN_OUTCOMES, "unknown");
           out.textContent = ev.outcome;
           meta.appendChild(out);
         }
@@ -293,6 +308,20 @@
         emptyEl.style.display = "none";
         count++;
         countEl.textContent = count + " event" + (count === 1 ? "" : "s");
+
+        // Cap the visible timeline so the DOM does not grow without bound on
+        // long-running pipelines. Older rows are removed from the bottom; the
+        // cumulative event counter keeps tracking the true total.
+        while (timelineEl.childElementCount > MAX_TIMELINE_ROWS) {
+          timelineEl.removeChild(timelineEl.lastElementChild);
+        }
+      }
+
+      function resetTimeline() {
+        timelineEl.innerHTML = "";
+        count = 0;
+        countEl.textContent = "0 events";
+        emptyEl.style.display = "";
       }
 
       function connect() {
@@ -316,13 +345,14 @@
         };
       }
 
-      wsFilter.addEventListener("change", connect);
-      clearBtn.addEventListener("click", function () {
-        timelineEl.innerHTML = "";
-        count = 0;
-        countEl.textContent = "0 events";
-        emptyEl.style.display = "";
+      wsFilter.addEventListener("change", function () {
+        // The previous timeline reflects a different filter; clear it so the
+        // user does not see stale events from another workspace mixed with the
+        // newly-filtered stream.
+        resetTimeline();
+        connect();
       });
+      clearBtn.addEventListener("click", resetTimeline);
 
       connect();
     })();

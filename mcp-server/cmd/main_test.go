@@ -210,7 +210,19 @@ func TestDashboardHandler_ServesEmbeddedHTMLAtRoot(t *testing.T) {
 		t.Fatalf("read body: %v", err)
 	}
 	body := string(bodyBytes)
-	for _, want := range []string{"<!DOCTYPE html>", "claude-forge", "EventSource", "/events"} {
+	wantSubstrings := []string{
+		"<!DOCTYPE html>",
+		"claude-forge",
+		"EventSource",
+		"/events",
+		// Safety mechanisms — assertions guard against regressions that would
+		// remove the DOM cap or the CSS-class allowlist on a future edit.
+		"MAX_TIMELINE_ROWS",
+		"safeClassFragment",
+		"KNOWN_EVENTS",
+		"KNOWN_OUTCOMES",
+	}
+	for _, want := range wantSubstrings {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q (body length=%d)", want, len(body))
 		}
