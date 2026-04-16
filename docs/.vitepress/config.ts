@@ -23,6 +23,7 @@ export default withMermaid(
             { text: "Architecture", link: "/architecture/overview" },
             { text: "Agents", link: "/agents/overview" },
             { text: "Reference", link: "/reference/mcp-tools" },
+            { text: "Research", link: "/research/codex-integration" },
           ],
           sidebar: {
             "/guide/": [
@@ -153,6 +154,17 @@ export default withMermaid(
                 ],
               },
             ],
+            "/research/": [
+              {
+                text: "Research",
+                items: [
+                  {
+                    text: "Codex Integration",
+                    link: "/research/codex-integration",
+                  },
+                ],
+              },
+            ],
           },
         },
       },
@@ -166,6 +178,7 @@ export default withMermaid(
             { text: "アーキテクチャ", link: "/ja/architecture/overview" },
             { text: "エージェント", link: "/ja/agents/overview" },
             { text: "リファレンス", link: "/ja/reference/mcp-tools" },
+            { text: "リサーチ", link: "/ja/research/codex-integration" },
           ],
           sidebar: {
             "/ja/guide/": [
@@ -304,6 +317,17 @@ export default withMermaid(
                   {
                     text: "ワークフロールール",
                     link: "/ja/reference/workflow-instructions",
+                  },
+                ],
+              },
+            ],
+            "/ja/research/": [
+              {
+                text: "リサーチ",
+                items: [
+                  {
+                    text: "Codex 統合可否調査",
+                    link: "/ja/research/codex-integration",
                   },
                 ],
               },

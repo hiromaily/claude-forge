@@ -143,6 +143,7 @@
 | sections/ja/reference/env-vars.md | Not referenced by any template |
 | sections/ja/reference/mcp-tools.md | Not referenced by any template |
 | sections/ja/reference/workflow-instructions.md | Not referenced by any template |
+| sections/ja/research/codex-integration.md | Not referenced by any template |
 | sections/product/flow-templates-guide.md | Not referenced by any template |
 | sections/product/human-interaction-guide.md | Not referenced by any template |
 | sections/product/quick-start-guide.md | Not referenced by any template |
@@ -151,3 +152,4 @@
 | sections/reference/env-vars.md | Not referenced by any template |
 | sections/reference/mcp-tools.md | Not referenced by any template |
 | sections/reference/workflow-instructions.md | Not referenced by any template |
+| sections/research/codex-integration.md | Not referenced by any template |
