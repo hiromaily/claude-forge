@@ -5,11 +5,8 @@ package main
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"log"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,6 +15,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/analytics"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/dashboard"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
@@ -25,13 +23,6 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/tools"
 )
-
-// dashboardHTML is the static HTML/CSS/JS dashboard served at GET /.
-// It is a zero-dependency client that subscribes to GET /events via
-// EventSource and renders a real-time pipeline timeline.
-//
-//go:embed dashboard.html
-var dashboardHTML []byte
 
 var appVersion = "dev"
 
@@ -81,75 +72,6 @@ func resolveAgentDir() string {
 	return "agents"
 }
 
-// dashboardURL formats the user-facing URL printed at startup.
-//
-// Always uses "localhost" rather than the bind interface so the line is
-// click-through in any modern terminal regardless of which host the
-// listener bound to (commonly "[::]:<port>" on dual-stack systems).
-//
-// port is expected to be a TCP port the kernel actually accepted — in
-// practice the value returned by net.Listener.Addr().(*net.TCPAddr).Port.
-// No range validation is performed; callers control the input.
-func dashboardURL(port int) string {
-	return fmt.Sprintf("http://localhost:%d/", port)
-}
-
-// dashboardHandler serves the embedded dashboard HTML at GET /.
-// It returns 404 for any other path so the SSE endpoint and future routes
-// are not shadowed.
-func dashboardHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		_, _ = w.Write(dashboardHTML)
-	}
-}
-
-// startSSEServer attempts to bind an HTTP server on the given address.
-// It exposes:
-//   - GET /events  — Server-Sent Events stream of pipeline phase transitions
-//   - GET /        — embedded zero-dependency dashboard HTML
-//
-// On successful bind it logs the dashboard URL to stderr so users can
-// click straight through to the live timeline. The log goes to stderr —
-// never stdout — so it never interferes with the MCP stdio transport.
-//
-// It returns the started *http.Server on success, or nil when the port cannot
-// be bound (the error is logged to stderr and execution continues).
-// A nil return means the dashboard and SSE are disabled but the MCP stdio
-// transport is unaffected.
-func startSSEServer(addr string, bus *events.EventBus) *http.Server {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "forge-state: SSE HTTP server could not bind %s: %v (continuing without SSE)\n", addr, err)
-		return nil
-	}
-	// Resolve the actual bound port — handles the FORGE_EVENTS_PORT=0 case
-	// where the kernel assigns a random free port and addr would otherwise
-	// be misleading. The type assertion holds for any successful tcp Listen,
-	// but we still guard it so a future protocol change cannot crash startup.
-	if tcpAddr, ok := ln.Addr().(*net.TCPAddr); ok {
-		fmt.Fprintf(os.Stderr, "forge-state: dashboard ready at %s\n", dashboardURL(tcpAddr.Port))
-	} else {
-		fmt.Fprintf(os.Stderr, "forge-state: dashboard ready (listener addr type %T; URL unavailable)\n", ln.Addr())
-	}
-	mux := http.NewServeMux()
-	mux.Handle("GET /events", events.SSEHandler(bus))
-	mux.Handle("GET /", dashboardHandler())
-	srv := &http.Server{Handler: mux}
-	go func() {
-		if serveErr := srv.Serve(ln); serveErr != nil && serveErr != http.ErrServerClosed {
-			fmt.Fprintf(os.Stderr, "forge-state: SSE HTTP server error: %v\n", serveErr)
-		}
-	}()
-	return srv
-}
-
 func main() {
 	sm := state.NewStateManager(appVersion)
 	srv := server.NewMCPServer("forge-state", appVersion)
@@ -176,13 +98,10 @@ func main() {
 	rep := analytics.NewReporter(specsDir, kb)
 	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir, histIdx, kb, profiler, col, est, rep)
 
-	// Start the SSE HTTP server if FORGE_EVENTS_PORT is set.
-	// A failed bind is non-fatal: the error is logged and execution continues
-	// to ServeStdio so the MCP stdio transport remains functional.
-	var httpSrv *http.Server
-	if eventsPort != "" {
-		httpSrv = startSSEServer(":"+eventsPort, bus)
-	}
+	// Start the optional dashboard / SSE / intervention HTTP server.
+	// Returns nil when FORGE_EVENTS_PORT is unset or the bind fails; in either
+	// case the MCP stdio transport below remains functional.
+	httpSrv := dashboard.Start(eventsPort, bus, sm)
 
 	// Run the MCP stdio transport. This blocks until stdin is closed.
 	if err := server.ServeStdio(srv); err != nil {
