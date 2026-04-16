@@ -181,6 +181,11 @@ func TestDashboardURL_FormatsLocalhostURL(t *testing.T) {
 		{name: "common_port", port: 9876, want: "http://localhost:9876/"},
 		{name: "low_port", port: 1, want: "http://localhost:1/"},
 		{name: "high_port", port: 65535, want: "http://localhost:65535/"},
+		// Documents current behaviour for an out-of-range value: the function
+		// formats whatever it receives; range validation is the caller's job.
+		// startSSEServer never passes 0 because it reads from an already-bound
+		// listener, so this case is documentation-only.
+		{name: "zero_port_passthrough", port: 0, want: "http://localhost:0/"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

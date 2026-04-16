@@ -82,9 +82,14 @@ func resolveAgentDir() string {
 }
 
 // dashboardURL formats the user-facing URL printed at startup.
+//
 // Always uses "localhost" rather than the bind interface so the line is
 // click-through in any modern terminal regardless of which host the
 // listener bound to (commonly "[::]:<port>" on dual-stack systems).
+//
+// port is expected to be a TCP port the kernel actually accepted — in
+// practice the value returned by net.Listener.Addr().(*net.TCPAddr).Port.
+// No range validation is performed; callers control the input.
 func dashboardURL(port int) string {
 	return fmt.Sprintf("http://localhost:%d/", port)
 }
@@ -126,9 +131,13 @@ func startSSEServer(addr string, bus *events.EventBus) *http.Server {
 	}
 	// Resolve the actual bound port — handles the FORGE_EVENTS_PORT=0 case
 	// where the kernel assigns a random free port and addr would otherwise
-	// be misleading.
-	port := ln.Addr().(*net.TCPAddr).Port
-	fmt.Fprintf(os.Stderr, "forge-state: dashboard ready at %s  (events stream: /events)\n", dashboardURL(port))
+	// be misleading. The type assertion holds for any successful tcp Listen,
+	// but we still guard it so a future protocol change cannot crash startup.
+	if tcpAddr, ok := ln.Addr().(*net.TCPAddr); ok {
+		fmt.Fprintf(os.Stderr, "forge-state: dashboard ready at %s\n", dashboardURL(tcpAddr.Port))
+	} else {
+		fmt.Fprintf(os.Stderr, "forge-state: dashboard ready (listener addr type %T; URL unavailable)\n", ln.Addr())
+	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /events", events.SSEHandler(bus))
 	mux.Handle("GET /", dashboardHandler())
