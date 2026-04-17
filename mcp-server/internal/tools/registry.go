@@ -373,7 +373,7 @@ func RegisterAll(
 					"Present on the discussion call; absent on all other calls.",
 			)),
 		),
-		PipelineInitWithContextHandler(sm),
+		PipelineInitWithContextHandler(sm, bus),
 	)
 
 	srv.AddTool(
@@ -390,7 +390,7 @@ func RegisterAll(
 					"actions where all numeric metrics may be zero. Omit (or pass false) for checkpoints.",
 			)),
 		),
-		PipelineNextActionHandler(sm, eng, agentDir, histIdx, kb, profiler),
+		PipelineNextActionHandler(sm, bus, eng, agentDir, histIdx, kb, profiler),
 	)
 
 	srv.AddTool(

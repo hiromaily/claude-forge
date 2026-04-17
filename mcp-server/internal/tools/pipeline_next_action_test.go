@@ -12,6 +12,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
@@ -69,7 +70,7 @@ func TestPipelineNextAction(t *testing.T) {
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -95,7 +96,7 @@ func TestPipelineNextAction(t *testing.T) {
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-2", nil)
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -124,7 +125,7 @@ func TestPipelineNextAction(t *testing.T) {
 			return nil
 		})
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -150,7 +151,7 @@ func TestPipelineNextAction(t *testing.T) {
 		// session exit even if the orchestrator hasn't called checkpoint() yet.
 		workspace, sm := initWorkspaceForNextAction(t, "checkpoint-b", nil)
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -188,7 +189,7 @@ func TestPipelineNextAction(t *testing.T) {
 			return nil
 		})
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -231,7 +232,7 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, agentDir, nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, agentDir, nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -278,7 +279,7 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, agentDir, nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, agentDir, nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -313,7 +314,7 @@ func TestPipelineNextAction(t *testing.T) {
 		agentDir := t.TempDir()
 
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, agentDir, nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, agentDir, nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -343,7 +344,7 @@ func TestPipelineNextAction(t *testing.T) {
 		t.Parallel()
 		sm := state.NewStateManager("dev")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, "/nonexistent/workspace/path")
 		if err != nil {
@@ -368,7 +369,7 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -463,7 +464,7 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -560,7 +561,7 @@ func TestPipelineNextAction(t *testing.T) {
 
 		kb := history.NewKnowledgeBase("")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -610,7 +611,7 @@ func TestPipelineNextAction(t *testing.T) {
 			return nil
 		})
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		// First call: engine sees human_gate → handler returns human_gate action.
 		result, err := callNextAction(t, handler, workspace)
@@ -670,7 +671,7 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		result, err := callNextAction(t, handler, workspace)
 		if err != nil {
@@ -732,7 +733,7 @@ func TestPipelineNextAction(t *testing.T) {
 			return nil
 		})
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 		// Call pipeline_next_action: P0 should resolve the gate and advance.
 		result, err := callNextAction(t, handler, workspace)
@@ -811,7 +812,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 		kb := history.NewKnowledgeBase("")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 		// Call with previous_tokens=500 to trigger P5 block.
 		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false, false)
@@ -858,7 +859,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 		kb := history.NewKnowledgeBase("")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 		// Use previous_model="" to confirm it does NOT trigger P5.
 		// Then call with previous_model set to confirm it does.
@@ -891,7 +892,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 		kb := history.NewKnowledgeBase("")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 		// Call with no previous_* params (defaults to zero/empty).
 		result, err := callNextAction(t, handler, workspace)
@@ -942,7 +943,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 
 		kb := history.NewKnowledgeBase("")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 		result, err := callNextActionWithPrev(t, handler, workspace, 800, 2000, "claude-sonnet-4-6", false, false)
 		if err != nil {
@@ -998,7 +999,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 		kb := history.NewKnowledgeBase("")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 		// setup_only=true should produce "setup_continue" from reportResultCore
 		// for a non-review phase like phase-1.
@@ -1038,7 +1039,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		workspace, sm := initWorkspaceForNextAction(t, "setup", nil)
 		kb := history.NewKnowledgeBase("")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false, false)
 		if err != nil {
@@ -1072,7 +1073,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		workspace, sm := initWorkspaceForNextAction(t, "completed", nil)
 		kb := history.NewKnowledgeBase("")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 		result, err := callNextActionWithPrev(t, handler, workspace, 500, 1000, "claude-sonnet-4-6", false, false)
 		if err != nil {
@@ -1108,7 +1109,7 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 		kb := history.NewKnowledgeBase("")
 		eng := orchestrator.NewEngine("", "")
-		handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 		// Call with actionComplete=true, tokens=0, model="" — P5 must fire via actionComplete flag.
 		result, err := callNextActionWithPrev(t, handler, workspace, 0, 0, "", false, true)

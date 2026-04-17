@@ -737,11 +737,12 @@ claude-forge/
 │   ├── _partials/         ← SSOT content fragments (included by docs/)
 │   └── architecture/      ← architecture documentation (13 focused files)
 ├── hooks/
-│   └── hooks.json         ← hook definitions (PreToolUse, PostToolUse, Stop)
+│   └── hooks.json         ← hook definitions (Setup, SessionStart, PreToolUse, PostToolUse, Stop)
 ├── mcp-server/            ← Go MCP server source (forge-state binary)
 ├── scripts/
 │   ├── common.sh          ← shared find_active_workspace helper
 │   ├── launch-mcp.sh      ← self-healing MCP launcher
+│   ├── session-start-hook.sh ← dashboard URL display at session start
 │   ├── pre-tool-hook.sh   ← read-only guard, commit blocking, checkout blocking
 │   ├── post-agent-hook.sh ← agent output quality validation
 │   ├── post-bash-hook.sh  ← auto-commits state.json+summary.md (v1 legacy)

@@ -129,6 +129,11 @@
     .event.kind-phase-fail { border-left-color: var(--bad); }
     .event.kind-checkpoint { border-left-color: var(--warn); }
     .event.kind-abandon { border-left-color: var(--bad); opacity: 0.7; }
+    .event.kind-pipeline-init { border-left-color: var(--accent); }
+    .event.kind-pipeline-complete { border-left-color: var(--ok); border-left-width: 5px; }
+    .event.kind-agent-dispatch { border-left-color: var(--info); opacity: 0.85; }
+    .event.kind-action-complete { border-left-color: var(--ok); opacity: 0.85; }
+    .event.kind-revision-required { border-left-color: var(--warn); }
     .event-kind {
       font-weight: 600;
       font-size: 13px;
@@ -244,8 +249,9 @@
       // Allowlist of CSS class fragments derivable from server data.
       // Anything outside the allowlist falls back to a generic "unknown"
       // class so the data path can never inject arbitrary CSS class names.
-      var KNOWN_EVENTS = ["phase-start", "phase-complete", "phase-fail", "checkpoint", "abandon"];
-      var KNOWN_OUTCOMES = ["completed", "in_progress", "failed", "awaiting_human", "abandoned"];
+      var KNOWN_EVENTS = ["phase-start", "phase-complete", "phase-fail", "checkpoint", "abandon",
+        "pipeline-init", "pipeline-complete", "agent-dispatch", "action-complete", "revision-required"];
+      var KNOWN_OUTCOMES = ["completed", "in_progress", "failed", "awaiting_human", "abandoned", "dispatched"];
 
       function safeClassFragment(value, allowlist, fallback) {
         return allowlist.indexOf(value) === -1 ? fallback : value;
@@ -393,6 +399,13 @@
           out.className = "event-outcome out-" + safeClassFragment(ev.outcome, KNOWN_OUTCOMES, "unknown");
           out.textContent = ev.outcome;
           meta.appendChild(out);
+        }
+        if (ev.detail) {
+          meta.appendChild(document.createTextNode(" "));
+          var detail = document.createElement("span");
+          detail.className = "event-meta";
+          detail.textContent = ev.detail;
+          meta.appendChild(detail);
         }
 
         // Inline Approve button: shown only on a checkpoint event that is

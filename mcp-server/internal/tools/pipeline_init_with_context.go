@@ -26,6 +26,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
@@ -101,7 +102,7 @@ type userConfirmation struct {
 //	creates directory, initialises state, applies all setters, skips phases, writes request.md.
 //
 // DISCRIMINATOR ORDER: discussion_answers checked BEFORE user_confirmation to prevent shadowing.
-func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFunc {
+func PipelineInitWithContextHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
@@ -159,7 +160,7 @@ func PipelineInitWithContextHandler(sm *state.StateManager) server.ToolHandlerFu
 			if err != nil {
 				return errorf("parse user_confirmation: %v", err)
 			}
-			return handleSecondCall(sm, workspace, extCtx, flags, uc)
+			return handleSecondCall(sm, bus, workspace, extCtx, flags, uc)
 		default:
 			// First call: detect effort, return needs_user_confirmation (or needs_discussion).
 			return handleFirstCall(workspace, extCtx, flags)
@@ -255,6 +256,7 @@ func handleDiscussionCall(
 
 func handleSecondCall(
 	sm *state.StateManager,
+	bus *events.EventBus,
 	workspace string,
 	extCtx externalContext,
 	flags pipelineFlags,
@@ -300,6 +302,8 @@ func handleSecondCall(
 	if err != nil {
 		return errorf("%v", err)
 	}
+
+	publishEventWithDetail(bus, nil, "pipeline-init", "setup", specName, workspace, "in_progress", "effort="+uc.Effort)
 
 	return okJSON(PipelineInitWithContextResult{
 		Ready:            true,

@@ -12,6 +12,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
@@ -63,7 +64,7 @@ func setupE2EWorkspace(
 
 	eng := orchestrator.NewEngine("", "")
 	kb := history.NewKnowledgeBase("")
-	nextActionH = PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+	nextActionH = PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 	reportResultH = PipelineReportResultHandler(sm, kb)
 
 	return dir, nextActionH, reportResultH
