@@ -62,7 +62,7 @@ type EffortOption struct {
 // UserConfirmationPrompt holds the detected values to present to the user.
 type UserConfirmationPrompt struct {
 	DetectedEffort      string                  `json:"detected_effort"`
-	EffortOptions       map[string]EffortOption  `json:"effort_options"`
+	EffortOptions       map[string]EffortOption `json:"effort_options"`
 	CurrentBranch       string                  `json:"current_branch"`
 	IsMainBranch        bool                    `json:"is_main_branch"`
 	Message             string                  `json:"message"`

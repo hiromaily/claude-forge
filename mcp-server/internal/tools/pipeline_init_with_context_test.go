@@ -814,12 +814,12 @@ func TestSourceIDPrependedToWorkspaceSlug(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		sourceID      string
-		slug          string
-		extCtx        map[string]any
-		wantSpecName  string
-		wantBranch    string
+		name         string
+		sourceID     string
+		slug         string
+		extCtx       map[string]any
+		wantSpecName string
+		wantBranch   string
 	}{
 		{
 			name:     "github_issue_with_slug",
@@ -844,10 +844,10 @@ func TestSourceIDPrependedToWorkspaceSlug(t *testing.T) {
 			wantBranch:   "feature/soa-2883-skip-minutes-job",
 		},
 		{
-			name:     "text_source_no_source_id",
-			sourceID: "",
-			slug:     "add-user-auth",
-			extCtx:   map[string]any{},
+			name:         "text_source_no_source_id",
+			sourceID:     "",
+			slug:         "add-user-auth",
+			extCtx:       map[string]any{},
 			wantSpecName: "add-user-auth",
 			wantBranch:   "feature/add-user-auth",
 		},
