@@ -189,7 +189,7 @@ func decodeRequest(w http.ResponseWriter, r *http.Request) (interventionRequest,
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
+	_ = json.NewEncoder(w).Encode(body) //nolint:errchkjson // body is always a map[string]any literal; encode errors on a committed response cannot be acted on
 }
 
 // httpError writes a JSON error response of the form {"error": "<msg>"}.
