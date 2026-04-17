@@ -1151,3 +1151,254 @@ func TestPipelineNextAction_P5(t *testing.T) {
 		}
 	})
 }
+
+// callNextActionWithUserResponse invokes PipelineNextActionHandler with user_response set.
+func callNextActionWithUserResponse(
+	t *testing.T,
+	handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error),
+	workspace string,
+	userResponse string,
+) (*mcp.CallToolResult, error) {
+	t.Helper()
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"workspace":     workspace,
+		"user_response": userResponse,
+	}
+	return handler(t.Context(), req)
+}
+
+func TestPipelineNextAction_P8_CheckpointRevision(t *testing.T) {
+	t.Parallel()
+
+	t.Run("checkpoint_a_revise_rewinds_to_phase3", func(t *testing.T) {
+		t.Parallel()
+
+		// Set up workspace at checkpoint-a with phase-3b already completed.
+		workspace, sm := initWorkspaceForNextAction(t, state.PhaseCheckpointA, func(s *state.State) error {
+			s.CompletedPhases = []string{state.PhaseSetup, state.PhaseOne, state.PhaseTwo, state.PhaseThree, state.PhaseThreeB}
+			s.CurrentPhaseStatus = state.StatusAwaitingHuman
+			return nil
+		})
+		// Write design.md and review-design.md so they exist before revision.
+		_ = os.WriteFile(filepath.Join(workspace, state.ArtifactDesign), []byte("# Design"), 0o600)
+		_ = os.WriteFile(filepath.Join(workspace, state.ArtifactReviewDesign), []byte("## Verdict: APPROVE_WITH_NOTES\n\nfindings"), 0o600)
+		_ = os.WriteFile(filepath.Join(workspace, state.ArtifactRequest), []byte("# Request"), 0o600)
+		_ = os.WriteFile(filepath.Join(workspace, state.ArtifactAnalysis), []byte("# Analysis"), 0o600)
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
+
+		// Call with user_response="revise" — should rewind to phase-3.
+		result, err := callNextActionWithUserResponse(t, handler, workspace, "revise")
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		// Should return spawn_agent for the architect (phase-3).
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q", resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if resp.Action.Agent != "architect" {
+			t.Errorf("action.Agent = %q, want %q", resp.Action.Agent, "architect")
+		}
+		if resp.Action.Phase != state.PhaseThree {
+			t.Errorf("action.Phase = %q, want %q", resp.Action.Phase, state.PhaseThree)
+		}
+
+		// Verify state was rewound to phase-3.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if s.CurrentPhase != state.PhaseThree {
+			t.Errorf("CurrentPhase = %q, want %q", s.CurrentPhase, state.PhaseThree)
+		}
+
+		// review-design.md should still exist — P8 preserves it so the architect
+		// can read review feedback. It gets deleted later when the architect
+		// completes (phase-3 transition cleans stale review artifacts).
+		if _, err := os.Stat(filepath.Join(workspace, state.ArtifactReviewDesign)); err != nil {
+			t.Errorf("review-design.md should still exist after checkpoint-a revision (architect needs it)")
+		}
+	})
+
+	t.Run("checkpoint_b_revise_rewinds_to_phase4", func(t *testing.T) {
+		t.Parallel()
+
+		// Set up workspace at checkpoint-b with phase-4b already completed.
+		workspace, sm := initWorkspaceForNextAction(t, state.PhaseCheckpointB, func(s *state.State) error {
+			s.CompletedPhases = []string{
+				state.PhaseSetup, state.PhaseOne, state.PhaseTwo,
+				state.PhaseThree, state.PhaseThreeB, state.PhaseCheckpointA,
+				state.PhaseFour, state.PhaseFourB,
+			}
+			s.CurrentPhaseStatus = state.StatusAwaitingHuman
+			return nil
+		})
+		_ = os.WriteFile(filepath.Join(workspace, state.ArtifactDesign), []byte("# Design"), 0o600)
+		_ = os.WriteFile(filepath.Join(workspace, state.ArtifactTasks), []byte("# Tasks\n\n## Task 1: Implement\nmode: sequential\n"), 0o600)
+		_ = os.WriteFile(filepath.Join(workspace, state.ArtifactReviewTasks), []byte("## Verdict: APPROVE\n"), 0o600)
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
+
+		result, err := callNextActionWithUserResponse(t, handler, workspace, "revise")
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		// Should return spawn_agent for the task-decomposer (phase-4).
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q", resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if resp.Action.Agent != "task-decomposer" {
+			t.Errorf("action.Agent = %q, want %q", resp.Action.Agent, "task-decomposer")
+		}
+		if resp.Action.Phase != state.PhaseFour {
+			t.Errorf("action.Phase = %q, want %q", resp.Action.Phase, state.PhaseFour)
+		}
+
+		// Verify state was rewound to phase-4.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if s.CurrentPhase != state.PhaseFour {
+			t.Errorf("CurrentPhase = %q, want %q", s.CurrentPhase, state.PhaseFour)
+		}
+
+		// review-tasks.md should still exist — P8 preserves it so the
+		// task-decomposer can read review feedback. It gets deleted later
+		// when phase-4 completes (applyWorkflowRules cleans stale review artifacts).
+		if _, err := os.Stat(filepath.Join(workspace, state.ArtifactReviewTasks)); err != nil {
+			t.Errorf("review-tasks.md should still exist after checkpoint-b revision (decomposer needs it)")
+		}
+	})
+
+	t.Run("checkpoint_a_proceed_advances_phase", func(t *testing.T) {
+		t.Parallel()
+
+		workspace, sm := initWorkspaceForNextAction(t, state.PhaseCheckpointA, func(s *state.State) error {
+			s.CompletedPhases = []string{state.PhaseSetup, state.PhaseOne, state.PhaseTwo, state.PhaseThree, state.PhaseThreeB}
+			s.CurrentPhaseStatus = state.StatusAwaitingHuman
+			return nil
+		})
+		_ = os.WriteFile(filepath.Join(workspace, state.ArtifactDesign), []byte("# Design"), 0o600)
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
+
+		result, err := callNextActionWithUserResponse(t, handler, workspace, "proceed")
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		// Should advance to phase-4 (task-decomposer).
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q", resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if resp.Action.Agent != "task-decomposer" {
+			t.Errorf("action.Agent = %q, want %q", resp.Action.Agent, "task-decomposer")
+		}
+
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if s.CurrentPhase != state.PhaseFour {
+			t.Errorf("CurrentPhase = %q, want %q", s.CurrentPhase, state.PhaseFour)
+		}
+	})
+
+	t.Run("checkpoint_a_abandon_returns_done", func(t *testing.T) {
+		t.Parallel()
+
+		workspace, sm := initWorkspaceForNextAction(t, state.PhaseCheckpointA, func(s *state.State) error {
+			s.CurrentPhaseStatus = state.StatusAwaitingHuman
+			return nil
+		})
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
+
+		result, err := callNextActionWithUserResponse(t, handler, workspace, "abandon")
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		if resp.Action.Type != orchestrator.ActionDone {
+			t.Errorf("action.Type = %q, want %q", resp.Action.Type, orchestrator.ActionDone)
+		}
+
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		if s.CurrentPhaseStatus != state.StatusAbandoned {
+			t.Errorf("CurrentPhaseStatus = %q, want %q", s.CurrentPhaseStatus, state.StatusAbandoned)
+		}
+	})
+
+	t.Run("non_checkpoint_revise_is_noop", func(t *testing.T) {
+		t.Parallel()
+
+		// user_response="revise" at a non-checkpoint phase should be a no-op.
+		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
+
+		result, err := callNextActionWithUserResponse(t, handler, workspace, "revise")
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+
+		// Should still return the phase-1 action (no rewind happened).
+		if resp.Action.Type != orchestrator.ActionSpawnAgent {
+			t.Errorf("action.Type = %q, want %q", resp.Action.Type, orchestrator.ActionSpawnAgent)
+		}
+		if resp.Action.Phase != state.PhaseOne {
+			t.Errorf("action.Phase = %q, want %q", resp.Action.Phase, state.PhaseOne)
+		}
+	})
+}

@@ -190,14 +190,26 @@ func (*Engine) handlePhaseTwo(_ *state.State) (Action, error) {
 // handlePhaseThree handles Phase 3 (architect).
 // investigation.md is included in inputs only when Phase 2 was not skipped
 // (it is absent when Phase 2 is in SkippedPhases, e.g. light/S template).
+// When phase-3b was already completed (checkpoint-a revision), review-design.md
+// is included so the architect can see the prior review feedback.
 func (*Engine) handlePhaseThree(st *state.State) (Action, error) {
 	inputFiles := []string{state.ArtifactRequest, state.ArtifactAnalysis}
 	if !slices.Contains(st.SkippedPhases, PhaseTwo) {
 		inputFiles = append(inputFiles, state.ArtifactInvestigation)
 	}
+
+	// Revision run: if phase-3b was previously completed, include review-design.md
+	// so the architect sees prior review feedback when revising the design.
+	isRevision := slices.Contains(st.CompletedPhases, PhaseThreeB)
+	summary := "Run Phase 3 architecture/design."
+	if isRevision {
+		inputFiles = append(inputFiles, state.ArtifactReviewDesign)
+		summary = "Revise the design based on checkpoint-a feedback."
+	}
+
 	return NewSpawnAgentAction(
 		agentArchitect,
-		"Run Phase 3 architecture/design.",
+		summary,
 		state.DefaultModel,
 		PhaseThree,
 		inputFiles,

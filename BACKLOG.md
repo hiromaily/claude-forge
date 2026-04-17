@@ -11,13 +11,14 @@ Ordered by priority. Higher rows should be tackled first.
 
 | # | ID | Issue | Title | Type | Effort | Why now |
 |---|-----|-------|-------|------|--------|---------|
-| 1 | **F10** | [#12](https://github.com/hiromaily/claude-forge/issues/12) | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
-| 2 | **F9** | [#13](https://github.com/hiromaily/claude-forge/issues/13) | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
-| 3 | **F12** | [#14](https://github.com/hiromaily/claude-forge/issues/14) | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
-| 4 | **F18** | [#17](https://github.com/hiromaily/claude-forge/issues/17) | Improvement report → test case generation | Feature | S | Auto-generate hook guard test cases from friction points found in improvement reports. Builds on the existing `history_get_friction_map` data. |
-| 5 | **F19** | [#18](https://github.com/hiromaily/claude-forge/issues/18) | CI feedback loop (post-PR auto-fix) | Feature | L | After PR creation, monitor CI results and auto-trigger fix flow on failure. Closes the quality loop beyond the pipeline boundary. |
-| 6 | **F6** | [#19](https://github.com/hiromaily/claude-forge/issues/19) | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. Could now be informed by the accumulated `analytics_*` metrics. |
-| 7 | **F2** | [#20](https://github.com/hiromaily/claude-forge/issues/20) | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
+| 1 | **B1** | — | Dynamic checkpoint UX: user visibility + resume | Bug/Feature | M | **Blocking bug.** Dynamic checkpoints (`design-approved`, `design-retry-limit`, `tasks-approved`, `task-retry-limit`, `design-review-unknown`, `task-review-unknown`, `impl-retry-limit-*`) are not properly handled when AutoApprove=false. Users see sudden abandons with no context about what phase/event caused it. Resume cannot recover from dynamic checkpoint states. |
+| 2 | **F10** | [#12](https://github.com/hiromaily/claude-forge/issues/12) | Partial execution (`--until`/`--from`) | Feature | M | `--until=design` for scoping only, `--from=phase-5` for re-implementation. Combines with `--auto` for autonomous scoping reports. |
+| 3 | **F9** | [#13](https://github.com/hiromaily/claude-forge/issues/13) | Structured acceptance criteria | Feature | M | Improves PASS/FAIL consistency. Currently depends on impl-reviewer's subjective interpretation. |
+| 4 | **F12** | [#14](https://github.com/hiromaily/claude-forge/issues/14) | Checkpoint diff preview | Feature | S | Nice-to-have. `--auto` reduces checkpoint frequency, lowering the priority. |
+| 5 | **F18** | [#17](https://github.com/hiromaily/claude-forge/issues/17) | Improvement report → test case generation | Feature | S | Auto-generate hook guard test cases from friction points found in improvement reports. Builds on the existing `history_get_friction_map` data. |
+| 6 | **F19** | [#18](https://github.com/hiromaily/claude-forge/issues/18) | CI feedback loop (post-PR auto-fix) | Feature | L | After PR creation, monitor CI results and auto-trigger fix flow on failure. Closes the quality loop beyond the pipeline boundary. |
+| 7 | **F6** | [#19](https://github.com/hiromaily/claude-forge/issues/19) | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. Could now be informed by the accumulated `analytics_*` metrics. |
+| 8 | **F2** | [#20](https://github.com/hiromaily/claude-forge/issues/20) | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
 
 **Effort key:** XS = < 30min, S = 1-2h, M = half day, L = 1+ day
 
@@ -29,6 +30,59 @@ Ordered by priority. Higher rows should be tackled first.
 4. **Data flywheel extensions** — leverage the accumulated `history_*` and `profile_*` data (F18)
 5. **Cost reduction** — validate with phase-stats data (F6)
 6. **Future features** — after data accumulation (F12, F19)
+
+---
+
+## B1: Dynamic Checkpoint UX — User Visibility + Resume
+
+### Problem
+
+When `AutoApprove=false`, dynamic checkpoints returned by the engine (`design-approved`, `design-retry-limit`, etc.) are not properly handled. The pipeline silently fails or abandons, leaving users with no context about what happened or which phase caused the issue. Resume cannot recover from these states.
+
+**Three concrete failure modes:**
+1. **No user visibility** — When a dynamic checkpoint is returned, the orchestrator (LLM) has no clear instructions for how to handle it. The result is a sudden abandon with no explanation of what phase or event triggered it.
+2. **Resume broken** — Dynamic checkpoint names (`design-approved`, etc.) are not formal phase IDs (`checkpoint-a`, etc.), so `resume_info` cannot correctly restore pipeline state.
+3. **P8 scope gap** — The 2026-04-17 fix added P8 to handle checkpoint responses deterministically, but `isCheckpointPhase()` only recognizes `checkpoint-a` and `checkpoint-b`. All other checkpoint types fall through unhandled.
+
+**Affected dynamic checkpoints:**
+
+| Checkpoint name | Source | Options | Trigger condition |
+|---|---|---|---|
+| `design-approved` | `handlePhaseThreeB` | proceed, revise | AutoApprove=false, verdict=APPROVE |
+| `design-retry-limit` | `handlePhaseThreeB` | approve, abandon | DesignRevisions >= MaxRetries |
+| `design-review-unknown` | `handlePhaseThreeB` | approve, revise, abandon | Unrecognized verdict |
+| `tasks-approved` | `handlePhaseFourB` | proceed, revise | AutoApprove=false, verdict=APPROVE |
+| `task-retry-limit` | `handlePhaseFourB` | approve, abandon | TaskRevisions >= MaxRetries |
+| `task-workflow-rules-retry-limit` | `handlePhaseFour` | approve, abandon | TaskRevisions >= MaxRetries (workflow rules) |
+| `task-review-unknown` | `handlePhaseFourB` | approve, revise, abandon | Unrecognized verdict |
+| `impl-retry-limit-{N}` | `handlePhaseFive` | approve, abandon | ImplRetries >= MaxRetries |
+| `post-to-source` | `handlePostToSource` | post, skip | Source URL present |
+
+### Design direction
+
+**Option A: Absorb dynamic checkpoints into P8**
+- Extend `isCheckpointPhase` to recognize all dynamic checkpoint names.
+- Handle each `user_response` (proceed/approve/revise/abandon/post/skip) inside the engine.
+- Pro: SKILL.md stays simple (always pass `user_response`).
+- Con: P8 logic grows complex; each dynamic checkpoint has different rewind targets and semantics.
+
+**Option B: Eliminate dynamic checkpoints; use formal phase transitions**
+- Remove the `design-approved` checkpoint from `handlePhaseThreeB`; let `reportResultCore` call `PhaseComplete` on verdict=APPROVE, reaching `checkpoint-a` directly.
+- Retry-limit and unknown-verdict cases become state flags with dedicated phase handling.
+- Pro: Clean architecture; no P8 changes needed.
+- Con: Retry-limit cases ("human judgment required") need a new mechanism since they cannot map to existing phases.
+
+**Option C: Promote dynamic checkpoints to formal phase IDs**
+- Add `design-approved`, `task-retry-limit`, etc. to `ValidPhases`.
+- Resume recognizes them as proper phases.
+- Pro: Resume works naturally.
+- Con: Phase count explodes (18 → 25+); test and documentation impact is large.
+
+### Context
+
+- 2026-04-17: `checkpoint-a` / `checkpoint-b` revise flow fixed (P8 block added to `pipeline_next_action.go`).
+- `AutoApprove=true` bypasses dynamic checkpoints entirely, so the problem only manifests with `AutoApprove=false`.
+- `AutoApprove=false` is the default when running `/forge` with the `full` template without the `--auto` flag.
 
 ---
 

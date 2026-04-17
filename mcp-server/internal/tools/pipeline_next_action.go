@@ -37,6 +37,11 @@ var outputVerdictHints = map[string]string{
 	state.ArtifactReviewTasks:  verdictHintApproveRevise,
 }
 
+// isCheckpointPhase returns true if the phase is a human-review checkpoint.
+func isCheckpointPhase(phase string) bool {
+	return phase == state.PhaseCheckpointA || phase == state.PhaseCheckpointB
+}
+
 // previousResult captures optional metrics from the action the orchestrator just completed.
 // The P5 report block fires when actionComplete is true OR when any metric is non-zero
 // (tokensUsed > 0, model != "", or durationMs > 0). actionComplete is the preferred
@@ -169,6 +174,46 @@ func PipelineNextActionHandler(
 					// Absorbed internally; fall through to eng.NextAction.
 				default:
 					// "proceed" or unknown: fall through to eng.NextAction.
+				}
+			}
+		}
+
+		// P8: Checkpoint response handler — the orchestrator passes the user's
+		// response and the engine handles all state transitions deterministically.
+		// The orchestrator MUST NOT call phase_complete for checkpoints; this
+		// block owns the full lifecycle (proceed → advance, revise → rewind,
+		// abandon → mark abandoned).
+		if userResponse != "" {
+			if st, stErr := sm2.GetState(); stErr == nil && isCheckpointPhase(st.CurrentPhase) {
+				switch userResponse {
+				case "proceed":
+					if completeErr := sm2.PhaseComplete(workspace, st.CurrentPhase); completeErr != nil {
+						return errorf("checkpoint proceed %s: %v", st.CurrentPhase, completeErr)
+					}
+				case "revise":
+					var targetPhase string
+					switch st.CurrentPhase {
+					case state.PhaseCheckpointA:
+						targetPhase = state.PhaseThree
+					case state.PhaseCheckpointB:
+						targetPhase = state.PhaseFour
+					}
+					if targetPhase != "" {
+						if updateErr := sm2.Update(func(s *state.State) error {
+							s.CurrentPhase = targetPhase
+							s.CurrentPhaseStatus = state.StatusInProgress
+							return nil
+						}); updateErr != nil {
+							return errorf("rewind %s to %s: %v", st.CurrentPhase, targetPhase, updateErr)
+						}
+					}
+				case "abandon":
+					if abandonErr := sm2.Abandon(workspace); abandonErr != nil {
+						return errorf("checkpoint abandon: %v", abandonErr)
+					}
+					return okJSON(nextActionResponse{
+						Action: orchestrator.NewDoneAction("pipeline abandoned at "+st.CurrentPhase, ""),
+					})
 				}
 			}
 		}

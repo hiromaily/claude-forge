@@ -118,9 +118,14 @@ Repeat until done:
                   `curl -s -X POST -H "Content-Type: application/json" -u "$JIRA_USER:$JIRA_TOKEN" "https://<domain>/rest/api/3/issue/<key>/comment" -d '<ADF JSON>'`
           c. Report success or failure to the user.
        3. If the user chooses **"skip"**: do nothing.
-     Call `mcp__forge-state__phase_complete(workspace, phase=action.name)`.
-     On the next `pipeline_next_action` call, omit `previous_action_complete` (or pass false),
-     and pass `previous_tokens=0, previous_duration_ms=0` with no `previous_model` or `previous_setup_only`
+     Pass the user's response to
+     `mcp__forge-state__pipeline_next_action(workspace, user_response=<response>)`.
+     The engine handles all checkpoint state transitions deterministically
+     (proceed → advance, revise → rewind, abandon → mark abandoned).
+     Do NOT call `phase_complete` for checkpoints — the engine owns the lifecycle.
+     On the next `pipeline_next_action` call, omit `previous_action_complete`
+     (or pass false), and pass `previous_tokens=0, previous_duration_ms=0`
+     with no `previous_model` or `previous_setup_only`
      (checkpoints have no agent cost; omitting `previous_action_complete` causes the P5 block to be skipped).
    - `exec`: Run `action.commands` via Bash. Record the duration and `action.setup_only`
      for the next `pipeline_next_action` call. Pass `previous_setup_only=true` if
