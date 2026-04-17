@@ -134,6 +134,10 @@
     .event.kind-agent-dispatch { border-left-color: var(--info); opacity: 0.85; }
     .event.kind-action-complete { border-left-color: var(--ok); opacity: 0.85; }
     .event.kind-revision-required { border-left-color: var(--warn); }
+    /* Outcome-based border overrides: ensure failed/abandoned events always
+       show the correct left-border colour regardless of event kind. */
+    .event.outcome-failed { border-left-color: var(--bad); }
+    .event.outcome-abandoned { border-left-color: var(--bad); opacity: 0.7; }
     .out-dispatched { background: rgba(163, 113, 247, 0.15); color: var(--info); }
     .event-kind {
       font-weight: 600;
@@ -223,7 +227,7 @@
     <div id="timeline" class="timeline"></div>
   </main>
   <footer>
-    Server-Sent Events from <code>/events</code>. Reconnects automatically on drop. Events are not persisted; reload restarts the stream.
+    Server-Sent Events from <code>/events</code>. Reconnects automatically on drop. Events are persisted to <code>events.jsonl</code>; reloads replay full history.
   </footer>
 
   <script>
@@ -241,6 +245,15 @@
       var es = null;
       var count = 0;
       var workspaces = new Set();
+
+      // Phase ID → human-readable label map, fetched from /api/phase-labels.
+      // Resolved client-side to keep the event publishing path decoupled from
+      // the orchestrator package.
+      var phaseLabels = {};
+      fetch("/api/phase-labels")
+        .then(function (r) { return r.json(); })
+        .then(function (m) { phaseLabels = m || {}; })
+        .catch(function () { /* best-effort; labels degrade to raw IDs */ });
 
       // Maximum number of event rows kept in the DOM. Older rows are dropped
       // from the bottom of the timeline once this cap is reached, so a
@@ -376,7 +389,11 @@
         }
 
         var div = document.createElement("div");
-        div.className = "event kind-" + safeClassFragment(ev.event, KNOWN_EVENTS, "unknown");
+        var cls = "event kind-" + safeClassFragment(ev.event, KNOWN_EVENTS, "unknown");
+        if (ev.outcome) {
+          cls += " outcome-" + safeClassFragment(ev.outcome, KNOWN_OUTCOMES, "unknown");
+        }
+        div.className = cls;
 
         var kind = document.createElement("div");
         kind.className = "event-kind";
@@ -384,7 +401,12 @@
         if (ev.phase) {
           var phaseSpan = document.createElement("span");
           phaseSpan.className = "event-meta";
-          phaseSpan.textContent = " · " + ev.phase;
+          var phaseText = ev.phase;
+          var label = phaseLabels[ev.phase];
+          if (label) {
+            phaseText += ": " + label;
+          }
+          phaseSpan.textContent = " · " + phaseText;
           kind.appendChild(phaseSpan);
         }
 

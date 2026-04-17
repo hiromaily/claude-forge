@@ -49,6 +49,16 @@ func PhaseLabel(phaseID string) string {
 	return phaseID
 }
 
+// PhaseLabels returns a copy of the phase ID → human-readable label map.
+// Used by the dashboard to resolve labels on the client side.
+func PhaseLabels() map[string]string {
+	out := make(map[string]string, len(phaseLabels))
+	for k, v := range phaseLabels {
+		out[k] = v
+	}
+	return out
+}
+
 // SkipLabel represents a skipped phase with both its ID and human-readable label.
 type SkipLabel struct {
 	PhaseID string `json:"phase_id"`

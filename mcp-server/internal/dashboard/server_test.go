@@ -37,7 +37,7 @@ func TestStart_BindsAndServesEvents(t *testing.T) {
 	port := freePort(t)
 	bus := events.NewEventBus()
 
-	srv := Start(port, bus, state.NewStateManager("test"))
+	srv := Start(port, bus, state.NewStateManager("test"), nil)
 	if srv == nil {
 		t.Fatal("Start returned nil; expected a running server")
 	}
@@ -107,7 +107,7 @@ func TestStart_FallbackOnPortConflict(t *testing.T) {
 	occupiedPort := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
 
 	bus := events.NewEventBus()
-	srv := Start(occupiedPort, bus, state.NewStateManager("test"))
+	srv := Start(occupiedPort, bus, state.NewStateManager("test"), nil)
 	if srv == nil {
 		t.Fatal("expected Start to succeed via fallback port, got nil")
 	}
@@ -166,7 +166,7 @@ func TestListenWithFallback_FallbackPortRange(t *testing.T) {
 func TestStart_NoopWhenPortEmpty(t *testing.T) {
 	t.Parallel()
 
-	srv := Start("", events.NewEventBus(), state.NewStateManager("test"))
+	srv := Start("", events.NewEventBus(), state.NewStateManager("test"), nil)
 	if srv != nil {
 		t.Fatal("expected Start(\"\", ...) to return nil")
 	}
@@ -180,7 +180,7 @@ func TestStart_ShutdownPath(t *testing.T) {
 	port := freePort(t)
 	bus := events.NewEventBus()
 
-	srv := Start(port, bus, state.NewStateManager("test"))
+	srv := Start(port, bus, state.NewStateManager("test"), nil)
 	if srv == nil {
 		t.Fatal("Start returned nil")
 	}
@@ -215,7 +215,7 @@ func TestStart_LogsDashboardURLOnStartup(t *testing.T) {
 	os.Stderr = w
 	t.Cleanup(func() { os.Stderr = origStderr })
 
-	srv := Start(port, bus, state.NewStateManager("test"))
+	srv := Start(port, bus, state.NewStateManager("test"), nil)
 	if srv == nil {
 		t.Fatal("Start returned nil")
 	}
@@ -250,7 +250,7 @@ func TestSSEResponseWriterFlushes(t *testing.T) {
 	port := freePort(t)
 	bus := events.NewEventBus()
 
-	srv := Start(port, bus, state.NewStateManager("test"))
+	srv := Start(port, bus, state.NewStateManager("test"), nil)
 	if srv == nil {
 		t.Fatal("Start returned nil")
 	}

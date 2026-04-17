@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -229,5 +231,78 @@ func TestSSEHandlerWorkspaceFilter(t *testing.T) {
 	}
 	if got != wantEvent {
 		t.Errorf("received event = %+v, want %+v", got, wantEvent)
+	}
+}
+
+// TestSSEHandlerReplaysHistory verifies that historical events (loaded from file)
+// are sent to new SSE clients on connect before any live events.
+func TestSSEHandlerReplaysHistory(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "events.jsonl")
+
+	// Write a historical event to the JSONL file.
+	historical := events.Event{
+		Event:     "pipeline-init",
+		Phase:     "setup",
+		SpecName:  "old-spec",
+		Workspace: "/tmp/ws",
+		Timestamp: "2026-04-17T12:00:00Z",
+		Outcome:   "completed",
+	}
+	line, _ := json.Marshal(historical)
+	if err := os.WriteFile(logPath, append(line, '\n'), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	bus := events.NewEventBus()
+	if err := bus.SetEventLog(logPath); err != nil {
+		t.Fatalf("SetEventLog: %v", err)
+	}
+	t.Cleanup(func() { bus.CloseLog() })
+
+	srv := httptest.NewServer(events.SSEHandler(bus))
+	defer srv.Close()
+
+	ctx := t.Context()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /events failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the first data line — should be the historical event replayed on connect.
+	lines := make(chan string, 10)
+	go func() {
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			text := scanner.Text()
+			if strings.HasPrefix(text, "data: ") {
+				lines <- text
+			}
+		}
+		close(lines)
+	}()
+
+	var dataLine string
+	select {
+	case line := <-lines:
+		dataLine = line
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for replayed historical event")
+	}
+
+	jsonPart := strings.TrimPrefix(dataLine, "data: ")
+	var got events.Event
+	if err := json.Unmarshal([]byte(jsonPart), &got); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v — raw: %q", err, jsonPart)
+	}
+
+	if got != historical {
+		t.Errorf("replayed event = %+v, want %+v", got, historical)
 	}
 }

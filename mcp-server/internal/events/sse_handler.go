@@ -8,6 +8,10 @@ import (
 
 // SSEHandler returns an http.HandlerFunc that streams pipeline events as Server-Sent Events.
 //
+// On connection, the handler first replays all historical events from bus.History()
+// so that dashboard reloads and new browser tabs see the full timeline. After the
+// replay, it subscribes to the live event stream.
+//
 // Each published Event is encoded as JSON and written in the SSE data-only format:
 //
 //	data: <json>\n\n
@@ -24,6 +28,7 @@ func SSEHandler(bus *EventBus) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
 
 		// Obtain the Flusher interface — required for real-time streaming.
 		flusher, ok := w.(http.Flusher)
@@ -40,7 +45,20 @@ func SSEHandler(bus *EventBus) http.HandlerFunc {
 		// Optional workspace filter.
 		wsFilter := r.URL.Query().Get("workspace")
 
-		// Subscribe to the bus.
+		// Replay historical events so dashboard reloads show the full timeline.
+		for _, e := range bus.History() {
+			if wsFilter != "" && e.Workspace != wsFilter {
+				continue
+			}
+			payload, err := json.Marshal(e)
+			if err != nil {
+				continue
+			}
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", payload)
+		}
+		flusher.Flush()
+
+		// Subscribe to the bus for live events.
 		id, ch := bus.Subscribe()
 		defer bus.Unsubscribe(id)
 

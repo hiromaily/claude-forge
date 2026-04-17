@@ -323,7 +323,7 @@ func TestInterventionRoutes_RegisteredOnHTTPServer(t *testing.T) {
 	bus := events.NewEventBus()
 	sm, _ := newTestStateManager(t)
 
-	srv := Start(port, bus, sm)
+	srv := Start(port, bus, sm, nil)
 	if srv == nil {
 		t.Fatal("Start returned nil")
 	}

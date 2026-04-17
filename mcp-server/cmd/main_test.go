@@ -18,7 +18,7 @@ import (
 func TestDashboardStart_NoopWhenPortEmpty(t *testing.T) {
 	t.Parallel()
 
-	httpSrv := dashboard.Start("", events.NewEventBus(), state.NewStateManager("test"))
+	httpSrv := dashboard.Start("", events.NewEventBus(), state.NewStateManager("test"), nil)
 	if httpSrv != nil {
 		t.Fatal(`expected dashboard.Start("", ...) to return nil`)
 	}

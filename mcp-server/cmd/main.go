@@ -78,6 +78,13 @@ func main() {
 	sm.SetSpecsDir(specsDir)
 	srv := server.NewMCPServer("forge-state", appVersion)
 	bus := events.NewEventBus()
+	// Enable JSONL-based event persistence so dashboard reloads and new sessions
+	// can replay historical events. All MCP server instances sharing the same
+	// specsDir will read/write the same log file.
+	eventLogPath := filepath.Join(specsDir, "events.jsonl")
+	if err := bus.SetEventLog(eventLogPath); err != nil {
+		fmt.Fprintf(os.Stderr, "forge-state: event log setup warning: %v\n", err)
+	}
 	slack := events.NewSlackNotifier(os.Getenv("FORGE_SLACK_WEBHOOK_URL"))
 	eventsPort := os.Getenv("FORGE_EVENTS_PORT")
 	agentDir := resolveAgentDir()
@@ -102,7 +109,9 @@ func main() {
 	// Start the optional dashboard / SSE / intervention HTTP server.
 	// Returns nil when FORGE_EVENTS_PORT is unset or the bind fails; in either
 	// case the MCP stdio transport below remains functional.
-	httpSrv := dashboard.Start(eventsPort, bus, sm)
+	httpSrv := dashboard.Start(eventsPort, bus, sm, &dashboard.StartOptions{
+		PhaseLabels: orchestrator.PhaseLabels(),
+	})
 
 	// Run the MCP stdio transport. This blocks until stdin is closed.
 	if err := server.ServeStdio(srv); err != nil {
@@ -117,4 +126,5 @@ func main() {
 			fmt.Fprintf(os.Stderr, "forge-state: SSE HTTP server shutdown error: %v\n", err)
 		}
 	}
+	bus.CloseLog()
 }

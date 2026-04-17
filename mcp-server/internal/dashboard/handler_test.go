@@ -22,7 +22,7 @@ func TestDashboardHandler_ServesEmbeddedHTMLAtRoot(t *testing.T) {
 
 	port := freePort(t)
 	bus := events.NewEventBus()
-	srv := Start(port, bus, state.NewStateManager("test"))
+	srv := Start(port, bus, state.NewStateManager("test"), nil)
 	if srv == nil {
 		t.Fatal("Start returned nil")
 	}
@@ -91,7 +91,7 @@ func TestDashboardHandler_404ForUnknownPaths(t *testing.T) {
 
 	port := freePort(t)
 	bus := events.NewEventBus()
-	srv := Start(port, bus, state.NewStateManager("test"))
+	srv := Start(port, bus, state.NewStateManager("test"), nil)
 	if srv == nil {
 		t.Fatal("Start returned nil")
 	}
@@ -138,7 +138,7 @@ func TestDashboardHandler_DoesNotShadowEvents(t *testing.T) {
 
 	port := freePort(t)
 	bus := events.NewEventBus()
-	srv := Start(port, bus, state.NewStateManager("test"))
+	srv := Start(port, bus, state.NewStateManager("test"), nil)
 	if srv == nil {
 		t.Fatal("Start returned nil")
 	}

@@ -45,7 +45,16 @@ const readHeaderTimeout = 5 * time.Second
 //
 // The caller is responsible for calling Shutdown on the returned server
 // during graceful shutdown.
-func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager) *http.Server {
+// StartOptions holds optional configuration for the dashboard server.
+type StartOptions struct {
+	// PhaseLabels maps phase IDs (e.g. "phase-3") to human-readable labels
+	// (e.g. "Design"). The dashboard serves this map via GET /api/phase-labels
+	// so the frontend can resolve labels client-side without coupling the event
+	// publishing path to the orchestrator package.
+	PhaseLabels map[string]string
+}
+
+func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager, opts *StartOptions) *http.Server {
 	if eventsPort == "" {
 		return nil
 	}
@@ -61,9 +70,15 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager) *htt
 		fmt.Fprintf(os.Stderr, "forge-state: dashboard ready (listener addr type %T; URL unavailable)\n", ln.Addr())
 	}
 
+	var labels map[string]string
+	if opts != nil && opts.PhaseLabels != nil {
+		labels = opts.PhaseLabels
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("GET /events", events.SSEHandler(bus))
 	mux.Handle("GET /", dashboardHandler())
+	mux.Handle("GET /api/phase-labels", phaseLabelsHandler(labels))
 	mux.Handle("POST /api/checkpoint/approve", approveCheckpointHandler(sm))
 	mux.Handle("POST /api/pipeline/abandon", abandonHandler(sm))
 
