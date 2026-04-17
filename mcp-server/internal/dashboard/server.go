@@ -16,7 +16,7 @@ import (
 // door on slowloris-style header drips.
 const readHeaderTimeout = 5 * time.Second
 
-// Start binds an HTTP listener on ":<eventsPort>" and serves:
+// Start binds an HTTP listener on "127.0.0.1:<eventsPort>" and serves:
 //
 //	GET  /events                  — SSE stream of pipeline phase transitions
 //	GET  /                        — embedded zero-dependency dashboard HTML
@@ -38,7 +38,7 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager) *htt
 	if eventsPort == "" {
 		return nil
 	}
-	addr := ":" + eventsPort
+	addr := net.JoinHostPort("127.0.0.1", eventsPort)
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {

@@ -97,7 +97,7 @@ func TestStart_BindsAndServesEvents(t *testing.T) {
 func TestStart_BindFailureIsNonFatal(t *testing.T) {
 	t.Parallel()
 
-	ln, err := net.Listen("tcp", ":0")
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}
