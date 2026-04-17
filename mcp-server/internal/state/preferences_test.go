@@ -9,10 +9,6 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
-func boolPtr(b bool) *bool { return new(b) }
-
-func strPtr(s string) *string { return new(s) }
-
 func TestLoadPreferences_FileNotExists(t *testing.T) {
 	t.Parallel()
 	p, err := state.LoadPreferences(t.TempDir())
