@@ -71,9 +71,11 @@ type reportResultEmbedded struct {
 // ReportResult is present when previous_* params triggered a non-proceed transition.
 type nextActionResponse struct {
 	orchestrator.Action
-	Warning        string                `json:"warning,omitempty"`
-	DisplayMessage string                `json:"display_message,omitempty"`
-	ReportResult   *reportResultEmbedded `json:"report_result,omitempty"`
+	Warning            string                `json:"warning,omitempty"`
+	DisplayMessage     string                `json:"display_message,omitempty"`
+	ReportResult       *reportResultEmbedded `json:"report_result,omitempty"`
+	CurrentPhase       string                `json:"current_phase,omitempty"`
+	CurrentPhaseStatus string                `json:"current_phase_status,omitempty"`
 }
 
 // parsePreviousResult extracts the optional previous_* parameters from the MCP request.
@@ -191,17 +193,37 @@ func PipelineNextActionHandler(
 						return errorf("checkpoint proceed %s: %v", st.CurrentPhase, completeErr)
 					}
 				case "revise":
-					var targetPhase string
+					var targetPhase, reviewPhase, reviewArtifact string
 					switch st.CurrentPhase {
 					case state.PhaseCheckpointA:
 						targetPhase = state.PhaseThree
+						reviewPhase = state.PhaseThreeB
+						reviewArtifact = state.ArtifactReviewDesign
 					case state.PhaseCheckpointB:
 						targetPhase = state.PhaseFour
+						reviewPhase = state.PhaseFourB
+						reviewArtifact = state.ArtifactReviewTasks
+					}
+					// Delete stale review file so the review phase re-runs
+					// the reviewer after the revision agent produces updated output.
+					if reviewArtifact != "" {
+						_ = os.Remove(filepath.Join(workspace, reviewArtifact))
 					}
 					if targetPhase != "" {
 						if updateErr := sm2.Update(func(s *state.State) error {
 							s.CurrentPhase = targetPhase
 							s.CurrentPhaseStatus = state.StatusInProgress
+							// Remove the review phase from CompletedPhases so the
+							// agent handler doesn't include the deleted review file as input.
+							if reviewPhase != "" {
+								filtered := make([]string, 0, len(s.CompletedPhases))
+								for _, p := range s.CompletedPhases {
+									if p != reviewPhase {
+										filtered = append(filtered, p)
+									}
+								}
+								s.CompletedPhases = filtered
+							}
 							return nil
 						}); updateErr != nil {
 							return errorf("rewind %s to %s: %v", st.CurrentPhase, targetPhase, updateErr)
@@ -421,8 +443,11 @@ func PipelineNextActionHandler(
 			}
 		}
 
-		// Publish fine-grained dispatch events for the dashboard.
+		// Include current phase state in response for debugging and publish
+		// fine-grained dispatch events for the dashboard.
 		if st, stErr := sm2.GetState(); stErr == nil {
+			resp.CurrentPhase = st.CurrentPhase
+			resp.CurrentPhaseStatus = st.CurrentPhaseStatus
 			switch action.Type {
 			case orchestrator.ActionSpawnAgent:
 				publishEventWithDetail(bus, nil, "agent-dispatch", action.Phase, st.SpecName, workspace, "dispatched", action.Agent)
@@ -537,7 +562,54 @@ func enrichPrompt(
 		profileStr = profiler.FormatForPrompt()
 	}
 
+	// Filter out patterns matching the current review's findings from the architect's
+	// prompt. This prevents "Common Review Findings" from showing stale/already-addressed
+	// findings that duplicate what's in review-design.md (which the architect reads directly).
+	// Scope: architect only (reads review-design.md). If task-decomposer needs similar
+	// filtering for review-tasks.md, extend this block.
+	if action.Agent == "architect" {
+		histCtx = filterCurrentReviewFindings(workspace, histCtx)
+	}
+
 	action.Prompt = prompt.BuildPrompt(action.Agent, agentInstructions, artifactsSection, profileStr, histCtx)
 
 	return nil
+}
+
+// filterCurrentReviewFindings removes pattern entries that match findings in
+// the current pipeline's review-design.md. This prevents the architect from
+// seeing stale "Common Review Findings" that duplicate the review feedback
+// already available as an input artifact.
+func filterCurrentReviewFindings(workspace string, ctx prompt.HistoryContext) prompt.HistoryContext {
+	reviewPath := filepath.Join(workspace, state.ArtifactReviewDesign)
+	_, findings, err := orchestrator.ParseVerdict(reviewPath)
+	if err != nil || len(findings) == 0 {
+		return ctx
+	}
+
+	// Build a set of normalized finding descriptions to exclude.
+	exclude := make(map[string]bool, len(findings))
+	for _, f := range findings {
+		exclude[strings.ToLower(f.Description)] = true
+	}
+
+	// Filter AllPatterns.
+	filtered := make([]history.PatternEntry, 0, len(ctx.AllPatterns))
+	for _, p := range ctx.AllPatterns {
+		if !exclude[strings.ToLower(p.Pattern)] {
+			filtered = append(filtered, p)
+		}
+	}
+	ctx.AllPatterns = filtered
+
+	// Filter CriticalPatterns.
+	filteredCritical := make([]history.PatternEntry, 0, len(ctx.CriticalPatterns))
+	for _, p := range ctx.CriticalPatterns {
+		if !exclude[strings.ToLower(p.Pattern)] {
+			filteredCritical = append(filteredCritical, p)
+		}
+	}
+	ctx.CriticalPatterns = filteredCritical
+
+	return ctx
 }

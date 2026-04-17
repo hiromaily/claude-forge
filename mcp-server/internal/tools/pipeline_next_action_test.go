@@ -1223,11 +1223,19 @@ func TestPipelineNextAction_P8_CheckpointRevision(t *testing.T) {
 			t.Errorf("CurrentPhase = %q, want %q", s.CurrentPhase, state.PhaseThree)
 		}
 
-		// review-design.md should still exist — P8 preserves it so the architect
-		// can read review feedback. It gets deleted later when the architect
-		// completes (phase-3 transition cleans stale review artifacts).
-		if _, err := os.Stat(filepath.Join(workspace, state.ArtifactReviewDesign)); err != nil {
-			t.Errorf("review-design.md should still exist after checkpoint-a revision (architect needs it)")
+		// review-design.md should be deleted — P8 removes it on rewind to prevent
+		// the stale verdict from causing an infinite REVISE loop when phase-3b
+		// re-enters. CompletedPhases is also cleaned so the architect is not
+		// dispatched in "revision" mode (which would try to read the deleted file).
+		if _, err := os.Stat(filepath.Join(workspace, state.ArtifactReviewDesign)); err == nil {
+			t.Errorf("review-design.md should be deleted after checkpoint-a revision (prevents stale verdict loop)")
+		}
+
+		// Verify phase-3b was removed from CompletedPhases.
+		for _, p := range s.CompletedPhases {
+			if p == state.PhaseThreeB {
+				t.Errorf("CompletedPhases should not contain %q after checkpoint-a revision", state.PhaseThreeB)
+			}
 		}
 	})
 
@@ -1284,11 +1292,19 @@ func TestPipelineNextAction_P8_CheckpointRevision(t *testing.T) {
 			t.Errorf("CurrentPhase = %q, want %q", s.CurrentPhase, state.PhaseFour)
 		}
 
-		// review-tasks.md should still exist — P8 preserves it so the
-		// task-decomposer can read review feedback. It gets deleted later
-		// when phase-4 completes (applyWorkflowRules cleans stale review artifacts).
-		if _, err := os.Stat(filepath.Join(workspace, state.ArtifactReviewTasks)); err != nil {
-			t.Errorf("review-tasks.md should still exist after checkpoint-b revision (decomposer needs it)")
+		// review-tasks.md should be deleted — P8 removes it on rewind to prevent
+		// the stale verdict from causing an infinite REVISE loop when phase-4b
+		// re-enters. CompletedPhases is also cleaned so the task-decomposer is
+		// not dispatched in "revision" mode (which would try to read the deleted file).
+		if _, err := os.Stat(filepath.Join(workspace, state.ArtifactReviewTasks)); err == nil {
+			t.Errorf("review-tasks.md should be deleted after checkpoint-b revision (prevents stale verdict loop)")
+		}
+
+		// Verify phase-4b was removed from CompletedPhases.
+		for _, p := range s.CompletedPhases {
+			if p == state.PhaseFourB {
+				t.Errorf("CompletedPhases should not contain %q after checkpoint-b revision", state.PhaseFourB)
+			}
 		}
 	})
 

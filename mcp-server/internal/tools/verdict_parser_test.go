@@ -9,6 +9,7 @@ import (
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/prompt"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/validation"
 )
@@ -175,6 +176,166 @@ func TestDetermineTransition(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------- TestDetermineTransition_StaleReviewDetection ----------
+
+func TestDetermineTransition_StaleReviewDetection(t *testing.T) {
+	t.Parallel()
+
+	t.Run("stale_review_detected_when_design_newer", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		sm := newVPStateManager(t, dir)
+		kb := newVPKnowledgeBase(t)
+
+		// Write review-design.md first (older).
+		writeVPReviewFile(t, dir, "review-design.md", "REVISE")
+
+		// Write design.md after (newer) — simulates architect revision.
+		// Note: on filesystems with 1-second mtime resolution (HFS+/FAT),
+		// both files may share the same mtime. The production code uses >=
+		// (not >) so same-mtime also triggers stale detection, making this
+		// test correct on all platforms.
+		if err := os.WriteFile(filepath.Join(dir, "design.md"), []byte("# Revised Design"), 0o600); err != nil {
+			t.Fatalf("write design.md: %v", err)
+		}
+
+		in := reportResultInput{workspace: dir, phase: "phase-3b"}
+		var warnings []string
+		out, err := determineTransition(sm, kb, in, []validation.ArtifactResult{}, "", &warnings)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if out.NextActionHint != "setup_continue" {
+			t.Errorf("NextActionHint = %q, want %q (stale review should trigger setup_continue)", out.NextActionHint, "setup_continue")
+		}
+		// review-design.md should be deleted.
+		if _, statErr := os.Stat(filepath.Join(dir, "review-design.md")); statErr == nil {
+			t.Errorf("review-design.md should be deleted after stale review detection")
+		}
+	})
+
+	t.Run("normal_revise_when_review_newer_than_design", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		sm := newVPStateManager(t, dir)
+		kb := newVPKnowledgeBase(t)
+
+		// Write design.md first (older).
+		if err := os.WriteFile(filepath.Join(dir, "design.md"), []byte("# Design"), 0o600); err != nil {
+			t.Fatalf("write design.md: %v", err)
+		}
+
+		// Write review-design.md after (newer) — reviewer just completed.
+		writeVPReviewFile(t, dir, "review-design.md", "REVISE")
+
+		in := reportResultInput{workspace: dir, phase: "phase-3b"}
+		var warnings []string
+		out, err := determineTransition(sm, kb, in, []validation.ArtifactResult{}, "", &warnings)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if out.NextActionHint != "revision_required" {
+			t.Errorf("NextActionHint = %q, want %q (review is fresh, normal REVISE path)", out.NextActionHint, "revision_required")
+		}
+		// review-design.md should still exist.
+		if _, statErr := os.Stat(filepath.Join(dir, "review-design.md")); statErr != nil {
+			t.Errorf("review-design.md should still exist after normal REVISE")
+		}
+	})
+
+	t.Run("stale_review_for_phase_4b_tasks", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		sm := newVPStateManager(t, dir)
+		kb := newVPKnowledgeBase(t)
+
+		// Write review-tasks.md first (older).
+		writeVPReviewFile(t, dir, "review-tasks.md", "REVISE")
+
+		// Write tasks.md after (newer).
+		if err := os.WriteFile(filepath.Join(dir, "tasks.md"), []byte("# Revised Tasks\n\n## Task 1: Implement\nmode: sequential\n"), 0o600); err != nil {
+			t.Fatalf("write tasks.md: %v", err)
+		}
+
+		in := reportResultInput{workspace: dir, phase: "phase-4b"}
+		var warnings []string
+		out, err := determineTransition(sm, kb, in, []validation.ArtifactResult{}, "", &warnings)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if out.NextActionHint != "setup_continue" {
+			t.Errorf("NextActionHint = %q, want %q", out.NextActionHint, "setup_continue")
+		}
+	})
+}
+
+// ---------- TestFilterCurrentReviewFindings ----------
+
+func TestFilterCurrentReviewFindings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("matching_patterns_excluded", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		// Write review-design.md with known findings.
+		content := "## Verdict: REVISE\n\n### Findings\n\n" +
+			"**1. [CRITICAL] Missing error handling for auth.**\n\n" +
+			"**2. [MINOR] Imprecise wording in section 3.**\n"
+		if err := os.WriteFile(filepath.Join(dir, "review-design.md"), []byte(content), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		ctx := prompt.HistoryContext{
+			CriticalPatterns: []history.PatternEntry{
+				{Severity: "CRITICAL", Pattern: "missing error handling for auth.", Frequency: 2, Agent: "design-reviewer"},
+				{Severity: "CRITICAL", Pattern: "unrelated critical finding", Frequency: 1, Agent: "design-reviewer"},
+			},
+			AllPatterns: []history.PatternEntry{
+				{Severity: "CRITICAL", Pattern: "missing error handling for auth.", Frequency: 2, Agent: "design-reviewer"},
+				{Severity: "MINOR", Pattern: "imprecise wording in section 3.", Frequency: 3, Agent: "design-reviewer"},
+				{Severity: "MINOR", Pattern: "unrelated minor finding", Frequency: 1, Agent: "design-reviewer"},
+			},
+		}
+
+		filtered := filterCurrentReviewFindings(dir, ctx)
+
+		if len(filtered.CriticalPatterns) != 1 {
+			t.Errorf("CriticalPatterns count = %d, want 1 (matching pattern should be excluded)", len(filtered.CriticalPatterns))
+		}
+		if len(filtered.AllPatterns) != 1 {
+			t.Errorf("AllPatterns count = %d, want 1 (two matching patterns should be excluded)", len(filtered.AllPatterns))
+		}
+	})
+
+	t.Run("no_review_file_returns_unchanged", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir() // no review-design.md
+
+		ctx := prompt.HistoryContext{
+			CriticalPatterns: []history.PatternEntry{
+				{Severity: "CRITICAL", Pattern: "some finding", Frequency: 1},
+			},
+			AllPatterns: []history.PatternEntry{
+				{Severity: "CRITICAL", Pattern: "some finding", Frequency: 1},
+			},
+		}
+
+		filtered := filterCurrentReviewFindings(dir, ctx)
+
+		if len(filtered.CriticalPatterns) != 1 {
+			t.Errorf("CriticalPatterns count = %d, want 1 (should be unchanged)", len(filtered.CriticalPatterns))
+		}
+		if len(filtered.AllPatterns) != 1 {
+			t.Errorf("AllPatterns count = %d, want 1 (should be unchanged)", len(filtered.AllPatterns))
+		}
+	})
 }
 
 // ---------- TestHandlePhase6Transition ----------

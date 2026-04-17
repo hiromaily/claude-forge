@@ -259,6 +259,20 @@ The deficit is therefore not in *what the agent can decide* but in *where and wh
 
 ---
 
+## Recently Resolved (2026-04-17)
+
+Five issues identified during a real-world `/forge` pipeline run on `dealon-app` (DEA-13: Proto Enum sync improvement). All fixed in a single batch:
+
+| # | Issue | Fix location | Description |
+|---|-------|-------------|-------------|
+| 1 | Design revision loop stuck | `verdict_parser.go` determineTransition | REVISE verdict spawned architect but stale `review-design.md` caused infinite loop. Fix: detect post-revision stale review via mtime comparison and delete before re-dispatching reviewer. |
+| 2 | Checkpoint revise didn't clean review files | `pipeline_next_action.go` P8 block | User choosing "revise" at checkpoint-a rewound to phase-3 but left stale `review-design.md`, preventing re-review. Fix: delete review files on checkpoint rewind. |
+| 3 | Common Review Findings showed stale entries | `pipeline_next_action.go` enrichPrompt | Architect saw "seen N times" for already-resolved CRITICALs. Fix: filter patterns matching current review-design.md findings before injecting into prompt. |
+| 4 | Architect didn't verify code assumptions | `agents/architect.md` | Architect wrote design details about APIs/types without reading actual source code, causing repeated CRITICAL findings. Fix: added "Verify Before You Write" section with explicit instructions. |
+| 5 | Pipeline state opaque during debugging | `pipeline_next_action.go` response struct | `pipeline_next_action` response didn't include current phase/status, making it hard to diagnose state issues. Fix: added `current_phase` and `current_phase_status` fields to response. |
+
+---
+
 ## Improvement Candidates
 
 | Issue | Title | Notes |
