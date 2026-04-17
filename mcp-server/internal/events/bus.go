@@ -8,14 +8,18 @@ import (
 	"sync/atomic"
 )
 
-// Event represents a phase transition notification emitted by the pipeline.
+// Event represents a pipeline lifecycle notification.
 type Event struct {
-	Event     string `json:"event"`     // "phase-start" | "phase-complete" | "phase-fail" | "checkpoint" | "abandon"
+	// Event type. Phase-level: "phase-start", "phase-complete", "phase-fail",
+	// "checkpoint", "abandon". Fine-grained: "pipeline-init", "pipeline-complete",
+	// "agent-dispatch", "action-complete", "revision-required".
+	Event     string `json:"event"`
 	Phase     string `json:"phase"`     // e.g. "phase-3"
 	SpecName  string `json:"specName"`  // from state.SpecName
 	Workspace string `json:"workspace"` // absolute path passed to the tool
 	Timestamp string `json:"timestamp"` // RFC3339 UTC
-	Outcome   string `json:"outcome"`   // "in_progress" | "completed" | "failed" | "awaiting_human" | "abandoned"
+	Outcome   string `json:"outcome"`   // "in_progress" | "completed" | "failed" | "awaiting_human" | "abandoned" | "dispatched"
+	Detail    string `json:"detail,omitempty"` // optional extra info (e.g. agent name, action type)
 }
 
 const subscriberBufferSize = 64

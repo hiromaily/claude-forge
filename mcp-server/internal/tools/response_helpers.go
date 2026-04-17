@@ -157,6 +157,11 @@ func validateTaskDependencies(tasks map[string]state.Task) []string {
 // publishEvent constructs an Event and publishes it to bus. If slack is non-nil,
 // it also calls slack.Notify so callers can pass nil when Slack is not needed.
 func publishEvent(bus *events.EventBus, slack *events.SlackNotifier, eventType, phase, specName, workspace, outcome string) {
+	publishEventWithDetail(bus, slack, eventType, phase, specName, workspace, outcome, "")
+}
+
+// publishEventWithDetail is like publishEvent but includes an optional Detail field.
+func publishEventWithDetail(bus *events.EventBus, slack *events.SlackNotifier, eventType, phase, specName, workspace, outcome, detail string) {
 	e := events.Event{
 		Event:     eventType,
 		Phase:     phase,
@@ -164,6 +169,7 @@ func publishEvent(bus *events.EventBus, slack *events.SlackNotifier, eventType, 
 		Workspace: workspace,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Outcome:   outcome,
+		Detail:    detail,
 	}
 	bus.Publish(e)
 	if slack != nil {

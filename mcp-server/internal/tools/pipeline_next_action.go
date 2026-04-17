@@ -14,6 +14,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/profile"
@@ -106,6 +107,7 @@ const maxDispatchIter = 20
 //nolint:gocyclo // complexity is inherent in the P1-P4 dispatch logic; splitting would obscure the flow
 func PipelineNextActionHandler(
 	sm *state.StateManager,
+	bus *events.EventBus,
 	eng *orchestrator.Engine,
 	agentDir string,
 	histIdx *history.HistoryIndex,
@@ -148,8 +150,12 @@ func PipelineNextActionHandler(
 				if rErr != nil {
 					return errorf("report_result: %v", rErr)
 				}
+				// Publish action-complete for the finished agent/exec step.
+				publishEventWithDetail(bus, nil, "action-complete", st.CurrentPhase, st.SpecName, workspace, "completed", prev.model)
+
 				switch outcome.NextActionHint {
 				case "revision_required":
+					publishEvent(bus, nil, "revision-required", st.CurrentPhase, st.SpecName, workspace, "failed")
 					// Surface to orchestrator; do NOT call eng.NextAction.
 					return okJSON(nextActionResponse{
 						ReportResult: &reportResultEmbedded{
@@ -367,6 +373,16 @@ func PipelineNextActionHandler(
 			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb, profiler); enrichErr != nil {
 				// Fail-open: return the action with a warning, not an error.
 				appendWarning(fmt.Sprintf("enrichPrompt: %v", enrichErr))
+			}
+		}
+
+		// Publish fine-grained dispatch events for the dashboard.
+		if st, stErr := sm2.GetState(); stErr == nil {
+			switch action.Type {
+			case orchestrator.ActionSpawnAgent:
+				publishEventWithDetail(bus, nil, "agent-dispatch", action.Phase, st.SpecName, workspace, "dispatched", action.Agent)
+			case orchestrator.ActionDone:
+				publishEvent(bus, nil, "pipeline-complete", st.CurrentPhase, st.SpecName, workspace, "completed")
 			}
 		}
 

@@ -13,9 +13,10 @@ claude-forge/
 │   ├── _partials/         ← SSOT コンテンツ断片（docs/ ファイルが組み込む）
 │   └── architecture/      ← アーキテクチャドキュメント（13 ファイル）
 ├── hooks/
-│   └── hooks.json         ← フック定義（PreToolUse、PostToolUse、Stop）
+│   └── hooks.json         ← フック定義（Setup、SessionStart、PreToolUse、PostToolUse、Stop）
 ├── mcp-server/            ← Go MCPサーバーソース（forge-state バイナリ）
 ├── scripts/               ← フックスクリプト + テストスイート
+│   ├── session-start-hook.sh ← セッション開始時にダッシュボードURLを表示
 │   ├── pre-tool-hook.sh   ← 読み取り専用ガード、コミットブロック、チェックアウトブロック
 │   ├── post-agent-hook.sh ← エージェント出力品質バリデーション
 │   ├── stop-hook.sh       ← パイプライン完了ガード

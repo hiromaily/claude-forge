@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
@@ -82,7 +83,7 @@ func TestPipelineInitWithContextFirstCallEffortOptions(t *testing.T) {
 			dir := t.TempDir()
 			sm := newPIWCSM()
 
-			h := PipelineInitWithContextHandler(sm)
+			h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 			res := callTool(t, h, map[string]any{
 				"workspace":        dir,
 				"external_context": tc.externalContext,
@@ -172,7 +173,7 @@ func TestPipelineInitWithContextFirstCallAlwaysPrompts(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":        dir,
 		"external_context": map[string]any{},
@@ -210,7 +211,7 @@ func TestPipelineInitWithContextSecondCall(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 
 	// Second call: with user_confirmation (no task_type)
 	res := callTool(t, h, map[string]any{
@@ -280,7 +281,7 @@ func TestPipelineInitWithContextSecondCallXSReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":        dir,
 		"external_context": map[string]any{},
@@ -331,7 +332,7 @@ func TestPipelineInitWithContextCurrentBranch(t *testing.T) {
 			dir := t.TempDir()
 			sm := newPIWCSM()
 
-			h := PipelineInitWithContextHandler(sm)
+			h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 			flags := map[string]any{}
 			if tc.currentBranch != "" {
 				flags["current_branch"] = tc.currentBranch
@@ -375,7 +376,7 @@ func TestPipelineInitWithContextInvalidConfirmedEffort(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":        dir,
 		"external_context": map[string]any{},
@@ -425,7 +426,7 @@ func TestInitWorkspaceRejectsNonASCIIPath(t *testing.T) {
 	t.Parallel()
 
 	sm := newPIWCSM()
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 
 	// Pass a workspace path containing Japanese characters directly.
 	res := callTool(t, h, map[string]any{
@@ -494,7 +495,7 @@ func TestPipelineInitWithContextRequestMDContent(t *testing.T) {
 			dir := t.TempDir()
 			sm := newPIWCSM()
 
-			h := PipelineInitWithContextHandler(sm)
+			h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 			res := callTool(t, h, map[string]any{
 				"workspace":        dir,
 				"external_context": tc.externalContext,
@@ -540,7 +541,7 @@ func TestPipelineInitWithContextSourceURL(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":  dir,
 		"source_id":  "SOA-123",
@@ -585,7 +586,7 @@ func TestPipelineInitWithContextTextSource(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":        dir,
 		"external_context": map[string]any{},
@@ -679,7 +680,7 @@ func TestInitWorkspaceUsesWorkspaceSlug(t *testing.T) {
 	wsDir := filepath.Join(parentDir, "20260331-task")
 
 	sm := newPIWCSM()
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":        wsDir,
 		"external_context": map[string]any{},
@@ -741,7 +742,7 @@ func TestPipelineInitWithContextSpecNameFallback(t *testing.T) {
 			}
 
 			sm := newPIWCSM()
-			h := PipelineInitWithContextHandler(sm)
+			h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 			res := callTool(t, h, map[string]any{
 				"workspace":        wsDir,
 				"external_context": map[string]any{},
@@ -775,7 +776,7 @@ func TestTopLevelSourceIDRefinement(t *testing.T) {
 	wsDir := filepath.Join(parentDir, "20260330-https-github-com-owner-repo-issues-42")
 
 	sm := newPIWCSM()
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace": wsDir,
 		"source_id": "42",
@@ -861,7 +862,7 @@ func TestSourceIDPrependedToWorkspaceSlug(t *testing.T) {
 			wsDir := filepath.Join(parentDir, "20260330-placeholder")
 
 			sm := newPIWCSM()
-			h := PipelineInitWithContextHandler(sm)
+			h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 
 			args := map[string]any{
 				"workspace":        wsDir,
@@ -908,7 +909,7 @@ func TestDiscussFirstCallTextSourceReturnsNeedsDiscussion(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":        dir,
 		"task_text":        "implement login feature",
@@ -951,7 +952,7 @@ func TestDiscussFirstCallAutoSuppressesDiscussion(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":        dir,
 		"task_text":        "implement login feature",
@@ -983,7 +984,7 @@ func TestDiscussFirstCallGitHubSourceSkipsDiscussion(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace": dir,
 		"external_context": map[string]any{
@@ -1017,7 +1018,7 @@ func TestDiscussionCallReturnsEnrichedNeedsUserConfirmation(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":          dir,
 		"task_text":          "implement login feature",
@@ -1062,7 +1063,7 @@ func TestDiscussionAndConfirmationBothPresentReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	sm := newPIWCSM()
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":          dir,
 		"task_text":          "implement login feature",
@@ -1089,7 +1090,7 @@ func TestThirdCallWithEnrichedBodyWritesRequestMD(t *testing.T) {
 	sm := newPIWCSM()
 	enrichedBody := "implement login feature\n\n## Discussion Answers\n\nQ1: users can log in"
 
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 	res := callTool(t, h, map[string]any{
 		"workspace":        dir,
 		"task_text":        "implement login feature",
@@ -1141,7 +1142,7 @@ func TestTextSourceRequestMDContainsTaskText(t *testing.T) {
 
 	dir := t.TempDir()
 	sm := newPIWCSM()
-	h := PipelineInitWithContextHandler(sm)
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
 
 	// First call: plain text source, no discussion, no user_confirmation.
 	res1 := callTool(t, h, map[string]any{

@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
@@ -32,7 +33,7 @@ func TestPipelineRoundTrip_Phase1ToPhase2(t *testing.T) {
 
 	workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 	eng := orchestrator.NewEngine("", "")
-	nextActionH := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+	nextActionH := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 	reportResultH := PipelineReportResultHandler(state.NewStateManager("dev"), history.NewKnowledgeBase(""))
 
 	// Step 1: call pipeline_next_action at phase-1.
@@ -97,7 +98,7 @@ func TestPipelineRoundTrip_SkipSignal(t *testing.T) {
 		return nil
 	})
 	eng := orchestrator.NewEngine("", "")
-	nextActionH := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+	nextActionH := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 
 	// Call pipeline_next_action at phase-2 which is skipped.
 	// The handler MUST absorb the skip internally (P1) and return the next
@@ -140,7 +141,7 @@ func TestPipelineRoundTrip_ExecPhase(t *testing.T) {
 	// Set up workspace at pr-creation phase.
 	workspace, sm := initWorkspaceForNextAction(t, "pr-creation", nil)
 	eng := orchestrator.NewEngine("", "")
-	nextActionH := PipelineNextActionHandler(sm, eng, "", nil, nil, nil)
+	nextActionH := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 	reportResultH := PipelineReportResultHandler(state.NewStateManager("dev"), history.NewKnowledgeBase(""))
 
 	// Step 1: call pipeline_next_action at pr-creation.
@@ -221,7 +222,7 @@ func TestDiscussModeEndToEnd(t *testing.T) {
 
 	sm := state.NewStateManager("dev")
 	initH := PipelineInitHandler(sm)
-	piwcH := PipelineInitWithContextHandler(sm)
+	piwcH := PipelineInitWithContextHandler(sm, events.NewEventBus())
 
 	// ---- Step 1: pipeline_init with "--discuss" flag ----
 
@@ -430,7 +431,7 @@ func TestIntegration_P5_PreviousResultMerge(t *testing.T) {
 
 	kb := history.NewKnowledgeBase("")
 	eng := orchestrator.NewEngine("", "")
-	handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+	handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 	// Step 1: call pipeline_next_action with no previous_* params.
 	// Expect: spawn_agent for phase-1 (situation-analyst).
@@ -536,7 +537,7 @@ func TestIntegration_P5_RevisionRequired(t *testing.T) {
 
 	kb := history.NewKnowledgeBase("")
 	eng := orchestrator.NewEngine("", "")
-	handler := PipelineNextActionHandler(sm, eng, "", nil, kb, nil)
+	handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
 
 	// Step 1: call pipeline_next_action with previous_tokens set.
 	// P5 block runs reportResultCore for phase-3b, reads REVISE verdict,
