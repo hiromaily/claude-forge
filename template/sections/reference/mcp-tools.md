@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-The `forge-state` MCP server exposes **44 typed tool calls**. Tool names use underscores (MCP protocol requirement).
+The `forge-state` MCP server exposes **46 typed tool calls**. Tool names use underscores (MCP protocol requirement).
 
 ## Lifecycle
 
@@ -43,6 +43,8 @@ The `forge-state` MCP server exposes **44 typed tool calls**. Tool names use und
 | `mcp__forge-state__set_skip_pr` | Skip PR creation |
 | `mcp__forge-state__set_debug` | Enable debug mode |
 | `mcp__forge-state__set_use_current_branch` | Use current branch instead of creating new |
+| `mcp__forge-state__preferences_get` | Read user preferences from `.specs/preferences.json` |
+| `mcp__forge-state__preferences_set` | Write user preferences (full replacement) |
 
 ## Task Management
 
