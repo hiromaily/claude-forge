@@ -4,7 +4,8 @@
       "type": "stdio",
       "command": "${CLAUDE_PLUGIN_ROOT}/scripts/launch-mcp.sh",
       "env": {
-        "FORGE_AGENTS_PATH": "${CLAUDE_PLUGIN_ROOT}/agents"
+        "FORGE_AGENTS_PATH": "${CLAUDE_PLUGIN_ROOT}/agents",
+        "FORGE_EVENTS_PORT": "8099"
       }
     }
   }

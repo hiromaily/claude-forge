@@ -92,9 +92,53 @@ func TestStart_BindsAndServesEvents(t *testing.T) {
 	}
 }
 
-// TestStart_BindFailureIsNonFatal verifies that when the port is already in
-// use, Start returns nil instead of panicking or calling log.Fatal.
-func TestStart_BindFailureIsNonFatal(t *testing.T) {
+// TestStart_FallbackOnPortConflict verifies that when the preferred port is
+// already in use, Start falls back to a random port in the fallback range
+// and returns a running server.
+func TestStart_FallbackOnPortConflict(t *testing.T) {
+	t.Parallel()
+
+	// Occupy the preferred port so Start must fall back.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+	occupiedPort := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+
+	bus := events.NewEventBus()
+	srv := Start(occupiedPort, bus, state.NewStateManager("test"))
+	if srv == nil {
+		t.Fatal("expected Start to succeed via fallback port, got nil")
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	})
+}
+
+// TestListenWithFallback_PreferredPortSucceeds verifies that when the
+// preferred port is free, listenWithFallback returns a listener on that port.
+func TestListenWithFallback_PreferredPortSucceeds(t *testing.T) {
+	t.Parallel()
+
+	port := freePort(t)
+	ln := listenWithFallback(port)
+	if ln == nil {
+		t.Fatal("listenWithFallback returned nil for free port")
+	}
+	defer func() { _ = ln.Close() }()
+
+	gotPort := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+	if gotPort != port {
+		t.Errorf("listenWithFallback bound port %s, want %s", gotPort, port)
+	}
+}
+
+// TestListenWithFallback_FallbackPortRange verifies that when the preferred
+// port is occupied, the fallback binds within [fallbackPortMin, fallbackPortMax].
+func TestListenWithFallback_FallbackPortRange(t *testing.T) {
 	t.Parallel()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -102,15 +146,17 @@ func TestStart_BindFailureIsNonFatal(t *testing.T) {
 		t.Fatalf("net.Listen: %v", err)
 	}
 	defer func() { _ = ln.Close() }()
-	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+	occupiedPort := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
 
-	bus := events.NewEventBus()
-	srv := Start(port, bus, state.NewStateManager("test"))
-	if srv != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(ctx)
-		t.Fatal("expected Start to return nil for already-bound port, got non-nil")
+	fallback := listenWithFallback(occupiedPort)
+	if fallback == nil {
+		t.Fatal("listenWithFallback returned nil; expected fallback to succeed")
+	}
+	defer func() { _ = fallback.Close() }()
+
+	gotPort := fallback.Addr().(*net.TCPAddr).Port
+	if gotPort < fallbackPortMin || gotPort > fallbackPortMax {
+		t.Errorf("fallback port %d outside expected range [%d, %d]", gotPort, fallbackPortMin, fallbackPortMax)
 	}
 }
 
