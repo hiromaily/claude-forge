@@ -42,7 +42,7 @@ func LoadPreferences(specsDir string) (Preferences, error) {
 // SavePreferences writes preferences.json to specsDir atomically.
 // Creates specsDir if it does not exist.
 func SavePreferences(specsDir string, p Preferences) error {
-	if err := os.MkdirAll(specsDir, 0o755); err != nil {
+	if err := os.MkdirAll(specsDir, 0o750); err != nil {
 		return fmt.Errorf("SavePreferences: mkdir: %w", err)
 	}
 	data, err := json.MarshalIndent(p, "", "  ")

@@ -9,8 +9,9 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
-func boolPtr(b bool) *bool    { return &b }
-func strPtr(s string) *string { return &s }
+func boolPtr(b bool) *bool { return new(b) }
+
+func strPtr(s string) *string { return new(s) }
 
 func TestLoadPreferences_FileNotExists(t *testing.T) {
 	t.Parallel()
@@ -73,7 +74,7 @@ func TestLoadPreferences_PartialFile(t *testing.T) {
 func TestSavePreferences_CreatesDir(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "nonexistent")
-	p := state.Preferences{Auto: boolPtr(true)}
+	p := state.Preferences{Auto: new(true)}
 	if err := state.SavePreferences(dir, p); err != nil {
 		t.Fatalf("SavePreferences: %v", err)
 	}
@@ -93,7 +94,7 @@ func TestSavePreferences_CreatesDir(t *testing.T) {
 func TestSavePreferences_AtomicWrite(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	p := state.Preferences{Effort: strPtr("L")}
+	p := state.Preferences{Effort: new("L")}
 	if err := state.SavePreferences(dir, p); err != nil {
 		t.Fatalf("SavePreferences: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestSavePreferences_AtomicWrite(t *testing.T) {
 func TestPreferences_Validate_ValidEffort(t *testing.T) {
 	t.Parallel()
 	for _, e := range []string{"S", "M", "L"} {
-		p := state.Preferences{Effort: strPtr(e)}
+		p := state.Preferences{Effort: new(e)}
 		if err := p.Validate(); err != nil {
 			t.Errorf("Validate(%q) = %v, want nil", e, err)
 		}
@@ -115,7 +116,7 @@ func TestPreferences_Validate_ValidEffort(t *testing.T) {
 
 func TestPreferences_Validate_InvalidEffort(t *testing.T) {
 	t.Parallel()
-	p := state.Preferences{Effort: strPtr("XS")}
+	p := state.Preferences{Effort: new("XS")}
 	if err := p.Validate(); err == nil {
 		t.Error("Validate(XS) = nil, want error")
 	}

@@ -92,7 +92,7 @@ func listenWithFallback(preferredPort string) net.Listener {
 		preferredPort, fallbackPortMin, fallbackPortMax)
 
 	for range fallbackAttempts {
-		port := fallbackPortMin + rand.IntN(fallbackPortMax-fallbackPortMin+1)
+		port := fallbackPortMin + rand.IntN(fallbackPortMax-fallbackPortMin+1) //nolint:gosec // port selection is non-security use of math/rand
 		addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
 		ln, err = net.Listen("tcp", addr)
 		if err == nil {
