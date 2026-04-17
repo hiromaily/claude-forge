@@ -24,7 +24,7 @@ features:
     details: Design and task plans go through APPROVE/REVISE cycles with dedicated reviewer agents before implementation begins.
     icon: 🔄
   - title: Disk-Based State
-    details: All progress tracked in state.json via Go MCP server (46 tools). Pipelines survive context compaction and session restarts.
+    details: All progress tracked in state.json via Go MCP server (47 tools). Pipelines survive context compaction and session restarts.
     icon: 💾
   - title: 10 Specialist Agents
     details: Each phase handled by a dedicated agent with its own context window — no shared state, no context pollution.
