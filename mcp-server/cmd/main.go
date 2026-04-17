@@ -7,8 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,6 +15,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/analytics"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/dashboard"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
@@ -73,27 +72,6 @@ func resolveAgentDir() string {
 	return "agents"
 }
 
-// startSSEServer attempts to bind an HTTP server for the SSE /events endpoint on
-// the given address. It returns the started *http.Server on success, or nil when
-// the port cannot be bound (the error is logged to stderr and execution continues).
-// A nil return means SSE is disabled but the MCP stdio transport is unaffected.
-func startSSEServer(addr string, bus *events.EventBus) *http.Server {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "forge-state: SSE HTTP server could not bind %s: %v (continuing without SSE)\n", addr, err)
-		return nil
-	}
-	mux := http.NewServeMux()
-	mux.Handle("GET /events", events.SSEHandler(bus))
-	srv := &http.Server{Handler: mux}
-	go func() {
-		if serveErr := srv.Serve(ln); serveErr != nil && serveErr != http.ErrServerClosed {
-			fmt.Fprintf(os.Stderr, "forge-state: SSE HTTP server error: %v\n", serveErr)
-		}
-	}()
-	return srv
-}
-
 func main() {
 	sm := state.NewStateManager(appVersion)
 	srv := server.NewMCPServer("forge-state", appVersion)
@@ -120,13 +98,10 @@ func main() {
 	rep := analytics.NewReporter(specsDir, kb)
 	tools.RegisterAll(srv, sm, bus, slack, eventsPort, eng, agentDir, histIdx, kb, profiler, col, est, rep)
 
-	// Start the SSE HTTP server if FORGE_EVENTS_PORT is set.
-	// A failed bind is non-fatal: the error is logged and execution continues
-	// to ServeStdio so the MCP stdio transport remains functional.
-	var httpSrv *http.Server
-	if eventsPort != "" {
-		httpSrv = startSSEServer(":"+eventsPort, bus)
-	}
+	// Start the optional dashboard / SSE / intervention HTTP server.
+	// Returns nil when FORGE_EVENTS_PORT is unset or the bind fails; in either
+	// case the MCP stdio transport below remains functional.
+	httpSrv := dashboard.Start(eventsPort, bus, sm)
 
 	// Run the MCP stdio transport. This blocks until stdin is closed.
 	if err := server.ServeStdio(srv); err != nil {

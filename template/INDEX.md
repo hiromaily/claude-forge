@@ -135,6 +135,7 @@
 | sections/ja/architecture/state-management.md | Not referenced by any template |
 | sections/ja/architecture/technical-decisions.md | Not referenced by any template |
 | sections/ja/development/installation-guide.md | Not referenced by any template |
+| sections/ja/product/dashboard.md | Not referenced by any template |
 | sections/ja/product/flow-templates-guide.md | Not referenced by any template |
 | sections/ja/product/human-interaction-guide.md | Not referenced by any template |
 | sections/ja/product/quick-start-guide.md | Not referenced by any template |
@@ -144,6 +145,7 @@
 | sections/ja/reference/mcp-tools.md | Not referenced by any template |
 | sections/ja/reference/workflow-instructions.md | Not referenced by any template |
 | sections/ja/research/codex-integration.md | Not referenced by any template |
+| sections/product/dashboard.md | Not referenced by any template |
 | sections/product/flow-templates-guide.md | Not referenced by any template |
 | sections/product/human-interaction-guide.md | Not referenced by any template |
 | sections/product/quick-start-guide.md | Not referenced by any template |

@@ -67,7 +67,7 @@ This registers the MCP server with `--scope local` (written to `.claude/settings
 | --- | --- | --- |
 | `FORGE_AGENTS_PATH` | Yes | Absolute path to `agents/` directory. Set automatically by `make setup`. |
 | `FORGE_SPECS_DIR` | No | Override the default `.specs/` directory. |
-| `FORGE_EVENTS_PORT` | No | Port for the SSE events endpoint. |
+| `FORGE_EVENTS_PORT` | No | Port for the SSE events endpoint and the bundled web dashboard (`http://localhost:<port>/`). |
 
 ## Troubleshooting
 

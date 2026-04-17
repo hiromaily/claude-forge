@@ -25,6 +25,12 @@ Read these files:
 4. **Test strategy** — is each changed layer tested? Are deleted test files replaced?
 5. **Contradictions** — any decisions that conflict with each other or with project conventions?
 6. **Scope creep** — does the design stay within the request, or does it over-engineer?
+7. **Implementation readiness** — is the design precise enough to implement without ambiguity? Specifically:
+   - Are all data flows fully specified (who calls what, with what input, producing what output)?
+   - Are edge cases and error paths defined (what happens on failure, empty input, timeout)?
+   - Are dependencies between components explicit (what reads from what, what must exist before what)?
+   - Could an implementer start coding from this design alone, or would they need to make design-level decisions themselves?
+   If the implementer would need to guess or make judgment calls about architectural choices, the design is NOT implementation-ready. This is CRITICAL.
 
 ## Severity Classification
 
