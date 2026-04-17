@@ -27,6 +27,7 @@ type StateManager struct {
 	state     *State // in-memory cache; nil until LoadFromFile or Init
 	workspace string // bound workspace path; empty until first bind
 	version   string // MCP server binary version; written to state.json on Init
+	specsDir  string // .specs/ directory path; set via SetSpecsDir
 }
 
 // NewStateManager constructs a StateManager ready for use.
@@ -39,6 +40,16 @@ func NewStateManager(version string) *StateManager {
 // Version returns the MCP server binary version that was passed to NewStateManager.
 func (m *StateManager) Version() string {
 	return m.version
+}
+
+// SetSpecsDir stores the .specs/ directory path for use by preferences loading.
+func (m *StateManager) SetSpecsDir(dir string) {
+	m.specsDir = dir
+}
+
+// SpecsDir returns the .specs/ directory path set via SetSpecsDir.
+func (m *StateManager) SpecsDir() string {
+	return m.specsDir
 }
 
 // ---------- helpers ----------

@@ -74,12 +74,13 @@ func resolveAgentDir() string {
 
 func main() {
 	sm := state.NewStateManager(appVersion)
+	specsDir := resolveSpecsDir()
+	sm.SetSpecsDir(specsDir)
 	srv := server.NewMCPServer("forge-state", appVersion)
 	bus := events.NewEventBus()
 	slack := events.NewSlackNotifier(os.Getenv("FORGE_SLACK_WEBHOOK_URL"))
 	eventsPort := os.Getenv("FORGE_EVENTS_PORT")
 	agentDir := resolveAgentDir()
-	specsDir := resolveSpecsDir()
 	eng := orchestrator.NewEngine(agentDir, specsDir)
 	histIdx := history.New(specsDir)
 	if err := histIdx.Build(); err != nil {
