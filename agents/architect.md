@@ -25,7 +25,8 @@ If this is a **revision**, also read:
 
 A **DESIGN document** covering:
 
-1. **Chosen approach and rationale** — why this approach vs alternatives considered
+1. **Chosen approach and rationale** — why this approach vs alternatives considered.
+   When multiple design alternatives exist, evaluate each from an **engineering perspective** — separation of concerns, DRY, testability, determinism, dependency direction, blast radius of changes — and select the one that is objectively superior. State the engineering criteria that drove the selection, not just a preference.
 2. **Architectural changes** — new files, modified interfaces, deleted code (with specific file paths)
    - **Impact scope** (when provided): If `investigation.md` includes `impact_scope` output, add a dedicated "Impact Scope" subsection listing each affected file, its BFS distance (or `-1` for TypeScript/Python), and interface changes required in that file.
 3. **Data model or type changes** — schema, struct, or type modifications

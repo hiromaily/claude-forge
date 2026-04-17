@@ -103,21 +103,65 @@ Done so far (lives entirely under `mcp-server/internal/dashboard/`):
 - ✅ Dashboard MVP (single embedded HTML, opt-in via `FORGE_EVENTS_PORT`, click-through URL printed at startup).
 - ✅ Intervention API + UI: `POST /api/checkpoint/approve`, `POST /api/pipeline/abandon`, plus inline Approve and header Abandon buttons. Loopback-only with structural Origin allowlist.
 Remaining:
-- ⬜ **Browser MCP tool** — Playwright / Chromium DevTools wrapper so an agent can read auth-walled docs, scrape internal portals, and screenshot UI state. Largest single Layer B item.
 - ⬜ **`pipeline_fork(workspace, from_phase)` MCP tool** — snapshot state.json + workspace dir into a sibling spec to enable "what if we tried approach B from Phase 3".
 - ⬜ **Stop-without-abandon intervention** — pause a running pipeline at the next safe boundary instead of marking it abandoned (today's only termination option).
-- ⬜ **LAN-watch mode** — opt-in bind to a non-loopback interface with auth so a teammate can subscribe to the SSE stream without owning the runner.
+- 🔒 **LAN-watch mode** — on hold. opt-in bind to a non-loopback interface with auth so a teammate can subscribe to the SSE stream without owning the runner. Revisit when multi-user demand is confirmed.
 
-**Layer C — Learning and self-recovery (extensions to history & analytics).** ⬜ entirely todo.
+**Layer D — Autonomous task queue (batch execution).** ⬜ new (2026-04-17).
+Maps to: sequential multi-task execution, Devin-style autonomous PR creation from a backlog of tickets.
+Why a separate layer: Layers A–C extend the *single-pipeline* model. Layer D wraps the existing forge pipeline in an outer loop, processing a user-curated list of tasks without modifying forge internals.
+
+Concept:
+- User creates `.specs/queue.yaml` containing a list of issue URLs (Jira, GitHub, Linear, etc.) with effort levels.
+- A new skill (`forge-queue`) parses the YAML, picks the first unprocessed task, and invokes the existing `forge` skill with `--auto` + the URL + effort.
+- On completion: writes `status: completed` + PR number back to `queue.yaml`, moves to next task.
+- On failure: writes `status: failed` + reason, abandons the pipeline, moves to next task.
+- Terminates when all tasks are processed.
+
+```yaml
+# .specs/queue.yaml
+tasks:
+  - url: https://jira.example.com/browse/DEA-123
+    effort: M
+    status: completed
+    pr: 2891
+    workspace: 2026-04-17-dea-123-fix-login-validation
+  - url: https://jira.example.com/browse/DEA-456
+    effort: S
+    status: failed
+    reason: "phase-3: architect could not produce viable design"
+    workspace: 2026-04-17-dea-456-add-export-feature
+  - url: https://github.com/legalforce/dealon-app/issues/42
+    effort: S
+  - url: https://jira.example.com/browse/DEA-789
+    effort: L
+```
+
+Design constraints:
+- **Sequential only** — parallel execution is handled by the user opening multiple terminals.
+- **`--auto` forced** — no checkpoints; each task runs to completion or failure autonomously.
+- **Link-based input only** — tasks are specified as issue URLs; free-text tasks are not supported in queue mode.
+- **No forge internals changes** — `forge-queue` is purely an outer loop that calls forge as-is.
+- **State lives in `queue.yaml`** — no separate state file; the YAML is both input and status tracker.
+
+Implementation:
+- Two new skills: `skills/forge-queue/SKILL.md` (executor), `skills/forge-queue-create/SKILL.md` (generator).
+- Five new MCP tools: `queue_create`, `queue_init`, `queue_next`, `queue_report`, `queue_update_pr` (YAML I/O + state.json read).
+- New Go package: `mcp-server/internal/queue/`.
+- Each task runs in an isolated `claude -p` subprocess (clean context per task).
+- Effort: M.
+- Full design: `docs/research/queue-design.md`.
+
+**Layer C — Learning and self-recovery (extensions to history & analytics).** 🔒 on hold (2026-04-17).
 Maps to: long-term knowledge, repository awareness deltas, CI feedback loop, budget guardrails, runtime estimator enforcement.
 Why fits here: claude-forge already collects most of the data — `history_*`, `profile_get`, `analytics_*`, `phase-log`. What is missing is *closing the loop* so the data influences the running pipeline:
 
-- ⬜ **CI feedback (BACKLOG F19)** — concretely: after `pr-creation`, spawn a watcher that polls `gh run list --branch <branch> --json status,conclusion`, parses failures from the run log, and re-enters Phase 5 with the failure as a revision finding.
-- ⬜ **Budget enforcement** — concretely: `pipeline_report_result` already accumulates `tokensUsed` per phase; add a `BudgetGuard` step that consults `analytics_estimate` and returns `action.type == "checkpoint"` with `present_to_user = "Budget exceeded P90 — continue?"` when cumulative tokens > P90 prediction × 1.2.
-- ⬜ **Org knowledge (`knowledge_search`)** — concretely: a new MCP tool that queries an embedding index over user-supplied markdown (e.g. `docs/conventions/*.md`, ADRs); `prompt.BuildPrompt` adds a Layer 5 with the same budget-truncation discipline.
-- ⬜ **Profile invalidation** — concretely: `profile.Cache` already exists; add a hash check on `package.json` / `go.mod` / `pnpm-lock.yaml` modification times and re-run analysis on drift.
+- 🔒 **CI feedback (BACKLOG F19)** — on hold. Post-PR CI watching is less valuable than strengthening pre-PR local verification (lint, test, build, typecheck via `profile_get` commands in `final-verification`). Revisit only after local verification is robust.
+- 🔒 **Budget enforcement** — on hold. `analytics_estimate` relies on historical P50/P90, but cold-start (no data) and effort-only granularity (ignores task complexity) make the threshold unreliable. Needs a fallback constant design and richer prediction inputs before implementation.
+- 🔒 **Org knowledge (`knowledge_search`)** — on hold. Largest unknown (embedding store choice). Defer until other layers produce enough data to know which knowledge sources are actually missing.
+- 🔒 **Profile invalidation** — on hold. Lowest risk item but deferred along with the rest of Layer C.
 
-These are all in-scope for the existing Go MCP server.
+These are all in-scope for the existing Go MCP server when unblocked.
 
 ### Implementation status snapshot
 
@@ -127,27 +171,26 @@ A glanceable view of remaining work. Effort is **post-Layer-B-MVP estimate**: th
 |---|---|---|---|---|
 | B | Dashboard MVP (timeline, SSE) | ✅ done | — | — |
 | B | Intervention API + Approve / Abandon UI | ✅ done | — | — |
-| B | Browser MCP (Playwright) | ⬜ todo | L | None — independent MCP tool |
 | B | `pipeline_fork` MCP tool | ⬜ todo | M | StateManager snapshot helper |
 | B | Stop-without-abandon | ⬜ todo | S | Add `StatusPaused` + matching guards |
-| B | LAN-watch mode (auth) | ⬜ todo | M | Requires auth scheme decision |
-| C | F19 — CI feedback loop | ⬜ todo | L | `gh` CLI or GitHub webhook receiver |
-| C | Budget enforcement | ⬜ todo | M | `analytics_estimate` (already shipped) |
-| C | `knowledge_search` MCP tool | ⬜ todo | L | Embedding store decision |
-| C | Profile invalidation on lockfile drift | ⬜ todo | S | None |
+| B | LAN-watch mode (auth) | 🔒 on hold | M | Multi-user demand unconfirmed |
+| C | F19 — CI feedback loop | 🔒 on hold | L | Pre-PR local verification preferred |
+| C | Budget enforcement | 🔒 on hold | M | Cold-start + granularity issues |
+| C | `knowledge_search` MCP tool | 🔒 on hold | L | Embedding store decision |
+| C | Profile invalidation on lockfile drift | 🔒 on hold | S | Layer C deferred as a whole |
+| D | `forge-queue` (autonomous task queue) | ⬜ todo | M | 5 MCP tools + 2 skills + Go package |
 | A | Cloud sandbox / runner / secrets / scheduler | 🚫 separate product | XL | Whole new repo |
 
-### Recommended sequence (updated 2026-04-16)
+### Recommended sequence (updated 2026-04-17)
 
-Layer B Phase 1 (dashboard + intervention) is shipped on `feature/sse-dashboard-mvp`. The natural next steps, in order of expected ROI:
+Layer B Phase 1 (dashboard + intervention) is shipped on `feature/sse-dashboard-mvp`. Layer C is **on hold** pending foundational improvements (local verification, prediction accuracy). The next steps focus on Layer B:
 
-1. **Layer C / Budget enforcement** (M, ~1 day). Smallest Layer C item, immediate Devin-flavoured win: the dashboard already shows phase costs via SSE, so an auto-checkpoint at P90 × 1.2 is visible the moment it triggers. Closes the loop on data the repo already collects.
-2. **Layer C / F19 CI feedback** (L, 2–3 days). Highest-value pipeline-quality improvement. Extends the value chain from "PR opened" to "PR mergeable."
-3. **Layer B / `pipeline_fork`** (M). Pairs naturally with the intervention UI — a "fork" button next to Approve / Abandon completes the intervention triad.
-4. **Layer B / Stop-without-abandon** (S). One-line addition to the existing intervention API; differentiates "I want to look at this" from "kill it."
-5. **Layer C / `knowledge_search`** (L). Largest unknown (embedding store choice). Defer until budget/CI loops have produced enough data to know which knowledge sources are actually missing.
-6. **Layer B / Browser MCP** (L). Independent track; pick up when an agent task requires it.
-7. **Layer A** stays out of scope unless a multi-developer offering becomes a strategic goal — that's a separate product decision, not a BACKLOG item.
+1. **Layer D / `forge-queue`** (S–M). Highest immediate ROI — enables autonomous batch execution of stocked tasks with zero changes to forge internals. New skill only.
+2. **Layer B / `pipeline_fork`** (M). Pairs naturally with the intervention UI — a "fork" button next to Approve / Abandon completes the intervention triad.
+3. **Layer B / Stop-without-abandon** (S). One-line addition to the existing intervention API; differentiates "I want to look at this" from "kill it."
+4. **Layer B / LAN-watch mode** (M). On hold — revisit when multi-user demand is confirmed.
+5. **Layer A** stays out of scope unless a multi-developer offering becomes a strategic goal — that's a separate product decision, not a BACKLOG item.
+6. **Layer C** — revisit when: (a) pre-PR local verification (`final-verification` using `profile_get` commands) is robust, (b) `analytics_estimate` has enough historical data and richer inputs (task complexity, language, file count) for reliable predictions.
 
 ### What "Devin-class" explicitly does *not* require
 
