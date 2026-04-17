@@ -30,7 +30,7 @@ In v1, if the LLM misinterpreted a skip condition or forgot to call `phase-compl
 | **Analytics** | None | `analytics.Collector`, `Estimator`, `Reporter` — token/cost/duration tracking |
 | **Cross-pipeline learning** | None | `history.HistoryIndex` (BM25), `KnowledgeBase` (patterns, friction) |
 | **Repo profiling** | None | `profile.RepoProfiler` — language, CI, linter detection for prompt enrichment |
-| **Tool count** | ~10 shell commands | 46 typed MCP tools |
+| **Tool count** | ~10 shell commands | 47 typed MCP tools |
 | **Error handling** | Shell exit codes, often swallowed | Go errors with typed responses (`IsError=true`) |
 
 ### What this means in practice

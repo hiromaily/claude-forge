@@ -1,4 +1,4 @@
-// registers all 46 MCP tool handlers with the MCP server.
+// registers all 47 MCP tool handlers with the MCP server.
 // Tool names use underscores (MCP protocol requirement; hyphens are not permitted).
 
 package tools
@@ -15,7 +15,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
-// RegisterAll registers all 46 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 47 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
@@ -35,6 +35,14 @@ func RegisterAll(
 	profiler *profile.RepoProfiler,
 	col *analytics.Collector, est *analytics.Estimator, rep *analytics.Reporter,
 ) {
+	srv.AddTool(
+		mcp.NewTool("__IMPORTANT",
+			mcp.WithDescription("Session-start context for claude-forge. Returns the dashboard URL and basic status information. "+
+				"This tool is auto-displayed in the system prompt when the plugin is loaded."),
+		),
+		ImportantHandler(eventsPort),
+	)
+
 	srv.AddTool(
 		mcp.NewTool("init",
 			mcp.WithDescription("Initialise a new pipeline workspace (state.json). Requires validated=true after validate_input succeeds."),

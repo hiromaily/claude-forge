@@ -1,7 +1,9 @@
-// Package tools implements all 46 MCP tool handlers registered by the
+// Package tools implements all 47 MCP tool handlers registered by the
 // forge-state server.
 //
 // The handlers are organised into categories:
+//
+// Discovery (1 tool): __IMPORTANT (session-start context with dashboard URL).
 //
 // Pipeline lifecycle (4 tools):
 //   - [PipelineInitHandler]: input parsing and resume detection.
@@ -26,8 +28,10 @@
 //
 // Validation (2 tools): validate_input, validate_artifact.
 //
-// History & analytics (8 tools): search_patterns, subscribe_events,
-// history_search, history_get_patterns, history_get_friction_map,
+// Query & config (3 tools): profile_get, preferences_get, preferences_set.
+//
+// History & analytics (7 tools): search_patterns, history_search,
+// history_get_patterns, history_get_friction_map,
 // analytics_pipeline_summary, analytics_repo_dashboard, analytics_estimate.
 //
 // All handlers are registered in [RegisterAll] (registry.go).

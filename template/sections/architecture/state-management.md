@@ -2,7 +2,7 @@
 
 ## Overview
 
-All pipeline state is managed through the **Go MCP server** (`forge-state`), which exposes 46 typed tool calls. State is persisted in `state.json` within the workspace directory.
+All pipeline state is managed through the **Go MCP server** (`forge-state`), which exposes 47 typed tool calls. State is persisted in `state.json` within the workspace directory.
 
 ## State Machine
 
@@ -57,7 +57,7 @@ Key fields in `state.json`:
 
 ## MCP Tool Categories
 
-The Go MCP server exposes **46 typed tool calls** across 8 categories:
+The Go MCP server exposes **47 typed tool calls** across 8 categories:
 
 | Category | Tools | Description |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 // Package tools — integration tests for handler registration and compilation.
 // Full guard-enforcement tests live in Task 7; here we verify that:
-//   - RegisterAll compiles and adds exactly 45 tools
+//   - RegisterAll compiles and adds exactly 47 tools
 //   - Each handler calls the StateManager without panicking on valid input
 package tools
 
@@ -66,8 +66,8 @@ func TestRegisterAllCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 46 {
-		t.Errorf("RegisterAll: expected 46 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 47 {
+		t.Errorf("RegisterAll: expected 47 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
 		}

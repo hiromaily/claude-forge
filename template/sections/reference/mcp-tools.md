@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-The `forge-state` MCP server exposes **46 typed tool calls**. Tool names use underscores (MCP protocol requirement).
+The `forge-state` MCP server exposes **47 typed tool calls**. Tool names use underscores (MCP protocol requirement).
 
 ## Lifecycle
 
