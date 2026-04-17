@@ -117,8 +117,10 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		// Apply user preferences as defaults (explicit flags win).
 		// A corrupt or missing preferences file silently falls back to zero
 		// Preferences{}, so the pipeline always proceeds.
-		if p, err := state.LoadPreferences(sm.SpecsDir()); err == nil {
-			mergeWithPreferences(flags, p)
+		if specsDir := sm.SpecsDir(); specsDir != "" {
+			if p, err := state.LoadPreferences(specsDir); err == nil {
+				mergeWithPreferences(flags, p)
+			}
 		}
 
 		// Decision 5: Source type and workspace path.

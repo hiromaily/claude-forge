@@ -51,11 +51,22 @@ func SavePreferences(specsDir string, p Preferences) error {
 	}
 	data = append(data, '\n')
 	target := filepath.Join(specsDir, preferencesFileName)
-	tmp := target + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	f, err := os.CreateTemp(specsDir, "preferences-*.json.tmp")
+	if err != nil {
+		return fmt.Errorf("SavePreferences: create tmp: %w", err)
+	}
+	tmp := f.Name()
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
 		return fmt.Errorf("SavePreferences: write tmp: %w", err)
 	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("SavePreferences: close tmp: %w", err)
+	}
 	if err := os.Rename(tmp, target); err != nil {
+		_ = os.Remove(tmp)
 		return fmt.Errorf("SavePreferences: rename: %w", err)
 	}
 	return nil

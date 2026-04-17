@@ -394,7 +394,7 @@ ensuring a clean context window per task with zero cross-task contamination.
 
 `claude -p` subprocess has full access to the `forge-state` MCP server
 when run from the same repository root where `claude-forge` is installed
-as a plugin. **Verified**: all 44 `mcp__plugin_claude-forge_forge-state__*`
+as a plugin. **Verified**: all 46 `mcp__plugin_claude-forge_forge-state__*`
 tools are available in `claude -p` sessions (tested 2026-04-17).
 
 Authentication (`gh` CLI, Jira credentials) is inherited from the parent
@@ -621,6 +621,6 @@ tools → queue → validation (URL validation)
 
 ## Tool Count Impact
 
-Current: 44 tools. After: 49 tools (+5: `queue_create`, `queue_init`,
+Current: 46 tools. After: 51 tools (+5: `queue_create`, `queue_init`,
 `queue_next`, `queue_report`, `queue_update_pr`).
 Update counts in `CLAUDE.md`, `scripts/README.md`, and `README.md`.
