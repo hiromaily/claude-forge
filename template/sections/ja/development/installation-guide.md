@@ -65,7 +65,7 @@ make setup-manual
 | --- | --- | --- |
 | `FORGE_AGENTS_PATH` | はい | `agents/` ディレクトリの絶対パス。`make setup` で自動設定。 |
 | `FORGE_SPECS_DIR` | いいえ | デフォルトの `.specs/` ディレクトリを上書き。 |
-| `FORGE_EVENTS_PORT` | いいえ | SSE イベントエンドポイントおよび同梱の Web ダッシュボード（`http://localhost:<port>/`）用のポート。 |
+| `FORGE_EVENTS_PORT` | いいえ | SSE イベントエンドポイントおよび同梱 Web ダッシュボード用ポート。デフォルト `8099`（`.mcp.json` で自動設定）。競合時は 8100〜8200 にフォールバック。 |
 
 ## トラブルシューティング
 

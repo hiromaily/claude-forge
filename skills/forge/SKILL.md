@@ -152,6 +152,8 @@ Repeat until done:
 - `--nopr`: Skips the PR creation phase at the end of the pipeline.
 - `--debug`: Enables debug mode in the pipeline state.
 
+Flags can also be set as persistent defaults via `/forge-setup`. Explicit flags on `/forge` always override preferences.
+
 ## Rules
 
 - Never make orchestration decisions independently — follow action.type exactly.

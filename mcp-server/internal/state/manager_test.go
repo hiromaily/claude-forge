@@ -39,6 +39,23 @@ func newManager() *state.StateManager {
 	return state.NewStateManager("dev")
 }
 
+// ---------- SpecsDir ----------
+
+func TestStateManager_SpecsDir(t *testing.T) {
+	t.Parallel()
+
+	m := newManager()
+
+	if got := m.SpecsDir(); got != "" {
+		t.Errorf("SpecsDir() before SetSpecsDir = %q, want empty", got)
+	}
+
+	m.SetSpecsDir("/tmp/specs")
+	if got := m.SpecsDir(); got != "/tmp/specs" {
+		t.Errorf("SpecsDir() = %q, want %q", got, "/tmp/specs")
+	}
+}
+
 // ---------- Init ----------
 
 func TestInit_CreatesStateJSON(t *testing.T) {

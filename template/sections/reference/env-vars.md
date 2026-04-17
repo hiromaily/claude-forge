@@ -25,7 +25,9 @@ Port for the SSE events endpoint **and** the bundled web dashboard. When set, th
 
 Open `http://localhost:<port>/` in a browser after starting any pipeline. The dashboard auto-reconnects on stream drop and supports per-workspace filtering.
 
-Default: not set (HTTP listener disabled, MCP stdio transport unaffected)
+When the configured port is already in use, the server automatically retries on a random port in the range **8100–8200**. The actual URL is logged to stderr. The HTTP listener binds to `127.0.0.1` only.
+
+Default: `8099` (set in `.mcp.json` for plugin installs; unset = HTTP listener disabled)
 
 ## Setup
 

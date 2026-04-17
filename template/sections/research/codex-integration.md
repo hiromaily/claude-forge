@@ -13,7 +13,7 @@ claude-forge ships the following artifacts as a single Claude Code plugin:
 - `skills/forge/SKILL.md` — orchestrator skill
 - `hooks/hooks.json` — `PreToolUse` / `PostToolUse` / `Stop` / `Setup`
 - `scripts/*.sh` — hook implementations referencing `${CLAUDE_PLUGIN_ROOT}`
-- `mcp-server/` — Go binary, 44 tools
+- `mcp-server/` — Go binary, 46 tools
 
 This document evaluates whether the same bundle can be published as a Codex plugin as of April 2026.
 
@@ -59,7 +59,7 @@ Per [openai/codex#14754](https://github.com/openai/codex/issues/14754) and [open
 
 The following parts of claude-forge port with little friction:
 
-- **MCP server** — the Go binary (`forge-state`, 44 tools) works unchanged; only the registration format changes (`.codex-plugin/plugin.json` `mcpServers` entry or `[mcp_servers.*]` in `~/.codex/config.toml`).
+- **MCP server** — the Go binary (`forge-state`, 46 tools) works unchanged; only the registration format changes (`.codex-plugin/plugin.json` `mcpServers` entry or `[mcp_servers.*]` in `~/.codex/config.toml`).
 - **`SKILL.md`** — the Codex skill schema closely matches Claude Code; `skills/forge/SKILL.md` can be reused with minimal edits.
 - **Hook payload / exit codes** — stdin JSON contract and `exit 2 = block` are identical. `pre-tool-hook.sh` rules that gate the `Bash` tool (Phase 5 parallel `git commit` block, `git checkout` to `main`/`master` block) still fire on Codex's `shell`. Only the `Edit` / `Write` rules go silent.
 - **AGENTS.md** — already a Codex-native convention; can be derived from `CLAUDE.md`.

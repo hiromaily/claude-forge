@@ -2,13 +2,24 @@ package dashboard
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+)
+
+const (
+	// fallbackPortMin and fallbackPortMax define the inclusive range of ports
+	// tried when the configured eventsPort is already in use.
+	fallbackPortMin = 8100
+	fallbackPortMax = 8200
+	// fallbackAttempts is the number of random ports to try before giving up.
+	fallbackAttempts = 10
 )
 
 // readHeaderTimeout caps the time a client may take to send the request line
@@ -38,17 +49,12 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager) *htt
 	if eventsPort == "" {
 		return nil
 	}
-	addr := net.JoinHostPort("127.0.0.1", eventsPort)
 
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "forge-state: SSE HTTP server could not bind %s: %v (continuing without SSE)\n", addr, err)
+	ln := listenWithFallback(eventsPort)
+	if ln == nil {
 		return nil
 	}
-	// Resolve the actual bound port — handles the FORGE_EVENTS_PORT=0 case
-	// where the kernel assigns a random free port and addr would otherwise
-	// be misleading. The type assertion holds for any successful tcp Listen,
-	// but we still guard it so a future protocol change cannot crash startup.
+
 	if tcpAddr, ok := ln.Addr().(*net.TCPAddr); ok {
 		fmt.Fprintf(os.Stderr, "forge-state: dashboard ready at %s\n", dashboardURL(tcpAddr.Port))
 	} else {
@@ -71,4 +77,28 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager) *htt
 		}
 	}()
 	return srv
+}
+
+// listenWithFallback tries to bind on the configured port first. If that fails
+// (e.g. port conflict), it retries on random ports in [fallbackPortMin, fallbackPortMax].
+// Returns nil only when all attempts are exhausted.
+func listenWithFallback(preferredPort string) net.Listener {
+	addr := net.JoinHostPort("127.0.0.1", preferredPort)
+	ln, err := net.Listen("tcp", addr)
+	if err == nil {
+		return ln
+	}
+	fmt.Fprintf(os.Stderr, "forge-state: port %s in use, trying fallback range %d–%d\n",
+		preferredPort, fallbackPortMin, fallbackPortMax)
+
+	for range fallbackAttempts {
+		port := fallbackPortMin + rand.IntN(fallbackPortMax-fallbackPortMin+1) //nolint:gosec // port selection is non-security use of math/rand
+		addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+		ln, err = net.Listen("tcp", addr)
+		if err == nil {
+			return ln
+		}
+	}
+	fmt.Fprintf(os.Stderr, "forge-state: SSE HTTP server could not bind after %d fallback attempts (continuing without SSE)\n", fallbackAttempts)
+	return nil
 }
