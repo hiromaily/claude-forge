@@ -1164,6 +1164,99 @@ func TestPipelineInitFlagsDiscussJSONRoundTrip(t *testing.T) {
 	})
 }
 
+// ---------- TestMergeWithPreferences ----------
+
+func TestMergeWithPreferences_DefaultsApplied(t *testing.T) {
+	t.Parallel()
+
+	flags := &PipelineInitFlags{}
+	p := state.Preferences{
+		Auto:    new(bool),
+		Debug:   new(bool),
+		NoPR:    new(bool),
+		Discuss: new(bool),
+		Effort:  new(string),
+	}
+	*p.Auto = true
+	*p.Debug = true
+	*p.NoPR = true
+	*p.Discuss = true
+	*p.Effort = "M"
+	mergeWithPreferences(flags, p)
+
+	if !flags.Auto {
+		t.Error("Auto should be true")
+	}
+	if !flags.Debug {
+		t.Error("Debug should be true")
+	}
+	if !flags.SkipPR {
+		t.Error("SkipPR should be true")
+	}
+	if !flags.Discuss {
+		t.Error("Discuss should be true")
+	}
+	if flags.EffortOverride == nil || *flags.EffortOverride != "M" {
+		t.Errorf("EffortOverride = %v, want M", flags.EffortOverride)
+	}
+}
+
+func TestMergeWithPreferences_ExplicitFlagsWin(t *testing.T) {
+	t.Parallel()
+
+	effortL := "L"
+	flags := &PipelineInitFlags{
+		Auto:           true,
+		EffortOverride: &effortL,
+	}
+	autoFalse := false
+	effortM := "M"
+	p := state.Preferences{
+		Auto:   &autoFalse,
+		Effort: &effortM,
+	}
+	mergeWithPreferences(flags, p)
+
+	if !flags.Auto {
+		t.Error("Auto should remain true (explicit flag)")
+	}
+	if *flags.EffortOverride != "L" {
+		t.Errorf("EffortOverride = %q, want L (explicit flag)", *flags.EffortOverride)
+	}
+}
+
+func TestMergeWithPreferences_EmptyPreferences(t *testing.T) {
+	t.Parallel()
+
+	flags := &PipelineInitFlags{Auto: true}
+	mergeWithPreferences(flags, state.Preferences{})
+
+	if !flags.Auto {
+		t.Error("Auto should remain true")
+	}
+	if flags.Debug {
+		t.Error("Debug should remain false")
+	}
+}
+
+func TestMergeWithPreferences_PartialPreferences(t *testing.T) {
+	t.Parallel()
+
+	flags := &PipelineInitFlags{}
+	debugTrue := true
+	p := state.Preferences{
+		Debug: &debugTrue,
+	}
+	mergeWithPreferences(flags, p)
+
+	if flags.Auto {
+		t.Error("Auto should remain false (not in preferences)")
+	}
+	if !flags.Debug {
+		t.Error("Debug should be true (from preferences)")
+	}
+}
+
 // ---------- TestPipelineInitHandlerCoreText ----------
 // AC-2: PipelineInitHandler response JSON contains top-level "core_text" field.
 

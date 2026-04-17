@@ -114,6 +114,13 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		// Build flags from parsed validation result.
 		flags := buildFlags(result.Parsed, currentBranch)
 
+		// Apply user preferences as defaults (explicit flags win).
+		// A corrupt or missing preferences file silently falls back to zero
+		// Preferences{}, so the pipeline always proceeds.
+		if p, err := state.LoadPreferences(sm.SpecsDir()); err == nil {
+			mergeWithPreferences(flags, p)
+		}
+
 		// Decision 5: Source type and workspace path.
 		sourceType := result.Parsed.SourceType
 
@@ -192,6 +199,28 @@ func buildFlags(parsed validation.ParsedInput, currentBranch string) *PipelineIn
 	}
 
 	return flags
+}
+
+// mergeWithPreferences applies preferences as defaults to flags.
+// Preferences can only enable flags, not disable them -- bool preferences
+// are applied only when the flag is at its zero value (false) and the
+// preference is true. Effort is applied only when no explicit override exists.
+func mergeWithPreferences(flags *PipelineInitFlags, p state.Preferences) {
+	if !flags.Auto && p.Auto != nil && *p.Auto {
+		flags.Auto = true
+	}
+	if !flags.Debug && p.Debug != nil && *p.Debug {
+		flags.Debug = true
+	}
+	if !flags.SkipPR && p.NoPR != nil && *p.NoPR {
+		flags.SkipPR = true
+	}
+	if !flags.Discuss && p.Discuss != nil && *p.Discuss {
+		flags.Discuss = true
+	}
+	if flags.EffortOverride == nil && p.Effort != nil {
+		flags.EffortOverride = p.Effort
+	}
 }
 
 // extractSourceID extracts the source identifier from the core text for GitHub/Jira URLs.
