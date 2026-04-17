@@ -1,4 +1,4 @@
-// Package tools implements all 44 MCP tool handlers registered by the
+// Package tools implements all 46 MCP tool handlers registered by the
 // forge-state server.
 //
 // The handlers are organised into categories:

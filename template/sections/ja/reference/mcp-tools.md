@@ -41,6 +41,8 @@
 | `mcp__forge-state__set_skip_pr` | PR作成をスキップ |
 | `mcp__forge-state__set_debug` | デバッグモードを有効化 |
 | `mcp__forge-state__set_use_current_branch` | 新規作成せず現在のブランチを使用 |
+| `mcp__forge-state__preferences_get` | `.specs/preferences.json` からユーザー設定を読み込み |
+| `mcp__forge-state__preferences_set` | ユーザー設定を書き込み（全置換） |
 
 ## タスク管理
 
