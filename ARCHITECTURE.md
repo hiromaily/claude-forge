@@ -42,7 +42,7 @@ The Engine returns typed actions. The LLM cannot invent steps or skip them. If a
 
 ### MCP tool surface
 
-The `forge-state` server exposes **44 typed MCP tools** across six categories:
+The `forge-state` server exposes **46 typed MCP tools** across six categories:
 
 | Category | Examples |
 | --- | --- |

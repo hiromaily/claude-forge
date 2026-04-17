@@ -9,7 +9,7 @@ The following diagram shows how the seven runtime components interact during a s
 | **User** | Human at terminal | Invokes `/forge`, reviews checkpoints |
 | **Claude Code** | CLI process (`claude`) | Hosts the conversation, dispatches hooks, manages tool permissions |
 | **Orchestrator (LLM)** | Claude LLM loaded with `SKILL.md` as system prompt | Thin control loop: calls MCP tools, spawns agents, presents results |
-| **forge-state (MCP)** | Go binary (`forge-state-mcp`) running as stdio child process | State machine + orchestration engine. All 44 tools registered here |
+| **forge-state (MCP)** | Go binary (`forge-state-mcp`) running as stdio child process | State machine + orchestration engine. All 46 tools registered here |
 | **Agent (LLM)** | Subagent spawned via `Agent` tool (separate LLM context) | Domain expert (analysis, design, implementation, review) |
 | **Hooks** | Bash scripts triggered by Claude Code hook system | Deterministic guardrails (pre-tool, post-tool, stop) |
 | **Workspace (.specs/)** | Files on disk | Artifact storage, `state.json`, all pipeline outputs |

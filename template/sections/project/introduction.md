@@ -46,7 +46,7 @@ Critical constraints are enforced at the shell level via Claude Code hooks — n
 - AI review loops (APPROVE/REVISE cycles)
 - Parallel implementation with mkdir-based atomic locking
 - Human checkpoints with optional auto-approve
-- Disk-based state machine (44 MCP tools)
+- Disk-based state machine (46 MCP tools)
 - Resume and abandon support
 - Input validation (deterministic + semantic)
 - Per-phase token/duration metrics

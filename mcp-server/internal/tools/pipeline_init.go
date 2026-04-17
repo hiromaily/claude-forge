@@ -219,7 +219,8 @@ func mergeWithPreferences(flags *PipelineInitFlags, p state.Preferences) {
 		flags.Discuss = true
 	}
 	if flags.EffortOverride == nil && p.Effort != nil {
-		flags.EffortOverride = p.Effort
+		e := *p.Effort
+		flags.EffortOverride = &e
 	}
 }
 
