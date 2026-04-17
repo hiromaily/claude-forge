@@ -1,5 +1,5 @@
 // Package tools — tests for updated RegisterAll signature and tool count.
-// These tests verify that RegisterAll accepts 13 parameters and registers 45 tools
+// These tests verify that RegisterAll accepts 13 parameters and registers 46 tools
 // including the subscribe_events, ast_summary, ast_find_definition, dependency_graph, impact_scope,
 // pipeline_init, pipeline_init_with_context, pipeline_next_action, pipeline_report_result,
 // history_search, history_get_patterns, history_get_friction_map, profile_get,
@@ -22,7 +22,7 @@ import (
 )
 
 // TestRegisterAllNewSignatureCount verifies that the updated 13-arg RegisterAll
-// registers exactly 44 tools (set_task_type removed), including subscribe_events,
+// registers exactly 46 tools (set_task_type removed), including subscribe_events,
 // ast_summary, ast_find_definition, dependency_graph, impact_scope, pipeline_init,
 // pipeline_init_with_context, pipeline_next_action, pipeline_report_result,
 // history_search, history_get_patterns, history_get_friction_map, profile_get,
@@ -48,8 +48,8 @@ func TestRegisterAllNewSignatureCount(t *testing.T) {
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("unmarshal tools/list: %v", err)
 	}
-	if got := len(resp.Result.Tools); got != 44 {
-		t.Errorf("RegisterAll: expected 44 tools, got %d", got)
+	if got := len(resp.Result.Tools); got != 46 {
+		t.Errorf("RegisterAll: expected 46 tools, got %d", got)
 		for _, tool := range resp.Result.Tools {
 			t.Logf("  tool: %v", tool["name"])
 		}

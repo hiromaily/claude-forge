@@ -1,4 +1,4 @@
-// registers all 44 MCP tool handlers with the MCP server.
+// registers all 46 MCP tool handlers with the MCP server.
 // Tool names use underscores (MCP protocol requirement; hyphens are not permitted).
 
 package tools
@@ -15,7 +15,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
-// RegisterAll registers all 44 tool handlers with srv, delegating to sm.
+// RegisterAll registers all 46 tool handlers with srv, delegating to sm.
 // bus receives published events from the five state-mutation handlers.
 // slack sends Slack webhook notifications for phase-complete, phase-fail, and abandon.
 // eventsPort is the port the SSE HTTP server is listening on (from FORGE_EVENTS_PORT).
@@ -467,5 +467,26 @@ func RegisterAll(
 			mcp.WithString("effort", mcp.Required(), mcp.Description("Effort estimate: S, M, or L")),
 		),
 		AnalyticsEstimateHandler(est),
+	)
+
+	// ---------- Preferences ----------
+
+	srv.AddTool(
+		mcp.NewTool("preferences_get",
+			mcp.WithDescription("Read user preferences from .specs/preferences.json. Returns {} if not configured."),
+		),
+		PreferencesGetHandler(sm),
+	)
+
+	srv.AddTool(
+		mcp.NewTool("preferences_set",
+			mcp.WithDescription(
+				"Write user preferences to .specs/preferences.json. Full replacement — "+
+					"omitted fields are erased. Callers should read current preferences first and merge before writing.",
+			),
+			mcp.WithObject("preferences", mcp.Required(),
+				mcp.Description("Preferences JSON object with optional fields: auto (bool), debug (bool), effort (S/M/L), nopr (bool), discuss (bool)")),
+		),
+		PreferencesSetHandler(sm),
 	)
 }
