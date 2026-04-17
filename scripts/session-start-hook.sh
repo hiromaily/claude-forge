@@ -20,7 +20,13 @@ MSG="claude-forge dashboard: ${URL}"
 # Build the additionalContext — injected into the system prompt.
 CONTEXT="claude-forge dashboard is available at ${URL}"
 
-cat <<EOF
+if command -v jq >/dev/null 2>&1; then
+  jq -n \
+    --arg context "$CONTEXT" \
+    --arg msg "$MSG" \
+    '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$context},systemMessage:$msg}'
+else
+  cat <<EOF
 {
   "hookSpecificOutput": {
     "hookEventName": "SessionStart",
@@ -29,3 +35,4 @@ cat <<EOF
   "systemMessage": "${MSG}"
 }
 EOF
+fi
