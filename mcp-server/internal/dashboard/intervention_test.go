@@ -69,6 +69,7 @@ func TestIsLocalRequest(t *testing.T) {
 	}{
 		{name: "loopback_no_origin", remoteAddr: "127.0.0.1:54321", origin: "", want: true},
 		{name: "loopback_v6_no_origin", remoteAddr: "[::1]:54321", origin: "", want: true},
+		{name: "loopback_v6_with_ipv6_origin", remoteAddr: "[::1]:54321", origin: "http://[::1]:9876", want: true},
 		{name: "loopback_with_localhost_origin", remoteAddr: "127.0.0.1:54321", origin: "http://localhost:9876", want: true},
 		{name: "loopback_with_127_origin", remoteAddr: "127.0.0.1:54321", origin: "http://127.0.0.1:9876", want: true},
 		{name: "non_loopback_rejected", remoteAddr: "192.168.1.10:54321", origin: "", want: false},

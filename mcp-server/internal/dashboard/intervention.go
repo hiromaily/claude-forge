@@ -167,7 +167,7 @@ func isLocalRequest(r *http.Request) bool {
 		return false
 	}
 	hostname := u.Hostname()
-	return hostname == "localhost" || hostname == "127.0.0.1"
+	return hostname == "localhost" || hostname == "127.0.0.1" || hostname == "::1"
 }
 
 // decodeRequest reads and parses the JSON body. On parse failure it writes a
