@@ -24,7 +24,7 @@ func ImportantHandler(eventsPort string) server.ToolHandlerFunc {
 		b.WriteString("claude-forge pipeline orchestrator is active.\n")
 
 		if eventsPort != "" {
-			b.WriteString(fmt.Sprintf("\nDashboard: http://localhost:%s/\n", eventsPort))
+			fmt.Fprintf(&b, "\nDashboard: http://localhost:%s/\n", eventsPort)
 			b.WriteString("Open the dashboard in your browser to monitor pipeline progress in real-time.\n")
 		}
 
