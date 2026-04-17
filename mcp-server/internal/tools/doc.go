@@ -3,7 +3,8 @@
 //
 // The handlers are organised into categories:
 //
-// Discovery (1 tool): __IMPORTANT (session-start context with dashboard URL).
+// Discovery (2 tools): __IMPORTANT (session-start context with dashboard URL),
+// subscribe_events (SSE endpoint URL).
 //
 // Pipeline lifecycle (4 tools):
 //   - [PipelineInitHandler]: input parsing and resume detection.
@@ -15,7 +16,7 @@
 //   - [PipelineReportResultHandler]: records phase metrics, validates
 //     artifacts, parses review verdicts, and advances pipeline state.
 //
-// State management (26 tools):
+// State management (25 tools):
 //   - init, get, phase-start, phase-complete, phase-fail, checkpoint,
 //     abandon, skip-phase, task-init, task-update, revision-bump,
 //     inline-revision-bump, set-revision-pending, clear-revision-pending,
