@@ -20,9 +20,24 @@ A header strip exposes the connection status (`live` / `disconnected`), the cumu
 
 ## Enabling it
 
-The dashboard ships inside the `forge-state` MCP binary as an embedded HTML asset. It is **opt-in** — the HTTP listener that serves it does not start unless you set the `FORGE_EVENTS_PORT` environment variable.
+The dashboard ships inside the `forge-state` MCP binary as an embedded HTML asset. When installed as a plugin, it is **enabled by default** — `.mcp.json` sets `FORGE_EVENTS_PORT=8099`, so the dashboard starts automatically on every session.
 
-To enable it, register the MCP server with `FORGE_EVENTS_PORT` in its env block. Pick any free local port:
+Open `http://localhost:8099/` in any browser. The page subscribes to `/events` and starts rendering the moment a pipeline begins emitting events.
+
+### Port fallback
+
+If port 8099 is already in use (e.g. another Claude Code session), the server automatically retries on a random port in the range **8100–8200** (up to 10 attempts). The actual URL is logged to stderr:
+
+```
+forge-state: port 8099 in use, trying fallback range 8100–8200
+forge-state: dashboard ready at http://localhost:8142/
+```
+
+If all fallback attempts fail, the MCP server continues to serve the stdio transport without the dashboard. The pipeline itself is never blocked by dashboard issues.
+
+### Manual override
+
+To use a different port, register the MCP server with a custom `FORGE_EVENTS_PORT`:
 
 ```bash
 claude mcp add forge-state \
@@ -32,10 +47,6 @@ claude mcp add forge-state \
   --env FORGE_AGENTS_PATH=/absolute/path/to/agents \
   --env FORGE_EVENTS_PORT=9876
 ```
-
-Then open `http://localhost:9876/` in any browser. The page subscribes to `/events` and starts rendering the moment a pipeline begins emitting events.
-
-If the port cannot be bound (already in use), the MCP server logs the failure to stderr and continues to serve the stdio transport without the dashboard. The pipeline itself is never blocked by dashboard issues.
 
 ## Per-workspace filtering
 
@@ -47,7 +58,7 @@ The dashboard uses the browser-native [EventSource](https://developer.mozilla.or
 
 ## Security notes
 
-- The HTTP listener binds to all interfaces on the configured port. On a shared machine, prefer a port that is firewalled, or run the MCP server inside a sandboxed account.
+- The HTTP listener binds to `127.0.0.1` (localhost only). It is not accessible from other machines on the network.
 - There is no authentication. Treat the dashboard URL as you would any other localhost dev server.
 - The dashboard ships as a single embedded file with no external CDN, no fonts, no analytics, and no third-party scripts. The only network call it makes is to `/events` on the same origin.
 
