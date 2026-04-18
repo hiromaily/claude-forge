@@ -8,9 +8,9 @@ macOS doesn't ship flock. The mkdir-based lock uses `mkdir` as an atomic operati
 
 The plugin may be installed in environments without `jq`, or `state.json` may be missing during non-pipeline work. Fail-closed would block legitimate operations. Each hook checks `command -v jq` and exits 0 if missing.
 
-## Why all agents use model: sonnet?
+## Why agents inherit the user's configured model instead of hardcoding sonnet?
 
-Cost optimization. The pipeline spawns 10+ agents per run. Using opus for all would be expensive. The system prompts in agent .md files are detailed enough that sonnet produces good results. If a specific agent consistently underperforms, upgrade that one agent to opus.
+Flexibility and user control. Previously all agents specified `model: sonnet` in their frontmatter, forcing every pipeline run onto Sonnet regardless of the user's configured default. Removing the `model:` field from agent frontmatter lets Claude Code use the user's active model — the same model selected by `/model` or the Claude Code default. Users who want to pin a specific model can add `model: <name>` back to individual agent frontmatter files (the per-agent selection mechanism from BACKLOG #21). For cost control, the user's own model configuration is the appropriate lever.
 
 ## Why the orchestrator doesn't read code?
 
