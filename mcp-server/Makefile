@@ -53,3 +53,30 @@ go-clean-lint-cache:
 .PHONY: go-test
 go-test:
 	go test -timeout 120s ./...
+
+#------------------------------------------------------------------------------
+# GoDoc
+#------------------------------------------------------------------------------
+.PHONY: install-godoc
+install-godoc:
+	go install golang.org/x/tools/cmd/godoc@latest
+
+# access to 
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/analytics/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/ast/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/dashboard/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/events/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/history/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/indexer/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/profile/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/prompt/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/search/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/state/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/tools/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/validation/
+
+.PHONY: run-godoc
+run-godoc:
+	godoc -http=:6060
