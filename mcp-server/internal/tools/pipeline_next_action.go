@@ -511,7 +511,7 @@ func PipelineNextActionHandler(
 // and the empty HistoryContext is used (fail-open pattern).
 //
 // Returns an error if the agent .md file is missing (caller should treat as warning).
-func enrichPrompt( //nolint:gocyclo // complexity is inherent in the dispatch table
+func enrichPrompt( //nolint:gocyclo // complexity is inherent in the multi-layer prompt assembly
 	resp *nextActionResponse,
 	agentDir, workspace string,
 	sm *state.StateManager,
@@ -527,24 +527,33 @@ func enrichPrompt( //nolint:gocyclo // complexity is inherent in the dispatch ta
 		return fmt.Errorf("read agent file %q: %w", agentFile, err)
 	}
 
+	// Fetch state once; used for both template substitution and history search below.
+	st, stErr := sm.GetState()
+	if stErr != nil {
+		return fmt.Errorf("get state for prompt enrichment: %w", stErr)
+	}
+
 	agentInstructions := string(agentData)
 
 	// Substitute agent instruction template variables with runtime values.
 	// Agent .md files use {workspace}, {branch}, {spec-name}, and {N} as placeholders
 	// that must be resolved before the prompt is sent, so agents receive concrete paths
 	// and identifiers rather than literal brace-tokens.
-	agentInstructions = strings.ReplaceAll(agentInstructions, "{workspace}", workspace)
+	// strings.NewReplacer performs all substitutions in a single pass, avoiding
+	// incorrect results if a replacement value contained another placeholder.
+	branch := ""
+	if st.Branch != nil {
+		branch = *st.Branch
+	}
+	replacements := []string{
+		"{workspace}", workspace,
+		"{branch}", branch,
+		"{spec-name}", st.SpecName,
+	}
 	if taskN := extractTaskNumber(action.OutputFile); taskN != "" {
-		agentInstructions = strings.ReplaceAll(agentInstructions, "{N}", taskN)
+		replacements = append(replacements, "{N}", taskN)
 	}
-	if st, stErr := sm.GetState(); stErr == nil {
-		branch := ""
-		if st.Branch != nil {
-			branch = *st.Branch
-		}
-		agentInstructions = strings.ReplaceAll(agentInstructions, "{branch}", branch)
-		agentInstructions = strings.ReplaceAll(agentInstructions, "{spec-name}", st.SpecName)
-	}
+	agentInstructions = strings.NewReplacer(replacements...).Replace(agentInstructions)
 
 	// Build Layer 2 artifacts section — file paths only (no content inlining).
 	// Agents read artifacts themselves via the Read tool. This keeps the MCP
@@ -592,11 +601,7 @@ func enrichPrompt( //nolint:gocyclo // complexity is inherent in the dispatch ta
 	var histCtx prompt.HistoryContext
 
 	if histIdx != nil {
-		oneLiner := ""
-		if st, stErr := sm.GetState(); stErr == nil {
-			oneLiner = st.SpecName
-		}
-
+		oneLiner := st.SpecName
 		if oneLiner == "" {
 			oneLiner = filepath.Base(workspace)
 		}
