@@ -324,6 +324,10 @@ func PipelineNextActionHandler(
 				if taskErr := executeTaskInit(action.Phase, sm2); taskErr != nil {
 					return errorf("task_init: %v", taskErr)
 				}
+				// Validate that task_init populated state.Tasks.
+				if st2, stErr := sm2.GetState(); stErr == nil && len(st2.Tasks) == 0 {
+					return errorf("task_init: tasks not populated after execution — tasks.md may be malformed or missing")
+				}
 				action, err = eng.NextAction(sm2, "")
 				if err != nil {
 					return errorf("next_action (after task_init): %v", err)
