@@ -268,6 +268,82 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 	})
 
+	t.Run("checkpoint_message_injected", func(t *testing.T) {
+		t.Parallel()
+		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
+
+		agentDir := t.TempDir()
+		agentContent := "# Situation Analyst\nYou are a situation analyst agent."
+		if err := os.WriteFile(filepath.Join(agentDir, "situation-analyst.md"), []byte(agentContent), 0o600); err != nil {
+			t.Fatalf("write agent file: %v", err)
+		}
+
+		// Write a checkpoint message file simulating dashboard approve with feedback.
+		msgContent := "Focus on the auth module only."
+		msgFile := filepath.Join(workspace, "checkpoint-message.txt")
+		if err := os.WriteFile(msgFile, []byte(msgContent), 0o644); err != nil {
+			t.Fatalf("write checkpoint-message.txt: %v", err)
+		}
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, agentDir, nil, nil, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var action orchestrator.Action
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
+			t.Fatalf("unmarshal action: %v", err)
+		}
+		// Human Feedback section must be present with the message content.
+		if !strings.Contains(action.Prompt, "## Human Feedback") {
+			t.Errorf("Prompt does not contain '## Human Feedback'\nPrompt: %s", action.Prompt)
+		}
+		if !strings.Contains(action.Prompt, msgContent) {
+			t.Errorf("Prompt does not contain checkpoint message %q\nPrompt: %s", msgContent, action.Prompt)
+		}
+		// The file must be consumed (deleted) after injection.
+		if _, statErr := os.Stat(msgFile); statErr == nil {
+			t.Errorf("checkpoint-message.txt should be deleted after consumption")
+		}
+	})
+
+	t.Run("no_checkpoint_message_no_feedback", func(t *testing.T) {
+		t.Parallel()
+		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
+
+		agentDir := t.TempDir()
+		agentContent := "# Situation Analyst\nYou are a situation analyst agent."
+		if err := os.WriteFile(filepath.Join(agentDir, "situation-analyst.md"), []byte(agentContent), 0o600); err != nil {
+			t.Fatalf("write agent file: %v", err)
+		}
+
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, agentDir, nil, nil, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		var action orchestrator.Action
+		if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
+			t.Fatalf("unmarshal action: %v", err)
+		}
+		// No checkpoint-message.txt → no Human Feedback section.
+		if strings.Contains(action.Prompt, "## Human Feedback") {
+			t.Errorf("Prompt should not contain '## Human Feedback' when no message file exists\nPrompt: %s", action.Prompt)
+		}
+	})
+
 	t.Run("output_artifact_section", func(t *testing.T) {
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)

@@ -590,6 +590,35 @@ func enrichPrompt(
 
 	action.Prompt = prompt.BuildPrompt(action.Agent, agentInstructions, artifactsSection, profileStr, histCtx)
 
+	// Layer 5: checkpoint feedback injection.
+	// When a user approves a checkpoint with a message via the dashboard,
+	// the message is written to checkpoint-message.txt. Read and consume it
+	// here so it is deterministically injected into the agent prompt —
+	// no reliance on SKILL.md or LLM interpretation.
+	//
+	// Invariant: this code only runs for ActionSpawnAgent (enrichPrompt is
+	// gated on that type). If the next action after a checkpoint were
+	// ActionExec/ActionWriteFile/ActionDone, the file would persist until
+	// the next spawn_agent call. In practice this does not happen: after
+	// checkpoint-a the next phase is always phase-4 (task-decomposer,
+	// spawn_agent) and after checkpoint-b it is phase-5 (implementer,
+	// spawn_agent after task_init absorption).
+	//
+	// Note: the ReadFile+Remove sequence is not atomic (TOCTOU). This is
+	// acceptable because pipeline_next_action is called sequentially by the
+	// orchestrator — concurrent calls for the same workspace do not occur
+	// in normal operation.
+	msgFile := filepath.Join(workspace, "checkpoint-message.txt")
+	if msgData, readErr := os.ReadFile(msgFile); readErr == nil {
+		msg := strings.TrimSpace(string(msgData))
+		if msg != "" {
+			action.Prompt += "\n\n## Human Feedback\n\n" +
+				"The reviewer provided the following instructions during checkpoint approval. " +
+				"Incorporate this feedback into your work:\n\n" + msg + "\n"
+		}
+		_ = os.Remove(msgFile)
+	}
+
 	return nil
 }
 

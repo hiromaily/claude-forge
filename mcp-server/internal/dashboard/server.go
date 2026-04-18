@@ -45,6 +45,7 @@ const readHeaderTimeout = 5 * time.Second
 //
 // The caller is responsible for calling Shutdown on the returned server
 // during graceful shutdown.
+
 // StartOptions holds optional configuration for the dashboard server.
 type StartOptions struct {
 	// PhaseLabels maps phase IDs (e.g. "phase-3") to human-readable labels
@@ -79,6 +80,8 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager, opts
 	mux.Handle("GET /events", events.SSEHandler(bus))
 	mux.Handle("GET /", dashboardHandler())
 	mux.Handle("GET /api/phase-labels", phaseLabelsHandler(labels))
+	mux.Handle("GET /api/phase-artifacts", phaseArtifactsHandler())
+	mux.Handle("GET /api/artifact", artifactHandler())
 	mux.Handle("POST /api/checkpoint/approve", approveCheckpointHandler(sm))
 	mux.Handle("POST /api/pipeline/abandon", abandonHandler(sm))
 

@@ -75,6 +75,15 @@ func TestDashboardHandler_ServesEmbeddedHTMLAtRoot(t *testing.T) {
 		"approveCheckpoint",
 		"abandonPipeline",
 		`id="abandon-btn"`,
+		// Artifact viewer — fail if the overlay or its JS is removed.
+		`id="artifact-overlay"`,
+		"openArtifact",
+		"/api/phase-artifacts",
+		"/api/artifact",
+		// Checkpoint message form — fail if the textarea or its wiring is removed.
+		"checkpoint-form",
+		"checkpoint-input",
+		`Instructions for AI`,
 	}
 	for _, want := range wantSubstrings {
 		if !strings.Contains(body, want) {
