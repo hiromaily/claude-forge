@@ -3,83 +3,33 @@
 package tools
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/maputil"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"
 )
 
-// parseStoryPoints extracts a numeric story-points value from an external_context map.
-// Accepts "jira_story_points" with "story_points" as a fallback alias.
-// Handles float64, int, and json.Number types; json.Number falls back from Int64 to Float64
-// to handle decimal inputs (e.g. "1.5" → 1).
-func parseStoryPoints(m map[string]any) int {
-	if _, ok := m["jira_story_points"]; !ok {
-		if sp, ok2 := m["story_points"]; ok2 {
-			m["jira_story_points"] = sp
-		}
-	}
-	spRaw, ok := m["jira_story_points"]
-	if !ok {
-		return 0
-	}
-	switch v := spRaw.(type) {
-	case float64:
-		return int(v)
-	case int:
-		return v
-	case json.Number:
-		if n, err := v.Int64(); err == nil {
-			return int(n)
-		}
-		if f, err := v.Float64(); err == nil {
-			return int(f)
-		}
-	}
-	return 0
-}
-
-// externalContext holds parsed GitHub/Jira/Linear context fields.
+// externalContext holds parsed source context fields in a service-neutral form.
 type externalContext struct {
-	// Source identifiers from pipeline_init result — used in request.md front matter.
-	SourceURL string
-	SourceID  string
-	// TaskText is the original task text for text source type pipelines.
-	// Populated from the top-level task_text MCP parameter (not from external_context map).
-	TaskText string
-	// GitHub fields
-	GitHubLabels []string
-	GitHubTitle  string
-	GitHubBody   string
-	// Jira fields
-	JiraIssueType   string
-	JiraStoryPoints int
-	JiraSummary     string
-	JiraDescription string
-	// Linear fields
-	LinearTitle       string
-	LinearDescription string
-	LinearPriority    string
-	LinearEstimate    int
-	LinearLabels      []string
+	SourceURL  string
+	SourceID   string
+	SourceType string
+	TaskText   string
+	Fields     sourcetype.ExternalFields
 }
 
-// IsTextSource returns true when no GitHub, Jira, or Linear fields are populated.
+// IsTextSource returns true when no external fields are populated.
 // Used by handleFirstCall to decide whether --discuss is applicable.
 func (ec externalContext) IsTextSource() bool {
-	return ec.GitHubTitle == "" && ec.GitHubBody == "" &&
-		ec.JiraIssueType == "" && ec.JiraSummary == "" && ec.JiraDescription == "" &&
-		ec.LinearTitle == "" && ec.LinearDescription == ""
+	return ec.Fields.IsEmpty()
 }
 
-// parseExternalContext extracts GitHub/Jira/Linear context fields from the args map.
-//
-// Note: some fallback aliases are shared across source types (e.g., "description"
-// falls back for both JiraDescription and LinearDescription). This is safe because
-// the orchestrator always passes prefixed keys (e.g., "linear_description"), and
-// downstream consumers (buildRequestMDWithBody, refineWorkspacePath) discriminate
-// by checking which group of fields is populated.
-func parseExternalContext(args map[string]any) (externalContext, error) {
+// parseExternalContext extracts source context fields from the args map,
+// delegating to the appropriate sourcetype handler for field extraction.
+func parseExternalContext(args map[string]any, sourceType string) (externalContext, error) {
 	var extCtx externalContext
+	extCtx.SourceType = sourceType
 
 	raw, ok := args["external_context"]
 	if !ok || raw == nil {
@@ -91,134 +41,50 @@ func parseExternalContext(args map[string]any) (externalContext, error) {
 		return extCtx, fmt.Errorf("external_context must be an object, got %T", raw)
 	}
 
-	extCtx.SourceURL = stringField(m, "source_url")
-	extCtx.SourceID = stringField(m, "source_id")
-	extCtx.GitHubTitle = stringField(m, "github_title")
-	extCtx.GitHubBody = stringField(m, "github_body")
-	extCtx.JiraIssueType = stringFieldAlt(m, "jira_issue_type", "issue_type")
-	extCtx.JiraSummary = stringFieldAlt(m, "jira_summary", "summary")
-	extCtx.JiraDescription = stringFieldAlt(m, "jira_description", "description")
+	extCtx.SourceURL = maputil.StringField(m, "source_url")
+	extCtx.SourceID = maputil.StringField(m, "source_id")
 
-	// Parse github_labels (array of strings).
-	if labelsRaw, ok := m["github_labels"]; ok {
-		switch v := labelsRaw.(type) {
-		case []any:
-			for _, l := range v {
-				if s, ok := l.(string); ok {
-					extCtx.GitHubLabels = append(extCtx.GitHubLabels, s)
-				}
-			}
-		case []string:
-			extCtx.GitHubLabels = v
-		}
-	}
-
-	// Parse jira_story_points (number), with "story_points" as fallback alias.
-	extCtx.JiraStoryPoints = parseStoryPoints(m)
-
-	// Linear fields.
-	extCtx.LinearTitle = stringFieldAlt(m, "linear_title", "title")
-	extCtx.LinearDescription = stringFieldAlt(m, "linear_description", "description")
-	extCtx.LinearPriority = stringFieldAlt(m, "linear_priority", "priority")
-	extCtx.LinearEstimate = parseEstimate(m)
-
-	// Parse linear_labels (array of strings).
-	if labelsRaw, ok := m["linear_labels"]; ok {
-		switch v := labelsRaw.(type) {
-		case []any:
-			for _, l := range v {
-				if s, ok := l.(string); ok {
-					extCtx.LinearLabels = append(extCtx.LinearLabels, s)
-				}
-			}
-		case []string:
-			extCtx.LinearLabels = v
-		}
+	h := sourcetype.Get(sourceType)
+	if h != nil {
+		extCtx.Fields = h.ParseExternalContext(m)
 	}
 
 	return extCtx, nil
 }
 
-// parseEstimate extracts a numeric estimate value from an external_context map.
-// Accepts "linear_estimate" with "estimate" as a fallback alias.
-func parseEstimate(m map[string]any) int {
-	if _, ok := m["linear_estimate"]; !ok {
-		if est, ok2 := m["estimate"]; ok2 {
-			m["linear_estimate"] = est
-		}
-	}
-	raw, ok := m["linear_estimate"]
+// detectSourceTypeFromFields infers the source type from the field name prefixes
+// in external_context. This is a backward-compatibility fallback for cases where
+// source_url is not provided but prefixed fields (github_*, jira_*, linear_*) are.
+func detectSourceTypeFromFields(args map[string]any) string {
+	ec, ok := args["external_context"].(map[string]any)
 	if !ok {
-		return 0
-	}
-	switch v := raw.(type) {
-	case float64:
-		return int(v)
-	case int:
-		return v
-	case json.Number:
-		if n, err := v.Int64(); err == nil {
-			return int(n)
-		}
-		if f, err := v.Float64(); err == nil {
-			return int(f)
-		}
-	}
-	return 0
-}
-
-// stringField extracts a string value from a map by key.
-func stringField(m map[string]any, key string) string {
-	v, ok := m[key]
-	if !ok || v == nil {
 		return ""
 	}
-	s, _ := v.(string)
-	return s
-}
-
-// stringFieldAlt tries the primary key first, then falls back to the alt key.
-// This allows callers to pass either "jira_summary" or "summary" as the field name.
-func stringFieldAlt(m map[string]any, primary, alt string) string {
-	if s := stringField(m, primary); s != "" {
-		return s
+	for key := range ec {
+		switch {
+		case len(key) > 7 && key[:7] == "github_":
+			return "github_issue"
+		case len(key) > 5 && key[:5] == "jira_":
+			return "jira_issue"
+		case len(key) > 7 && key[:7] == "linear_":
+			return "linear_issue"
+		}
 	}
-	return stringField(m, alt)
-}
-
-// boolField extracts a bool value from a map by key.
-func boolField(m map[string]any, key string) bool {
-	v, ok := m[key]
-	if !ok || v == nil {
-		return false
-	}
-	b, _ := v.(bool)
-	return b
+	return ""
 }
 
 // buildRequestMDWithBody constructs the request.md content.
-// For text source type: uses the body parameter directly (enables both task_text passthrough
-// and discussion-enriched body). For github_issue/jira_issue: ignores body and uses the
-// GitHub/Jira fields as before.
+// For URL source types: uses the external fields. For text: uses the body parameter directly.
 func buildRequestMDWithBody(extCtx externalContext, body string) string {
 	var sb strings.Builder
 
-	// Determine source_type and body.
 	sourceType := "text"
 	var resolvedBody string
 
-	switch {
-	case extCtx.GitHubTitle != "" || extCtx.GitHubBody != "":
-		sourceType = "github_issue"
-		resolvedBody = strings.TrimSpace(extCtx.GitHubTitle + "\n\n" + extCtx.GitHubBody)
-	case extCtx.JiraIssueType != "" || extCtx.JiraSummary != "" || extCtx.JiraDescription != "":
-		sourceType = "jira_issue"
-		resolvedBody = strings.TrimSpace(extCtx.JiraSummary + "\n\n" + extCtx.JiraDescription)
-	case extCtx.LinearTitle != "" || extCtx.LinearDescription != "":
-		sourceType = "linear_issue"
-		resolvedBody = strings.TrimSpace(extCtx.LinearTitle + "\n\n" + extCtx.LinearDescription)
-	default:
-		// text source: use the body parameter directly.
+	if !extCtx.Fields.IsEmpty() && extCtx.SourceType != "" {
+		sourceType = extCtx.SourceType
+		resolvedBody = strings.TrimSpace(extCtx.Fields.Title + "\n\n" + extCtx.Fields.Body)
+	} else {
 		resolvedBody = body
 	}
 

@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"
 )
 
 // InputResult is the structured result returned by ValidateInput.
@@ -46,16 +48,8 @@ var (
 	reBareResume  = regexp.MustCompile(`(?:^|\s)--resume(?:\s|$)`)
 )
 
-// Regexps for URL classification.
-var (
-	reGitHubURL  = regexp.MustCompile(`^https://github\.com/[^/]+/[^/]+/issues/[0-9]+`)
-	reGitHubBase = regexp.MustCompile(`^https://github\.com/`)
-	reJiraURL    = regexp.MustCompile(`^https://[^/]+\.atlassian\.net/browse/[A-Z]+-[0-9]+`)
-	reJiraBase   = regexp.MustCompile(`^https://[^/]+\.atlassian\.net/`)
-	reLinearURL  = regexp.MustCompile(`^https://linear\.app/[^/]+/issue/[A-Z]+-[0-9]+`)
-	reLinearBase = regexp.MustCompile(`^https://linear\.app/`)
-	reHTTPS      = regexp.MustCompile(`^https?://`)
-)
+// Regexp for URL detection (not classification — classification is delegated to sourcetype.ClassifyURL).
+var reHTTPS = regexp.MustCompile(`^https?://`)
 
 // Regexps for parsing flags into the Flags map.
 var (
@@ -139,63 +133,21 @@ func ValidateInput(arguments string) InputResult {
 
 // validateURL checks the URL format and returns the appropriate InputResult.
 func validateURL(core string, flags map[string]string, bareFlags []string) InputResult {
-	switch {
-	case reGitHubBase.MatchString(core):
-		if !reGitHubURL.MatchString(core) {
-			return InputResult{
-				Valid:  false,
-				Errors: []string{"ERROR: Invalid GitHub URL format. Expected: https://github.com/{owner}/{repo}/issues/{number}"},
-			}
-		}
+	sourceType, err := sourcetype.ClassifyURL(core)
+	if err != nil {
 		return InputResult{
-			Valid: true,
-			Parsed: ParsedInput{
-				Flags:      flags,
-				BareFlags:  normalizeBareFlags(bareFlags),
-				CoreText:   core,
-				SourceType: "github_issue",
-			},
+			Valid:  false,
+			Errors: []string{err.Error()},
 		}
-	case reJiraBase.MatchString(core):
-		if !reJiraURL.MatchString(core) {
-			return InputResult{
-				Valid:  false,
-				Errors: []string{"ERROR: Invalid Jira URL format. Expected: https://{org}.atlassian.net/browse/{KEY}-{number}"},
-			}
-		}
-		return InputResult{
-			Valid: true,
-			Parsed: ParsedInput{
-				Flags:      flags,
-				BareFlags:  normalizeBareFlags(bareFlags),
-				CoreText:   core,
-				SourceType: "jira_issue",
-			},
-		}
-	case reLinearBase.MatchString(core):
-		if !reLinearURL.MatchString(core) {
-			return InputResult{
-				Valid:  false,
-				Errors: []string{"ERROR: Invalid Linear URL format. Expected: https://linear.app/{org}/issue/{KEY}-{number}"},
-			}
-		}
-		return InputResult{
-			Valid: true,
-			Parsed: ParsedInput{
-				Flags:      flags,
-				BareFlags:  normalizeBareFlags(bareFlags),
-				CoreText:   core,
-				SourceType: "linear_issue",
-			},
-		}
-	default:
-		return InputResult{
-			Valid: false,
-			Errors: []string{"ERROR: Unrecognised URL format. Supported formats: " +
-				"GitHub Issue: https://github.com/{owner}/{repo}/issues/{number}, " +
-				"Jira Issue: https://{org}.atlassian.net/browse/{KEY}-{number}, " +
-				"Linear Issue: https://linear.app/{org}/issue/{KEY}-{number}"},
-		}
+	}
+	return InputResult{
+		Valid: true,
+		Parsed: ParsedInput{
+			Flags:      flags,
+			BareFlags:  normalizeBareFlags(bareFlags),
+			CoreText:   core,
+			SourceType: sourceType,
+		},
 	}
 }
 

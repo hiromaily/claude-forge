@@ -11,6 +11,7 @@ import (
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
@@ -1239,8 +1240,11 @@ func TestBuildRequestMDWithBody(t *testing.T) {
 		{
 			name: "github_source_ignores_body",
 			extCtx: externalContext{
-				GitHubTitle: "Fix crash",
-				GitHubBody:  "crashes on startup",
+				SourceType: "github_issue",
+				Fields: sourcetype.ExternalFields{
+					Title: "Fix crash",
+					Body:  "crashes on startup",
+				},
 			},
 			body:       "this body should be ignored",
 			wantSource: "source_type: github_issue",

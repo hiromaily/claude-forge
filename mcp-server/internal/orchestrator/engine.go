@@ -25,7 +25,8 @@ import (
 	"strconv"
 	"strings"
 
-	// orchestrator → state (one-way; state must never import orchestrator)
+	// orchestrator → sourcetype / state (one-way; state must never import orchestrator)
+	"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
@@ -719,7 +720,7 @@ func (e *Engine) handlePRCreation(st *state.State) (Action, error) {
 
 	body := "[forge] Pipeline summary will be generated shortly.\n\nSpec: " + st.SpecName
 
-	if e.sourceTypeReader(st.Workspace) == state.SourceTypeGitHub {
+	if h := sourcetype.Get(e.sourceTypeReader(st.Workspace)); h != nil && h.SupportsClosingRef() {
 		if issueNum := e.sourceIDReader(st.Workspace); issueNum != "" {
 			body += "\n\nCloses #" + issueNum
 		}
@@ -810,8 +811,8 @@ func (*Engine) handleFinalCommit(st *state.State) (Action, error) {
 func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 	sourceType := e.sourceTypeReader(st.Workspace)
 
-	label := sourceTypeLabel(sourceType)
-	if label == "" {
+	h := sourcetype.Get(sourceType)
+	if h == nil {
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
 	}
 
@@ -821,57 +822,17 @@ func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 	}
 
 	sourceID := e.sourceIDReader(st.Workspace)
-	pm := buildPostMethod(sourceType, sourceURL, sourceID, st.Workspace)
+	artifactPath := filepath.Join(st.Workspace, state.ArtifactSummary)
+	pm := h.PostConfig(sourceURL, sourceID, artifactPath)
 
 	msg := fmt.Sprintf(
-		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/%s",
-		label, sourceURL, st.Workspace, state.ArtifactSummary,
+		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s",
+		h.Label(), sourceURL, artifactPath,
 	)
 
 	action := NewCheckpointAction(PhasePostToSource, msg, []string{"post", "skip"})
 	action.PostMethod = pm
 	return action, nil
-}
-
-// sourceTypeLabel returns a human-readable label for a source type.
-func sourceTypeLabel(sourceType string) string {
-	switch sourceType {
-	case state.SourceTypeGitHub:
-		return "GitHub issue"
-	case state.SourceTypeJira:
-		return "Jira issue"
-	case state.SourceTypeLinear:
-		return "Linear issue"
-	default:
-		return ""
-	}
-}
-
-// buildPostMethod constructs a PostMethod for the given source type.
-// Returns nil for text sources and unknown source types.
-func buildPostMethod(sourceType, sourceURL, sourceID, workspace string) *PostMethod {
-	bodySource := filepath.Join(workspace, state.ArtifactSummary)
-
-	switch sourceType {
-	case state.SourceTypeGitHub:
-		return &PostMethod{
-			Command:    "gh issue comment " + sourceURL + " --body-file " + bodySource,
-			BodySource: bodySource,
-		}
-	case state.SourceTypeJira:
-		return &PostMethod{
-			BodySource:  bodySource,
-			Instruction: "Post the contents of " + bodySource + " as a comment to " + sourceURL + ". Use Atlassian MCP tools if available, or convert the markdown to ADF and POST via Jira REST API with $JIRA_USER:$JIRA_TOKEN.",
-		}
-	case state.SourceTypeLinear:
-		return &PostMethod{
-			MCPTool:    "mcp__linear__save_comment",
-			MCPParams:  map[string]string{"issueId": sourceID},
-			BodySource: bodySource,
-		}
-	default:
-		return nil
-	}
 }
 
 // readFrontMatterField reads a named field from {workspace}/request.md YAML front matter.
@@ -928,12 +889,13 @@ func readSourceID(workspace string) string {
 	return readFrontMatterField(workspace, "source_id", "")
 }
 
-// ClosingRef returns the GitHub issue closing reference for the given workspace,
-// e.g. "\n\nCloses #42", or "" if the pipeline was not started from a GitHub issue
+// ClosingRef returns the issue closing reference for the given workspace,
+// e.g. "\n\nCloses #42", or "" if the source type does not support closing refs
 // or if no source_id is present.  Used by executeFinalCommit to persist the
 // closing reference in the final PR body after summary.md replaces the placeholder.
 func ClosingRef(workspace string) string {
-	if readSourceType(workspace) != state.SourceTypeGitHub {
+	h := sourcetype.Get(readSourceType(workspace))
+	if h == nil || !h.SupportsClosingRef() {
 		return ""
 	}
 	issueNum := readSourceID(workspace)

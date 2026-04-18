@@ -27,7 +27,9 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/maputil"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
@@ -111,8 +113,26 @@ func PipelineInitWithContextHandler(sm *state.StateManager, bus *events.EventBus
 
 		args := req.GetArguments()
 
+		// Derive source type from source_url for handler lookup.
+		// Check top-level source_url first, then source_url inside external_context.
+		sourceURL := maputil.StringField(args, "source_url")
+		if sourceURL == "" {
+			if ec, ok := args["external_context"].(map[string]any); ok {
+				sourceURL = maputil.StringField(ec, "source_url")
+			}
+		}
+		detectedSourceType := ""
+		if sourceURL != "" {
+			detectedSourceType, _ = sourcetype.ClassifyURL(sourceURL)
+		}
+		// Fallback: detect source type from external_context field prefixes
+		// when no source_url is provided (backward compatibility).
+		if detectedSourceType == "" {
+			detectedSourceType = detectSourceTypeFromFields(args)
+		}
+
 		// Parse external_context object.
-		extCtx, err := parseExternalContext(args)
+		extCtx, err := parseExternalContext(args, detectedSourceType)
 		if err != nil {
 			return errorf("parse external_context: %v", err)
 		}
@@ -120,10 +140,10 @@ func PipelineInitWithContextHandler(sm *state.StateManager, bus *events.EventBus
 		// source_id and source_url are returned by pipeline_init but aren't fetched
 		// fields, so the orchestrator passes them as top-level parameters rather than
 		// embedding them inside external_context alongside the fetched GitHub/Jira fields.
-		if topSourceID := stringField(args, "source_id"); topSourceID != "" && extCtx.SourceID == "" {
+		if topSourceID := maputil.StringField(args, "source_id"); topSourceID != "" && extCtx.SourceID == "" {
 			extCtx.SourceID = topSourceID
 		}
-		if topSourceURL := stringField(args, "source_url"); topSourceURL != "" && extCtx.SourceURL == "" {
+		if topSourceURL := maputil.StringField(args, "source_url"); topSourceURL != "" && extCtx.SourceURL == "" {
 			extCtx.SourceURL = topSourceURL
 		}
 
@@ -190,15 +210,8 @@ func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFla
 // enrichedBody is set when called from handleDiscussionCall; "" otherwise.
 func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags pipelineFlags, enrichedBody string) (*mcp.CallToolResult, error) {
 	// Detect effort.
-	combinedText := strings.TrimSpace(extCtx.GitHubTitle + " " + extCtx.GitHubBody + " " +
-		extCtx.JiraSummary + " " + extCtx.JiraDescription + " " +
-		extCtx.LinearTitle + " " + extCtx.LinearDescription + " " + extCtx.TaskText)
-	// Linear estimate is used as a fallback for story points when Jira story points are absent.
-	storyPoints := extCtx.JiraStoryPoints
-	if storyPoints == 0 && extCtx.LinearEstimate > 0 {
-		storyPoints = extCtx.LinearEstimate
-	}
-	effort := orchestrator.DetectEffort(flags.EffortOverride, storyPoints, combinedText)
+	combinedText := strings.TrimSpace(extCtx.Fields.CombinedText() + " " + extCtx.TaskText)
+	effort := orchestrator.DetectEffort(flags.EffortOverride, extCtx.Fields.StoryPoints, combinedText)
 
 	// Build EffortOptions for all three valid efforts with human-readable labels.
 	// The detected effort is marked as recommended so the orchestrator renders it deterministically.
@@ -341,12 +354,12 @@ func parseFlags(args map[string]any) (pipelineFlags, error) {
 		return flags, fmt.Errorf("unmarshal flags: %w", err)
 	}
 
-	flags.Auto = boolField(m, "auto")
-	flags.SkipPR = boolField(m, "skip_pr")
-	flags.Debug = boolField(m, "debug")
-	flags.Discuss = boolField(m, "discuss")
-	flags.EffortOverride = stringField(m, "effort_override")
-	flags.CurrentBranch = stringField(m, "current_branch")
+	flags.Auto = maputil.BoolField(m, "auto")
+	flags.SkipPR = maputil.BoolField(m, "skip_pr")
+	flags.Debug = maputil.BoolField(m, "debug")
+	flags.Discuss = maputil.BoolField(m, "discuss")
+	flags.EffortOverride = maputil.StringField(m, "effort_override")
+	flags.CurrentBranch = maputil.StringField(m, "current_branch")
 
 	return flags, nil
 }
@@ -364,9 +377,9 @@ func parseUserConfirmation(raw any) (userConfirmation, error) {
 		return uc, fmt.Errorf("unmarshal user_confirmation: %w", err)
 	}
 
-	uc.Effort = stringField(m, "effort")
-	uc.WorkspaceSlug = stringField(m, "workspace_slug")
-	uc.UseCurrentBranch = boolField(m, "use_current_branch")
-	uc.EnrichedRequestBody = stringField(m, "enriched_request_body")
+	uc.Effort = maputil.StringField(m, "effort")
+	uc.WorkspaceSlug = maputil.StringField(m, "workspace_slug")
+	uc.UseCurrentBranch = maputil.BoolField(m, "use_current_branch")
+	uc.EnrichedRequestBody = maputil.StringField(m, "enriched_request_body")
 	return uc, nil
 }

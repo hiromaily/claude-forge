@@ -1,6 +1,10 @@
 package orchestrator
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"
+)
 
 // Action type constants — match design-mcp-v2.md JSON "type" values.
 const (
@@ -66,18 +70,7 @@ type Action struct {
 	SummaryPath string `json:"summary_path,omitempty"`
 
 	// post-to-source metadata — populated only for post-to-source checkpoints
-	PostMethod *PostMethod `json:"post_method,omitempty"`
-}
-
-// PostMethod describes how to post a comment back to the source issue.
-// Populated only for post-to-source checkpoint actions.
-// At most one of MCPTool, Command, or Instruction should be set.
-type PostMethod struct {
-	MCPTool     string            `json:"mcp_tool,omitempty"`
-	Command     string            `json:"command,omitempty"`
-	MCPParams   map[string]string `json:"mcp_params,omitempty"`
-	BodySource  string            `json:"body_source"`
-	Instruction string            `json:"instruction,omitempty"`
+	PostMethod *sourcetype.PostConfig `json:"post_method,omitempty"`
 }
 
 // NewSpawnAgentAction constructs an Action of type ActionSpawnAgent.

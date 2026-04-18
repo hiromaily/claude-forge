@@ -1,65 +1,14 @@
 // Package tools — unit tests for context_fetcher.go.
-// Tests cover parseEstimate, parseExternalContext (Linear fields),
+// Tests cover parseExternalContext (Linear fields),
 // buildRequestMDWithBody (Linear branch), and IsTextSource.
 package tools
 
 import (
 	"strings"
 	"testing"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"
 )
-
-// ---------- TestParseEstimate ----------
-
-func TestParseEstimate(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		m    map[string]any
-		want int
-	}{
-		{
-			name: "float64_value",
-			m:    map[string]any{"linear_estimate": float64(3)},
-			want: 3,
-		},
-		{
-			name: "int_value",
-			m:    map[string]any{"linear_estimate": 5},
-			want: 5,
-		},
-		{
-			name: "fallback_alias_estimate",
-			m:    map[string]any{"estimate": float64(8)},
-			want: 8,
-		},
-		{
-			name: "missing_key",
-			m:    map[string]any{},
-			want: 0,
-		},
-		{
-			name: "nil_value",
-			m:    map[string]any{"linear_estimate": nil},
-			want: 0,
-		},
-		{
-			name: "primary_wins_over_alias",
-			m:    map[string]any{"linear_estimate": float64(3), "estimate": float64(8)},
-			want: 3,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := parseEstimate(tc.m)
-			if got != tc.want {
-				t.Errorf("parseEstimate() = %d, want %d", got, tc.want)
-			}
-		})
-	}
-}
 
 // ---------- TestParseExternalContextLinear ----------
 
@@ -72,29 +21,25 @@ func TestParseExternalContextLinear(t *testing.T) {
 			"external_context": map[string]any{
 				"linear_title":       "Fix naming convention",
 				"linear_description": "Update API naming",
-				"linear_priority":    "high",
 				"linear_estimate":    float64(3),
 				"linear_labels":      []any{"bug", "backend"},
 			},
 		}
-		extCtx, err := parseExternalContext(args)
+		extCtx, err := parseExternalContext(args, "linear_issue")
 		if err != nil {
 			t.Fatalf("parseExternalContext: %v", err)
 		}
-		if extCtx.LinearTitle != "Fix naming convention" {
-			t.Errorf("LinearTitle = %q, want %q", extCtx.LinearTitle, "Fix naming convention")
+		if extCtx.Fields.Title != "Fix naming convention" {
+			t.Errorf("Fields.Title = %q, want %q", extCtx.Fields.Title, "Fix naming convention")
 		}
-		if extCtx.LinearDescription != "Update API naming" {
-			t.Errorf("LinearDescription = %q, want %q", extCtx.LinearDescription, "Update API naming")
+		if extCtx.Fields.Body != "Update API naming" {
+			t.Errorf("Fields.Body = %q, want %q", extCtx.Fields.Body, "Update API naming")
 		}
-		if extCtx.LinearPriority != "high" {
-			t.Errorf("LinearPriority = %q, want %q", extCtx.LinearPriority, "high")
+		if extCtx.Fields.StoryPoints != 3 {
+			t.Errorf("Fields.StoryPoints = %d, want %d", extCtx.Fields.StoryPoints, 3)
 		}
-		if extCtx.LinearEstimate != 3 {
-			t.Errorf("LinearEstimate = %d, want %d", extCtx.LinearEstimate, 3)
-		}
-		if len(extCtx.LinearLabels) != 2 || extCtx.LinearLabels[0] != "bug" || extCtx.LinearLabels[1] != "backend" {
-			t.Errorf("LinearLabels = %v, want [bug backend]", extCtx.LinearLabels)
+		if len(extCtx.Fields.Labels) != 2 || extCtx.Fields.Labels[0] != "bug" || extCtx.Fields.Labels[1] != "backend" {
+			t.Errorf("Fields.Labels = %v, want [bug backend]", extCtx.Fields.Labels)
 		}
 	})
 
@@ -104,34 +49,33 @@ func TestParseExternalContextLinear(t *testing.T) {
 			"external_context": map[string]any{
 				"title":       "Fix naming convention",
 				"description": "Update API naming",
-				"priority":    "high",
 				"estimate":    float64(5),
 			},
 		}
-		extCtx, err := parseExternalContext(args)
+		extCtx, err := parseExternalContext(args, "linear_issue")
 		if err != nil {
 			t.Fatalf("parseExternalContext: %v", err)
 		}
-		if extCtx.LinearTitle != "Fix naming convention" {
-			t.Errorf("LinearTitle = %q, want %q (via fallback alias)", extCtx.LinearTitle, "Fix naming convention")
+		if extCtx.Fields.Title != "Fix naming convention" {
+			t.Errorf("Fields.Title = %q, want %q (via fallback alias)", extCtx.Fields.Title, "Fix naming convention")
 		}
-		if extCtx.LinearDescription != "Update API naming" {
-			t.Errorf("LinearDescription = %q, want %q (via fallback alias)", extCtx.LinearDescription, "Update API naming")
+		if extCtx.Fields.Body != "Update API naming" {
+			t.Errorf("Fields.Body = %q, want %q (via fallback alias)", extCtx.Fields.Body, "Update API naming")
 		}
-		if extCtx.LinearEstimate != 5 {
-			t.Errorf("LinearEstimate = %d, want %d (via fallback alias)", extCtx.LinearEstimate, 5)
+		if extCtx.Fields.StoryPoints != 5 {
+			t.Errorf("Fields.StoryPoints = %d, want %d (via fallback alias)", extCtx.Fields.StoryPoints, 5)
 		}
 	})
 
 	t.Run("nil_external_context", func(t *testing.T) {
 		t.Parallel()
 		args := map[string]any{}
-		extCtx, err := parseExternalContext(args)
+		extCtx, err := parseExternalContext(args, "")
 		if err != nil {
 			t.Fatalf("parseExternalContext: %v", err)
 		}
-		if extCtx.LinearTitle != "" {
-			t.Errorf("LinearTitle = %q, want empty", extCtx.LinearTitle)
+		if extCtx.Fields.Title != "" {
+			t.Errorf("Fields.Title = %q, want empty", extCtx.Fields.Title)
 		}
 	})
 }
@@ -144,10 +88,13 @@ func TestBuildRequestMDWithBodyLinear(t *testing.T) {
 	t.Run("linear_context_produces_linear_issue", func(t *testing.T) {
 		t.Parallel()
 		extCtx := externalContext{
-			SourceURL:         "https://linear.app/dealon/issue/DEA-13",
-			SourceID:          "DEA-13",
-			LinearTitle:       "Fix naming convention",
-			LinearDescription: "Update all API endpoints",
+			SourceURL:  "https://linear.app/dealon/issue/DEA-13",
+			SourceID:   "DEA-13",
+			SourceType: "linear_issue",
+			Fields: sourcetype.ExternalFields{
+				Title: "Fix naming convention",
+				Body:  "Update all API endpoints",
+			},
 		}
 		got := buildRequestMDWithBody(extCtx, "")
 		if !strings.Contains(got, "source_type: linear_issue") {
@@ -170,7 +117,10 @@ func TestBuildRequestMDWithBodyLinear(t *testing.T) {
 	t.Run("linear_title_only", func(t *testing.T) {
 		t.Parallel()
 		extCtx := externalContext{
-			LinearTitle: "Fix naming convention",
+			SourceType: "linear_issue",
+			Fields: sourcetype.ExternalFields{
+				Title: "Fix naming convention",
+			},
 		}
 		got := buildRequestMDWithBody(extCtx, "")
 		if !strings.Contains(got, "source_type: linear_issue") {
@@ -200,24 +150,32 @@ func TestIsTextSource(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "github_title",
-			extCtx: externalContext{GitHubTitle: "Fix bug"},
-			want:   false,
+			name: "github_title",
+			extCtx: externalContext{
+				Fields: sourcetype.ExternalFields{Title: "Fix bug"},
+			},
+			want: false,
 		},
 		{
-			name:   "jira_summary",
-			extCtx: externalContext{JiraSummary: "Fix bug"},
-			want:   false,
+			name: "jira_summary",
+			extCtx: externalContext{
+				Fields: sourcetype.ExternalFields{Title: "Fix bug"},
+			},
+			want: false,
 		},
 		{
-			name:   "linear_title",
-			extCtx: externalContext{LinearTitle: "Fix bug"},
-			want:   false,
+			name: "linear_title",
+			extCtx: externalContext{
+				Fields: sourcetype.ExternalFields{Title: "Fix bug"},
+			},
+			want: false,
 		},
 		{
-			name:   "linear_description_only",
-			extCtx: externalContext{LinearDescription: "Some description"},
-			want:   false,
+			name: "body_only",
+			extCtx: externalContext{
+				Fields: sourcetype.ExternalFields{Body: "Some description"},
+			},
+			want: false,
 		},
 	}
 

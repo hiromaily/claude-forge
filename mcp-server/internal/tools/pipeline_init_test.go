@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/validation"
 )
@@ -1055,8 +1056,8 @@ func TestRefineWorkspacePath(t *testing.T) {
 			name:      "jira_issue_refines_name",
 			workspace: ".specs/20260330-https-legalforce-atlassian-net-browse-so",
 			extCtx: externalContext{
-				SourceID:    "SOA-2883",
-				JiraSummary: "Light plan triggers meeting minutes job for Meet meetings",
+				SourceID: "SOA-2883",
+				Fields:   sourcetype.ExternalFields{Title: "Light plan triggers meeting minutes job for Meet meetings"},
 			},
 			want: ".specs/20260330-soa-2883-light-plan-triggers-meeting-mi",
 		},
@@ -1064,8 +1065,8 @@ func TestRefineWorkspacePath(t *testing.T) {
 			name:      "github_issue_refines_name",
 			workspace: ".specs/20260330-https-github-com-owner-repo-issues-42",
 			extCtx: externalContext{
-				SourceID:    "42",
-				GitHubTitle: "Fix auth timeout in middleware",
+				SourceID: "42",
+				Fields:   sourcetype.ExternalFields{Title: "Fix auth timeout in middleware"},
 			},
 			want: ".specs/20260330-42-fix-auth-timeout-in-middleware",
 		},
@@ -1073,8 +1074,8 @@ func TestRefineWorkspacePath(t *testing.T) {
 			name:      "linear_issue_refines_name",
 			workspace: ".specs/20260330-https-linear-app-dealon-issue-dea-13",
 			extCtx: externalContext{
-				SourceID:    "DEA-13",
-				LinearTitle: "Fix naming convention in API",
+				SourceID: "DEA-13",
+				Fields:   sourcetype.ExternalFields{Title: "Fix naming convention in API"},
 			},
 			want: ".specs/20260330-dea-13-fix-naming-convention-in-api",
 		},
@@ -1085,18 +1086,18 @@ func TestRefineWorkspacePath(t *testing.T) {
 			want:      ".specs/20260330-implement-a-new-feature",
 		},
 		{
-			name:      "github_title_only_no_source_id",
+			name:      "title_only_no_source_id",
 			workspace: ".specs/20260330-https-github-com-owner-repo-issues-42",
 			extCtx: externalContext{
-				GitHubTitle: "Fix auth timeout in middleware",
+				Fields: sourcetype.ExternalFields{Title: "Fix auth timeout in middleware"},
 			},
 			want: ".specs/20260330-fix-auth-timeout-in-middleware",
 		},
 		{
-			name:      "jira_summary_only_no_source_id",
+			name:      "jira_title_only_no_source_id",
 			workspace: ".specs/20260330-https-legalforce-atlassian-net-browse-so",
 			extCtx: externalContext{
-				JiraSummary: "Skip minutes job without integration",
+				Fields: sourcetype.ExternalFields{Title: "Skip minutes job without integration"},
 			},
 			want: ".specs/20260330-skip-minutes-job-without-integration",
 		},

@@ -1499,103 +1499,10 @@ func TestPostToSource_CheckpointOptions(t *testing.T) {
 	}
 }
 
-// TestSourceTypeLabel verifies label mapping for all known source types.
-func TestSourceTypeLabel(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		sourceType string
-		want       string
-	}{
-		{state.SourceTypeGitHub, "GitHub issue"},
-		{state.SourceTypeJira, "Jira issue"},
-		{state.SourceTypeLinear, "Linear issue"},
-		{state.SourceTypeText, ""},
-		{"unknown", ""},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.sourceType, func(t *testing.T) {
-			t.Parallel()
-			got := sourceTypeLabel(tc.sourceType)
-			if got != tc.want {
-				t.Errorf("sourceTypeLabel(%q) = %q, want %q", tc.sourceType, got, tc.want)
-			}
-		})
-	}
-}
-
-// TestBuildPostMethod verifies PostMethod construction for all known source types.
-func TestBuildPostMethod(t *testing.T) {
-	t.Parallel()
-
-	t.Run("github_uses_command", func(t *testing.T) {
-		t.Parallel()
-		pm := buildPostMethod(state.SourceTypeGitHub, "https://github.com/org/repo/issues/42", "42", ".specs/test")
-		if pm == nil {
-			t.Fatalf("buildPostMethod returned nil for GitHub")
-		}
-		if pm.Command == "" {
-			t.Errorf("Command should be non-empty for GitHub")
-		}
-		if !strings.Contains(pm.Command, "gh issue comment") {
-			t.Errorf("Command = %q, want substring 'gh issue comment'", pm.Command)
-		}
-		if !strings.Contains(pm.Command, "--body-file") {
-			t.Errorf("Command = %q, want substring '--body-file'", pm.Command)
-		}
-		if pm.BodySource == "" {
-			t.Errorf("BodySource should be non-empty")
-		}
-	})
-
-	t.Run("jira_uses_instruction", func(t *testing.T) {
-		t.Parallel()
-		pm := buildPostMethod(state.SourceTypeJira, "https://example.atlassian.net/browse/PROJ-123", "PROJ-123", ".specs/test")
-		if pm == nil {
-			t.Fatalf("buildPostMethod returned nil for Jira")
-		}
-		if pm.Instruction == "" {
-			t.Errorf("Instruction should be non-empty for Jira")
-		}
-		if pm.BodySource == "" {
-			t.Errorf("BodySource should be non-empty")
-		}
-	})
-
-	t.Run("linear_uses_mcp_tool", func(t *testing.T) {
-		t.Parallel()
-		pm := buildPostMethod(state.SourceTypeLinear, "https://linear.app/dealon/issue/DEA-13", "DEA-13", ".specs/test")
-		if pm == nil {
-			t.Fatalf("buildPostMethod returned nil for Linear")
-		}
-		if pm.MCPTool != "mcp__linear__save_comment" {
-			t.Errorf("MCPTool = %q, want mcp__linear__save_comment", pm.MCPTool)
-		}
-		if pm.MCPParams["issueId"] != "DEA-13" {
-			t.Errorf("MCPParams[issueId] = %q, want DEA-13", pm.MCPParams["issueId"])
-		}
-		if pm.BodySource == "" {
-			t.Errorf("BodySource should be non-empty")
-		}
-	})
-
-	t.Run("text_returns_nil", func(t *testing.T) {
-		t.Parallel()
-		pm := buildPostMethod(state.SourceTypeText, "", "", ".specs/test")
-		if pm != nil {
-			t.Errorf("buildPostMethod should return nil for text source, got %+v", pm)
-		}
-	})
-
-	t.Run("unknown_returns_nil", func(t *testing.T) {
-		t.Parallel()
-		pm := buildPostMethod("unknown", "https://example.com", "", ".specs/test")
-		if pm != nil {
-			t.Errorf("buildPostMethod should return nil for unknown source, got %+v", pm)
-		}
-	})
-}
+// TestSourceTypeLabel and TestBuildPostMethod were removed — the functions
+// sourceTypeLabel and buildPostMethod have been replaced by the sourcetype
+// registry (sourcetype.Get().Label() and sourcetype.Get().PostConfig()).
+// Coverage is provided by sourcetype/registry_test.go.
 
 // TestHandlePhaseFour_WorkflowRulesRetryLimitCheckpoint verifies that when
 // TaskRevisions has reached MaxRevisionRetries and review-tasks.md exists,
