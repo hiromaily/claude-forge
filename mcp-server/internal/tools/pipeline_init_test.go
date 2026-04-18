@@ -285,6 +285,24 @@ func TestPipelineInitSourceTypes(t *testing.T) {
 			wantSourceID:   "PROJ-123",
 		},
 		{
+			name:           "linear_url",
+			arguments:      "https://linear.app/dealon/issue/DEA-13",
+			wantSourceType: "linear_issue",
+			wantSourceID:   "DEA-13",
+		},
+		{
+			name:           "linear_url_with_trailing_slash",
+			arguments:      "https://linear.app/dealon/issue/DEA-13/",
+			wantSourceType: "linear_issue",
+			wantSourceID:   "DEA-13",
+		},
+		{
+			name:           "linear_url_with_slug",
+			arguments:      "https://linear.app/dealon/issue/DEA-13/some-title-slug",
+			wantSourceType: "linear_issue",
+			wantSourceID:   "DEA-13",
+		},
+		{
 			name:           "free_text",
 			arguments:      "implement a user authentication feature",
 			wantSourceType: "text",
@@ -470,15 +488,11 @@ func TestPipelineInitFetchNeeded(t *testing.T) {
 		if r.FetchNeeded.Type != "github" {
 			t.Errorf("fetch_needed.type: got %q, want %q", r.FetchNeeded.Type, "github")
 		}
-		wantFields := []string{"labels", "title", "body"}
-		if len(r.FetchNeeded.Fields) != len(wantFields) {
-			t.Errorf("fetch_needed.fields: got %v, want %v", r.FetchNeeded.Fields, wantFields)
-		} else {
-			for i, f := range wantFields {
-				if r.FetchNeeded.Fields[i] != f {
-					t.Errorf("fetch_needed.fields[%d]: got %q, want %q", i, r.FetchNeeded.Fields[i], f)
-				}
-			}
+		if r.FetchNeeded.Command == "" {
+			t.Errorf("fetch_needed.command should not be empty for github_issue")
+		}
+		if r.FetchNeeded.ResponseMapping["title"] != "github_title" {
+			t.Errorf("fetch_needed.response_mapping[title]: got %q, want %q", r.FetchNeeded.ResponseMapping["title"], "github_title")
 		}
 	})
 
@@ -497,15 +511,34 @@ func TestPipelineInitFetchNeeded(t *testing.T) {
 		if r.FetchNeeded.Type != "jira" {
 			t.Errorf("fetch_needed.type: got %q, want %q", r.FetchNeeded.Type, "jira")
 		}
-		wantFields := []string{"issue_type", "story_points", "summary", "description"}
-		if len(r.FetchNeeded.Fields) != len(wantFields) {
-			t.Errorf("fetch_needed.fields: got %v, want %v", r.FetchNeeded.Fields, wantFields)
-		} else {
-			for i, f := range wantFields {
-				if r.FetchNeeded.Fields[i] != f {
-					t.Errorf("fetch_needed.fields[%d]: got %q, want %q", i, r.FetchNeeded.Fields[i], f)
-				}
-			}
+		if r.FetchNeeded.ResponseMapping["summary"] != "jira_summary" {
+			t.Errorf("fetch_needed.response_mapping[summary]: got %q, want %q", r.FetchNeeded.ResponseMapping["summary"], "jira_summary")
+		}
+	})
+
+	t.Run("linear_non_null_with_correct_fields", func(t *testing.T) {
+		t.Parallel()
+		res := callTool(t, h, map[string]any{
+			"arguments": "https://linear.app/dealon/issue/DEA-13",
+		})
+		if res.IsError {
+			t.Fatalf("handler returned MCP error: %v", textContent(res))
+		}
+		r := parsePipelineInitResult(t, textContent(res))
+		if r.FetchNeeded == nil {
+			t.Fatalf("fetch_needed is nil for linear_issue, want non-nil")
+		}
+		if r.FetchNeeded.Type != "linear" {
+			t.Errorf("fetch_needed.type: got %q, want %q", r.FetchNeeded.Type, "linear")
+		}
+		if r.FetchNeeded.MCPTool != "mcp__linear__get_issue" {
+			t.Errorf("fetch_needed.mcp_tool: got %q, want %q", r.FetchNeeded.MCPTool, "mcp__linear__get_issue")
+		}
+		if r.FetchNeeded.MCPParams["issueId"] != "DEA-13" {
+			t.Errorf("fetch_needed.mcp_params[issueId]: got %q, want %q", r.FetchNeeded.MCPParams["issueId"], "DEA-13")
+		}
+		if r.FetchNeeded.ResponseMapping["title"] != "linear_title" {
+			t.Errorf("fetch_needed.response_mapping[title]: got %q, want %q", r.FetchNeeded.ResponseMapping["title"], "linear_title")
 		}
 	})
 
@@ -897,6 +930,24 @@ func TestExtractSourceID(t *testing.T) {
 			want:       "PROJ-123",
 		},
 		{
+			name:       "linear_issue",
+			sourceType: "linear_issue",
+			coreText:   "https://linear.app/dealon/issue/DEA-13",
+			want:       "DEA-13",
+		},
+		{
+			name:       "linear_issue_with_trailing_slash",
+			sourceType: "linear_issue",
+			coreText:   "https://linear.app/dealon/issue/DEA-13/",
+			want:       "DEA-13",
+		},
+		{
+			name:       "linear_issue_with_slug",
+			sourceType: "linear_issue",
+			coreText:   "https://linear.app/dealon/issue/DEA-13/some-title-slug",
+			want:       "DEA-13",
+		},
+		{
 			name:       "text_source",
 			sourceType: "text",
 			coreText:   "implement a feature",
@@ -1017,6 +1068,15 @@ func TestRefineWorkspacePath(t *testing.T) {
 				GitHubTitle: "Fix auth timeout in middleware",
 			},
 			want: ".specs/20260330-42-fix-auth-timeout-in-middleware",
+		},
+		{
+			name:      "linear_issue_refines_name",
+			workspace: ".specs/20260330-https-linear-app-dealon-issue-dea-13",
+			extCtx: externalContext{
+				SourceID:    "DEA-13",
+				LinearTitle: "Fix naming convention in API",
+			},
+			want: ".specs/20260330-dea-13-fix-naming-convention-in-api",
 		},
 		{
 			name:      "no_context_keeps_original",

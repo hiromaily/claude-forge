@@ -67,11 +67,15 @@ type PipelineInitFlags struct {
 
 // FetchNeeded describes the external data that must be fetched before
 // pipeline_init_with_context can run decisions 6–13.
-// Only populated for github_issue and jira_issue source types.
+// Only populated for github_issue, jira_issue, and linear_issue source types.
+// At most one of MCPTool, Command, or Instruction should drive the fetch.
 type FetchNeeded struct {
-	Type        string   `json:"type"`
-	Fields      []string `json:"fields"`
-	Instruction string   `json:"instruction"`
+	Type            string            `json:"type"`
+	MCPTool         string            `json:"mcp_tool,omitempty"`
+	Command         string            `json:"command,omitempty"`
+	MCPParams       map[string]string `json:"mcp_params,omitempty"`
+	ResponseMapping map[string]string `json:"response_mapping"`
+	Instruction     string            `json:"instruction"`
 }
 
 // PipelineInitHandler handles the "pipeline_init" MCP tool.
@@ -135,14 +139,14 @@ func PipelineInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
 		// Derive spec_name from workspace base.
 		specName := deriveSpecName(workspace)
 
-		// Build fetch_needed block.
-		fetchNeeded := makeFetchNeeded(sourceType)
-
 		// source_url is only meaningful for URL-based source types; omit for text/workspace.
 		var sourceURL string
-		if sourceType == "github_issue" || sourceType == "jira_issue" {
+		if sourceType == "github_issue" || sourceType == "jira_issue" || sourceType == "linear_issue" {
 			sourceURL = coreText
 		}
+
+		// Build fetch_needed block.
+		fetchNeeded := makeFetchNeeded(sourceType, sourceURL, sourceID)
 
 		return okJSON(PipelineInitResult{
 			Workspace:   workspace,
@@ -226,15 +230,27 @@ func mergeWithPreferences(flags *PipelineInitFlags, p state.Preferences) {
 	}
 }
 
-// extractSourceID extracts the source identifier from the core text for GitHub/Jira URLs.
+// extractSourceID extracts the source identifier from the core text for GitHub/Jira/Linear URLs.
 // For GitHub: the issue number (e.g., "42" from .../issues/42).
 // For Jira: the issue key (e.g., "PROJ-123" from .../browse/PROJ-123).
+// For Linear: the issue key (e.g., "DEA-13" from .../issue/DEA-13).
 // Returns empty string for text/workspace source types.
 func extractSourceID(sourceType, coreText string) string {
 	switch sourceType {
-	case "github_issue", "jira_issue":
+	case "github_issue", "jira_issue", "linear_issue":
 		u, err := url.Parse(coreText)
 		if err != nil {
+			return ""
+		}
+		// Linear URLs may have a trailing slug after the issue key (e.g., /issue/DEA-13/some-title).
+		// The issue key is always the segment right after "/issue/".
+		if sourceType == "linear_issue" {
+			segments := strings.Split(strings.Trim(u.Path, "/"), "/")
+			for i, seg := range segments {
+				if seg == "issue" && i+1 < len(segments) {
+					return segments[i+1]
+				}
+			}
 			return ""
 		}
 		return path.Base(u.Path)
@@ -314,10 +330,15 @@ func refineWorkspacePath(workspace string, extCtx externalContext) string {
 	case extCtx.SourceID != "" && extCtx.GitHubTitle != "":
 		id = extCtx.SourceID
 		summary = extCtx.GitHubTitle
+	case extCtx.SourceID != "" && extCtx.LinearTitle != "":
+		id = extCtx.SourceID
+		summary = extCtx.LinearTitle
 	case extCtx.JiraSummary != "":
 		summary = extCtx.JiraSummary
 	case extCtx.GitHubTitle != "":
 		summary = extCtx.GitHubTitle
+	case extCtx.LinearTitle != "":
+		summary = extCtx.LinearTitle
 	default:
 		return workspace
 	}
@@ -342,19 +363,45 @@ func replaceWorkspaceSlug(workspace, newSlug string) string {
 
 // makeFetchNeeded constructs the FetchNeeded block for the given source type.
 // Returns nil for text and workspace source types.
-func makeFetchNeeded(sourceType string) *FetchNeeded {
+func makeFetchNeeded(sourceType, sourceURL, sourceID string) *FetchNeeded {
 	switch sourceType {
 	case "github_issue":
 		return &FetchNeeded{
-			Type:        "github",
-			Fields:      []string{"labels", "title", "body"},
+			Type:    "github",
+			Command: "gh issue view " + sourceURL + " --json title,body,labels",
+			ResponseMapping: map[string]string{
+				"title":  "github_title",
+				"body":   "github_body",
+				"labels": "github_labels",
+			},
 			Instruction: "fetch github issue fields before calling pipeline_init_with_context",
 		}
 	case "jira_issue":
 		return &FetchNeeded{
-			Type:        "jira",
-			Fields:      []string{"issue_type", "story_points", "summary", "description"},
-			Instruction: "fetch jira issue fields before calling pipeline_init_with_context",
+			Type: "jira",
+			ResponseMapping: map[string]string{
+				"summary":      "jira_summary",
+				"description":  "jira_description",
+				"issue_type":   "jira_issue_type",
+				"story_points": "jira_story_points",
+			},
+			Instruction: "fetch jira issue fields (summary, description, issuetype, story_points) before calling pipeline_init_with_context. Use Atlassian MCP tools if available, or Jira REST API with $JIRA_USER:$JIRA_TOKEN credentials.",
+		}
+	case "linear_issue":
+		return &FetchNeeded{
+			Type:    "linear",
+			MCPTool: "mcp__linear__get_issue",
+			MCPParams: map[string]string{
+				"issueId": sourceID,
+			},
+			ResponseMapping: map[string]string{
+				"title":       "linear_title",
+				"description": "linear_description",
+				"priority":    "linear_priority",
+				"estimate":    "linear_estimate",
+				"labels":      "linear_labels",
+			},
+			Instruction: "fetch linear issue fields before calling pipeline_init_with_context",
 		}
 	default:
 		return nil
