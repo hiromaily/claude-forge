@@ -3,7 +3,6 @@
 package events
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,13 +15,13 @@ type Event struct {
 	// Event type. Phase-level: "phase-start", "phase-complete", "phase-fail",
 	// "checkpoint", "abandon". Fine-grained: "pipeline-init", "pipeline-complete",
 	// "agent-dispatch", "action-complete", "revision-required".
-	Event    string `json:"event"`
-	Phase    string `json:"phase"`    // e.g. "phase-3"
-	SpecName string `json:"specName"` // from state.SpecName
-	Workspace  string `json:"workspace"`            // absolute path passed to the tool
-	Timestamp  string `json:"timestamp"`            // RFC3339 UTC
-	Outcome    string `json:"outcome"`              // "in_progress" | "completed" | "failed" | "awaiting_human" | "abandoned" | "dispatched"
-	Detail     string `json:"detail,omitempty"`     // optional extra info (e.g. agent name, action type)
+	Event     string `json:"event"`
+	Phase     string `json:"phase"`            // e.g. "phase-3"
+	SpecName  string `json:"specName"`         // from state.SpecName
+	Workspace string `json:"workspace"`        // absolute path passed to the tool
+	Timestamp string `json:"timestamp"`        // RFC3339 UTC
+	Outcome   string `json:"outcome"`          // "in_progress" | "completed" | "failed" | "awaiting_human" | "abandoned" | "dispatched"
+	Detail    string `json:"detail,omitempty"` // optional extra info (e.g. agent name, action type)
 }
 
 const subscriberBufferSize = 64
@@ -140,10 +139,11 @@ func (b *EventBus) Publish(e Event) {
 	b.histMu.Unlock()
 
 	// Persist to JSONL log file (best-effort).
+	// Single Write call keeps the line atomic up to PIPE_BUF on POSIX systems.
 	b.logMu.Lock()
 	if b.logFile != nil {
 		if data, err := json.Marshal(e); err == nil {
-			_, _ = fmt.Fprintf(b.logFile, "%s\n", data)
+			_, _ = b.logFile.Write(append(data, '\n'))
 		}
 	}
 	b.logMu.Unlock()
@@ -184,25 +184,13 @@ func loadEventsFromFile(path string) ([]Event, error) {
 	defer func() { _ = f.Close() }()
 
 	var result []Event
-	scanner := bufio.NewScanner(f)
-	// Raise the default 64 KB token limit to 1 MB to handle events with large
-	// Detail payloads (e.g. full agent output). Without this, bufio.ErrTooLong
-	// would abort the scan and all subsequent lines would be lost.
-	const maxLineSize = 1024 * 1024
-	scanner.Buffer(make([]byte, 0, 256*1024), maxLineSize)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
+	dec := json.NewDecoder(f)
+	for dec.More() {
 		var e Event
-		if err := json.Unmarshal(line, &e); err != nil {
+		if err := dec.Decode(&e); err != nil {
 			continue // skip malformed lines
 		}
 		result = append(result, e)
-	}
-	if err := scanner.Err(); err != nil {
-		return result, fmt.Errorf("scan event log: %w", err)
 	}
 	return result, nil
 }
