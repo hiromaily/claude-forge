@@ -13,6 +13,7 @@ const (
 	ActionBatchCommit  = "batch_commit"  // engine dispatches batch commit internally; never surfaced to orchestrator
 	ActionHumanGate    = "human_gate"    // engine dispatches human gate; handler presents to orchestrator as-is
 	ActionRenameBranch = "rename_branch" // engine dispatches branch rename when design content suggests a different type
+	ActionPushBranch   = "push_branch"   // engine dispatches branch push before pr-creation; absorbed internally by pipeline_next_action
 )
 
 // SkipSummaryPrefix is the prefix placed in Action.Summary for per-phase skip signals.
@@ -172,6 +173,18 @@ func NewRenameBranchAction(phase, oldBranch, newBranch string) Action {
 		Phase:     phase,
 		OldBranch: oldBranch,
 		NewBranch: newBranch,
+		SetupOnly: true,
+	}
+}
+
+// NewPushBranchAction constructs an Action of type ActionPushBranch.
+// It is absorbed internally by pipeline_next_action (never surfaced to the orchestrator),
+// so pipeline_report_result is never called for this action type; SetupOnly is set for
+// consistency with other internally-absorbed action constructors but has no effect.
+func NewPushBranchAction(phase string) Action {
+	return Action{
+		Type:      ActionPushBranch,
+		Phase:     phase,
 		SetupOnly: true,
 	}
 }

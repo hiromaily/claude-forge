@@ -34,6 +34,7 @@ type State struct {
 	SkipPr                    bool            `json:"skipPr"`
 	UseCurrentBranch          bool            `json:"useCurrentBranch"`
 	BranchClassified          bool            `json:"branchClassified"`
+	BranchPushed              bool            `json:"branchPushed"`
 	Debug                     bool            `json:"debug"`
 	SkippedPhases             []string        `json:"skippedPhases"`
 	CurrentPhase              string          `json:"currentPhase"`

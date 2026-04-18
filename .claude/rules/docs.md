@@ -18,6 +18,7 @@ paths: ["docs/**/*.md", "template/**/*.md", "README.md", "CLAUDE.md"]
 - **Never edit `README.md` or `CLAUDE.md` directly** — changes are overwritten on next `make docs`.
 - To change structure, edit the template (`template/*.tpl.md`).
 - To change section content, edit the relevant file under `template/sections/`.
+- **After editing any file under `template/`**, run `make docs` immediately to regenerate `README.md`, `CLAUDE.md`, and `ARCHITECTURE.md`. Commit the regenerated files together with the template edits — never commit template changes without the regenerated output.
 
 ### Workflow
 

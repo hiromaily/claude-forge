@@ -156,6 +156,7 @@ func (e *Engine) NextAction(sm *state.StateManager, _ string) (Action, error) {
 // analyst-investigator agent so both analyses are written to analysis.md in one pass.
 func (*Engine) handlePhaseOne(st *state.State) (Action, error) {
 	if slices.Contains(st.SkippedPhases, PhaseTwo) {
+		// state.DefaultModel is an analytics label only; execution model comes from agent frontmatter.
 		return NewSpawnAgentAction(
 			agentAnalystInvestigator,
 			"Run Phase 1 combined situation analysis and investigation.",
@@ -704,6 +705,14 @@ func (e *Engine) handlePRCreation(st *state.State) (Action, error) {
 	// Note: Decision 14 already handles the case where pr-creation is in SkippedPhases.
 	if st.SkipPr {
 		return NewDoneAction(SkipSummaryPrefix+PhasePRCreation, ""), nil
+	}
+
+	// Push the feature branch before creating the PR. Without this, gh pr create
+	// fails with "branch not found on remote". pipeline_next_action absorbs this
+	// action internally (like rename_branch) and sets BranchPushed=true in state
+	// so the engine does not push again on re-entry.
+	if !st.BranchPushed {
+		return NewPushBranchAction(PhasePRCreation), nil
 	}
 
 	title := derivePRTitle(st)

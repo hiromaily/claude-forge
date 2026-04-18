@@ -1494,3 +1494,124 @@ func TestPipelineNextAction_P8_CheckpointRevision(t *testing.T) {
 		}
 	})
 }
+
+// TestExtractTaskNumber verifies the extractTaskNumber helper that is used to
+// resolve the {N} template variable in agent .md files.
+func TestExtractTaskNumber(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		outputFile string
+		want       string
+	}{
+		{name: "impl_1", outputFile: "impl-1.md", want: "1"},
+		{name: "impl_2", outputFile: "impl-2.md", want: "2"},
+		{name: "impl_10", outputFile: "impl-10.md", want: "10"},
+		{name: "review_1", outputFile: "review-1.md", want: "1"},
+		{name: "review_3", outputFile: "review-3.md", want: "3"},
+		{name: "analysis", outputFile: "analysis.md", want: ""},
+		{name: "design", outputFile: "design.md", want: ""},
+		{name: "tasks", outputFile: "tasks.md", want: ""},
+		{name: "empty", outputFile: "", want: ""},
+		{name: "impl_no_suffix", outputFile: "impl-1", want: ""},
+		{name: "impl_prefix_only", outputFile: "impl-", want: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := extractTaskNumber(tc.outputFile)
+			if got != tc.want {
+				t.Errorf("extractTaskNumber(%q) = %q, want %q", tc.outputFile, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEnrichPrompt_TemplateSubstitution verifies that {workspace}, {branch},
+// {spec-name}, and {N} placeholders in agent .md files are replaced with
+// runtime values before the prompt is returned.
+func TestEnrichPrompt_TemplateSubstitution(t *testing.T) {
+	t.Parallel()
+
+	specName := "my-spec"
+	branch := "fix/999-my-fix"
+
+	// Phase-5 with a single sequential task so the engine dispatches a single-task
+	// implementer (NewSpawnAgentAction with OutputFile="impl-1.md"), which populates
+	// action.OutputFile and allows extractTaskNumber to resolve {N}.
+	workspace, sm := initWorkspaceForNextAction(t, state.PhaseFive, func(s *state.State) error {
+		s.SpecName = specName
+		s.Branch = &branch
+		s.Tasks = map[string]state.Task{
+			"1": {
+				Title:         "Task 1",
+				ExecutionMode: state.ExecModeSequential,
+				ImplStatus:    "",
+				ReviewStatus:  "",
+			},
+		}
+		return nil
+	})
+
+	// Write tasks.md so the engine skips ActionTaskInit.
+	if err := os.WriteFile(filepath.Join(workspace, "tasks.md"), []byte("# Tasks\n"), 0o600); err != nil {
+		t.Fatalf("write tasks.md: %v", err)
+	}
+
+	agentDir := t.TempDir()
+	// The agent file for the implementer uses all four placeholders.
+	agentContent := "workspace={workspace} branch={branch} spec={spec-name} task={N}"
+	if err := os.WriteFile(filepath.Join(agentDir, "implementer.md"), []byte(agentContent), 0o600); err != nil {
+		t.Fatalf("write implementer.md: %v", err)
+	}
+
+	eng := orchestrator.NewEngine(agentDir, "")
+	handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, agentDir, nil, nil, nil)
+
+	result, err := callNextAction(t, handler, workspace)
+	if err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("handler returned MCP error: %s", result.Content)
+	}
+
+	var action orchestrator.Action
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &action); err != nil {
+		t.Fatalf("unmarshal action: %v", err)
+	}
+	if action.Type != orchestrator.ActionSpawnAgent {
+		t.Fatalf("action.Type = %q, want %q", action.Type, orchestrator.ActionSpawnAgent)
+	}
+
+	// All placeholders must be resolved; no literal brace-tokens should remain.
+	if strings.Contains(action.Prompt, "{workspace}") {
+		t.Errorf("Prompt still contains literal {workspace}\nPrompt: %s", action.Prompt)
+	}
+	if strings.Contains(action.Prompt, "{branch}") {
+		t.Errorf("Prompt still contains literal {branch}\nPrompt: %s", action.Prompt)
+	}
+	if strings.Contains(action.Prompt, "{spec-name}") {
+		t.Errorf("Prompt still contains literal {spec-name}\nPrompt: %s", action.Prompt)
+	}
+	if strings.Contains(action.Prompt, "{N}") {
+		t.Errorf("Prompt still contains literal {N}\nPrompt: %s", action.Prompt)
+	}
+
+	// Verify the resolved values appear in the prompt.
+	if !strings.Contains(action.Prompt, workspace) {
+		t.Errorf("Prompt does not contain resolved workspace %q\nPrompt: %s", workspace, action.Prompt)
+	}
+	if !strings.Contains(action.Prompt, branch) {
+		t.Errorf("Prompt does not contain resolved branch %q\nPrompt: %s", branch, action.Prompt)
+	}
+	if !strings.Contains(action.Prompt, specName) {
+		t.Errorf("Prompt does not contain resolved spec-name %q\nPrompt: %s", specName, action.Prompt)
+	}
+	// Task number "1" should appear (from impl-1.md output file).
+	if !strings.Contains(action.Prompt, "task=1") {
+		t.Errorf("Prompt does not contain resolved task number (want 'task=1')\nPrompt: %s", action.Prompt)
+	}
+}

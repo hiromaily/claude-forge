@@ -399,6 +399,29 @@ func PipelineNextActionHandler(
 				}
 				continue
 
+			case orchestrator.ActionPushBranch:
+				// P7: push feature branch to remote before pr-creation, update state, re-enter.
+				// Absorbed internally so the orchestrator never sees push_branch as an action.
+				// git push -u origin HEAD works on any checked-out branch name and is idempotent.
+				if pushErr := runGit(workspace, "push", "-u", "origin", "HEAD"); pushErr != nil {
+					return errorf("push_branch git: %v", pushErr)
+				}
+				if updateErr := sm2.Update(func(s *state.State) error {
+					s.BranchPushed = true
+					return nil
+				}); updateErr != nil {
+					return errorf("push_branch state update: %v", updateErr)
+				}
+				action, err = eng.NextAction(sm2, "")
+				if err != nil {
+					return errorf("next_action (after push_branch): %v", err)
+				}
+				if iter == maxDispatchIter-1 {
+					return errorf("dispatch loop exceeded %d iterations — possible engine cycle; last action: %s",
+						maxDispatchIter, action.Type)
+				}
+				continue
+
 			default:
 				// ActionSpawnAgent, ActionCheckpoint, ActionWriteFile, ActionDone — return as-is.
 			}
@@ -488,7 +511,7 @@ func PipelineNextActionHandler(
 // and the empty HistoryContext is used (fail-open pattern).
 //
 // Returns an error if the agent .md file is missing (caller should treat as warning).
-func enrichPrompt(
+func enrichPrompt( //nolint:gocyclo // complexity is inherent in the dispatch table
 	resp *nextActionResponse,
 	agentDir, workspace string,
 	sm *state.StateManager,
@@ -505,6 +528,23 @@ func enrichPrompt(
 	}
 
 	agentInstructions := string(agentData)
+
+	// Substitute agent instruction template variables with runtime values.
+	// Agent .md files use {workspace}, {branch}, {spec-name}, and {N} as placeholders
+	// that must be resolved before the prompt is sent, so agents receive concrete paths
+	// and identifiers rather than literal brace-tokens.
+	agentInstructions = strings.ReplaceAll(agentInstructions, "{workspace}", workspace)
+	if taskN := extractTaskNumber(action.OutputFile); taskN != "" {
+		agentInstructions = strings.ReplaceAll(agentInstructions, "{N}", taskN)
+	}
+	if st, stErr := sm.GetState(); stErr == nil {
+		branch := ""
+		if st.Branch != nil {
+			branch = *st.Branch
+		}
+		agentInstructions = strings.ReplaceAll(agentInstructions, "{branch}", branch)
+		agentInstructions = strings.ReplaceAll(agentInstructions, "{spec-name}", st.SpecName)
+	}
 
 	// Build Layer 2 artifacts section — file paths only (no content inlining).
 	// Agents read artifacts themselves via the Read tool. This keeps the MCP
@@ -658,4 +698,18 @@ func filterCurrentReviewFindings(workspace string, ctx prompt.HistoryContext) pr
 	ctx.CriticalPatterns = filteredCritical
 
 	return ctx
+}
+
+// extractTaskNumber parses the task number from an output artifact filename.
+// "impl-1.md" → "1", "review-2.md" → "2". Returns "" when the filename does
+// not match either pattern (e.g. "analysis.md", "design.md").
+func extractTaskNumber(outputFile string) string {
+	for _, prefix := range []string{"impl-", "review-"} {
+		if rest, ok := strings.CutPrefix(outputFile, prefix); ok {
+			if n, ok2 := strings.CutSuffix(rest, ".md"); ok2 {
+				return n
+			}
+		}
+	}
+	return ""
 }
