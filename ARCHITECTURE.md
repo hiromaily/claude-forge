@@ -760,7 +760,7 @@ claude-forge/
 
 Key choices that shape the plugin's architecture:
 
-- **All agents use `model: sonnet`** — cost optimization for 10+ agent invocations per run. Upgrade individual agents to `opus` if needed.
+- **Agents inherit the user's configured model** — no `model:` key is set in agent frontmatter. Users control model selection via their Claude Code configuration. Pin individual agents to a specific model by adding `model: <name>` to their frontmatter if needed.
 - **The orchestrator never reads source code** — only small artifact files, keeping its context window lean.
 - **Parallel implementation with mkdir-based locking** — macOS lacks `flock`, so atomic `mkdir` is used instead. Parallel agents skip `git commit`; the orchestrator batch-commits after the group finishes.
 
