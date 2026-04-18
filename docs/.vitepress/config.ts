@@ -170,6 +170,10 @@ export default withMermaid(
                     text: "Codex Integration",
                     link: "/research/codex-integration",
                   },
+                  {
+                    text: "Remote Dashboard Control",
+                    link: "/research/remote-dashboard-control",
+                  },
                 ],
               },
             ],
@@ -344,6 +348,10 @@ export default withMermaid(
                   {
                     text: "Codex 統合可否調査",
                     link: "/ja/research/codex-integration",
+                  },
+                  {
+                    text: "ダッシュボードのリモートコントロール",
+                    link: "/ja/research/remote-dashboard-control",
                   },
                 ],
               },
