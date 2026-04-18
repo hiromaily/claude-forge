@@ -66,7 +66,7 @@ func setupE2EWorkspace(
 	eng := orchestrator.NewEngine("", "")
 	kb := history.NewKnowledgeBase("")
 	nextActionH = PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
-	reportResultH = PipelineReportResultHandler(sm, kb)
+	reportResultH = PipelineReportResultHandler(sm, events.NewEventBus(), kb)
 
 	return dir, nextActionH, reportResultH
 }
@@ -339,7 +339,7 @@ func TestE2E_CheckpointRevisionFlow(t *testing.T) {
 	eng := orchestrator.NewEngine("", "")
 	kb := history.NewKnowledgeBase("")
 	nextActionH := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
-	reportResultH := PipelineReportResultHandler(sm, kb)
+	reportResultH := PipelineReportResultHandler(sm, events.NewEventBus(), kb)
 	workspace := dir
 
 	// Track how many times checkpoint-a returned an ActionCheckpoint.

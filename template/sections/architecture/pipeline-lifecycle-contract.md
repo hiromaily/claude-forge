@@ -1,6 +1,6 @@
 # Pipeline Lifecycle Contract
 
-> **Status: Specification** — This document defines the target contract. The implementation fix (calling `sm.PhaseStart()` in `pipeline_next_action` and emitting `phase-complete` in `pipeline_report_result`) is pending. See [Current Gaps](#current-gaps-pending-fix) for details.
+> **Status: Implemented** — All gaps have been resolved. `pipeline_next_action` calls `sm.PhaseStart()` and emits `phase-start` events; `pipeline_report_result` emits `phase-complete` events; checkpoint events are emitted when setting `awaiting_human`.
 
 ## Purpose
 
@@ -125,22 +125,22 @@ pipeline_next_action (with user_response)
 
 Events are the dashboard's view of pipeline state. They must form a coherent timeline.
 
-| Event | Current Emitter | When | Outcome |
+| Event | Emitter | When | Outcome |
 |---|---|---|---|
 | `pipeline-init` | `pipeline_init_with_context` | Workspace created | `in_progress` |
-| `phase-start` | `pipeline_next_action` (spawn_agent only) | Phase begins | `in_progress` |
+| `phase-start` | `pipeline_next_action` or `PhaseStartHandler` | Phase begins | `in_progress` |
 | `agent-dispatch` | `pipeline_next_action` | Agent spawned (detail: agent name) | `dispatched` |
 | `action-complete` | `pipeline_next_action` (P5 embedded report path) | Agent/exec finished (detail: model) | `completed` |
-| `phase-complete` | `PhaseCompleteHandler` only | Phase done | `completed` |
+| `phase-complete` | `pipeline_next_action` (P5 path), `pipeline_report_result`, or `PhaseCompleteHandler` | Phase done | `completed` |
 | `phase-fail` | `PhaseFailHandler` | Phase failed | `failed` |
-| `checkpoint` | `CheckpointHandler` only | Awaiting human | `awaiting_human` |
+| `checkpoint` | `pipeline_next_action` or `CheckpointHandler` | Awaiting human | `awaiting_human` |
 | `revision-required` | `pipeline_next_action` | Review verdict REVISE | `failed` |
 | `pipeline-complete` | `pipeline_next_action` | All phases done | `completed` |
 | `abandon` | `AbandonHandler` | Pipeline abandoned | `abandoned` |
 
-### Expected Event Sequence per Phase (target)
+### Expected Event Sequence per Phase
 
-After the contract is fully implemented, a normal `spawn_agent` phase produces:
+A normal `spawn_agent` phase produces:
 
 ```
 phase-start (in_progress)
@@ -156,17 +156,6 @@ phase-start (in_progress)
   → action-complete (completed)
   → phase-complete (completed)
 ```
-
-## Current Gaps (pending fix)
-
-The following gaps exist between this specification and the current implementation:
-
-| Gap | Location | Fix Required |
-|---|---|---|
-| `sm.PhaseStart()` not called | `pipeline_next_action.go` ~line 453 | Add `sm2.PhaseStart(workspace, action.Phase)` before `publishEvent("phase-start")` |
-| `phase-start` only emitted for `spawn_agent` | `pipeline_next_action.go` ~line 452 switch | Emit for `exec` and `write_file` actions too |
-| `phase-complete` not emitted | `pipeline_report_result.go` / `phase_transition.go` | Add `publishEvent("phase-complete")` after `sm.PhaseComplete()` in `determineTransition()` |
-| `checkpoint` event not emitted in engine path | `pipeline_next_action.go` ~line 427 | Add `publishEvent("checkpoint")` after `sm.Update()` sets `awaiting_human` |
 
 ## Design Decisions
 

@@ -175,7 +175,8 @@ func PipelineNextActionHandler(
 				case "setup_continue":
 					// Absorbed internally; fall through to eng.NextAction.
 				default:
-					// "proceed" or unknown: fall through to eng.NextAction.
+					// "proceed" — phase completed successfully; emit phase-complete event.
+					publishEvent(bus, nil, "phase-complete", st.CurrentPhase, st.SpecName, workspace, "completed")
 				}
 			}
 		}
@@ -431,6 +432,9 @@ func PipelineNextActionHandler(
 				// Fail-open: warn but still return the action.
 				appendWarning(fmt.Sprintf("set awaiting_human: %v", updateErr))
 			}
+			if st, stErr := sm2.GetState(); stErr == nil {
+				publishEvent(bus, nil, "checkpoint", action.Phase, st.SpecName, workspace, "awaiting_human")
+			}
 		}
 
 		resp.Action = action
@@ -443,6 +447,16 @@ func PipelineNextActionHandler(
 			}
 		}
 
+		// Transition phase state to in_progress and emit dashboard events.
+		// PhaseStart sets CurrentPhaseStatus="in_progress" and Timestamps.PhaseStarted.
+		// Checkpoint and done actions are excluded — checkpoints set awaiting_human above,
+		// and done signals pipeline completion (no phase to start).
+		if action.Type != orchestrator.ActionCheckpoint && action.Type != orchestrator.ActionDone && action.Type != orchestrator.ActionHumanGate {
+			if startErr := sm2.PhaseStart(workspace, action.Phase); startErr != nil {
+				appendWarning(fmt.Sprintf("PhaseStart: %v", startErr))
+			}
+		}
+
 		// Include current phase state in response for debugging and publish
 		// fine-grained dispatch events for the dashboard.
 		if st, stErr := sm2.GetState(); stErr == nil {
@@ -452,6 +466,8 @@ func PipelineNextActionHandler(
 			case orchestrator.ActionSpawnAgent:
 				publishEvent(bus, nil, "phase-start", action.Phase, st.SpecName, workspace, "in_progress")
 				publishEventWithDetail(bus, nil, "agent-dispatch", action.Phase, st.SpecName, workspace, "dispatched", action.Agent)
+			case orchestrator.ActionExec, orchestrator.ActionWriteFile:
+				publishEvent(bus, nil, "phase-start", action.Phase, st.SpecName, workspace, "in_progress")
 			case orchestrator.ActionDone:
 				publishEvent(bus, nil, "pipeline-complete", st.CurrentPhase, st.SpecName, workspace, "completed")
 			}

@@ -11,6 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
@@ -46,7 +47,9 @@ type reportResultInput struct {
 // PipelineReportResultHandler handles the "pipeline_report_result" MCP tool.
 // It records a phase-log entry, validates the artifact, parses any verdict,
 // and advances pipeline state accordingly.
-func PipelineReportResultHandler(sm *state.StateManager, kb *history.KnowledgeBase) server.ToolHandlerFunc {
+// After a successful phase completion (NextActionHint == "proceed"), emits a
+// "phase-complete" event to the dashboard.
+func PipelineReportResultHandler(sm *state.StateManager, bus *events.EventBus, kb *history.KnowledgeBase) server.ToolHandlerFunc {
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Step 1: Parse required parameters.
 		workspace, phase, result, err := requireWorkspaceAndPhase(req)
@@ -73,7 +76,19 @@ func PipelineReportResultHandler(sm *state.StateManager, kb *history.KnowledgeBa
 			setupOnly:  req.GetBool("setup_only", false),
 		}
 
-		return handleReportResult(sm2, kb, in)
+		out, coreErr := reportResultCore(sm2, kb, in)
+		if coreErr != nil {
+			return errorf("%v", coreErr)
+		}
+
+		// Emit phase-complete event after successful phase completion.
+		if out.NextActionHint == "proceed" && !in.setupOnly {
+			if st, stErr := loadState(workspace); stErr == nil {
+				publishEvent(bus, nil, "phase-complete", phase, st.SpecName, workspace, "completed")
+			}
+		}
+
+		return okJSON(out)
 	}
 }
 

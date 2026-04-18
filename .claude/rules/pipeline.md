@@ -4,7 +4,7 @@ When modifying pipeline code (`mcp-server/internal/tools/pipeline_next_action.go
 
 **Full specification**: `docs/architecture/pipeline-lifecycle-contract.md` (SSOT: `template/sections/architecture/pipeline-lifecycle-contract.md`)
 
-> **Implementation status**: The contract is partially implemented. `pipeline_next_action` does not yet call `sm.PhaseStart()`, and `pipeline_report_result` does not yet emit `phase-complete` events. See the "Current Gaps" section in the full specification for the fix plan.
+> **Implementation status**: Fully implemented. `pipeline_next_action` calls `sm.PhaseStart()` and emits `phase-start`/`checkpoint` events; `pipeline_report_result` emits `phase-complete` events.
 
 ## Mandatory Rules
 

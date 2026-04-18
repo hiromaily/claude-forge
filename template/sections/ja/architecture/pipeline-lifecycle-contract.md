@@ -1,6 +1,6 @@
 # パイプラインライフサイクル契約
 
-> **ステータス: 仕様書** — このドキュメントは目標とする契約を定義する。実装修正（`pipeline_next_action` での `sm.PhaseStart()` 呼び出しと `pipeline_report_result` での `phase-complete` イベント発行）は未完了。詳細は[現在のギャップ](#現在のギャップ修正待ち)を参照。
+> **ステータス: 実装済み** — すべてのギャップが解消された。`pipeline_next_action` は `sm.PhaseStart()` を呼び出し `phase-start` イベントを発行する。`pipeline_report_result` は `phase-complete` イベントを発行する。チェックポイントイベントは `awaiting_human` 設定時に発行される。
 
 ## 目的
 
@@ -123,22 +123,22 @@ pipeline_next_action (user_response 付き)
 
 ## イベント分類
 
-| イベント | 現在の発行者 | タイミング | 結果 |
+| イベント | 発行者 | タイミング | 結果 |
 |---|---|---|---|
 | `pipeline-init` | `pipeline_init_with_context` | ワークスペース作成時 | `in_progress` |
-| `phase-start` | `pipeline_next_action` (spawn_agent のみ) | フェーズ開始時 | `in_progress` |
+| `phase-start` | `pipeline_next_action` or `PhaseStartHandler` | フェーズ開始時 | `in_progress` |
 | `agent-dispatch` | `pipeline_next_action` | エージェント起動時 | `dispatched` |
 | `action-complete` | `pipeline_next_action` (P5 埋め込みレポートパス) | エージェント/exec完了時 | `completed` |
-| `phase-complete` | `PhaseCompleteHandler` のみ | フェーズ完了時 | `completed` |
+| `phase-complete` | `pipeline_next_action` (P5パス), `pipeline_report_result`, or `PhaseCompleteHandler` | フェーズ完了時 | `completed` |
 | `phase-fail` | `PhaseFailHandler` | フェーズ失敗時 | `failed` |
-| `checkpoint` | `CheckpointHandler` のみ | ヒューマン待機時 | `awaiting_human` |
+| `checkpoint` | `pipeline_next_action` or `CheckpointHandler` | ヒューマン待機時 | `awaiting_human` |
 | `revision-required` | `pipeline_next_action` | レビューREVISE判定時 | `failed` |
 | `pipeline-complete` | `pipeline_next_action` | 全フェーズ完了時 | `completed` |
 | `abandon` | `AbandonHandler` | パイプライン放棄時 | `abandoned` |
 
-### フェーズごとの期待イベントシーケンス（目標）
+### フェーズごとの期待イベントシーケンス
 
-契約が完全に実装された後、通常の `spawn_agent` フェーズは以下を生成する:
+通常の `spawn_agent` フェーズは以下を生成する:
 
 ```
 phase-start (in_progress)
@@ -154,17 +154,6 @@ phase-start (in_progress)
   -> action-complete (completed)
   -> phase-complete (completed)
 ```
-
-## 現在のギャップ（修正待ち）
-
-この仕様と現在の実装の間に以下のギャップが存在する:
-
-| ギャップ | 場所 | 必要な修正 |
-|---|---|---|
-| `sm.PhaseStart()` が呼ばれない | `pipeline_next_action.go` ~line 453 | `publishEvent("phase-start")` の前に `sm2.PhaseStart(workspace, action.Phase)` を追加 |
-| `phase-start` が `spawn_agent` のみで発行 | `pipeline_next_action.go` ~line 452 switch | `exec` と `write_file` アクションでも発行する |
-| `phase-complete` が発行されない | `pipeline_report_result.go` / `phase_transition.go` | `determineTransition()` 内の `sm.PhaseComplete()` の後に `publishEvent("phase-complete")` を追加 |
-| `checkpoint` イベントがエンジンパスで発行されない | `pipeline_next_action.go` ~line 427 | `sm.Update()` で `awaiting_human` 設定後に `publishEvent("checkpoint")` を追加 |
 
 ## 設計判断
 
