@@ -33,6 +33,9 @@ targets:
   - input: template/pages/ai-agents/claude/rules/testing.tpl.md
     output: .claude/rules/testing.md
 
+  - input: template/pages/ai-agents/claude/rules/pipeline.tpl.md
+    output: .claude/rules/pipeline.md
+
   # Claude Code: commands
   - input: template/pages/ai-agents/claude/commands/fix-pr-reviews.tpl.md
     output: .claude/commands/fix-pr-reviews.md

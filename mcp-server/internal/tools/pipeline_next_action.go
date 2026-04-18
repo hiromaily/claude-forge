@@ -450,6 +450,7 @@ func PipelineNextActionHandler(
 			resp.CurrentPhaseStatus = st.CurrentPhaseStatus
 			switch action.Type {
 			case orchestrator.ActionSpawnAgent:
+				publishEvent(bus, nil, "phase-start", action.Phase, st.SpecName, workspace, "in_progress")
 				publishEventWithDetail(bus, nil, "agent-dispatch", action.Phase, st.SpecName, workspace, "dispatched", action.Agent)
 			case orchestrator.ActionDone:
 				publishEvent(bus, nil, "pipeline-complete", st.CurrentPhase, st.SpecName, workspace, "completed")
