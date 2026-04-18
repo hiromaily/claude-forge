@@ -148,6 +148,13 @@ linters:
           - gocyclo     # complex test functions with many assertions are acceptable
           - dogsled     # multiple blank identifiers acceptable in test helpers (e.g. runtime.Caller)
 
+      # Sourcetype handlers are pure interface implementations; receivers are required by the
+      # interface contract but hold no state, so unused-receiver warnings are expected.
+      - path: internal/engine/sourcetype/
+        linters:
+          - revive
+        text: "unused-receiver"
+
     # Exclude files from all linters.
     paths:
       - ".*\\.pb\\.go"

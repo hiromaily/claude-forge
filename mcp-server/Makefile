@@ -61,21 +61,23 @@ go-test:
 install-godoc:
 	go install golang.org/x/tools/cmd/godoc@latest
 
-# access to 
+# access to
 # http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/analytics/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/ast/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/pkg/ast/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/pkg/events/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/pkg/maputil/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/pkg/search/
 # http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/dashboard/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/events/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/history/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/indexer/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/orchestrator/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/profile/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/prompt/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/search/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/state/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/tools/
-# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/validation/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/engine/sourcetype/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/engine/state/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/handler/tools/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/handler/validation/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/indexer/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/profile/
+# http://localhost:6060/pkg/github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/prompt/
 
 .PHONY: run-godoc
 run-godoc:

@@ -7,7 +7,7 @@ set -uo pipefail
 #   - systemMessage: displayed in the user's terminal
 #
 # System prompt injection is handled by the __IMPORTANT MCP tool
-# (see mcp-server/internal/tools/important.go), so this hook only
+# (see mcp-server/internal/handler/tools/important.go), so this hook only
 # provides the terminal-visible message.
 #
 # The dashboard URL is derived from FORGE_EVENTS_PORT (default 8099).

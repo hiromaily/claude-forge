@@ -1,6 +1,6 @@
 ---
 name: forge
-description: Orchestrate a full development pipeline using MCP-driven subagents. Accepts plain text, GitHub Issue URLs, or Jira Issue URLs as input.
+description: Orchestrate a full development pipeline using MCP-driven subagents. Accepts plain text or issue tracker URLs (GitHub, Jira, Linear, etc.) as input.
 ---
 
 # claude-forge Orchestrator
@@ -16,10 +16,15 @@ Example: `/forge 20260401-effort-only-flow`
 3. If `result.resume_mode` is `"auto"`: the input matched an existing spec directory.
    **Do not ask for confirmation** — proceed directly to Step 2.
 4. For new pipelines (`resume_mode` is absent):
-   a. If `result.fetch_needed` is non-null: fetch the external data described by `result.fetch_needed`
-      (GitHub issue fields or Jira issue fields), then call
-      `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, source_id=result.source_id, source_url=result.source_url, flags=result.flags, external_context=<fetched data>)`.
-      (`task_text` is not applicable for GitHub/Jira sources — do not pass it.)
+   a. If `result.fetch_needed` is non-null:
+      1. Fetch the external data using the method specified in `fetch_needed`:
+         - If `fetch_needed.mcp_tool` is set: call the MCP tool with `fetch_needed.mcp_params`.
+         - Else if `fetch_needed.command` is set: execute the command via Bash and parse the JSON output.
+         - Else: follow `fetch_needed.instruction` as a fallback guide.
+      2. Map the response fields to `external_context` using `fetch_needed.response_mapping`:
+         for each entry `(response_key → context_key)`, set `external_context[context_key] = response[response_key]`.
+      3. Call `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, source_id=result.source_id, source_url=result.source_url, flags=result.flags, external_context=<mapped data>)`.
+         (`task_text` is not applicable for external issue sources — do not pass it.)
    b. If `result.fetch_needed` is null (plain text input): call
       `mcp__forge-state__pipeline_init_with_context(workspace=result.workspace, flags=result.flags, task_text=result.core_text)`.
       (`result.core_text` is a top-level field in the `pipeline_init` response — the task text with bare flags stripped.)
@@ -110,19 +115,16 @@ Repeat until done:
      the user closes the conversation before responding. Never skip or defer this call.
      Then present `action.present_to_user` to the user. Wait for response.
      - **Special: `post-to-source` checkpoint** — when `action.name`
-       is `"post-to-source"` (the message will indicate GitHub or Jira):
+       is `"post-to-source"`:
        1. Ask the user whether to post the work report (use AskUserQuestion
           with options "post" / "skip").
-       2. If the user chooses **"post"**:
-          a. Extract the source URL from `action.present_to_user` (the line starting with `URL:`).
-          b. Determine the source type from the URL (GitHub if `github.com`, Jira if `atlassian.net`):
-             - **GitHub**: run
-               `gh issue comment <url> --body-file {workspace}/summary.md`
-             - **Jira**: Extract the domain and issue key from the URL
-               (e.g. `example.atlassian.net` and `PROJ-123` from `https://example.atlassian.net/browse/PROJ-123`). Try in order:
-               1. Atlassian MCP tools (if available)
-               2. Convert `{workspace}/summary.md` to Atlassian Document Format (ADF) and run:
-                  `curl -s -X POST -H "Content-Type: application/json" -u "$JIRA_USER:$JIRA_TOKEN" "https://<domain>/rest/api/3/issue/<key>/comment" -d '<ADF JSON>'`
+       2. If the user chooses **"post"** and `action.post_method` is present:
+          a. Read the body content from `action.post_method.body_source`.
+          b. Post the comment using the method specified in `post_method`:
+             - If `post_method.mcp_tool` is set: call it with `post_method.mcp_params`
+               and the body content (pass body as the `body` parameter).
+             - Else if `post_method.command` is set: execute the command via Bash.
+             - Else if `post_method.instruction` is set: follow the instruction as a fallback guide.
           c. Report success or failure to the user.
        3. If the user chooses **"skip"**: do nothing.
      Pass the user's response to

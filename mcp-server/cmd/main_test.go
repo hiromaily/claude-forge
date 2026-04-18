@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/dashboard"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 // TestDashboardStart_NoopWhenPortEmpty verifies that main's wiring of

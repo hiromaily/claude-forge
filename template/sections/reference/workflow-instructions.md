@@ -106,4 +106,4 @@ require LLM judgement — they are pure pattern matches.
 
 - Design: `docs/superpowers/specs/2026-04-10-workflow-instructions-design.md`
 - Agent integration: `agents/task-decomposer.md`
-- Engine entry point: `mcp-server/internal/tools/pipeline_report_result.go`
+- Engine entry point: `mcp-server/internal/handler/tools/pipeline_report_result.go`

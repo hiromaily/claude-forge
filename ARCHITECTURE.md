@@ -59,7 +59,7 @@ The `forge-state` server exposes **47 typed MCP tools** across six categories:
 
 This document specifies the exact JSON payloads exchanged between the Claude orchestrator (SKILL.md) and the Go MCP server (`forge-state-mcp`) during a pipeline run. These four tools drive the entire pipeline lifecycle.
 
-> **Source of truth**: The Go structs in `mcp-server/internal/tools/` and `mcp-server/internal/orchestrator/actions.go`. This document mirrors those definitions — update both when changing schemas.
+> **Source of truth**: The Go structs in `mcp-server/internal/handler/tools/` and `mcp-server/internal/engine/orchestrator/actions.go`. This document mirrors those definitions — update both when changing schemas.
 
 ---
 

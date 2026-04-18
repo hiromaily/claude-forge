@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 const (

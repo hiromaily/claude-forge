@@ -28,7 +28,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
 )
 
 // interventionRequest is the JSON body shape accepted by intervention endpoints.

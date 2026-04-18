@@ -548,7 +548,7 @@ tasks:
 
 ```text
 mcp-server/internal/queue/         ← YAML parse/validate/read/write + workspace scan
-mcp-server/internal/tools/
+mcp-server/internal/handler/tools/
   queue_create.go                  ← MCP handler (generate queue.yaml)
   queue_init.go                    ← MCP handler (validate existing queue.yaml)
   queue_next.go                    ← MCP handler (pick next task + slug)
@@ -570,15 +570,15 @@ tools → queue → state (ReadState only)
 
 This follows the existing layering rule (`tools → ... → state`).
 No reverse dependency is introduced. The `queue` package does not import
-`orchestrator` or `tools`.
+`engine/orchestrator` or `handler/tools`.
 
 ### URL validation reuse
 
 Both `queue_create` and `queue_init` validate URLs using source type
-detection. The `validation` package (used by `pipeline_init`) exposes
+detection. The `handler/validation` package (used by `pipeline_init`) exposes
 `ValidateInput` which includes source type detection. Since `queue`
-imports `state` only (not `tools` or `validation`), the URL validation
-logic is extracted into a shared function in the `validation` package
+imports `engine/state` only (not `handler/tools` or `handler/validation`), the URL validation
+logic is extracted into a shared function in the `handler/validation` package
 (which `queue` can import without violating the DAG):
 
 ```text
@@ -604,7 +604,7 @@ tools → queue → validation (URL validation)
 - `queue_report` workspace slug refinement: pre-generated slug vs actual directory
 - Atomic write: verify file integrity after write
 
-### MCP handler tests (`mcp-server/internal/tools/`)
+### MCP handler tests (`mcp-server/internal/handler/tools/`)
 
 - `queue_create`: validates URLs, rejects existing file, writes valid YAML
 - `queue_init`: returns correct counts for mixed-status queues

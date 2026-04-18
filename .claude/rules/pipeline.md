@@ -1,6 +1,6 @@
 # Pipeline Lifecycle Contract
 
-When modifying pipeline code (`mcp-server/internal/tools/pipeline_next_action.go`, `pipeline_report_result.go`, `handlers.go`, or `orchestrator/engine.go`), follow these rules.
+When modifying pipeline code (`mcp-server/internal/handler/tools/pipeline_next_action.go`, `pipeline_report_result.go`, `handlers.go`, or `orchestrator/engine.go`), follow these rules.
 
 **Full specification**: `docs/architecture/pipeline-lifecycle-contract.md` (SSOT: `template/sections/architecture/pipeline-lifecycle-contract.md`)
 
@@ -54,5 +54,5 @@ Every `phase-start` event must eventually be followed by a `phase-complete`, `ph
 
 - Read `template/sections/architecture/pipeline-lifecycle-contract.md` before making changes
 - Verify that `PhaseStart` and `PhaseComplete` are both called for every phase
-- Run `cd mcp-server && go test ./internal/tools/... -count=1` after changes
+- Run `cd mcp-server && go test ./internal/handler/tools/... -count=1` after changes
 - Check dashboard event timeline shows `phase-start -> agent-dispatch -> action-complete -> phase-complete` for each phase
