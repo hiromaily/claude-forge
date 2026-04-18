@@ -3,6 +3,7 @@ package maputil
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -94,7 +95,7 @@ func StringArray(m map[string]any, key string) []string {
 // Returns an error if the input is nil or cannot be converted.
 func ToMap(raw any) (map[string]any, error) {
 	if raw == nil {
-		return nil, fmt.Errorf("cannot convert nil to map")
+		return nil, errors.New("cannot convert nil to map")
 	}
 	if m, ok := raw.(map[string]any); ok {
 		return m, nil

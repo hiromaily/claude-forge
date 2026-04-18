@@ -43,14 +43,16 @@ func (h *JiraHandler) FetchConfig(sourceURL, sourceID string) *FetchConfig {
 			"summary": "jira_summary", "description": "jira_description",
 			"issue_type": "jira_issue_type", "story_points": "jira_story_points",
 		},
-		Instruction: "fetch jira issue fields (summary, description, issuetype, story_points) before calling pipeline_init_with_context. Use Atlassian MCP tools if available, or Jira REST API with $JIRA_USER:$JIRA_TOKEN credentials.",
+		Instruction: "fetch jira issue fields (summary, description, issuetype, story_points) before calling pipeline_init_with_context. " +
+			"Use Atlassian MCP tools if available, or Jira REST API with $JIRA_USER:$JIRA_TOKEN credentials.",
 	}
 }
 
 func (h *JiraHandler) PostConfig(sourceURL, sourceID, artifactPath string) *PostConfig {
 	return &PostConfig{
-		BodySource:  artifactPath,
-		Instruction: "Post the contents of " + artifactPath + " as a comment to " + sourceURL + ". Use Atlassian MCP tools if available, or convert the markdown to ADF and POST via Jira REST API with $JIRA_USER:$JIRA_TOKEN.",
+		BodySource: artifactPath,
+		Instruction: "Post the contents of " + artifactPath + " as a comment to " + sourceURL + ". " +
+			"Use Atlassian MCP tools if available, or convert the markdown to ADF and POST via Jira REST API with $JIRA_USER:$JIRA_TOKEN.",
 	}
 }
 

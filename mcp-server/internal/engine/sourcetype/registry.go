@@ -1,3 +1,5 @@
+// Package sourcetype provides a registry of issue-tracker source-type handlers
+// (GitHub, Jira, Linear) used to classify pipeline inputs and generate fetch/post configs.
 package sourcetype
 
 import (
