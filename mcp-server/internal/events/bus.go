@@ -5,12 +5,14 @@ package events
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Event represents a pipeline lifecycle notification.
@@ -35,6 +37,10 @@ const subscriberBufferSize = 64
 //
 // When a log file path is configured via SetEventLog, events are persisted to a JSONL file
 // so that dashboard reloads and new sessions can replay historical events.
+//
+// WatchEventLog enables multi-process event sharing: events written to the shared log by
+// other MCP server instances (e.g. sessions from other projects) are tailed and broadcast
+// to live SSE subscribers, so a single dashboard port shows all active pipelines.
 type EventBus struct {
 	mu          sync.RWMutex
 	subscribers map[string]chan Event
@@ -42,19 +48,34 @@ type EventBus struct {
 
 	// history stores all events seen during this process lifetime plus any
 	// loaded from the JSONL log file on startup.
+	// histMap is a dedup index keyed by histKey(e) for O(1) lookup in addAndBroadcast.
+	// Both are protected by histMu.
 	histMu  sync.RWMutex
 	history []Event
+	histMap map[string]struct{}
 
 	// logFile is the append-only JSONL event log. nil when persistence is disabled.
-	logMu   sync.Mutex
-	logFile *os.File
+	// logPath and tailOffset are set once by SetEventLog before any concurrent access.
+	logMu      sync.Mutex
+	logFile    *os.File
+	logPath    string
+	tailOffset atomic.Int64
 }
 
 // NewEventBus constructs a new, empty EventBus.
 func NewEventBus() *EventBus {
 	return &EventBus{
 		subscribers: make(map[string]chan Event),
+		histMap:     make(map[string]struct{}),
 	}
+}
+
+// histKey returns a string that uniquely identifies an event for deduplication.
+// It uses the fields most likely to distinguish separate events: timestamp, workspace,
+// event type, phase, and outcome. The Detail field is included to handle edge cases
+// such as two agent-dispatch events for the same phase (parallel tasks).
+func histKey(e Event) string {
+	return e.Timestamp + "|" + e.Workspace + "|" + e.Event + "|" + e.Phase + "|" + e.Outcome + "|" + e.Detail
 }
 
 // SetEventLog configures JSONL-based event persistence. It loads any existing
@@ -79,8 +100,17 @@ func (b *EventBus) SetEventLog(path string) error {
 	if len(loaded) > 0 {
 		b.histMu.Lock()
 		b.history = append(loaded, b.history...)
+		for _, e := range loaded {
+			b.histMap[histKey(e)] = struct{}{}
+		}
 		b.histMu.Unlock()
 		fmt.Fprintf(os.Stderr, "forge-state: loaded %d historical events from %s\n", len(loaded), path)
+	}
+
+	// Record file size after loading so WatchEventLog starts tailing from here.
+	// Events before this offset are already in history; we only broadcast new appends.
+	if fi, statErr := os.Stat(path); statErr == nil {
+		b.tailOffset.Store(fi.Size())
 	}
 
 	// Open (or create) the file in append mode for future writes.
@@ -90,8 +120,102 @@ func (b *EventBus) SetEventLog(path string) error {
 	}
 	b.logMu.Lock()
 	b.logFile = f
+	b.logPath = path
 	b.logMu.Unlock()
 	return nil
+}
+
+// WatchEventLog starts a background goroutine that tails the shared event log file
+// and broadcasts new events written by other MCP server processes to live SSE subscribers.
+// This enables a single dashboard to show events from all active project sessions.
+// Events already in history (written by this instance) are deduplicated and skipped.
+// The goroutine exits when ctx is cancelled.
+func (b *EventBus) WatchEventLog(ctx context.Context) {
+	b.logMu.Lock()
+	path := b.logPath
+	b.logMu.Unlock()
+	if path == "" {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		offset := b.tailOffset.Load()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				offset = b.readTail(path, offset)
+			}
+		}
+	}()
+}
+
+// readTail reads new events appended to path since offset, calls addAndBroadcast for each,
+// and returns the new file offset to resume from next time.
+func (b *EventBus) readTail(path string, offset int64) int64 {
+	// Stat before opening: skip the open syscall entirely when nothing is new.
+	fi, err := os.Stat(path)
+	if err != nil || fi.Size() <= offset {
+		return offset
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return offset
+	}
+	defer func() { _ = f.Close() }()
+
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return offset
+	}
+
+	reader := bufio.NewReader(f)
+	for {
+		line, readErr := reader.ReadBytes('\n')
+		line = bytes.TrimRight(line, "\r\n")
+		if len(line) > 0 {
+			var e Event
+			if jsonErr := json.Unmarshal(line, &e); jsonErr == nil {
+				b.addAndBroadcast(e)
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			break
+		}
+	}
+
+	// Use the file size at the start of this read as the new offset.
+	// Any bytes appended during the read will be re-processed next tick;
+	// addAndBroadcast deduplicates against history so re-processing is safe.
+	return fi.Size()
+}
+
+// addAndBroadcast adds e to history if not already present and broadcasts it to live
+// subscribers. It does NOT write to the log file (the event is already there —
+// this is called by readTail for events written by other MCP server processes).
+func (b *EventBus) addAndBroadcast(e Event) {
+	b.histMu.Lock()
+	if _, ok := b.histMap[histKey(e)]; ok {
+		b.histMu.Unlock()
+		return // already in history — our own event or a cross-process duplicate
+	}
+	b.history = append(b.history, e)
+	b.histMap[histKey(e)] = struct{}{}
+	b.histMu.Unlock()
+
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	for _, ch := range b.subscribers {
+		select {
+		case ch <- e:
+		default:
+		}
+	}
 }
 
 // History returns a copy of all historical events (loaded from file + current session).
@@ -136,9 +260,10 @@ func (b *EventBus) Unsubscribe(id string) {
 // Publish acquires only a read lock so concurrent Publish calls do not serialize.
 // The event is also appended to the in-memory history and JSONL log file.
 func (b *EventBus) Publish(e Event) {
-	// Append to in-memory history.
+	// Append to in-memory history and dedup index.
 	b.histMu.Lock()
 	b.history = append(b.history, e)
+	b.histMap[histKey(e)] = struct{}{}
 	b.histMu.Unlock()
 
 	// Persist to JSONL log file (best-effort).

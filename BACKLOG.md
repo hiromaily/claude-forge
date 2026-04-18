@@ -19,6 +19,7 @@ Ordered by priority. Higher rows should be tackled first.
 | 6 | **F19** | [#18](https://github.com/hiromaily/claude-forge/issues/18) | CI feedback loop (post-PR auto-fix) | Feature | L | After PR creation, monitor CI results and auto-trigger fix flow on failure. Closes the quality loop beyond the pipeline boundary. |
 | 7 | **F6** | [#19](https://github.com/hiromaily/claude-forge/issues/19) | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. Could now be informed by the accumulated `analytics_*` metrics. |
 | 8 | **F2** | [#20](https://github.com/hiromaily/claude-forge/issues/20) | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
+| 9 | **F20** | — | Shared events log rotation / pruning | Maintenance | S | `~/.claude/forge-events.jsonl` is append-only and grows indefinitely. `SetEventLog` loads the entire file into memory on startup. After weeks of use across many projects the file and in-memory `history` slice will become large. Add max-age trimming (e.g. keep last 30 days) or a file-size cap with rollover to `forge-events.jsonl.old`. |
 
 **Effort key:** XS = < 30min, S = 1-2h, M = half day, L = 1+ day
 
