@@ -4,6 +4,7 @@ package tools
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -14,7 +15,7 @@ func TestAstFindDefinitionFromPath_Found(t *testing.T) {
 	ctx := context.Background()
 	// sample.go contains exactly one definition of "Greet".
 	result, err := astFindDefinitionFromPath(ctx,
-		"../../../pkg/ast/testdata/sample.go",
+		filepath.Join(moduleRoot(t), "pkg", "ast", "testdata", "sample.go"),
 		"go",
 		"Greet",
 	)
@@ -37,7 +38,7 @@ func TestAstFindDefinitionFromPath_Found(t *testing.T) {
 func TestAstFindDefinitionFromPath_NotFound(t *testing.T) {
 	ctx := context.Background()
 	result, err := astFindDefinitionFromPath(ctx,
-		"../../../pkg/ast/testdata/sample.go",
+		filepath.Join(moduleRoot(t), "pkg", "ast", "testdata", "sample.go"),
 		"go",
 		"NonExistentSymbolXYZ",
 	)
@@ -104,7 +105,7 @@ func TestAstFindDefinitionFromPath_FileNotFound(t *testing.T) {
 func TestAstFindDefinitionFromPath_UnsupportedLanguage(t *testing.T) {
 	ctx := context.Background()
 	result, err := astFindDefinitionFromPath(ctx,
-		"../../../pkg/ast/testdata/sample.go",
+		filepath.Join(moduleRoot(t), "pkg", "ast", "testdata", "sample.go"),
 		"ruby",
 		"Greet",
 	)
@@ -124,7 +125,7 @@ func TestAstFindDefinitionFromPath_UnsupportedLanguage(t *testing.T) {
 func TestAstFindDefinitionFromPath_AutoDetect(t *testing.T) {
 	ctx := context.Background()
 	result, err := astFindDefinitionFromPath(ctx,
-		"../../../pkg/ast/testdata/sample.go",
+		filepath.Join(moduleRoot(t), "pkg", "ast", "testdata", "sample.go"),
 		"", // auto-detect from .go extension
 		"Greet",
 	)

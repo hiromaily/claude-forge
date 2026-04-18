@@ -1181,7 +1181,7 @@ func TestInit_GoldenFile(t *testing.T) {
 	}
 
 	// Read the golden fixture.
-	goldenPath := filepath.Join("..", "..", "..", "testdata", "state_init.json")
+	goldenPath := filepath.Join(moduleRoot(t), "testdata", "state_init.json")
 	rawGolden, err := os.ReadFile(goldenPath)
 	if err != nil {
 		t.Fatalf("read golden fixture %q: %v", goldenPath, err)

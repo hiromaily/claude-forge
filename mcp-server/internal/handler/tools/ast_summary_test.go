@@ -5,20 +5,18 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
 
-// astTestdataDir returns the absolute path to mcp-server/ast/testdata/.
-func astTestdataDir() string {
-	_, file, _, _ := runtime.Caller(0)
-	// file is .../mcp-server/internal/handler/tools/ast_summary_test.go
-	return filepath.Join(filepath.Dir(file), "..", "..", "..", "pkg", "ast", "testdata")
+// astTestdataDir returns the absolute path to mcp-server/pkg/ast/testdata/.
+func astTestdataDir(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(moduleRoot(t), "pkg", "ast", "testdata")
 }
 
 func TestAstSummaryFromPath_Go(t *testing.T) {
-	path := filepath.Join(astTestdataDir(), "sample.go")
+	path := filepath.Join(astTestdataDir(t), "sample.go")
 	result, err := astSummaryFromPath(context.Background(), path, "go")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -34,7 +32,7 @@ func TestAstSummaryFromPath_Go(t *testing.T) {
 
 func TestAstSummaryFromPath_AutoDetect(t *testing.T) {
 	// language="" with a .go path — should auto-detect as Go.
-	path := filepath.Join(astTestdataDir(), "sample.go")
+	path := filepath.Join(astTestdataDir(t), "sample.go")
 	result, err := astSummaryFromPath(context.Background(), path, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -59,7 +57,7 @@ func TestAstSummaryFromPath_FileNotFound(t *testing.T) {
 }
 
 func TestAstSummaryFromPath_UnsupportedLanguage(t *testing.T) {
-	path := filepath.Join(astTestdataDir(), "sample.go")
+	path := filepath.Join(astTestdataDir(t), "sample.go")
 	result, err := astSummaryFromPath(context.Background(), path, "cobol")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

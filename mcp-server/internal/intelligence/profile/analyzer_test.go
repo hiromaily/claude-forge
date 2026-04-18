@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -137,15 +136,8 @@ func TestAnalyzeOrUpdate_this_repo(t *testing.T) {
 		t.Skip("make not on PATH")
 	}
 
-	// Derive repo root from this file's location.
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
-	}
-
-	// This file is at mcp-server/internal/intelligence/profile/analyzer_test.go
-	// Repo root is four levels up.
-	repoRoot := filepath.Join(filepath.Dir(filename), "..", "..", "..", "..")
+	// Repo root is the module root's parent (mcp-server → claude-forge).
+	repoRoot := filepath.Dir(moduleRoot(t))
 	cachePath := filepath.Join(t.TempDir(), "repo-profile.json")
 
 	p := New(cachePath, repoRoot)
