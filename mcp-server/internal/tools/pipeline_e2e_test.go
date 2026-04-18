@@ -130,14 +130,15 @@ func mockAgentExecute(
 }
 
 // runE2EPipeline drives the full pipeline loop until ActionDone or 60 iterations.
-// Returns true if a revision cycle was detected (phase-3b returned revision_required).
+// Returns the collected actions (including the final ActionDone) and whether a
+// revision cycle was detected (phase-3b returned revision_required).
 func runE2EPipeline(
 	t *testing.T,
 	cfg e2eConfig,
 	workspace string,
 	nextActionH server.ToolHandlerFunc,
 	reportResultH server.ToolHandlerFunc,
-) (revisionCycleDetected bool) {
+) (actions []orchestrator.Action, revisionCycleDetected bool) {
 	t.Helper()
 
 	approveOverride := new(bool) // *bool pointing to false
@@ -157,8 +158,10 @@ func runE2EPipeline(
 			t.Fatalf("runE2EPipeline: unmarshal nextActionResponse: %v (raw: %s)", err, textContent(result))
 		}
 
+		actions = append(actions, resp.Action)
+
 		if resp.Action.Type == orchestrator.ActionDone {
-			return revisionCycleDetected
+			return actions, revisionCycleDetected
 		}
 
 		// Determine the phase to report. For checkpoint actions, the phase is
@@ -207,7 +210,7 @@ func runE2EPipeline(
 	}
 
 	t.Fatalf("runE2EPipeline: pipeline did not reach ActionDone within 60 iterations")
-	return false // unreachable; satisfies compiler
+	return nil, false // unreachable; satisfies compiler
 }
 
 // phaseLogSet returns a set of phase IDs that appear in s.PhaseLog.
@@ -249,7 +252,7 @@ func TestE2E_Templates(t *testing.T) {
 			t.Parallel()
 			cfg := e2eConfig{effort: tc.effort, template: tc.template}
 			workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
-			runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
+			_, _ = runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
 
 			s, err := state.ReadState(workspace)
 			if err != nil {
@@ -280,7 +283,7 @@ func TestE2E_DesignRevisionCycle(t *testing.T) {
 		reviewDesignVerdict: "REVISE",
 	}
 	workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
-	revisionDetected := runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
+	_, revisionDetected := runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
 
 	if !revisionDetected {
 		t.Errorf("expected revision cycle to be detected, got revisionDetected=false")
@@ -467,5 +470,129 @@ func TestE2E_CheckpointRevisionFlow(t *testing.T) {
 	}
 	if finalState.CurrentPhase != state.PhaseCompleted {
 		t.Errorf("currentPhase = %q, want %q", finalState.CurrentPhase, state.PhaseCompleted)
+	}
+}
+
+// TestE2E_ActionSequenceComplete verifies that each template produces a minimum
+// number of actions (catches silent skips), that the last action is ActionDone,
+// and that no spawn_agent phase appears more than once outside revision cycles.
+func TestE2E_ActionSequenceComplete(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		template       string
+		effort         string
+		wantMinActions int
+	}{
+		{name: "standard", template: state.TemplateStandard, effort: state.EffortM, wantMinActions: 10},
+		{name: "light", template: state.TemplateLight, effort: state.EffortS, wantMinActions: 6},
+		{name: "full", template: state.TemplateFull, effort: state.EffortL, wantMinActions: 12},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := e2eConfig{effort: tc.effort, template: tc.template}
+			workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
+			actions, _ := runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
+
+			t.Logf("template=%s action_count=%d", tc.template, len(actions))
+			for i, a := range actions {
+				phase := a.Phase
+				if phase == "" {
+					phase = a.Name
+				}
+				t.Logf("  [%d] %s:%s", i, a.Type, phase)
+			}
+
+			if len(actions) < tc.wantMinActions {
+				var phases []string
+				for _, a := range actions {
+					phase := a.Phase
+					if phase == "" {
+						phase = a.Name
+					}
+					phases = append(phases, a.Type+":"+phase)
+				}
+				t.Errorf("action count = %d, want >= %d; sequence: %v",
+					len(actions), tc.wantMinActions, phases)
+			}
+
+			// Last action must be ActionDone.
+			last := actions[len(actions)-1]
+			if last.Type != orchestrator.ActionDone {
+				t.Errorf("last action type = %q, want %q", last.Type, orchestrator.ActionDone)
+			}
+
+			// No duplicate spawn_agent phases (phase-3/3b may repeat in revision cycles).
+			spawnPhases := make(map[string]int)
+			for _, a := range actions {
+				if a.Type == orchestrator.ActionSpawnAgent {
+					spawnPhases[a.Phase]++
+				}
+			}
+			for phase, count := range spawnPhases {
+				if phase != state.PhaseThree && phase != state.PhaseThreeB && count > 1 {
+					t.Errorf("spawn_agent for phase %q dispatched %d times, want 1", phase, count)
+				}
+			}
+		})
+	}
+}
+
+// TestE2E_SkippedPhasesInPhaseLog verifies that after the skip-logging fix,
+// ALL phases (including skipped ones) have PhaseLog entries.
+func TestE2E_SkippedPhasesInPhaseLog(t *testing.T) {
+	t.Parallel()
+
+	cfg := e2eConfig{effort: state.EffortS, template: state.TemplateLight}
+	workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
+	_, _ = runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
+
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+
+	// Build set of ALL phases that appear in PhaseLog (including skipped).
+	allLogged := make(map[string]bool)
+	for _, entry := range s.PhaseLog {
+		allLogged[entry.Phase] = true
+	}
+
+	// Verify skipped phases appear in PhaseLog with model "skipped".
+	expectedSkips := orchestrator.SkipsForTemplate(state.TemplateLight)
+	for _, skip := range expectedSkips {
+		if !allLogged[skip] {
+			t.Errorf("skipped phase %q not found in PhaseLog; expected model=skipped entry", skip)
+		}
+	}
+
+	// Verify ALL phases from phase-1 to final-commit have a PhaseLog entry.
+	// setup and completed don't get entries.
+	// Some phases are legitimately excluded from PhaseLog:
+	//   - checkpoint-a/checkpoint-b: handled as checkpoint actions, not reported via pipeline_report_result
+	//   - pr-creation: skipped when SkipPR=true (our e2e config)
+	//   - post-to-source: checkpoint-like phase, skipped for text sources
+	//   - final-commit: absorbed as exec by P4 (executeFinalCommit), no report_result call
+	excludedFromLog := map[string]bool{
+		state.PhaseCheckpointA:  true, // checkpoint lifecycle managed by pipeline_next_action
+		state.PhaseCheckpointB:  true, // checkpoint lifecycle managed by pipeline_next_action
+		state.PhasePRCreation:   true, // skipped when SkipPR=true
+		state.PhasePostToSource: true, // skipped for text source type
+		state.PhaseFinalCommit:  true, // absorbed by P4 executeFinalCommit
+	}
+
+	for _, phase := range orchestrator.AllPhases {
+		if phase == state.PhaseSetup || phase == state.PhaseCompleted {
+			continue
+		}
+		if excludedFromLog[phase] {
+			continue
+		}
+		if !allLogged[phase] {
+			t.Errorf("phase %q has no PhaseLog entry — action may have been silently consumed", phase)
+		}
 	}
 }
