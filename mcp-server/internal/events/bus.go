@@ -3,8 +3,11 @@
 package events
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -184,13 +187,22 @@ func loadEventsFromFile(path string) ([]Event, error) {
 	defer func() { _ = f.Close() }()
 
 	var result []Event
-	dec := json.NewDecoder(f)
-	for dec.More() {
-		var e Event
-		if err := dec.Decode(&e); err != nil {
-			continue // skip malformed lines
+	reader := bufio.NewReader(f)
+	for {
+		line, err := reader.ReadBytes('\n')
+		line = bytes.TrimRight(line, "\r\n")
+		if len(line) > 0 {
+			var e Event
+			if jsonErr := json.Unmarshal(line, &e); jsonErr == nil {
+				result = append(result, e)
+			}
 		}
-		result = append(result, e)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return result, fmt.Errorf("read event log: %w", err)
+		}
 	}
 	return result, nil
 }
