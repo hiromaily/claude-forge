@@ -316,43 +316,12 @@ func TestE2E_CheckpointRevisionFlow(t *testing.T) {
 	t.Parallel()
 
 	cfg := e2eConfig{
-		effort:   state.EffortM,
-		template: state.TemplateStandard,
+		effort:      state.EffortM,
+		template:    state.TemplateStandard,
+		autoApprove: false,
+		skipPR:      true,
 	}
-
-	// Custom workspace setup with AutoApprove=false so checkpoints are NOT skipped.
-	dir := t.TempDir()
-	sm := state.NewStateManager("dev")
-	if err := sm.Init(dir, "e2e-checkpoint-revision"); err != nil {
-		t.Fatalf("sm.Init: %v", err)
-	}
-	if err := sm.Configure(dir, state.PipelineConfig{
-		Effort:        cfg.effort,
-		FlowTemplate:  cfg.template,
-		AutoApprove:   false,
-		SkipPR:        true,
-		SkippedPhases: orchestrator.SkipsForTemplate(cfg.template),
-	}); err != nil {
-		t.Fatalf("sm.Configure: %v", err)
-	}
-	if err := sm.Update(func(s *state.State) error {
-		s.BranchClassified = true
-		return nil
-	}); err != nil {
-		t.Fatalf("sm.Update: %v", err)
-	}
-	if err := os.WriteFile(
-		filepath.Join(dir, state.ArtifactRequest),
-		[]byte("# Request\n\ntest task\n"),
-		0o600,
-	); err != nil {
-		t.Fatalf("write request.md: %v", err)
-	}
-	eng := orchestrator.NewEngine("", "")
-	kb := history.NewKnowledgeBase("")
-	nextActionH := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
-	reportResultH := PipelineReportResultHandler(sm, events.NewEventBus(), kb)
-	workspace := dir
+	workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
 
 	// Track how many times checkpoint-a returned an ActionCheckpoint.
 	checkpointACount := 0
@@ -576,28 +545,108 @@ func TestE2E_SkippedPhasesInPhaseLog(t *testing.T) {
 
 	// Verify ALL phases from phase-1 to final-commit have a PhaseLog entry.
 	// setup and completed don't get entries.
-	// Some phases are legitimately excluded from PhaseLog:
-	//   - checkpoint-a/checkpoint-b: handled as checkpoint actions, not reported via pipeline_report_result
-	//   - pr-creation: skipped when SkipPR=true (our e2e config)
-	//   - post-to-source: checkpoint-like phase, skipped for text sources
-	//   - final-commit: absorbed as exec by P4 (executeFinalCommit), no report_result call
-	excludedFromLog := map[string]bool{
-		state.PhaseCheckpointA:  true, // checkpoint lifecycle managed by pipeline_next_action
-		state.PhaseCheckpointB:  true, // checkpoint lifecycle managed by pipeline_next_action
-		state.PhasePRCreation:   true, // skipped when SkipPR=true
-		state.PhasePostToSource: true, // skipped for text source type
-		state.PhaseFinalCommit:  true, // absorbed by P4 executeFinalCommit
-	}
-
 	for _, phase := range orchestrator.AllPhases {
 		if phase == state.PhaseSetup || phase == state.PhaseCompleted {
-			continue
-		}
-		if excludedFromLog[phase] {
 			continue
 		}
 		if !allLogged[phase] {
 			t.Errorf("phase %q has no PhaseLog entry — action may have been silently consumed", phase)
 		}
+	}
+}
+
+func TestE2E_CheckpointPhaseLog(t *testing.T) {
+	t.Parallel()
+
+	cfg := e2eConfig{
+		effort:      state.EffortM,
+		template:    state.TemplateStandard,
+		autoApprove: false,
+		skipPR:      true,
+	}
+	workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
+
+	for range 60 {
+		result, err := callNextAction(t, nextActionH, workspace)
+		if err != nil {
+			t.Fatalf("callNextAction: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("MCP error: %s", textContent(result))
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(textContent(result)), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if resp.Action.Type == orchestrator.ActionDone {
+			break
+		}
+
+		reportPhase := resp.Action.Phase
+		if resp.Action.Type == orchestrator.ActionCheckpoint && reportPhase == "" {
+			reportPhase = resp.Action.Name
+		}
+
+		if resp.Action.Type == orchestrator.ActionCheckpoint {
+			result, err = callNextActionWithUserResponse(t, nextActionH, workspace, "proceed")
+			if err != nil {
+				t.Fatalf("callNextActionWithUserResponse: %v", err)
+			}
+			if result.IsError {
+				t.Fatalf("MCP error on proceed: %s", textContent(result))
+			}
+			if err := json.Unmarshal([]byte(textContent(result)), &resp); err != nil {
+				t.Fatalf("unmarshal after proceed: %v", err)
+			}
+			if resp.Action.Type == orchestrator.ActionDone {
+				break
+			}
+			reportPhase = resp.Action.Phase
+			if resp.Action.Type == orchestrator.ActionCheckpoint && reportPhase == "" {
+				reportPhase = resp.Action.Name
+			}
+		}
+
+		switch resp.Action.Type {
+		case orchestrator.ActionWriteFile:
+			if err := os.WriteFile(resp.Action.Path, []byte(resp.Action.Content), 0o600); err != nil {
+				t.Fatalf("write_file: %v", err)
+			}
+		case orchestrator.ActionSpawnAgent:
+			approve := new(bool)
+			*approve = true
+			mockAgentExecute(t, workspace, resp.Action, cfg, approve)
+		case orchestrator.ActionExec:
+			// no-op
+		}
+
+		reportRes := callTool(t, reportResultH, map[string]any{
+			"workspace":   workspace,
+			"phase":       reportPhase,
+			"tokens_used": 500,
+			"duration_ms": 1000,
+			"model":       "sonnet",
+		})
+		if reportRes.IsError {
+			t.Fatalf("reportResult for %q: %s", reportPhase, textContent(reportRes))
+		}
+	}
+
+	s, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+
+	logged := make(map[string]bool)
+	for _, entry := range s.PhaseLog {
+		logged[entry.Phase] = true
+	}
+
+	if !logged[state.PhaseCheckpointA] {
+		t.Errorf("checkpoint-a not found in PhaseLog")
+	}
+	if !logged[state.PhaseCheckpointB] {
+		t.Errorf("checkpoint-b not found in PhaseLog")
 	}
 }
