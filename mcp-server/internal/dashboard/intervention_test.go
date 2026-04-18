@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
 )
 
 // newTestStateManager returns a StateManager initialized at a fresh temp

@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-04-18T13:51:37.729661Z",
+  "totalReviewsAnalyzed": 1,
+  "patterns": [
+    {
+      "pattern": "design missing error handling edge cases",
+      "severity": "CRITICAL",
+      "frequency": 1,
+      "agent": "design-reviewer",
+      "first_seen": "2026-04-18T13:51:37.729657Z",
+      "last_seen": "2026-04-18T13:51:37.729657Z",
+      "category": "test_coverage"
+    }
+  ]
+}

@@ -4,23 +4,23 @@
 
 1. **DRY violations**: `parseStoryPoints`/`parseEstimate` are near-identical. Label array parsing is duplicated. The marshal-unmarshal round-trip pattern appears 4+ times.
 2. **Source type knowledge scattered**: Adding a new source type requires changes in 8 locations across 5 packages with no compile-time enforcement.
-3. **No shared utility for map field extraction**: `stringField`, `boolField`, etc. are private to `tools` but needed by the new `sourcetype` package.
+3. **No shared utility for map field extraction**: `stringField`, `boolField`, etc. are private to `handler/tools` but needed by the new `engine/sourcetype` package.
 
 ## Goal
 
-- Extract `maputil` package for generic map field helpers
-- Create `sourcetype` package with Handler interface and registry
-- Eliminate all source-type switch statements from `tools` and `orchestrator`
+- Extract `pkg/maputil` package for generic map field helpers
+- Create `engine/sourcetype` package with Handler interface and registry
+- Eliminate all source-type switch statements from `handler/tools` and `engine/orchestrator`
 - Achieve compile-time enforcement: forgetting to implement a Handler method is a build error
 
 ## Design
 
-### 1. `internal/maputil` Package
+### 1. `pkg/maputil` Package
 
 Extract generic map extraction helpers from `context_fetcher.go`.
 
 ```go
-// internal/maputil/fields.go
+// pkg/maputil/fields.go
 package maputil
 
 func StringField(m map[string]any, key string) string
@@ -39,12 +39,12 @@ func ToMap(raw any) (map[string]any, error)                   // merges marshal-
 
 `ToMap` replaces the 4+ instances of `json.Marshal(raw)` then `json.Unmarshal(data, &m)`.
 
-### 2. `internal/sourcetype` Package
+### 2. `internal/engine/sourcetype` Package
 
 #### Types
 
 ```go
-// internal/sourcetype/types.go
+// internal/engine/sourcetype/types.go
 package sourcetype
 
 // FetchConfig describes how to fetch external issue data.
@@ -79,12 +79,12 @@ type ExternalFields struct {
 }
 ```
 
-`ExternalFields` is a **unified, service-neutral** struct. This replaces the per-service fields on `externalContext` (e.g., `GitHubTitle`, `JiraSummary`, `LinearTitle` all map to `Title`). The `externalContext` struct in `tools` remains but becomes thinner — it holds `SourceURL`, `SourceID`, `TaskText`, and an `ExternalFields` from the handler.
+`ExternalFields` is a **unified, service-neutral** struct. This replaces the per-service fields on `externalContext` (e.g., `GitHubTitle`, `JiraSummary`, `LinearTitle` all map to `Title`). The `externalContext` struct in `handler/tools` remains but becomes thinner — it holds `SourceURL`, `SourceID`, `TaskText`, and an `ExternalFields` from the handler.
 
 #### Handler Interface
 
 ```go
-// internal/sourcetype/handler.go
+// internal/engine/sourcetype/handler.go
 package sourcetype
 
 import "regexp"
@@ -130,7 +130,7 @@ type Handler interface {
 #### Registry
 
 ```go
-// internal/sourcetype/registry.go
+// internal/engine/sourcetype/registry.go
 package sourcetype
 
 // registry holds all registered source type handlers.
@@ -185,12 +185,12 @@ func ValidateURL(url string) (string, error) {
 Each handler is a single file. Example for Linear:
 
 ```go
-// internal/sourcetype/linear.go
+// internal/engine/sourcetype/linear.go
 package sourcetype
 
 import (
     "regexp"
-    "github.com/hiromaily/claude-forge/mcp-server/internal/maputil"
+    "github.com/hiromaily/claude-forge/mcp-server/pkg/maputil"
 )
 
 var (
@@ -363,15 +363,15 @@ tools ──→ sourcetype ←── orchestrator
             maputil (field extraction)
 ```
 
-- `sourcetype` imports `state` (for `SourceType*` constants) and `maputil`
-- `tools` imports `sourcetype` (for types and `Get()`)
-- `orchestrator` imports `sourcetype` (for types and `Get()`)
+- `engine/sourcetype` imports `engine/state` (for `SourceType*` constants) and `pkg/maputil`
+- `handler/tools` imports `engine/sourcetype` (for types and `Get()`)
+- `engine/orchestrator` imports `engine/sourcetype` (for types and `Get()`)
 - No circular dependency
 
 ### 6. Compile-Time Enforcement
 
 Adding a new service requires:
-1. Create `internal/sourcetype/newservice.go` implementing `Handler`
+1. Create `internal/engine/sourcetype/newservice.go` implementing `Handler`
 2. Add it to `registry` in `registry.go`
 
 If any method is missing, the compiler rejects `&NewServiceHandler{}` as not implementing `Handler`. No other files need updating.
@@ -382,18 +382,18 @@ If any method is missing, the compiler rejects `&NewServiceHandler{}` as not imp
 
 | File | Content |
 |------|---------|
-| `internal/maputil/fields.go` | Exported field extraction helpers |
-| `internal/maputil/fields_test.go` | Tests |
-| `internal/sourcetype/types.go` | FetchConfig, PostConfig, ExternalFields |
-| `internal/sourcetype/handler.go` | Handler interface |
-| `internal/sourcetype/registry.go` | Registry, Get(), All(), ValidateURL() |
-| `internal/sourcetype/registry_test.go` | Registry tests |
-| `internal/sourcetype/github.go` | GitHubHandler |
-| `internal/sourcetype/jira.go` | JiraHandler |
-| `internal/sourcetype/linear.go` | LinearHandler |
-| `internal/sourcetype/github_test.go` | Tests |
-| `internal/sourcetype/jira_test.go` | Tests |
-| `internal/sourcetype/linear_test.go` | Tests |
+| `pkg/maputil/fields.go` | Exported field extraction helpers |
+| `pkg/maputil/fields_test.go` | Tests |
+| `internal/engine/sourcetype/types.go` | FetchConfig, PostConfig, ExternalFields |
+| `internal/engine/sourcetype/handler.go` | Handler interface |
+| `internal/engine/sourcetype/registry.go` | Registry, Get(), All(), ValidateURL() |
+| `internal/engine/sourcetype/registry_test.go` | Registry tests |
+| `internal/engine/sourcetype/github.go` | GitHubHandler |
+| `internal/engine/sourcetype/jira.go` | JiraHandler |
+| `internal/engine/sourcetype/linear.go` | LinearHandler |
+| `internal/engine/sourcetype/github_test.go` | Tests |
+| `internal/engine/sourcetype/jira_test.go` | Tests |
+| `internal/engine/sourcetype/linear_test.go` | Tests |
 
 ### Modified Files
 
@@ -439,5 +439,5 @@ If any method is missing, the compiler rejects `&NewServiceHandler{}` as not imp
 - **Pro**: DRY violations eliminated. `parseStoryPoints`/`parseEstimate` unified. Label parsing unified.
 - **Pro**: `externalContext` simplified from 13 service-specific fields to 1 `ExternalFields`.
 - **Con**: New abstraction layer (Handler interface). More files.
-- **Con**: `sourcetype` package needs `maputil` — adds a dependency edge. Acceptable since `maputil` is a leaf package.
+- **Con**: `engine/sourcetype` package needs `pkg/maputil` — adds a dependency edge. Acceptable since `pkg/maputil` is a leaf package.
 - **Con**: Existing tests need updates for type changes (`FetchNeeded` → `FetchConfig`, `PostMethod` → `PostConfig`).

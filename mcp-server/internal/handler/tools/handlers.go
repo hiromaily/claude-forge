@@ -1,0 +1,602 @@
+// implements MCP tool handlers that delegate to StateManager
+// methods and enforce guard preconditions.
+//
+// Blocking guards return an MCP error response (IsError = true).
+// Non-blocking warnings are included as a "warning" key in the JSON content.
+
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/indexer"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+)
+
+// ---------- init ----------
+
+// InitHandler handles the "init" MCP tool.
+// Accepts: workspace (string), spec_name (string), validated (bool).
+// Guard: GuardInitValidated must be true.
+func InitHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace := req.GetString("workspace", "")
+		if workspace == "" {
+			return errorf("workspace parameter is required")
+		}
+		specName := req.GetString("spec_name", "")
+		if specName == "" {
+			return errorf("spec_name parameter is required")
+		}
+		validated := req.GetBool("validated", false)
+		if err := GuardInitValidated(validated); err != nil {
+			return blockGuard(err)
+		}
+		if err := sm.Init(workspace, specName); err != nil {
+			return errorf("init: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- get ----------
+
+// GetHandler handles the "get" MCP tool.
+// Accepts: workspace (string), field (string).
+func GetHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, field, result, err := requireWorkspaceAndString(req, "field")
+		if result != nil {
+			return result, err
+		}
+		val, err := sm.Get(workspace, field)
+		if err != nil {
+			return errorf("get: %v", err)
+		}
+		return okText(val)
+	}
+}
+
+// ---------- phase_start ----------
+
+// PhaseStartHandler handles the "phase_start" MCP tool.
+// Accepts: workspace (string), phase (string).
+// Guard 3c: phase-5 requires non-empty tasks.
+func PhaseStartHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
+		}
+		// Guard 3c: blocking
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
+		}
+		if gerr := Guard3cTasksNonEmpty(phase, s); gerr != nil {
+			return blockGuard(gerr)
+		}
+		if err := sm.PhaseStart(workspace, phase); err != nil {
+			return errorf("phase_start: %v", err)
+		}
+		publishEvent(bus, nil, "phase-start", phase, s.SpecName, workspace, "in_progress")
+		return okText("ok")
+	}
+}
+
+// ---------- phase_complete ----------
+
+// PhaseCompleteHandler handles the "phase_complete" MCP tool.
+// Accepts: workspace (string), phase (string).
+// Guards: 3a (artifact), 3e (awaiting_human), 3j (revision pending).
+// Warnings: 3f (phase-log missing), 3i (not in_progress).
+func PhaseCompleteHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
+		}
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
+		}
+		// Blocking guards.
+		if gerr := Guard3aArtifactExists(workspace, phase, s); gerr != nil {
+			return blockGuard(gerr)
+		}
+		if gerr := Guard3eCheckpointAwaitingHuman(phase, s); gerr != nil {
+			return blockGuard(gerr)
+		}
+		if gerr := Guard3jCheckpointRevisionPending(phase, s); gerr != nil {
+			return blockGuard(gerr)
+		}
+		// Non-blocking warnings.
+		var warnings []string
+		if w := Warn3fPhaseLogMissing(phase, s); w != "" {
+			warnings = append(warnings, w)
+		}
+		if w := Warn3iPhaseNotInProgress(s); w != "" {
+			warnings = append(warnings, w)
+		}
+		if err := sm.PhaseComplete(workspace, phase); err != nil {
+			return errorf("phase_complete: %v", err)
+		}
+		publishEvent(bus, slack, "phase-complete", phase, s.SpecName, workspace, "completed")
+		if len(warnings) > 0 {
+			return okWithWarning("ok", strings.Join(warnings, "; "))
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- phase_fail ----------
+
+// PhaseFailHandler handles the "phase_fail" MCP tool.
+// Accepts: workspace (string), phase (string), message (string).
+func PhaseFailHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
+		}
+		message := req.GetString("message", "")
+		specName, _ := stateForEvent(workspace)
+		if err := sm.PhaseFail(workspace, phase, message); err != nil {
+			return errorf("phase_fail: %v", err)
+		}
+		publishEvent(bus, slack, "phase-fail", phase, specName, workspace, "failed")
+		return okText("ok")
+	}
+}
+
+// ---------- checkpoint ----------
+
+// CheckpointHandler handles the "checkpoint" MCP tool.
+// Accepts: workspace (string), phase (string).
+func CheckpointHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
+		}
+		specName, _ := stateForEvent(workspace)
+		if err := sm.Checkpoint(workspace, phase); err != nil {
+			return errorf("checkpoint: %v", err)
+		}
+		publishEvent(bus, nil, "checkpoint", phase, specName, workspace, "awaiting_human")
+		return okText("ok")
+	}
+}
+
+// ---------- task_init ----------
+
+// TaskInitHandler handles the "task_init" MCP tool.
+// Accepts: workspace (string), tasks (object).
+// Guard 3g: checkpoint-b must be completed or skipped.
+func TaskInitHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
+		}
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
+		}
+		// Guard 3g: blocking.
+		if gerr := Guard3gCheckpointBDoneOrSkipped(s); gerr != nil {
+			return blockGuard(gerr)
+		}
+		// Parse tasks from arguments.
+		args := req.GetArguments()
+		tasksRaw, ok := args["tasks"]
+		if !ok {
+			return errorf("tasks parameter is required")
+		}
+		tasksData, err := json.Marshal(tasksRaw)
+		if err != nil {
+			return errorf("marshal tasks: %v", err)
+		}
+		var tasks map[string]state.Task
+		if err := json.Unmarshal(tasksData, &tasks); err != nil {
+			return errorf("unmarshal tasks: %v", err)
+		}
+		if len(tasks) == 0 {
+			return errorf("task_init: no tasks parsed from input — tasks.md may be empty or malformed")
+		}
+		// Validate dependency integrity before storing.
+		warnings := validateTaskDependencies(tasks)
+		if err := sm.TaskInit(workspace, tasks); err != nil {
+			return errorf("task_init: %v", err)
+		}
+		if len(warnings) > 0 {
+			return okJSON(map[string]any{
+				"status":   "ok",
+				"warnings": warnings,
+			})
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- task_update ----------
+
+// TaskUpdateHandler handles the "task_update" MCP tool.
+// Accepts: workspace (string), task_num (string), field (string), value (string).
+// Guard 3b: review-{N}.md must exist when setting reviewStatus to completed_pass.
+// Warning 3h: task not found in state.Tasks.
+func TaskUpdateHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
+		}
+		taskNum, err := req.RequireString("task_num")
+		if err != nil {
+			return errorf("%v", err)
+		}
+		field, err := req.RequireString("field")
+		if err != nil {
+			return errorf("%v", err)
+		}
+		value, err := req.RequireString("value")
+		if err != nil {
+			return errorf("%v", err)
+		}
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
+		}
+		// Guard 3b: blocking.
+		if gerr := Guard3bReviewFileExists(workspace, taskNum, value, s); gerr != nil {
+			if field == "reviewStatus" {
+				return blockGuard(gerr)
+			}
+		}
+		// Warning 3h: non-blocking.
+		var warning string
+		if w := Warn3hTaskNotFound(taskNum, s); w != "" {
+			warning = w
+		}
+		if err := sm.TaskUpdate(workspace, taskNum, field, value); err != nil {
+			return errorf("task_update: %v", err)
+		}
+		if warning != "" {
+			return okWithWarning("ok", warning)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- revision_bump ----------
+
+// RevisionBumpHandler handles the "revision_bump" MCP tool.
+// Accepts: workspace (string), rev_type (string).
+func RevisionBumpHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, revType, result, err := requireWorkspaceAndString(req, "rev_type")
+		if result != nil {
+			return result, err
+		}
+		if err := sm.RevisionBump(workspace, revType); err != nil {
+			return errorf("revision_bump: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- inline_revision_bump ----------
+
+// InlineRevisionBumpHandler handles the "inline_revision_bump" MCP tool.
+// Accepts: workspace (string), rev_type (string).
+func InlineRevisionBumpHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, revType, result, err := requireWorkspaceAndString(req, "rev_type")
+		if result != nil {
+			return result, err
+		}
+		if err := sm.InlineRevisionBump(workspace, revType); err != nil {
+			return errorf("inline_revision_bump: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- set_branch ----------
+
+// SetBranchHandler handles the "set_branch" MCP tool.
+// Accepts: workspace (string), branch (string).
+func SetBranchHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, branch, result, err := requireWorkspaceAndString(req, "branch")
+		if result != nil {
+			return result, err
+		}
+		if err := sm.SetBranch(workspace, branch); err != nil {
+			return errorf("set_branch: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- set_effort ----------
+
+// SetEffortHandler handles the "set_effort" MCP tool.
+// Accepts: workspace (string), effort (string).
+func SetEffortHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, effort, result, err := requireWorkspaceAndString(req, "effort")
+		if result != nil {
+			return result, err
+		}
+		if err := sm.SetEffort(workspace, effort); err != nil {
+			return errorf("set_effort: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- set_flow_template ----------
+
+// SetFlowTemplateHandler handles the "set_flow_template" MCP tool.
+// Accepts: workspace (string), flow_template (string).
+func SetFlowTemplateHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, tmpl, result, err := requireWorkspaceAndString(req, "flow_template")
+		if result != nil {
+			return result, err
+		}
+		if err := sm.SetFlowTemplate(workspace, tmpl); err != nil {
+			return errorf("set_flow_template: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- set_auto_approve ----------
+
+// SetAutoApproveHandler handles the "set_auto_approve" MCP tool.
+// Accepts: workspace (string).
+func SetAutoApproveHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
+		}
+		if err := sm.SetAutoApprove(workspace); err != nil {
+			return errorf("set_auto_approve: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- set_skip_pr ----------
+
+// SetSkipPrHandler handles the "set_skip_pr" MCP tool.
+// Accepts: workspace (string).
+func SetSkipPrHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
+		}
+		if err := sm.SetSkipPr(workspace); err != nil {
+			return errorf("set_skip_pr: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- set_debug ----------
+
+// SetDebugHandler handles the "set_debug" MCP tool.
+// Accepts: workspace (string).
+func SetDebugHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
+		}
+		if err := sm.SetDebug(workspace); err != nil {
+			return errorf("set_debug: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- set_use_current_branch ----------
+
+// SetUseCurrentBranchHandler handles the "set_use_current_branch" MCP tool.
+// Accepts: workspace (string), branch (string).
+func SetUseCurrentBranchHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, branch, result, err := requireWorkspaceAndString(req, "branch")
+		if result != nil {
+			return result, err
+		}
+		if err := sm.SetUseCurrentBranch(workspace, branch); err != nil {
+			return errorf("set_use_current_branch: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- set_revision_pending ----------
+
+// SetRevisionPendingHandler handles the "set_revision_pending" MCP tool.
+// Accepts: workspace (string), checkpoint (string).
+func SetRevisionPendingHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, checkpoint, result, err := requireWorkspaceAndString(req, "checkpoint")
+		if result != nil {
+			return result, err
+		}
+		if err := sm.SetRevisionPending(workspace, checkpoint); err != nil {
+			return errorf("set_revision_pending: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- clear_revision_pending ----------
+
+// ClearRevisionPendingHandler handles the "clear_revision_pending" MCP tool.
+// Accepts: workspace (string), checkpoint (string).
+func ClearRevisionPendingHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, checkpoint, result, err := requireWorkspaceAndString(req, "checkpoint")
+		if result != nil {
+			return result, err
+		}
+		if err := sm.ClearRevisionPending(workspace, checkpoint); err != nil {
+			return errorf("clear_revision_pending: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- skip_phase ----------
+
+// SkipPhaseHandler handles the "skip_phase" MCP tool.
+// Accepts: workspace (string), phase (string).
+func SkipPhaseHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
+		}
+		if err := sm.SkipPhase(workspace, phase); err != nil {
+			return errorf("skip_phase: %v", err)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- phase_log ----------
+
+// PhaseLogHandler handles the "phase_log" MCP tool.
+// Accepts: workspace (string), phase (string), tokens (number),
+//
+//	duration_ms (number), model (string).
+//
+// Warning 3d: duplicate phase-log entry.
+func PhaseLogHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, phase, result, err := requireWorkspaceAndPhase(req)
+		if result != nil {
+			return result, err
+		}
+		tokens := req.GetInt("tokens", 0)
+		durationMs := req.GetInt("duration_ms", 0)
+		model := req.GetString("model", "")
+
+		s, result, err := loadStateOrError(workspace)
+		if result != nil {
+			return result, err
+		}
+		// Warning 3d: non-blocking.
+		warning := Warn3dPhaseLogDuplicate(phase, s)
+
+		if err := sm.PhaseLog(workspace, phase, tokens, durationMs, model); err != nil {
+			return errorf("phase_log: %v", err)
+		}
+		if warning != "" {
+			return okWithWarning("ok", warning)
+		}
+		return okText("ok")
+	}
+}
+
+// ---------- phase_stats ----------
+
+// PhaseStatsHandler handles the "phase_stats" MCP tool.
+// Accepts: workspace (string).
+func PhaseStatsHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
+		}
+		stats, err := sm.PhaseStats(workspace)
+		if err != nil {
+			return errorf("phase_stats: %v", err)
+		}
+		return okJSON(stats)
+	}
+}
+
+// ---------- abandon ----------
+
+// AbandonHandler handles the "abandon" MCP tool.
+// Accepts: workspace (string).
+func AbandonHandler(sm *state.StateManager, bus *events.EventBus, slack *events.SlackNotifier) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
+		}
+		specName, phase := stateForEvent(workspace)
+		if err := sm.Abandon(workspace); err != nil {
+			return errorf("abandon: %v", err)
+		}
+		publishEvent(bus, slack, "abandon", phase, specName, workspace, "abandoned")
+		return okText("ok")
+	}
+}
+
+// ---------- resume_info ----------
+
+// ResumeInfoHandler handles the "resume_info" MCP tool.
+// Accepts: workspace (string).
+func ResumeInfoHandler(sm *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
+		}
+		info, err := sm.ResumeInfo(workspace)
+		if err != nil {
+			return errorf("resume_info: %v", err)
+		}
+		return okJSON(info)
+	}
+}
+
+// ---------- refresh_index ----------
+
+// RefreshIndexHandler handles the "refresh_index" MCP tool. It derives
+// specsDir from the workspace parameter and delegates to refreshIndexWithSpecsDir.
+func RefreshIndexHandler(_ *state.StateManager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		workspace, result, err := requireWorkspace(req)
+		if result != nil {
+			return result, err
+		}
+		specsDir := filepath.Dir(workspace)
+		return refreshIndexWithSpecsDir(specsDir)(ctx, req)
+	}
+}
+
+// refreshIndexWithSpecsDir returns a ToolHandlerFunc that calls indexer.BuildSpecsIndex
+// on the given specsDir. If specsDir does not exist, an MCP error is returned immediately.
+func refreshIndexWithSpecsDir(specsDir string) server.ToolHandlerFunc {
+	return func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if _, err := os.Stat(specsDir); err != nil {
+			return mcp.NewToolResultError("specsDir does not exist: " + specsDir), nil
+		}
+		n, err := indexer.BuildSpecsIndex(specsDir)
+		if err != nil {
+			return errorf("refresh_index: %v", err)
+		}
+		return okText(fmt.Sprintf("ok: wrote %d entries to %s/index.json", n, specsDir))
+	}
+}

@@ -13,7 +13,7 @@
 ### Task 1: Add `PostMethod` struct to `orchestrator/actions.go`
 
 **Files:**
-- Modify: `poc/claude-forge/mcp-server/internal/orchestrator/actions.go`
+- Modify: `poc/claude-forge/mcp-server/internal/engine/orchestrator/actions.go`
 
 - [ ] **Step 1: Write the test**
 
@@ -21,7 +21,7 @@ No separate test needed — `PostMethod` is a data struct. It will be tested via
 
 - [ ] **Step 2: Add `PostMethod` struct and extend `Action`**
 
-In `poc/claude-forge/mcp-server/internal/orchestrator/actions.go`, add after the `Action` struct definition (after line 67):
+In `poc/claude-forge/mcp-server/internal/engine/orchestrator/actions.go`, add after the `Action` struct definition (after line 67):
 
 ```go
 // PostMethod describes how to post a comment back to the source issue.
@@ -50,7 +50,7 @@ Expected: success, no errors
 - [ ] **Step 4: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/orchestrator/actions.go
+git add poc/claude-forge/mcp-server/internal/engine/orchestrator/actions.go
 git commit -m "feat(orchestrator): add PostMethod struct to Action for post-to-source metadata"
 ```
 
@@ -59,12 +59,12 @@ git commit -m "feat(orchestrator): add PostMethod struct to Action for post-to-s
 ### Task 2: Restructure `FetchNeeded` in `pipeline_init.go`
 
 **Files:**
-- Modify: `poc/claude-forge/mcp-server/internal/tools/pipeline_init.go`
-- Modify: `poc/claude-forge/mcp-server/internal/tools/pipeline_init_test.go`
+- Modify: `poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init.go`
+- Modify: `poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init_test.go`
 
 - [ ] **Step 1: Update `FetchNeeded` struct**
 
-In `poc/claude-forge/mcp-server/internal/tools/pipeline_init.go`, replace the `FetchNeeded` struct (lines 71-75):
+In `poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init.go`, replace the `FetchNeeded` struct (lines 71-75):
 
 ```go
 // FetchNeeded describes the external data that must be fetched before
@@ -268,13 +268,13 @@ The `text_null` test case remains unchanged.
 
 - [ ] **Step 5: Run tests**
 
-Run: `cd poc/claude-forge/mcp-server && go test ./internal/tools/... -count=1 -run TestPipelineInit`
+Run: `cd poc/claude-forge/mcp-server && go test ./internal/handler/tools/... -count=1 -run TestPipelineInit`
 Expected: all pass
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/tools/pipeline_init.go poc/claude-forge/mcp-server/internal/tools/pipeline_init_test.go
+git add poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init.go poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init_test.go
 git commit -m "feat(pipeline-init): restructure FetchNeeded with mcp_tool/command/response_mapping"
 ```
 
@@ -283,7 +283,7 @@ git commit -m "feat(pipeline-init): restructure FetchNeeded with mcp_tool/comman
 ### Task 3: Update `handlePostToSource` in `engine.go`
 
 **Files:**
-- Modify: `poc/claude-forge/mcp-server/internal/orchestrator/engine.go`
+- Modify: `poc/claude-forge/mcp-server/internal/engine/orchestrator/engine.go`
 
 - [ ] **Step 1: Add `sourceTypeLabel` helper**
 
@@ -411,7 +411,7 @@ Expected: success
 - [ ] **Step 6: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/orchestrator/engine.go
+git add poc/claude-forge/mcp-server/internal/engine/orchestrator/engine.go
 git commit -m "feat(engine): handlePostToSource returns PostMethod metadata in checkpoint action"
 ```
 
@@ -420,7 +420,7 @@ git commit -m "feat(engine): handlePostToSource returns PostMethod metadata in c
 ### Task 4: Update engine tests for `PostMethod`
 
 **Files:**
-- Modify: `poc/claude-forge/mcp-server/internal/orchestrator/engine_test.go`
+- Modify: `poc/claude-forge/mcp-server/internal/engine/orchestrator/engine_test.go`
 
 - [ ] **Step 1: Update `TestPostToSource_CheckpointOptions`**
 
@@ -534,13 +534,13 @@ Do the same for `post_to_source_jira_issue` and any other post-to-source entries
 
 - [ ] **Step 3: Run tests**
 
-Run: `cd poc/claude-forge/mcp-server && go test -race ./internal/orchestrator/... -count=1`
+Run: `cd poc/claude-forge/mcp-server && go test -race ./internal/engine/orchestrator/... -count=1`
 Expected: all pass
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/orchestrator/engine_test.go
+git add poc/claude-forge/mcp-server/internal/engine/orchestrator/engine_test.go
 git commit -m "test(engine): verify PostMethod in post-to-source checkpoint actions"
 ```
 

@@ -2,23 +2,23 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Eliminate DRY violations and scattered source-type knowledge by creating a `maputil` utility package and a `sourcetype` Handler registry with compile-time enforcement.
+**Goal:** Eliminate DRY violations and scattered source-type knowledge by creating a `pkg/maputil` utility package and a `engine/sourcetype` Handler registry with compile-time enforcement.
 
-**Architecture:** Extract generic map helpers to `internal/maputil`. Create `internal/sourcetype` with Handler interface, ExternalFields unified type, and per-service implementations (GitHub, Jira, Linear). Refactor `tools` and `orchestrator` to delegate to the registry instead of inline switch statements.
+**Architecture:** Extract generic map helpers to `pkg/maputil`. Create `internal/engine/sourcetype` with Handler interface, ExternalFields unified type, and per-service implementations (GitHub, Jira, Linear). Refactor `handler/tools` and `engine/orchestrator` to delegate to the registry instead of inline switch statements.
 
 **Tech Stack:** Go 1.26, stdlib only, table-driven tests with `t.Parallel()`
 
 ---
 
-### Task 1: Create `internal/maputil` package
+### Task 1: Create `pkg/maputil` package
 
 **Files:**
-- Create: `poc/claude-forge/mcp-server/internal/maputil/fields.go`
-- Create: `poc/claude-forge/mcp-server/internal/maputil/fields_test.go`
+- Create: `poc/claude-forge/mcp-server/pkg/maputil/fields.go`
+- Create: `poc/claude-forge/mcp-server/pkg/maputil/fields_test.go`
 
 - [ ] **Step 1: Write tests for `StringField`, `StringFieldAlt`, `BoolField`**
 
-Create `poc/claude-forge/mcp-server/internal/maputil/fields_test.go`:
+Create `poc/claude-forge/mcp-server/pkg/maputil/fields_test.go`:
 
 ```go
 package maputil_test
@@ -26,7 +26,7 @@ package maputil_test
 import (
 	"testing"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/maputil"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/maputil"
 )
 
 func TestStringField(t *testing.T) {
@@ -184,12 +184,12 @@ func TestToMap(t *testing.T) {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd poc/claude-forge/mcp-server && go test ./internal/maputil/... -count=1`
+Run: `cd poc/claude-forge/mcp-server && go test ./pkg/maputil/... -count=1`
 Expected: compilation error (package doesn't exist yet)
 
 - [ ] **Step 3: Create `fields.go`**
 
-Create `poc/claude-forge/mcp-server/internal/maputil/fields.go`:
+Create `poc/claude-forge/mcp-server/pkg/maputil/fields.go`:
 
 ```go
 // Package maputil provides type-safe field extraction from map[string]any.
@@ -307,25 +307,25 @@ func ToMap(raw any) (map[string]any, error) {
 
 - [ ] **Step 4: Run tests**
 
-Run: `cd poc/claude-forge/mcp-server && go test ./internal/maputil/... -count=1 -v`
+Run: `cd poc/claude-forge/mcp-server && go test ./pkg/maputil/... -count=1 -v`
 Expected: all pass
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/maputil/
+git add poc/claude-forge/mcp-server/pkg/maputil/
 git commit -m "feat(maputil): add type-safe map field extraction utilities"
 ```
 
 ---
 
-### Task 2: Create `internal/sourcetype` — types and Handler interface
+### Task 2: Create `internal/engine/sourcetype` — types and Handler interface
 
 **Files:**
-- Create: `poc/claude-forge/mcp-server/internal/sourcetype/types.go`
-- Create: `poc/claude-forge/mcp-server/internal/sourcetype/handler.go`
-- Create: `poc/claude-forge/mcp-server/internal/sourcetype/registry.go`
-- Create: `poc/claude-forge/mcp-server/internal/sourcetype/registry_test.go`
+- Create: `poc/claude-forge/mcp-server/internal/engine/sourcetype/types.go`
+- Create: `poc/claude-forge/mcp-server/internal/engine/sourcetype/handler.go`
+- Create: `poc/claude-forge/mcp-server/internal/engine/sourcetype/registry.go`
+- Create: `poc/claude-forge/mcp-server/internal/engine/sourcetype/registry_test.go`
 
 - [ ] **Step 1: Create `types.go`**
 
@@ -560,13 +560,13 @@ func TestClassifyURL(t *testing.T) {
 
 - [ ] **Step 5: Run tests (should fail — handlers not yet registered)**
 
-Run: `cd poc/claude-forge/mcp-server && go test ./internal/sourcetype/... -count=1`
+Run: `cd poc/claude-forge/mcp-server && go test ./internal/engine/sourcetype/... -count=1`
 Expected: fail (Get returns nil, All returns 0)
 
 - [ ] **Step 6: Commit skeleton**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/sourcetype/
+git add poc/claude-forge/mcp-server/internal/engine/sourcetype/
 git commit -m "feat(sourcetype): add Handler interface, registry, and types"
 ```
 
@@ -575,9 +575,9 @@ git commit -m "feat(sourcetype): add Handler interface, registry, and types"
 ### Task 3: Implement GitHub, Jira, and Linear handlers
 
 **Files:**
-- Create: `poc/claude-forge/mcp-server/internal/sourcetype/github.go`
-- Create: `poc/claude-forge/mcp-server/internal/sourcetype/jira.go`
-- Create: `poc/claude-forge/mcp-server/internal/sourcetype/linear.go`
+- Create: `poc/claude-forge/mcp-server/internal/engine/sourcetype/github.go`
+- Create: `poc/claude-forge/mcp-server/internal/engine/sourcetype/jira.go`
+- Create: `poc/claude-forge/mcp-server/internal/engine/sourcetype/linear.go`
 
 - [ ] **Step 1: Create `github.go`**
 
@@ -589,7 +589,7 @@ import (
 	"path"
 	"regexp"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/maputil"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/maputil"
 )
 
 var (
@@ -657,7 +657,7 @@ import (
 	"path"
 	"regexp"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/maputil"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/maputil"
 )
 
 var (
@@ -726,7 +726,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/maputil"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/maputil"
 )
 
 var (
@@ -799,13 +799,13 @@ func (h *LinearHandler) ParseExternalContext(m map[string]any) ExternalFields {
 
 - [ ] **Step 4: Run sourcetype tests**
 
-Run: `cd poc/claude-forge/mcp-server && go test ./internal/sourcetype/... -count=1 -v`
+Run: `cd poc/claude-forge/mcp-server && go test ./internal/engine/sourcetype/... -count=1 -v`
 Expected: all pass (handlers registered via init)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/sourcetype/
+git add poc/claude-forge/mcp-server/internal/engine/sourcetype/
 git commit -m "feat(sourcetype): implement GitHub, Jira, and Linear handlers"
 ```
 
@@ -814,7 +814,7 @@ git commit -m "feat(sourcetype): implement GitHub, Jira, and Linear handlers"
 ### Task 4: Refactor `validation/input.go` to use sourcetype registry
 
 **Files:**
-- Modify: `poc/claude-forge/mcp-server/internal/validation/input.go`
+- Modify: `poc/claude-forge/mcp-server/internal/handler/validation/input.go`
 
 - [ ] **Step 1: Replace URL regex vars and validateURL with sourcetype.ClassifyURL**
 
@@ -844,19 +844,19 @@ func validateURL(core string, flags map[string]string, bareFlags []string) Input
 }
 ```
 
-Add import: `"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"`
+Add import: `"github.com/hiromaily/claude-forge/mcp-server/internal/engine/sourcetype"`
 
 Keep `reHTTPS` — it's used for the `isURL` check in `ValidateInput`.
 
 - [ ] **Step 2: Run validation tests**
 
-Run: `cd poc/claude-forge/mcp-server && go test ./internal/validation/... -count=1`
+Run: `cd poc/claude-forge/mcp-server && go test ./internal/handler/validation/... -count=1`
 Expected: all pass (black-box tests, behavior unchanged)
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/validation/input.go
+git add poc/claude-forge/mcp-server/internal/handler/validation/input.go
 git commit -m "refactor(validation): delegate URL classification to sourcetype registry"
 ```
 
@@ -865,8 +865,8 @@ git commit -m "refactor(validation): delegate URL classification to sourcetype r
 ### Task 5: Refactor `tools/pipeline_init.go` to use sourcetype
 
 **Files:**
-- Modify: `poc/claude-forge/mcp-server/internal/tools/pipeline_init.go`
-- Modify: `poc/claude-forge/mcp-server/internal/tools/pipeline_init_test.go`
+- Modify: `poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init.go`
+- Modify: `poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init_test.go`
 
 - [ ] **Step 1: Replace FetchNeeded with sourcetype.FetchConfig**
 
@@ -881,7 +881,7 @@ to:
 FetchNeeded *sourcetype.FetchConfig `json:"fetch_needed,omitempty"`
 ```
 
-Add import: `"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"`
+Add import: `"github.com/hiromaily/claude-forge/mcp-server/internal/engine/sourcetype"`
 
 - [ ] **Step 2: Replace extractSourceID and makeFetchNeeded**
 
@@ -936,17 +936,17 @@ func refineWorkspacePath(workspace string, extCtx externalContext) string {
 
 In `pipeline_init_test.go`, update type references from `FetchNeeded` to `sourcetype.FetchConfig` if needed (the JSON field name `fetch_needed` is unchanged, so tests using `parsePipelineInitResult` should still work if the result struct field type is aliased correctly).
 
-Add import to test file if needed: `"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"`
+Add import to test file if needed: `"github.com/hiromaily/claude-forge/mcp-server/internal/engine/sourcetype"`
 
 - [ ] **Step 5: Run tests**
 
-Run: `cd poc/claude-forge/mcp-server && go test ./internal/tools/... -count=1 -run TestPipelineInit`
+Run: `cd poc/claude-forge/mcp-server && go test ./internal/handler/tools/... -count=1 -run TestPipelineInit`
 Expected: all pass
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/tools/pipeline_init.go poc/claude-forge/mcp-server/internal/tools/pipeline_init_test.go
+git add poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init.go poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init_test.go
 git commit -m "refactor(pipeline-init): delegate to sourcetype registry for extractSourceID and makeFetchNeeded"
 ```
 
@@ -955,9 +955,9 @@ git commit -m "refactor(pipeline-init): delegate to sourcetype registry for extr
 ### Task 6: Refactor `tools/context_fetcher.go` to use maputil and sourcetype
 
 **Files:**
-- Modify: `poc/claude-forge/mcp-server/internal/tools/context_fetcher.go`
-- Modify: `poc/claude-forge/mcp-server/internal/tools/context_fetcher_test.go`
-- Modify: `poc/claude-forge/mcp-server/internal/tools/pipeline_init_with_context.go`
+- Modify: `poc/claude-forge/mcp-server/internal/handler/tools/context_fetcher.go`
+- Modify: `poc/claude-forge/mcp-server/internal/handler/tools/context_fetcher_test.go`
+- Modify: `poc/claude-forge/mcp-server/internal/handler/tools/pipeline_init_with_context.go`
 
 - [ ] **Step 1: Simplify externalContext struct**
 
@@ -1120,13 +1120,13 @@ Update `pipeline_init_with_context_test.go` — no structural change needed sinc
 
 - [ ] **Step 7: Run tests**
 
-Run: `cd poc/claude-forge/mcp-server && go test ./internal/tools/... -count=1`
+Run: `cd poc/claude-forge/mcp-server && go test ./internal/handler/tools/... -count=1`
 Expected: all pass
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/tools/
+git add poc/claude-forge/mcp-server/internal/handler/tools/
 git commit -m "refactor(context-fetcher): use maputil and sourcetype for unified field handling"
 ```
 
@@ -1135,9 +1135,9 @@ git commit -m "refactor(context-fetcher): use maputil and sourcetype for unified
 ### Task 7: Refactor `orchestrator/engine.go` to use sourcetype
 
 **Files:**
-- Modify: `poc/claude-forge/mcp-server/internal/orchestrator/actions.go`
-- Modify: `poc/claude-forge/mcp-server/internal/orchestrator/engine.go`
-- Modify: `poc/claude-forge/mcp-server/internal/orchestrator/engine_test.go`
+- Modify: `poc/claude-forge/mcp-server/internal/engine/orchestrator/actions.go`
+- Modify: `poc/claude-forge/mcp-server/internal/engine/orchestrator/engine.go`
+- Modify: `poc/claude-forge/mcp-server/internal/engine/orchestrator/engine_test.go`
 
 - [ ] **Step 1: Replace PostMethod with sourcetype.PostConfig in actions.go**
 
@@ -1146,7 +1146,7 @@ Remove the `PostMethod` struct definition. Change the `Action` field:
 PostMethod *sourcetype.PostConfig `json:"post_method,omitempty"`
 ```
 
-Add import: `"github.com/hiromaily/claude-forge/mcp-server/internal/sourcetype"`
+Add import: `"github.com/hiromaily/claude-forge/mcp-server/internal/engine/sourcetype"`
 
 - [ ] **Step 2: Rewrite handlePostToSource in engine.go**
 
@@ -1207,7 +1207,7 @@ Expected: all pass
 - [ ] **Step 6: Commit**
 
 ```bash
-git add poc/claude-forge/mcp-server/internal/orchestrator/
+git add poc/claude-forge/mcp-server/internal/engine/orchestrator/
 git commit -m "refactor(engine): delegate to sourcetype handlers, remove PostMethod and switch statements"
 ```
 
@@ -1229,7 +1229,7 @@ Expected: no errors
 
 - [ ] **Step 3: Verify no source-type switch statements remain**
 
-Run: `grep -rn 'case.*SourceTypeGitHub\|case.*github_issue\|case.*SourceTypeJira\|case.*jira_issue\|case.*SourceTypeLinear\|case.*linear_issue' poc/claude-forge/mcp-server/internal/tools/ poc/claude-forge/mcp-server/internal/orchestrator/ poc/claude-forge/mcp-server/internal/validation/`
+Run: `grep -rn 'case.*SourceTypeGitHub\|case.*github_issue\|case.*SourceTypeJira\|case.*jira_issue\|case.*SourceTypeLinear\|case.*linear_issue' poc/claude-forge/mcp-server/internal/handler/tools/ poc/claude-forge/mcp-server/internal/engine/orchestrator/ poc/claude-forge/mcp-server/internal/handler/validation/`
 Expected: no matches (all switch logic moved to sourcetype handlers)
 
 - [ ] **Step 4: Verify import cycle is clean**

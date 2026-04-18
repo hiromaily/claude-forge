@@ -8,7 +8,7 @@ When making changes to this plugin, verify the items relevant to the area you ch
 
 ### State management commands (26 commands)
 
-All commands are tested in `mcp-server/internal/state/`:
+All commands are tested in `mcp-server/internal/engine/state/`:
 
 - init, get, phase-start, phase-complete, phase-fail, checkpoint, abandon, skip-phase
 - task-init, task-update
@@ -41,7 +41,7 @@ final-commit → completed
 
 ### MCP-only tools (22 tools)
 
-All have dedicated test files in `mcp-server/internal/tools/`:
+All have dedicated test files in `mcp-server/internal/handler/tools/`:
 
 - Discovery: `__IMPORTANT`
 - Pipeline: `pipeline_init`, `pipeline_init_with_context`, `pipeline_next_action`, `pipeline_report_result`

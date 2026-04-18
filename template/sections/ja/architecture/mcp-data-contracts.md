@@ -2,7 +2,7 @@
 
 このドキュメントは、Claudeオーケストレーター（SKILL.md）とGo MCPサーバー（`forge-state-mcp`）間でパイプライン実行中にやりとりされる正確なJSONペイロードを規定します。以下の4つのツールがパイプライン全体のライフサイクルを駆動します。
 
-> **信頼できるソース**: `mcp-server/internal/tools/` および `mcp-server/internal/orchestrator/actions.go` のGo構造体。スキーマ変更時は本ドキュメントとGoコードの両方を更新すること。
+> **信頼できるソース**: `mcp-server/internal/handler/tools/` および `mcp-server/internal/engine/orchestrator/actions.go` のGo構造体。スキーマ変更時は本ドキュメントとGoコードの両方を更新すること。
 
 ---
 
