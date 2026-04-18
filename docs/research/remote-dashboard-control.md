@@ -154,7 +154,6 @@ FORGE_EVENTS_PORT=8099 FORGE_DASHBOARD_TOKEN=<secret> forge-state-mcp
 
 # in another terminal, expose via ngrok
 ngrok http 8099 --request-header-add "Authorization: Bearer <secret>"
-# or use ngrok basic auth and set the token on the server side
 ```
 
 ---
