@@ -2127,3 +2127,53 @@ func TestNewRenameBranchAction(t *testing.T) {
 		t.Errorf("NewRenameBranchAction() = %+v, want %+v", action, want)
 	}
 }
+
+func TestHandlePhaseThree_RevisionIncludesReviewDesign(t *testing.T) {
+	t.Parallel()
+
+	// When phase-3b is in CompletedPhases (checkpoint-a revision rewind),
+	// handlePhaseThree should include review-design.md in InputFiles.
+	sm := newTestStateManager(t, "phase-3", func(s *state.State) error {
+		s.CompletedPhases = []string{"setup", "phase-1", "phase-2", "phase-3", "phase-3b"}
+		return nil
+	})
+
+	eng := defaultEng()
+	action, err := eng.NextAction(sm, "")
+	if err != nil {
+		t.Fatalf("NextAction: %v", err)
+	}
+	if action.Type != ActionSpawnAgent {
+		t.Fatalf("action.Type = %q, want %q", action.Type, ActionSpawnAgent)
+	}
+	if action.Agent != agentArchitect {
+		t.Fatalf("action.Agent = %q, want %q", action.Agent, agentArchitect)
+	}
+
+	hasReviewDesign := slices.Contains(action.InputFiles, state.ArtifactReviewDesign)
+	if !hasReviewDesign {
+		t.Errorf("InputFiles = %v, want to contain %q for revision run", action.InputFiles, state.ArtifactReviewDesign)
+	}
+}
+
+func TestHandlePhaseThree_FreshRunNoReviewDesign(t *testing.T) {
+	t.Parallel()
+
+	// When phase-3b is NOT in CompletedPhases (fresh run),
+	// handlePhaseThree should NOT include review-design.md in InputFiles.
+	sm := newTestStateManager(t, "phase-3", nil)
+
+	eng := defaultEng()
+	action, err := eng.NextAction(sm, "")
+	if err != nil {
+		t.Fatalf("NextAction: %v", err)
+	}
+	if action.Type != ActionSpawnAgent {
+		t.Fatalf("action.Type = %q, want %q", action.Type, ActionSpawnAgent)
+	}
+
+	hasReviewDesign := slices.Contains(action.InputFiles, state.ArtifactReviewDesign)
+	if hasReviewDesign {
+		t.Errorf("InputFiles = %v, should NOT contain %q for fresh run", action.InputFiles, state.ArtifactReviewDesign)
+	}
+}

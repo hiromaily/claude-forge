@@ -1,6 +1,10 @@
 package orchestrator
 
-import "github.com/hiromaily/claude-forge/mcp-server/internal/state"
+import (
+	"maps"
+
+	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
+)
 
 // Template name constants — aliased from the state package to prevent silent divergence.
 const (
@@ -47,6 +51,14 @@ func PhaseLabel(phaseID string) string {
 		return label
 	}
 	return phaseID
+}
+
+// PhaseLabels returns a copy of the phase ID → human-readable label map.
+// Used by the dashboard to resolve labels on the client side.
+func PhaseLabels() map[string]string {
+	out := make(map[string]string, len(phaseLabels))
+	maps.Copy(out, phaseLabels)
+	return out
 }
 
 // SkipLabel represents a skipped phase with both its ID and human-readable label.

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
@@ -65,7 +66,7 @@ func setupE2EWorkspace(
 	eng := orchestrator.NewEngine("", "")
 	kb := history.NewKnowledgeBase("")
 	nextActionH = PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
-	reportResultH = PipelineReportResultHandler(sm, kb)
+	reportResultH = PipelineReportResultHandler(sm, events.NewEventBus(), kb)
 
 	return dir, nextActionH, reportResultH
 }
@@ -290,5 +291,177 @@ func TestE2E_DesignRevisionCycle(t *testing.T) {
 	}
 	if s.Revisions.DesignRevisions != 1 {
 		t.Errorf("DesignRevisions = %d, want 1", s.Revisions.DesignRevisions)
+	}
+}
+
+// TestE2E_CheckpointRevisionFlow exercises the P8 checkpoint revision flow end-to-end:
+// 1. Pipeline runs through phase-1 → phase-2 → phase-3 → phase-3b → checkpoint-a
+// 2. User responds with "revise" → pipeline rewinds to phase-3
+// 3. Architect runs again, design reviewer runs again → checkpoint-a reached again
+// 4. User responds with "proceed" → pipeline continues to phase-4 and beyond
+// 5. Pipeline completes successfully.
+func TestE2E_CheckpointRevisionFlow(t *testing.T) {
+	t.Parallel()
+
+	cfg := e2eConfig{
+		effort:   state.EffortM,
+		template: state.TemplateStandard,
+	}
+
+	// Custom workspace setup with AutoApprove=false so checkpoints are NOT skipped.
+	dir := t.TempDir()
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(dir, "e2e-checkpoint-revision"); err != nil {
+		t.Fatalf("sm.Init: %v", err)
+	}
+	if err := sm.Configure(dir, state.PipelineConfig{
+		Effort:        cfg.effort,
+		FlowTemplate:  cfg.template,
+		AutoApprove:   false,
+		SkipPR:        true,
+		SkippedPhases: orchestrator.SkipsForTemplate(cfg.template),
+	}); err != nil {
+		t.Fatalf("sm.Configure: %v", err)
+	}
+	if err := sm.Update(func(s *state.State) error {
+		s.BranchClassified = true
+		return nil
+	}); err != nil {
+		t.Fatalf("sm.Update: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(dir, state.ArtifactRequest),
+		[]byte("# Request\n\ntest task\n"),
+		0o600,
+	); err != nil {
+		t.Fatalf("write request.md: %v", err)
+	}
+	eng := orchestrator.NewEngine("", "")
+	kb := history.NewKnowledgeBase("")
+	nextActionH := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
+	reportResultH := PipelineReportResultHandler(sm, events.NewEventBus(), kb)
+	workspace := dir
+
+	// Track how many times checkpoint-a returned an ActionCheckpoint.
+	checkpointACount := 0
+	// Track observed phases to verify the revision cycle occurred.
+	var phaseSequence []string
+	// pendingCheckpoint is set when a checkpoint action is returned; on the next
+	// iteration the test sends user_response instead of calling reportResult.
+	pendingCheckpoint := ""
+
+	for range 60 {
+		var result *mcp.CallToolResult
+		var err error
+
+		// If a checkpoint is pending from the previous iteration, respond to it
+		// via user_response instead of doing a normal callNextAction.
+		switch {
+		case pendingCheckpoint == state.PhaseCheckpointA:
+			checkpointACount++
+			if checkpointACount == 1 {
+				// First time at checkpoint-a: respond "revise" to trigger rewind.
+				result, err = callNextActionWithUserResponse(t, nextActionH, workspace, "revise")
+			} else {
+				// Second time at checkpoint-a: respond "proceed" to advance.
+				result, err = callNextActionWithUserResponse(t, nextActionH, workspace, "proceed")
+			}
+			pendingCheckpoint = ""
+		case pendingCheckpoint != "":
+			// For other checkpoints (checkpoint-b), just proceed.
+			result, err = callNextActionWithUserResponse(t, nextActionH, workspace, "proceed")
+			pendingCheckpoint = ""
+		default:
+			result, err = callNextAction(t, nextActionH, workspace)
+		}
+
+		if err != nil {
+			t.Fatalf("callNextAction returned Go error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("callNextAction returned MCP error: %s", textContent(result))
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(textContent(result)), &resp); err != nil {
+			t.Fatalf("unmarshal nextActionResponse: %v (raw: %s)", err, textContent(result))
+		}
+
+		if resp.Action.Type == orchestrator.ActionDone {
+			break
+		}
+
+		reportPhase := resp.Action.Phase
+		if resp.Action.Type == orchestrator.ActionCheckpoint && reportPhase == "" {
+			reportPhase = resp.Action.Name
+		}
+		phaseSequence = append(phaseSequence, reportPhase)
+
+		// If this is a checkpoint action, set pendingCheckpoint and skip reportResult.
+		// The P8 handler in pipeline_next_action owns the checkpoint lifecycle;
+		// the test must NOT call reportResult for checkpoints — instead, on the next
+		// iteration it sends user_response.
+		if resp.Action.Type == orchestrator.ActionCheckpoint {
+			pendingCheckpoint = reportPhase
+			continue
+		}
+
+		switch resp.Action.Type {
+		case orchestrator.ActionWriteFile:
+			if err := os.WriteFile(resp.Action.Path, []byte(resp.Action.Content), 0o600); err != nil {
+				t.Fatalf("write_file %s: %v", resp.Action.Path, err)
+			}
+		case orchestrator.ActionSpawnAgent:
+			// Always write APPROVE verdicts — we don't want phase-3b revision_required
+			// in this test (that's the old auto-revision path). The checkpoint revision
+			// is driven by user_response="revise" at checkpoint-a.
+			alwaysApprove := new(bool)
+			*alwaysApprove = true
+			mockAgentExecute(t, workspace, resp.Action, cfg, alwaysApprove)
+		case orchestrator.ActionExec:
+			// No mock artifact write needed.
+		default:
+			t.Fatalf("unhandled action type %q for phase %q", resp.Action.Type, resp.Action.Phase)
+		}
+
+		// Report result to advance state (for non-checkpoint actions).
+		reportRes := callTool(t, reportResultH, map[string]any{
+			"workspace":   workspace,
+			"phase":       reportPhase,
+			"tokens_used": 500,
+			"duration_ms": 1000,
+			"model":       "sonnet",
+		})
+		if reportRes.IsError {
+			t.Fatalf("callReportResult for phase %q returned MCP error: %s",
+				reportPhase, textContent(reportRes))
+		}
+	}
+
+	// Verify checkpoint-a was reached exactly twice (once before revise, once after).
+	if checkpointACount != 2 {
+		t.Errorf("checkpoint-a was reached %d times, want 2", checkpointACount)
+	}
+
+	// Verify the phase sequence shows phase-3 appearing at least twice
+	// (first run + revision run).
+	phase3Count := 0
+	for _, p := range phaseSequence {
+		if p == state.PhaseThree {
+			phase3Count++
+		}
+	}
+	if phase3Count < 2 {
+		t.Errorf("phase-3 appeared %d times in sequence, want >= 2 (revision should re-run it); sequence: %v",
+			phase3Count, phaseSequence)
+	}
+
+	// Verify pipeline completed successfully.
+	finalState, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if finalState.CurrentPhase != state.PhaseCompleted {
+		t.Errorf("currentPhase = %q, want %q", finalState.CurrentPhase, state.PhaseCompleted)
 	}
 }

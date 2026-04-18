@@ -41,12 +41,23 @@ A structured design document in markdown. Be specific about:
 - Interface shapes (function signatures, type definitions)
 - What gets deleted and what replaces it
 
+## Verify Before You Write
+
+When your design references specific APIs, type signatures, function behaviours, or library patterns:
+
+- **Read the actual source file** (via Read or AST tools) to confirm the API exists and works as you assume. Do NOT rely on memory or general knowledge of a library.
+- **Check parameter types and return types** of functions you plan to call or modify. A wrong assumption about a type (e.g., `string` vs `number`, branded vs plain) will produce a CRITICAL finding in review.
+- **Verify switch/if-else exhaustiveness** by reading the actual code — do not guess the number of enum values or branch structure.
+
+If you cannot verify an assumption (e.g., the file is in an external repository), explicitly state "**Unverified assumption:**" and the fallback plan if the assumption is wrong.
+
 ## What NOT to Do
 
 - Do NOT implement any code — only describe what should be built
 - Do NOT leave open questions unresolved — make a decision and state the rationale
 - Do NOT over-engineer — stay within the scope of the request
 - Do NOT ignore project conventions found in steering files
+- Do NOT write design details about APIs or types without first reading the actual source code — unverified assumptions are the #1 cause of CRITICAL review findings and revision cycles
 
 ## Design Checklist for Constant/Type Changes
 

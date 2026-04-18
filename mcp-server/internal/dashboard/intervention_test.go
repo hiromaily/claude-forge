@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -144,6 +146,90 @@ func TestApproveCheckpoint_Success(t *testing.T) {
 	}
 	if s.CurrentPhase == "checkpoint-a" {
 		t.Errorf("CurrentPhase did not advance: still %q", s.CurrentPhase)
+	}
+}
+
+// TestApproveCheckpoint_MessageWritten verifies that when the checkpoint
+// approve request includes a non-empty message, the handler writes the
+// message to checkpoint-message.txt inside the workspace directory.
+func TestApproveCheckpoint_MessageWritten(t *testing.T) {
+	t.Parallel()
+
+	sm, workspace := newTestStateManager(t)
+
+	// Advance to checkpoint-a / awaiting_human.
+	for _, phase := range []string{"phase-1", "phase-2", "phase-3", "phase-3b"} {
+		if err := sm.PhaseComplete(workspace, phase); err != nil {
+			t.Fatalf("PhaseComplete %s: %v", phase, err)
+		}
+	}
+	if err := sm.Checkpoint(workspace, "checkpoint-a"); err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+
+	handler := approveCheckpointHandler(sm)
+	body := jsonBody(t, interventionRequest{
+		Workspace: workspace,
+		Phase:     "checkpoint-a",
+		Message:   "Please add error handling to the parser module.",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/checkpoint/approve", body)
+	req.RemoteAddr = "127.0.0.1:54321"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200; body=%q", rec.Code, readErrorBody(t, rec.Result()))
+	}
+
+	// Verify checkpoint-message.txt was written with the expected content.
+	msgFile := filepath.Join(workspace, "checkpoint-message.txt")
+	data, err := os.ReadFile(msgFile)
+	if err != nil {
+		t.Fatalf("ReadFile checkpoint-message.txt: %v", err)
+	}
+	want := "Please add error handling to the parser module."
+	if string(data) != want {
+		t.Errorf("checkpoint-message.txt: got %q, want %q", string(data), want)
+	}
+}
+
+// TestApproveCheckpoint_NoMessageNoFile verifies that when the checkpoint
+// approve request has an empty message, no checkpoint-message.txt file is
+// created.
+func TestApproveCheckpoint_NoMessageNoFile(t *testing.T) {
+	t.Parallel()
+
+	sm, workspace := newTestStateManager(t)
+
+	// Advance to checkpoint-a / awaiting_human.
+	for _, phase := range []string{"phase-1", "phase-2", "phase-3", "phase-3b"} {
+		if err := sm.PhaseComplete(workspace, phase); err != nil {
+			t.Fatalf("PhaseComplete %s: %v", phase, err)
+		}
+	}
+	if err := sm.Checkpoint(workspace, "checkpoint-a"); err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+
+	handler := approveCheckpointHandler(sm)
+	body := jsonBody(t, interventionRequest{
+		Workspace: workspace,
+		Phase:     "checkpoint-a",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/checkpoint/approve", body)
+	req.RemoteAddr = "127.0.0.1:54321"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200; body=%q", rec.Code, readErrorBody(t, rec.Result()))
+	}
+
+	// Verify no checkpoint-message.txt was created.
+	msgFile := filepath.Join(workspace, "checkpoint-message.txt")
+	if _, err := os.Stat(msgFile); err == nil {
+		t.Errorf("checkpoint-message.txt should not exist when message is empty")
 	}
 }
 
@@ -323,7 +409,7 @@ func TestInterventionRoutes_RegisteredOnHTTPServer(t *testing.T) {
 	bus := events.NewEventBus()
 	sm, _ := newTestStateManager(t)
 
-	srv := Start(port, bus, sm)
+	srv := Start(port, bus, sm, nil)
 	if srv == nil {
 		t.Fatal("Start returned nil")
 	}

@@ -32,6 +32,16 @@ var reviewArtifactFile = map[string]string{
 	"phase-4b": "review-tasks.md",
 }
 
+// revisionPrimaryArtifact maps review phases to the primary artifact that
+// the revision agent writes. Used to detect post-revision stale reviews
+// via modification-time comparison.
+//
+//nolint:gochecknoglobals // package-level lookup table for revision primary artifacts
+var revisionPrimaryArtifact = map[string]string{
+	"phase-3b": state.ArtifactDesign,
+	"phase-4b": state.ArtifactTasks,
+}
+
 // phaseAgentName maps review phases to the agent name used for pattern accumulation.
 //
 //nolint:gochecknoglobals // package-level lookup table for phase agent names
@@ -79,6 +89,40 @@ func determineTransition(
 
 		switch verdict {
 		case orchestrator.VerdictRevise:
+			// Detect post-revision stale review: if the primary artifact
+			// (design.md for phase-3b, tasks.md for phase-4b) was modified
+			// more recently than the review artifact, the revision agent
+			// (architect / task-decomposer) has already run. Delete the stale
+			// review file and return "setup_continue" so the engine re-enters
+			// handlePhaseThreeB/handlePhaseFourB and spawns the reviewer to
+			// re-evaluate the revised artifact. Without this check, the engine
+			// would read the stale REVISE verdict and re-dispatch the revision
+			// agent in an infinite loop.
+			if primaryFile, ok := revisionPrimaryArtifact[in.phase]; ok {
+				reviewStat, _ := os.Stat(filepath.Join(in.workspace, artifactFile))
+				primaryStat, primaryErr := os.Stat(filepath.Join(in.workspace, primaryFile))
+				// The >= comparison (not strictly >) is intentional: when both
+				// files share the same mtime (same-second writes on HFS+/FAT),
+				// re-dispatching the reviewer (safe) is preferred over
+				// re-dispatching the revision agent (infinite loop risk).
+				if primaryErr == nil && reviewStat != nil && !primaryStat.ModTime().Before(reviewStat.ModTime()) {
+					// Architect/decomposer already revised — delete stale review.
+					reviewFilePath := filepath.Join(in.workspace, artifactFile)
+					if rmErr := os.Remove(reviewFilePath); rmErr != nil {
+						// Deletion failed — fall through to normal REVISE path
+						// rather than returning setup_continue with the stale file
+						// still on disk (which would reintroduce the infinite loop).
+						*warnings = append(*warnings, "failed to remove stale review file: "+rmErr.Error())
+					} else {
+						return reportResultOutcome{
+							StateUpdated:    true,
+							ArtifactWritten: artifactWritten,
+							NextActionHint:  "setup_continue",
+						}, nil
+					}
+				}
+			}
+
 			if err := sm.RevisionBump(in.workspace, revType); err != nil {
 				return reportResultOutcome{}, err
 			}

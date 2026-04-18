@@ -34,7 +34,7 @@ func TestPipelineRoundTrip_Phase1ToPhase2(t *testing.T) {
 	workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)
 	eng := orchestrator.NewEngine("", "")
 	nextActionH := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
-	reportResultH := PipelineReportResultHandler(state.NewStateManager("dev"), history.NewKnowledgeBase(""))
+	reportResultH := PipelineReportResultHandler(state.NewStateManager("dev"), events.NewEventBus(), history.NewKnowledgeBase(""))
 
 	// Step 1: call pipeline_next_action at phase-1.
 	result, err := callNextAction(t, nextActionH, workspace)
@@ -142,7 +142,7 @@ func TestPipelineRoundTrip_ExecPhase(t *testing.T) {
 	workspace, sm := initWorkspaceForNextAction(t, "pr-creation", nil)
 	eng := orchestrator.NewEngine("", "")
 	nextActionH := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
-	reportResultH := PipelineReportResultHandler(state.NewStateManager("dev"), history.NewKnowledgeBase(""))
+	reportResultH := PipelineReportResultHandler(state.NewStateManager("dev"), events.NewEventBus(), history.NewKnowledgeBase(""))
 
 	// Step 1: call pipeline_next_action at pr-creation.
 	result, err := callNextAction(t, nextActionH, workspace)

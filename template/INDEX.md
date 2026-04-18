@@ -16,6 +16,7 @@
 | pages/ai-agents/claude/rules/golang.tpl.md | .claude/rules/golang.md | 1 |
 | pages/ai-agents/claude/rules/shell-script.tpl.md | .claude/rules/shell-script.md | 1 |
 | pages/ai-agents/claude/rules/testing.tpl.md | .claude/rules/testing.md | 1 |
+| pages/ai-agents/claude/rules/pipeline.tpl.md | .claude/rules/pipeline.md | 1 |
 | pages/ai-agents/claude/commands/fix-pr-reviews.tpl.md | .claude/commands/fix-pr-reviews.md | 1 |
 | pages/ai-agents/claude/skills/docs-ssot/SKILL.tpl.md | .claude/skills/docs-ssot/SKILL.md | 1 |
 
@@ -67,6 +68,7 @@
 | sections/ai/rules/git.md | claude |
 | sections/ai/rules/go-test.md | claude |
 | sections/ai/rules/golang.md | claude |
+| sections/ai/rules/pipeline.md | claude |
 | sections/ai/rules/shell-script.md | claude |
 | sections/ai/rules/testing.md | claude |
 
@@ -100,6 +102,7 @@
 | sections/architecture/hooks.md | Not referenced by any template |
 | sections/architecture/overview-content.md | Not referenced by any template |
 | sections/architecture/pipeline-flow-guide.md | Not referenced by any template |
+| sections/architecture/pipeline-lifecycle-contract.md | Not referenced by any template |
 | sections/architecture/pipeline-sequence.md | Not referenced by any template |
 | sections/architecture/runtime-flow.md | Not referenced by any template |
 | sections/architecture/state-management.md | Not referenced by any template |
@@ -129,6 +132,7 @@
 | sections/ja/architecture/overview-content.md | Not referenced by any template |
 | sections/ja/architecture/pipeline-flow-guide.md | Not referenced by any template |
 | sections/ja/architecture/pipeline-flow.md | Not referenced by any template |
+| sections/ja/architecture/pipeline-lifecycle-contract.md | Not referenced by any template |
 | sections/ja/architecture/pipeline-phase-execution-by-effort-level.md | Not referenced by any template |
 | sections/ja/architecture/pipeline-sequence.md | Not referenced by any template |
 | sections/ja/architecture/runtime-flow.md | Not referenced by any template |

@@ -422,7 +422,7 @@ func RegisterAll(
 			mcp.WithString("model", mcp.Description("Model identifier, e.g. sonnet")),
 			mcp.WithBoolean("setup_only", mcp.Description("When true, record phase-log but do not advance the phase. Used for multi-step setup actions.")),
 		),
-		PipelineReportResultHandler(sm, kb),
+		PipelineReportResultHandler(sm, bus, kb),
 	)
 
 	srv.AddTool(

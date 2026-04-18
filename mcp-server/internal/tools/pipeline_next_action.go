@@ -37,6 +37,11 @@ var outputVerdictHints = map[string]string{
 	state.ArtifactReviewTasks:  verdictHintApproveRevise,
 }
 
+// isCheckpointPhase returns true if the phase is a human-review checkpoint.
+func isCheckpointPhase(phase string) bool {
+	return phase == state.PhaseCheckpointA || phase == state.PhaseCheckpointB
+}
+
 // previousResult captures optional metrics from the action the orchestrator just completed.
 // The P5 report block fires when actionComplete is true OR when any metric is non-zero
 // (tokensUsed > 0, model != "", or durationMs > 0). actionComplete is the preferred
@@ -66,9 +71,11 @@ type reportResultEmbedded struct {
 // ReportResult is present when previous_* params triggered a non-proceed transition.
 type nextActionResponse struct {
 	orchestrator.Action
-	Warning        string                `json:"warning,omitempty"`
-	DisplayMessage string                `json:"display_message,omitempty"`
-	ReportResult   *reportResultEmbedded `json:"report_result,omitempty"`
+	Warning            string                `json:"warning,omitempty"`
+	DisplayMessage     string                `json:"display_message,omitempty"`
+	ReportResult       *reportResultEmbedded `json:"report_result,omitempty"`
+	CurrentPhase       string                `json:"current_phase,omitempty"`
+	CurrentPhaseStatus string                `json:"current_phase_status,omitempty"`
 }
 
 // parsePreviousResult extracts the optional previous_* parameters from the MCP request.
@@ -168,7 +175,68 @@ func PipelineNextActionHandler(
 				case "setup_continue":
 					// Absorbed internally; fall through to eng.NextAction.
 				default:
-					// "proceed" or unknown: fall through to eng.NextAction.
+					// "proceed" — phase completed successfully; emit phase-complete event.
+					publishEvent(bus, nil, "phase-complete", st.CurrentPhase, st.SpecName, workspace, "completed")
+				}
+			}
+		}
+
+		// P8: Checkpoint response handler — the orchestrator passes the user's
+		// response and the engine handles all state transitions deterministically.
+		// The orchestrator MUST NOT call phase_complete for checkpoints; this
+		// block owns the full lifecycle (proceed → advance, revise → rewind,
+		// abandon → mark abandoned).
+		if userResponse != "" {
+			if st, stErr := sm2.GetState(); stErr == nil && isCheckpointPhase(st.CurrentPhase) {
+				switch userResponse {
+				case "proceed":
+					if completeErr := sm2.PhaseComplete(workspace, st.CurrentPhase); completeErr != nil {
+						return errorf("checkpoint proceed %s: %v", st.CurrentPhase, completeErr)
+					}
+				case "revise":
+					var targetPhase, reviewPhase, reviewArtifact string
+					switch st.CurrentPhase {
+					case state.PhaseCheckpointA:
+						targetPhase = state.PhaseThree
+						reviewPhase = state.PhaseThreeB
+						reviewArtifact = state.ArtifactReviewDesign
+					case state.PhaseCheckpointB:
+						targetPhase = state.PhaseFour
+						reviewPhase = state.PhaseFourB
+						reviewArtifact = state.ArtifactReviewTasks
+					}
+					// Delete stale review file so the review phase re-runs
+					// the reviewer after the revision agent produces updated output.
+					if reviewArtifact != "" {
+						_ = os.Remove(filepath.Join(workspace, reviewArtifact))
+					}
+					if targetPhase != "" {
+						if updateErr := sm2.Update(func(s *state.State) error {
+							s.CurrentPhase = targetPhase
+							s.CurrentPhaseStatus = state.StatusInProgress
+							// Remove the review phase from CompletedPhases so the
+							// agent handler doesn't include the deleted review file as input.
+							if reviewPhase != "" {
+								filtered := make([]string, 0, len(s.CompletedPhases))
+								for _, p := range s.CompletedPhases {
+									if p != reviewPhase {
+										filtered = append(filtered, p)
+									}
+								}
+								s.CompletedPhases = filtered
+							}
+							return nil
+						}); updateErr != nil {
+							return errorf("rewind %s to %s: %v", st.CurrentPhase, targetPhase, updateErr)
+						}
+					}
+				case "abandon":
+					if abandonErr := sm2.Abandon(workspace); abandonErr != nil {
+						return errorf("checkpoint abandon: %v", abandonErr)
+					}
+					return okJSON(nextActionResponse{
+						Action: orchestrator.NewDoneAction("pipeline abandoned at "+st.CurrentPhase, ""),
+					})
 				}
 			}
 		}
@@ -364,6 +432,9 @@ func PipelineNextActionHandler(
 				// Fail-open: warn but still return the action.
 				appendWarning(fmt.Sprintf("set awaiting_human: %v", updateErr))
 			}
+			if st, stErr := sm2.GetState(); stErr == nil {
+				publishEvent(bus, nil, "checkpoint", action.Phase, st.SpecName, workspace, "awaiting_human")
+			}
 		}
 
 		resp.Action = action
@@ -376,11 +447,27 @@ func PipelineNextActionHandler(
 			}
 		}
 
-		// Publish fine-grained dispatch events for the dashboard.
+		// Transition phase state to in_progress and emit dashboard events.
+		// PhaseStart sets CurrentPhaseStatus="in_progress" and Timestamps.PhaseStarted.
+		// Checkpoint and done actions are excluded — checkpoints set awaiting_human above,
+		// and done signals pipeline completion (no phase to start).
+		if action.Type != orchestrator.ActionCheckpoint && action.Type != orchestrator.ActionDone && action.Type != orchestrator.ActionHumanGate {
+			if startErr := sm2.PhaseStart(workspace, action.Phase); startErr != nil {
+				appendWarning(fmt.Sprintf("PhaseStart: %v", startErr))
+			}
+		}
+
+		// Include current phase state in response for debugging and publish
+		// fine-grained dispatch events for the dashboard.
 		if st, stErr := sm2.GetState(); stErr == nil {
+			resp.CurrentPhase = st.CurrentPhase
+			resp.CurrentPhaseStatus = st.CurrentPhaseStatus
 			switch action.Type {
 			case orchestrator.ActionSpawnAgent:
+				publishEvent(bus, nil, "phase-start", action.Phase, st.SpecName, workspace, "in_progress")
 				publishEventWithDetail(bus, nil, "agent-dispatch", action.Phase, st.SpecName, workspace, "dispatched", action.Agent)
+			case orchestrator.ActionExec, orchestrator.ActionWriteFile:
+				publishEvent(bus, nil, "phase-start", action.Phase, st.SpecName, workspace, "in_progress")
 			case orchestrator.ActionDone:
 				publishEvent(bus, nil, "pipeline-complete", st.CurrentPhase, st.SpecName, workspace, "completed")
 			}
@@ -492,7 +579,83 @@ func enrichPrompt(
 		profileStr = profiler.FormatForPrompt()
 	}
 
+	// Filter out patterns matching the current review's findings from the architect's
+	// prompt. This prevents "Common Review Findings" from showing stale/already-addressed
+	// findings that duplicate what's in review-design.md (which the architect reads directly).
+	// Scope: architect only (reads review-design.md). If task-decomposer needs similar
+	// filtering for review-tasks.md, extend this block.
+	if action.Agent == "architect" {
+		histCtx = filterCurrentReviewFindings(workspace, histCtx)
+	}
+
 	action.Prompt = prompt.BuildPrompt(action.Agent, agentInstructions, artifactsSection, profileStr, histCtx)
 
+	// Layer 5: checkpoint feedback injection.
+	// When a user approves a checkpoint with a message via the dashboard,
+	// the message is written to checkpoint-message.txt. Read and consume it
+	// here so it is deterministically injected into the agent prompt —
+	// no reliance on SKILL.md or LLM interpretation.
+	//
+	// Invariant: this code only runs for ActionSpawnAgent (enrichPrompt is
+	// gated on that type). If the next action after a checkpoint were
+	// ActionExec/ActionWriteFile/ActionDone, the file would persist until
+	// the next spawn_agent call. In practice this does not happen: after
+	// checkpoint-a the next phase is always phase-4 (task-decomposer,
+	// spawn_agent) and after checkpoint-b it is phase-5 (implementer,
+	// spawn_agent after task_init absorption).
+	//
+	// Note: the ReadFile+Remove sequence is not atomic (TOCTOU). This is
+	// acceptable because pipeline_next_action is called sequentially by the
+	// orchestrator — concurrent calls for the same workspace do not occur
+	// in normal operation.
+	msgFile := filepath.Join(workspace, "checkpoint-message.txt")
+	if msgData, readErr := os.ReadFile(msgFile); readErr == nil {
+		msg := strings.TrimSpace(string(msgData))
+		if msg != "" {
+			action.Prompt += "\n\n## Human Feedback\n\n" +
+				"The reviewer provided the following instructions during checkpoint approval. " +
+				"Incorporate this feedback into your work:\n\n" + msg + "\n"
+		}
+		_ = os.Remove(msgFile)
+	}
+
 	return nil
+}
+
+// filterCurrentReviewFindings removes pattern entries that match findings in
+// the current pipeline's review-design.md. This prevents the architect from
+// seeing stale "Common Review Findings" that duplicate the review feedback
+// already available as an input artifact.
+func filterCurrentReviewFindings(workspace string, ctx prompt.HistoryContext) prompt.HistoryContext {
+	reviewPath := filepath.Join(workspace, state.ArtifactReviewDesign)
+	_, findings, err := orchestrator.ParseVerdict(reviewPath)
+	if err != nil || len(findings) == 0 {
+		return ctx
+	}
+
+	// Build a set of normalized finding descriptions to exclude.
+	exclude := make(map[string]bool, len(findings))
+	for _, f := range findings {
+		exclude[strings.ToLower(f.Description)] = true
+	}
+
+	// Filter AllPatterns.
+	filtered := make([]history.PatternEntry, 0, len(ctx.AllPatterns))
+	for _, p := range ctx.AllPatterns {
+		if !exclude[strings.ToLower(p.Pattern)] {
+			filtered = append(filtered, p)
+		}
+	}
+	ctx.AllPatterns = filtered
+
+	// Filter CriticalPatterns.
+	filteredCritical := make([]history.PatternEntry, 0, len(ctx.CriticalPatterns))
+	for _, p := range ctx.CriticalPatterns {
+		if !exclude[strings.ToLower(p.Pattern)] {
+			filteredCritical = append(filteredCritical, p)
+		}
+	}
+	ctx.CriticalPatterns = filteredCritical
+
+	return ctx
 }

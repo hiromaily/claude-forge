@@ -81,6 +81,10 @@ export default withMermaid(
                     link: "/architecture/state-management",
                   },
                   {
+                    text: "Pipeline Lifecycle Contract",
+                    link: "/architecture/pipeline-lifecycle-contract",
+                  },
+                  {
                     text: "Effort-driven Flow",
                     link: "/architecture/effort-flow",
                   },
@@ -247,6 +251,10 @@ export default withMermaid(
                   {
                     text: "状態管理",
                     link: "/ja/architecture/state-management",
+                  },
+                  {
+                    text: "パイプラインライフサイクル契約",
+                    link: "/ja/architecture/pipeline-lifecycle-contract",
                   },
                   {
                     text: "工数ドリブンフロー",

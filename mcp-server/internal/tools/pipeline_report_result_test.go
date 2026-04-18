@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hiromaily/claude-forge/mcp-server/internal/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
@@ -647,7 +648,7 @@ func TestPipelineReportResult(t *testing.T) {
 				tc.setup(t, sm, dir)
 			}
 
-			h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
+			h := PipelineReportResultHandler(sm, events.NewEventBus(), history.NewKnowledgeBase(""))
 			params := map[string]any{
 				"workspace":   dir,
 				"phase":       tc.phase,
@@ -720,7 +721,7 @@ func setupPhase4SpecWorkspace(t *testing.T, specName string) (string, string, *s
 // write tasks.md (and any instructions.md) before calling this helper.
 func callPhase4Report(t *testing.T, sm *state.StateManager, workspace string) reportResultOutcome {
 	t.Helper()
-	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
+	h := PipelineReportResultHandler(sm, events.NewEventBus(), history.NewKnowledgeBase(""))
 	res := callTool(t, h, map[string]any{
 		"workspace":   workspace,
 		"phase":       "phase-4",
@@ -937,7 +938,7 @@ files:
 		t.Fatalf("write tasks.md: %v", err)
 	}
 
-	h := PipelineReportResultHandler(sm, history.NewKnowledgeBase(""))
+	h := PipelineReportResultHandler(sm, events.NewEventBus(), history.NewKnowledgeBase(""))
 	res := callTool(t, h, map[string]any{
 		"workspace":   workspace,
 		"phase":       "phase-4",

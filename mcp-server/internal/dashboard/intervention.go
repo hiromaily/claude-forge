@@ -25,15 +25,20 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/state"
 )
 
 // interventionRequest is the JSON body shape accepted by intervention endpoints.
 // Phase is required for /api/checkpoint/approve and ignored by /api/pipeline/abandon.
+// Message is optional for /api/checkpoint/approve — when present, it is written to
+// a checkpoint message file that the orchestrator can read as user_response.
 type interventionRequest struct {
 	Workspace string `json:"workspace"`
 	Phase     string `json:"phase,omitempty"`
+	Message   string `json:"message,omitempty"`
 }
 
 // approveCheckpointHandler completes the named checkpoint phase, mirroring the
@@ -77,6 +82,17 @@ func approveCheckpointHandler(sm *state.StateManager) http.HandlerFunc {
 		if s.CurrentPhaseStatus != state.StatusAwaitingHuman {
 			httpError(w, http.StatusConflict, fmt.Sprintf("phase %q is not awaiting human (status=%q)", req.Phase, s.CurrentPhaseStatus))
 			return
+		}
+
+		// If the user attached a message, write it to a checkpoint message file
+		// so the orchestrator can pick it up as user_response on the next
+		// pipeline_next_action call.
+		if req.Message != "" {
+			msgFile := filepath.Join(req.Workspace, "checkpoint-message.txt")
+			if writeErr := os.WriteFile(msgFile, []byte(req.Message), 0o644); writeErr != nil { //nolint:gosec // G306: 0644 is intentional; the file must be readable by the orchestrator process
+				httpError(w, http.StatusInternalServerError, fmt.Sprintf("write checkpoint message: %v", writeErr))
+				return
+			}
 		}
 
 		if err := sm.PhaseComplete(req.Workspace, req.Phase); err != nil {
@@ -170,9 +186,14 @@ func isLocalRequest(r *http.Request) bool {
 	return hostname == "localhost" || hostname == "127.0.0.1" || hostname == "::1"
 }
 
+// maxRequestBodyBytes caps the request body size for intervention endpoints.
+// 64 KB is generous for the small JSON payloads these endpoints accept.
+const maxRequestBodyBytes = 64 * 1024
+
 // decodeRequest reads and parses the JSON body. On parse failure it writes a
 // 400 response and returns ok=false so the caller short-circuits.
 func decodeRequest(w http.ResponseWriter, r *http.Request) (interventionRequest, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	var req interventionRequest
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()

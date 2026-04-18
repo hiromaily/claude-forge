@@ -144,6 +144,18 @@ func handlePhase5Transition(
 		}
 	}
 
+	// Phase-3 (architect) stale review cleanup: when the architect rewrites
+	// design.md (on a revision run), delete the old review-design.md so
+	// handlePhaseThreeB dispatches a fresh design reviewer instead of reading
+	// a stale verdict. This mirrors the pattern in applyWorkflowRules (phase-4)
+	// and pipeline_e2e_test.go.
+	if in.phase == "phase-3" {
+		reviewPath := filepath.Join(in.workspace, state.ArtifactReviewDesign)
+		if err := os.Remove(reviewPath); err != nil && !os.IsNotExist(err) {
+			return reportResultOutcome{}, fmt.Errorf("remove stale %s: %w", state.ArtifactReviewDesign, err)
+		}
+	}
+
 	// Phase-4 (task-decomposer) completion gate: apply deterministic workflow
 	// rules from .specs/instructions.md. If violations exist, write
 	// review-tasks.md and emit revision_required so the engine re-dispatches

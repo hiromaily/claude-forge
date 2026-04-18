@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	_ "embed"
+	"encoding/json"
 	"net/http"
 )
 
@@ -25,5 +26,25 @@ func dashboardHandler() http.HandlerFunc {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		_, _ = w.Write(dashboardHTML)
+	}
+}
+
+// phaseLabelsHandler serves the phase ID → label map as JSON.
+// The dashboard fetches this once on load and resolves labels client-side,
+// keeping the event publishing path free from orchestrator dependencies.
+func phaseLabelsHandler(labels map[string]string) http.HandlerFunc {
+	// Pre-encode the response; the map is immutable after startup.
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	data, err := json.Marshal(labels)
+	if err != nil {
+		data = []byte("{}")
+	}
+
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "max-age=3600")
+		_, _ = w.Write(data)
 	}
 }
