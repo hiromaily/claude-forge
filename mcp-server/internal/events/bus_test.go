@@ -426,6 +426,69 @@ func TestWatchEventLog_SkipsOwnEvents(t *testing.T) {
 	}
 }
 
+// TestWatchEventLog_TruncationResetsOffset verifies that if the shared log file is
+// truncated (e.g. rotated), WatchEventLog resets its offset to zero and resumes
+// reading from the beginning of the new file content.
+func TestWatchEventLog_TruncationResetsOffset(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "events.jsonl")
+
+	bus := events.NewEventBus()
+	if err := bus.SetEventLog(logPath); err != nil {
+		t.Fatalf("SetEventLog: %v", err)
+	}
+	t.Cleanup(func() { bus.CloseLog() })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	bus.WatchEventLog(ctx)
+
+	// Subscribe before any writes so the channel captures all broadcasts.
+	_, ch := bus.Subscribe()
+
+	// Write a large first event (Detail field makes it noticeably longer than second).
+	// This ensures the second file, written after truncation, is strictly smaller,
+	// triggering the fi.Size() < offset truncation-reset path in readTail.
+	first := events.Event{
+		Event: "phase-start", Phase: "phase-1", SpecName: "proj",
+		Workspace: "/proj/.specs/ws", Timestamp: "2026-04-18T12:00:00Z",
+		Outcome: "in_progress", Detail: "this-detail-makes-the-line-longer-than-the-second-event",
+	}
+	line, _ := json.Marshal(first)
+	if err := os.WriteFile(logPath, append(line, '\n'), 0o600); err != nil {
+		t.Fatalf("write first event: %v", err)
+	}
+
+	// Wait for the first tick to process the initial event so tailOffset advances.
+	select {
+	case <-ch:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for first event")
+	}
+
+	// Simulate file truncation: overwrite with a shorter event.
+	// fi.Size() of the new file is less than the current tailOffset,
+	// which triggers the reset-to-zero path in readTail.
+	second := events.Event{
+		Event: "phase-start", Phase: "phase-2", SpecName: "proj",
+		Workspace: "/proj/.specs/ws", Timestamp: "2026-04-18T12:01:00Z", Outcome: "in_progress",
+	}
+	line2, _ := json.Marshal(second)
+	if err := os.WriteFile(logPath, append(line2, '\n'), 0o600); err != nil {
+		t.Fatalf("write truncated event: %v", err)
+	}
+
+	select {
+	case got := <-ch:
+		if got != second {
+			t.Errorf("received event = %+v, want %+v", got, second)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out: event after truncation was not broadcast")
+	}
+}
+
 // TestCloseLogIdempotent verifies that CloseLog can be called multiple times without panic.
 func TestCloseLogIdempotent(t *testing.T) {
 	t.Parallel()

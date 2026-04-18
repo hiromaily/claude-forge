@@ -154,10 +154,25 @@ func (b *EventBus) WatchEventLog(ctx context.Context) {
 
 // readTail reads new events appended to path since offset, calls addAndBroadcast for each,
 // and returns the new file offset to resume from next time.
+//
+// Only complete lines (terminated by '\n') are processed; a partial line at EOF
+// (another process mid-write) is left for the next tick. The returned offset
+// reflects bytes actually consumed, not fi.Size(), so a transient I/O error
+// does not cause the unread portion to be silently skipped.
+//
+// Truncation: if fi.Size() < offset the file was rotated or manually truncated;
+// the offset is reset to 0 so reading resumes from the beginning.
 func (b *EventBus) readTail(path string, offset int64) int64 {
 	// Stat before opening: skip the open syscall entirely when nothing is new.
 	fi, err := os.Stat(path)
-	if err != nil || fi.Size() <= offset {
+	if err != nil {
+		return offset
+	}
+	// Handle file truncation / rotation: reset to start.
+	if fi.Size() < offset {
+		offset = 0
+	}
+	if fi.Size() <= offset {
 		return offset
 	}
 
@@ -173,26 +188,27 @@ func (b *EventBus) readTail(path string, offset int64) int64 {
 
 	reader := bufio.NewReader(f)
 	for {
-		line, readErr := reader.ReadBytes('\n')
-		line = bytes.TrimRight(line, "\r\n")
-		if len(line) > 0 {
-			var e Event
-			if jsonErr := json.Unmarshal(line, &e); jsonErr == nil {
-				b.addAndBroadcast(e)
+		raw, readErr := reader.ReadBytes('\n')
+		if len(raw) > 0 {
+			if raw[len(raw)-1] == '\n' {
+				// Complete line: parse, broadcast, and advance the offset.
+				line := bytes.TrimRight(raw, "\r\n")
+				var e Event
+				if jsonErr := json.Unmarshal(line, &e); jsonErr == nil {
+					b.addAndBroadcast(e)
+				}
+				offset += int64(len(raw))
+			} else {
+				// Partial line at EOF (writer mid-write): stop here; next tick will retry.
+				break
 			}
-		}
-		if readErr == io.EOF {
-			break
 		}
 		if readErr != nil {
 			break
 		}
 	}
 
-	// Use the file size at the start of this read as the new offset.
-	// Any bytes appended during the read will be re-processed next tick;
-	// addAndBroadcast deduplicates against history so re-processing is safe.
-	return fi.Size()
+	return offset
 }
 
 // addAndBroadcast adds e to history if not already present and broadcasts it to live

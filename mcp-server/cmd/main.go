@@ -73,16 +73,6 @@ func resolveAgentDir() string {
 }
 
 // resolveEventsLog returns the path for the shared JSONL event log.
-//
-// Priority:
-//  1. FORGE_EVENTS_LOG environment variable (explicit override)
-//  2. ~/.claude/forge-events.jsonl (default — shared across all project sessions)
-//
-// Using a home-directory path instead of a per-project specsDir path ensures
-// that all MCP server instances (one per Claude Code session, regardless of
-// project) write to the same file. The instance that owns the dashboard port
-// can then tail this file to show events from every active session.
-// resolveEventsLog returns the path for the shared JSONL event log.
 // It is a pure function: it reads env vars and the OS home directory but
 // performs no filesystem operations (caller is responsible for MkdirAll).
 //
