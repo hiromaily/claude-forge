@@ -13,10 +13,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 // e2eConfig holds per-test pipeline configuration for E2E tests.

@@ -17,9 +17,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/indexer"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/indexer"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 // ---------- init ----------

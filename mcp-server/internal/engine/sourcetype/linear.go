@@ -17,9 +17,9 @@ func init() { register(&LinearHandler{}) }
 
 type LinearHandler struct{}
 
-func (h *LinearHandler) Type() string               { return "linear_issue" }
-func (h *LinearHandler) Label() string              { return "Linear issue" }
-func (h *LinearHandler) FieldPrefix() string        { return "linear_" }
+func (h *LinearHandler) Type() string                { return "linear_issue" }
+func (h *LinearHandler) Label() string               { return "Linear issue" }
+func (h *LinearHandler) FieldPrefix() string         { return "linear_" }
 func (h *LinearHandler) URLPattern() *regexp.Regexp  { return reLinearURL }
 func (h *LinearHandler) BasePattern() *regexp.Regexp { return reLinearBase }
 func (h *LinearHandler) SupportsClosingRef() bool    { return false }
@@ -44,8 +44,8 @@ func (h *LinearHandler) ExtractSourceID(rawURL string) string {
 
 func (h *LinearHandler) FetchConfig(sourceURL, sourceID string) *FetchConfig {
 	return &FetchConfig{
-		Type:    "linear",
-		MCPTool: "mcp__linear__get_issue",
+		Type:      "linear",
+		MCPTool:   "mcp__linear__get_issue",
 		MCPParams: map[string]string{"issueId": sourceID},
 		ResponseMapping: map[string]string{
 			"title": "linear_title", "description": "linear_description",

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 // ---------- helpers ----------

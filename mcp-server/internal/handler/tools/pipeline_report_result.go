@@ -11,11 +11,11 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/handler/validation"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 // reportResultOutcome is the typed result of the report-result core logic.

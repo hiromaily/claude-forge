@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
 )
 
 // writeStateStruct writes a state.State as state.json in dir.

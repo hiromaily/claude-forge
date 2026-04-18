@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/maputil"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/sourcetype"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/maputil"
 )
 
 // externalContext holds parsed source context fields in a service-neutral form.

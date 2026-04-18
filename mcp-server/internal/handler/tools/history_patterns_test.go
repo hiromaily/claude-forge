@@ -8,8 +8,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 )
 
 // makeHistoryGetPatternsReq builds a mcp.CallToolRequest for the history_get_patterns tool.

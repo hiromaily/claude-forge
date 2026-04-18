@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 )
 
 // repoRoot returns the absolute path of the git repository root for the given

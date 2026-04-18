@@ -16,8 +16,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/search"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/search"
 )
 
 // Output format constants for the two search_patterns output modes.

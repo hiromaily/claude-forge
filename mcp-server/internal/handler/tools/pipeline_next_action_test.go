@@ -12,10 +12,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 // runGitCmd runs a git command in the given directory and fails the test on error.

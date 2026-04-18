@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 // freePort returns a random available TCP port number as a string.

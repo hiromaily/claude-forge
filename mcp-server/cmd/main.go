@@ -14,14 +14,14 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/dashboard"
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/profile"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/handler/tools"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/profile"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 var appVersion = "dev"

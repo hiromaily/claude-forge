@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 )
 
 // makeFindings is a helper to construct []orchestrator.Finding slices.

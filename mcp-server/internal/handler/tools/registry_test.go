@@ -13,12 +13,12 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
-	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/profile"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/profile"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 // TestRegisterAllNewSignatureCount verifies that the updated 13-arg RegisterAll

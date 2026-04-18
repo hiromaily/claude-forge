@@ -41,17 +41,17 @@ const (
 // On new pipeline path: ResumeMode is absent, all detection fields are populated.
 // On error (invalid input or resume with missing state.json): Errors is non-empty.
 type PipelineInitResult struct {
-	ResumeMode  ResumeMode         `json:"resume_mode,omitempty"`
-	Workspace   string             `json:"workspace,omitempty"`
-	Instruction string             `json:"instruction,omitempty"`
-	SpecName    string             `json:"spec_name,omitempty"`
-	SourceType  string             `json:"source_type,omitempty"`
-	SourceURL   string             `json:"source_url,omitempty"`
-	SourceID    string             `json:"source_id,omitempty"`
-	CoreText    string             `json:"core_text,omitempty"`
-	Flags       *PipelineInitFlags `json:"flags,omitempty"`
+	ResumeMode  ResumeMode              `json:"resume_mode,omitempty"`
+	Workspace   string                  `json:"workspace,omitempty"`
+	Instruction string                  `json:"instruction,omitempty"`
+	SpecName    string                  `json:"spec_name,omitempty"`
+	SourceType  string                  `json:"source_type,omitempty"`
+	SourceURL   string                  `json:"source_url,omitempty"`
+	SourceID    string                  `json:"source_id,omitempty"`
+	CoreText    string                  `json:"core_text,omitempty"`
+	Flags       *PipelineInitFlags      `json:"flags,omitempty"`
 	FetchNeeded *sourcetype.FetchConfig `json:"fetch_needed,omitempty"`
-	Errors      []string           `json:"errors,omitempty"`
+	Errors      []string                `json:"errors,omitempty"`
 }
 
 // PipelineInitFlags holds the parsed flag values from the arguments string.

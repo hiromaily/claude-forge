@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/handler/validation"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 )
 
 // phaseRevType maps review phases to their revision type passed to RevisionBump.
