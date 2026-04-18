@@ -14,9 +14,35 @@ A reverse-chronological timeline of every event the pipeline emits:
 | `checkpoint` | amber | The pipeline is paused waiting for human input |
 | `abandon` | red (faded) | The pipeline was abandoned |
 
-Each event row shows the phase name, the spec name, an outcome badge (`completed` / `in_progress` / `failed` / `awaiting_human` / `abandoned`), and a wall-clock timestamp.
+Each event row shows the phase name, the spec name, an outcome badge (`completed` / `in_progress` / `failed` / `awaiting_human` / `abandoned`), and a wall-clock timestamp. Phase-complete events include clickable links to the generated artifact (e.g. `analysis.md`, `design.md`) that open an in-dashboard viewer.
 
 A header strip exposes the connection status (`live` / `disconnected`), the cumulative event count for the session, a workspace filter, and a `clear` button. The empty state tells you to run `/forge <task>` to see events appear.
+
+## Artifact viewer
+
+When a phase completes, the dashboard shows links to the artifacts it produced (e.g. `design.md` after Phase 3, `review-design.md` after Phase 3b). Clicking a link opens a modal overlay that fetches and displays the raw markdown content.
+
+At checkpoint events, the viewer also shows links to all related artifacts for the current checkpoint — for example, checkpoint-a displays `analysis.md`, `investigation.md`, `design.md`, and `review-design.md` so you can review the work before approving.
+
+The artifact endpoint (`GET /api/artifact`) serves only `.md` files from within the workspace directory. Path traversal is blocked and access is restricted to loopback requests.
+
+## Checkpoint interaction
+
+At checkpoint events (`checkpoint-a`, `checkpoint-b`), the dashboard displays an **approve** button and an optional **message textarea**. You can:
+
+- **Approve without a message** — equivalent to typing "proceed" in the Claude Code session.
+- **Approve with a message** — the message is injected into the next agent's prompt as a `## Human Feedback` section. This lets you steer the AI's next phase without switching back to the terminal.
+
+The message is written to `checkpoint-message.txt` in the workspace directory. When the next agent is spawned, `enrichPrompt` reads the file, appends its content to the agent prompt, and deletes the file (one-shot delivery). This is handled entirely server-side — no SKILL.md changes or LLM interpretation required.
+
+## Mobile support
+
+The dashboard is responsive and optimised for smartphone-sized viewports (≤ 640px):
+
+- Header controls wrap to full width with larger touch targets
+- Event cards switch from a 3-column grid to a 2-row stacked layout
+- Artifact viewer and checkpoint form adapt to narrow screens
+- Buttons and inputs meet recommended touch target sizes
 
 ## Enabling it
 
@@ -64,11 +90,9 @@ The dashboard uses the browser-native [EventSource](https://developer.mozilla.or
 
 ## What the dashboard does not do (yet)
 
-The first cut is observability-only. It cannot:
-
-- Pause, resume, or branch a running pipeline (no intervention API)
-- Show artifact diffs at checkpoints
-- Persist past runs (closing the tab loses the view)
+- Pause, resume, or branch a running pipeline mid-phase
+- Show artifact diffs between revisions
+- Render markdown with rich formatting (currently displays raw text)
 - Drive a remote pipeline from a different machine
 - Show token / cost burndown against a budget
 
