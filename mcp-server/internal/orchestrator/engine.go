@@ -809,18 +809,18 @@ func (*Engine) handleFinalCommit(st *state.State) (Action, error) {
 // handlePostToSource handles the post-to-source phase — Decision 26.
 func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
 	sourceType := e.sourceTypeReader(st.Workspace)
-	sourceURL := e.sourceURLReader(st.Workspace)
-	sourceID := e.sourceIDReader(st.Workspace)
 
 	label := sourceTypeLabel(sourceType)
 	if label == "" {
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
 	}
 
+	sourceURL := e.sourceURLReader(st.Workspace)
 	if sourceURL == "" {
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
 	}
 
+	sourceID := e.sourceIDReader(st.Workspace)
 	pm := buildPostMethod(sourceType, sourceURL, sourceID, st.Workspace)
 
 	msg := fmt.Sprintf(

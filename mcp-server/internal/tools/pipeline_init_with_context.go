@@ -171,9 +171,7 @@ func PipelineInitWithContextHandler(sm *state.StateManager, bus *events.EventBus
 // ---------- first call ----------
 
 func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFlags) (*mcp.CallToolResult, error) {
-	isTextSource := extCtx.GitHubTitle == "" && extCtx.GitHubBody == "" &&
-		extCtx.JiraIssueType == "" && extCtx.JiraSummary == "" && extCtx.JiraDescription == ""
-	if flags.Discuss && !flags.Auto && isTextSource {
+	if flags.Discuss && !flags.Auto && extCtx.IsTextSource() {
 		result := PipelineInitWithContextResult{
 			NeedsDiscussion: &DiscussionPrompt{
 				Questions: defaultDiscussionQuestions(),
@@ -193,8 +191,14 @@ func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFla
 func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags pipelineFlags, enrichedBody string) (*mcp.CallToolResult, error) {
 	// Detect effort.
 	combinedText := strings.TrimSpace(extCtx.GitHubTitle + " " + extCtx.GitHubBody + " " +
-		extCtx.JiraSummary + " " + extCtx.JiraDescription + " " + extCtx.TaskText)
-	effort := orchestrator.DetectEffort(flags.EffortOverride, extCtx.JiraStoryPoints, combinedText)
+		extCtx.JiraSummary + " " + extCtx.JiraDescription + " " +
+		extCtx.LinearTitle + " " + extCtx.LinearDescription + " " + extCtx.TaskText)
+	// Linear estimate is used as a fallback for story points when Jira story points are absent.
+	storyPoints := extCtx.JiraStoryPoints
+	if storyPoints == 0 && extCtx.LinearEstimate > 0 {
+		storyPoints = extCtx.LinearEstimate
+	}
+	effort := orchestrator.DetectEffort(flags.EffortOverride, storyPoints, combinedText)
 
 	// Build EffortOptions for all three valid efforts with human-readable labels.
 	// The detected effort is marked as recommended so the orchestrator renders it deterministically.

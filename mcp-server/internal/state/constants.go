@@ -159,7 +159,8 @@ const (
 // ---------- Source types ----------
 
 const (
-	SourceTypeGitHub = "github_issue"
-	SourceTypeJira   = "jira_issue"
-	SourceTypeText   = "text"
+	SourceTypeGitHub  = "github_issue"
+	SourceTypeJira    = "jira_issue"
+	SourceTypeLinear  = "linear_issue"
+	SourceTypeText    = "text"
 )

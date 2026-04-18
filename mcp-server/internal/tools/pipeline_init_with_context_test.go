@@ -69,6 +69,17 @@ func TestPipelineInitWithContextFirstCallEffortOptions(t *testing.T) {
 			wantNoStateJSON: true,
 		},
 		{
+			name: "linear_issue",
+			externalContext: map[string]any{
+				"linear_title":       "Fix naming convention",
+				"linear_description": "Update API naming for consistency",
+				"linear_estimate":    float64(3),
+			},
+			flags:           map[string]any{},
+			wantEffort:      "S",
+			wantNoStateJSON: true,
+		},
+		{
 			name:            "text_heuristic_default",
 			externalContext: map[string]any{},
 			flags:           map[string]any{},

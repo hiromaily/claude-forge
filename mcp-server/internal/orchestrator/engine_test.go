@@ -305,6 +305,8 @@ func defaultEng() *Engine {
 		specsDir:         "/test/specs",
 		verdictReader:    stubVerdictReader(VerdictApprove),
 		sourceTypeReader: stubSourceTypeReader("text"),
+		sourceURLReader:  func(_ string) string { return "" },
+		sourceIDReader:   func(_ string) string { return "" },
 	}
 }
 
@@ -1095,6 +1097,7 @@ func TestNextAction(t *testing.T) {
 					verdictReader:    stubVerdictReader(VerdictApprove),
 					sourceTypeReader: stubSourceTypeReader("github_issue"),
 					sourceURLReader:  func(_ string) string { return "https://github.com/org/repo/issues/42" },
+					sourceIDReader:   func(_ string) string { return "42" },
 				}
 			},
 			wantType: ActionCheckpoint,
@@ -1133,6 +1136,7 @@ func TestNextAction(t *testing.T) {
 					verdictReader:    stubVerdictReader(VerdictApprove),
 					sourceTypeReader: stubSourceTypeReader("jira_issue"),
 					sourceURLReader:  func(_ string) string { return "https://example.atlassian.net/browse/PROJ-123" },
+					sourceIDReader:   func(_ string) string { return "PROJ-123" },
 				}
 			},
 			wantType: ActionCheckpoint,
@@ -1401,8 +1405,8 @@ func TestReadSourceURL(t *testing.T) {
 	}
 }
 
-// TestPostToSource_CheckpointOptions verifies that github_issue and jira_issue
-// post-to-source checkpoints return "post"/"skip" options with the source URL.
+// TestPostToSource_CheckpointOptions verifies that github_issue, jira_issue, and linear_issue
+// post-to-source checkpoints return "post"/"skip" options with the source URL and PostMethod.
 func TestPostToSource_CheckpointOptions(t *testing.T) {
 	t.Parallel()
 
@@ -1410,22 +1414,37 @@ func TestPostToSource_CheckpointOptions(t *testing.T) {
 		name         string
 		sourceType   string
 		sourceURL    string
+		sourceID     string
 		wantName     string
 		wantURLInMsg string
+		wantMCPTool  string
+		wantCommand  string
 	}{
-		{
-			name:         "jira_issue",
-			sourceType:   "jira_issue",
-			sourceURL:    "https://example.atlassian.net/browse/PROJ-123",
-			wantName:     "post-to-source",
-			wantURLInMsg: "https://example.atlassian.net/browse/PROJ-123",
-		},
 		{
 			name:         "github_issue",
 			sourceType:   "github_issue",
 			sourceURL:    "https://github.com/org/repo/issues/42",
+			sourceID:     "42",
 			wantName:     "post-to-source",
 			wantURLInMsg: "https://github.com/org/repo/issues/42",
+			wantCommand:  "gh issue comment",
+		},
+		{
+			name:         "jira_issue",
+			sourceType:   "jira_issue",
+			sourceURL:    "https://example.atlassian.net/browse/PROJ-123",
+			sourceID:     "PROJ-123",
+			wantName:     "post-to-source",
+			wantURLInMsg: "https://example.atlassian.net/browse/PROJ-123",
+		},
+		{
+			name:         "linear_issue",
+			sourceType:   "linear_issue",
+			sourceURL:    "https://linear.app/dealon/issue/DEA-13",
+			sourceID:     "DEA-13",
+			wantName:     "post-to-source",
+			wantURLInMsg: "https://linear.app/dealon/issue/DEA-13",
+			wantMCPTool:  "mcp__linear__save_comment",
 		},
 	}
 
@@ -1440,6 +1459,7 @@ func TestPostToSource_CheckpointOptions(t *testing.T) {
 				verdictReader:    stubVerdictReader(VerdictApprove),
 				sourceTypeReader: stubSourceTypeReader(tc.sourceType),
 				sourceURLReader:  func(_ string) string { return tc.sourceURL },
+				sourceIDReader:   func(_ string) string { return tc.sourceID },
 			}
 
 			action, err := eng.NextAction(sm, "")
@@ -1461,8 +1481,120 @@ func TestPostToSource_CheckpointOptions(t *testing.T) {
 			if !strings.Contains(action.PresentToUser, tc.wantURLInMsg) {
 				t.Errorf("action.PresentToUser does not contain URL %q: %q", tc.wantURLInMsg, action.PresentToUser)
 			}
+
+			// Verify PostMethod is present
+			if action.PostMethod == nil {
+				t.Fatalf("action.PostMethod is nil, want non-nil")
+			}
+			if tc.wantMCPTool != "" && action.PostMethod.MCPTool != tc.wantMCPTool {
+				t.Errorf("PostMethod.MCPTool = %q, want %q", action.PostMethod.MCPTool, tc.wantMCPTool)
+			}
+			if tc.wantCommand != "" && !strings.Contains(action.PostMethod.Command, tc.wantCommand) {
+				t.Errorf("PostMethod.Command = %q, want substring %q", action.PostMethod.Command, tc.wantCommand)
+			}
+			if action.PostMethod.BodySource == "" {
+				t.Errorf("PostMethod.BodySource should not be empty")
+			}
 		})
 	}
+}
+
+// TestSourceTypeLabel verifies label mapping for all known source types.
+func TestSourceTypeLabel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		sourceType string
+		want       string
+	}{
+		{state.SourceTypeGitHub, "GitHub issue"},
+		{state.SourceTypeJira, "Jira issue"},
+		{state.SourceTypeLinear, "Linear issue"},
+		{state.SourceTypeText, ""},
+		{"unknown", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.sourceType, func(t *testing.T) {
+			t.Parallel()
+			got := sourceTypeLabel(tc.sourceType)
+			if got != tc.want {
+				t.Errorf("sourceTypeLabel(%q) = %q, want %q", tc.sourceType, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildPostMethod verifies PostMethod construction for all known source types.
+func TestBuildPostMethod(t *testing.T) {
+	t.Parallel()
+
+	t.Run("github_uses_command", func(t *testing.T) {
+		t.Parallel()
+		pm := buildPostMethod(state.SourceTypeGitHub, "https://github.com/org/repo/issues/42", "42", ".specs/test")
+		if pm == nil {
+			t.Fatalf("buildPostMethod returned nil for GitHub")
+		}
+		if pm.Command == "" {
+			t.Errorf("Command should be non-empty for GitHub")
+		}
+		if !strings.Contains(pm.Command, "gh issue comment") {
+			t.Errorf("Command = %q, want substring 'gh issue comment'", pm.Command)
+		}
+		if !strings.Contains(pm.Command, "--body-file") {
+			t.Errorf("Command = %q, want substring '--body-file'", pm.Command)
+		}
+		if pm.BodySource == "" {
+			t.Errorf("BodySource should be non-empty")
+		}
+	})
+
+	t.Run("jira_uses_instruction", func(t *testing.T) {
+		t.Parallel()
+		pm := buildPostMethod(state.SourceTypeJira, "https://example.atlassian.net/browse/PROJ-123", "PROJ-123", ".specs/test")
+		if pm == nil {
+			t.Fatalf("buildPostMethod returned nil for Jira")
+		}
+		if pm.Instruction == "" {
+			t.Errorf("Instruction should be non-empty for Jira")
+		}
+		if pm.BodySource == "" {
+			t.Errorf("BodySource should be non-empty")
+		}
+	})
+
+	t.Run("linear_uses_mcp_tool", func(t *testing.T) {
+		t.Parallel()
+		pm := buildPostMethod(state.SourceTypeLinear, "https://linear.app/dealon/issue/DEA-13", "DEA-13", ".specs/test")
+		if pm == nil {
+			t.Fatalf("buildPostMethod returned nil for Linear")
+		}
+		if pm.MCPTool != "mcp__linear__save_comment" {
+			t.Errorf("MCPTool = %q, want mcp__linear__save_comment", pm.MCPTool)
+		}
+		if pm.MCPParams["issueId"] != "DEA-13" {
+			t.Errorf("MCPParams[issueId] = %q, want DEA-13", pm.MCPParams["issueId"])
+		}
+		if pm.BodySource == "" {
+			t.Errorf("BodySource should be non-empty")
+		}
+	})
+
+	t.Run("text_returns_nil", func(t *testing.T) {
+		t.Parallel()
+		pm := buildPostMethod(state.SourceTypeText, "", "", ".specs/test")
+		if pm != nil {
+			t.Errorf("buildPostMethod should return nil for text source, got %+v", pm)
+		}
+	})
+
+	t.Run("unknown_returns_nil", func(t *testing.T) {
+		t.Parallel()
+		pm := buildPostMethod("unknown", "https://example.com", "", ".specs/test")
+		if pm != nil {
+			t.Errorf("buildPostMethod should return nil for unknown source, got %+v", pm)
+		}
+	})
 }
 
 // TestHandlePhaseFour_WorkflowRulesRetryLimitCheckpoint verifies that when

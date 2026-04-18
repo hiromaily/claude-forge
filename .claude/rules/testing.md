@@ -98,7 +98,7 @@ After modifying `skills/forge/SKILL.md`:
 - [ ] Agent Roster matches each agent's actual Input section (10 agents)
 - [ ] All phase IDs exist in the Go MCP server's ValidPhases list
 - [ ] `comprehensive-reviewer.md` frontmatter has correct name, description, model
-- [ ] `source_type` detection logic covers `github_issue`, `jira_issue`, `text`
+- [ ] `source_type` detection logic covers `github_issue`, `jira_issue`, `linear_issue`, `text`
 - [ ] PR creation step includes `gh pr create` + PR number capture
 - [ ] Final Summary includes PR number in `summary.md` template
 - [ ] Post to Source correctly dispatches on `source_type`

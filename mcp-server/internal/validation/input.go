@@ -22,7 +22,7 @@ type ParsedInput struct {
 	Flags      map[string]string `json:"flags"`
 	BareFlags  []string          `json:"bare_flags"`
 	CoreText   string            `json:"core_text"`
-	SourceType string            `json:"source_type"` // "github_issue","jira_issue","workspace","text"
+	SourceType string            `json:"source_type"` // "github_issue","jira_issue","linear_issue","workspace","text"
 }
 
 // effortXS is the effort level that is explicitly not supported.
@@ -52,6 +52,8 @@ var (
 	reGitHubBase = regexp.MustCompile(`^https://github\.com/`)
 	reJiraURL    = regexp.MustCompile(`^https://[^/]+\.atlassian\.net/browse/[A-Z]+-[0-9]+`)
 	reJiraBase   = regexp.MustCompile(`^https://[^/]+\.atlassian\.net/`)
+	reLinearURL  = regexp.MustCompile(`^https://linear\.app/[^/]+/issue/[A-Z]+-[0-9]+`)
+	reLinearBase = regexp.MustCompile(`^https://linear\.app/`)
 	reHTTPS      = regexp.MustCompile(`^https?://`)
 )
 
@@ -73,7 +75,7 @@ func ValidateInput(arguments string) InputResult {
 	if trimmed == "" {
 		return InputResult{
 			Valid:  false,
-			Errors: []string{"ERROR: No task description provided. Please provide a development task, GitHub Issue URL, or Jira Issue URL. (empty input)"},
+			Errors: []string{"ERROR: No task description provided. Please provide a development task, GitHub Issue URL, Jira Issue URL, or Linear Issue URL. (empty input)"},
 		}
 	}
 
@@ -170,12 +172,29 @@ func validateURL(core string, flags map[string]string, bareFlags []string) Input
 				SourceType: "jira_issue",
 			},
 		}
+	case reLinearBase.MatchString(core):
+		if !reLinearURL.MatchString(core) {
+			return InputResult{
+				Valid:  false,
+				Errors: []string{"ERROR: Invalid Linear URL format. Expected: https://linear.app/{org}/issue/{KEY}-{number}"},
+			}
+		}
+		return InputResult{
+			Valid: true,
+			Parsed: ParsedInput{
+				Flags:      flags,
+				BareFlags:  normalizeBareFlags(bareFlags),
+				CoreText:   core,
+				SourceType: "linear_issue",
+			},
+		}
 	default:
 		return InputResult{
 			Valid: false,
 			Errors: []string{"ERROR: Unrecognised URL format. Supported formats: " +
 				"GitHub Issue: https://github.com/{owner}/{repo}/issues/{number}, " +
-				"Jira Issue: https://{org}.atlassian.net/browse/{KEY}-{number}"},
+				"Jira Issue: https://{org}.atlassian.net/browse/{KEY}-{number}, " +
+				"Linear Issue: https://linear.app/{org}/issue/{KEY}-{number}"},
 		}
 	}
 }

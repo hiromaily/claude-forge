@@ -38,7 +38,7 @@ func parseStoryPoints(m map[string]any) int {
 	return 0
 }
 
-// externalContext holds parsed GitHub/Jira context fields.
+// externalContext holds parsed GitHub/Jira/Linear context fields.
 type externalContext struct {
 	// Source identifiers from pipeline_init result — used in request.md front matter.
 	SourceURL string
@@ -55,9 +55,29 @@ type externalContext struct {
 	JiraStoryPoints int
 	JiraSummary     string
 	JiraDescription string
+	// Linear fields
+	LinearTitle       string
+	LinearDescription string
+	LinearPriority    string
+	LinearEstimate    int
+	LinearLabels      []string
 }
 
-// parseExternalContext extracts GitHub/Jira context fields from the args map.
+// IsTextSource returns true when no GitHub, Jira, or Linear fields are populated.
+// Used by handleFirstCall to decide whether --discuss is applicable.
+func (ec externalContext) IsTextSource() bool {
+	return ec.GitHubTitle == "" && ec.GitHubBody == "" &&
+		ec.JiraIssueType == "" && ec.JiraSummary == "" && ec.JiraDescription == "" &&
+		ec.LinearTitle == "" && ec.LinearDescription == ""
+}
+
+// parseExternalContext extracts GitHub/Jira/Linear context fields from the args map.
+//
+// Note: some fallback aliases are shared across source types (e.g., "description"
+// falls back for both JiraDescription and LinearDescription). This is safe because
+// the orchestrator always passes prefixed keys (e.g., "linear_description"), and
+// downstream consumers (buildRequestMDWithBody, refineWorkspacePath) discriminate
+// by checking which group of fields is populated.
 func parseExternalContext(args map[string]any) (externalContext, error) {
 	var extCtx externalContext
 
@@ -96,7 +116,55 @@ func parseExternalContext(args map[string]any) (externalContext, error) {
 	// Parse jira_story_points (number), with "story_points" as fallback alias.
 	extCtx.JiraStoryPoints = parseStoryPoints(m)
 
+	// Linear fields.
+	extCtx.LinearTitle = stringFieldAlt(m, "linear_title", "title")
+	extCtx.LinearDescription = stringFieldAlt(m, "linear_description", "description")
+	extCtx.LinearPriority = stringFieldAlt(m, "linear_priority", "priority")
+	extCtx.LinearEstimate = parseEstimate(m)
+
+	// Parse linear_labels (array of strings).
+	if labelsRaw, ok := m["linear_labels"]; ok {
+		switch v := labelsRaw.(type) {
+		case []any:
+			for _, l := range v {
+				if s, ok := l.(string); ok {
+					extCtx.LinearLabels = append(extCtx.LinearLabels, s)
+				}
+			}
+		case []string:
+			extCtx.LinearLabels = v
+		}
+	}
+
 	return extCtx, nil
+}
+
+// parseEstimate extracts a numeric estimate value from an external_context map.
+// Accepts "linear_estimate" with "estimate" as a fallback alias.
+func parseEstimate(m map[string]any) int {
+	if _, ok := m["linear_estimate"]; !ok {
+		if est, ok2 := m["estimate"]; ok2 {
+			m["linear_estimate"] = est
+		}
+	}
+	raw, ok := m["linear_estimate"]
+	if !ok {
+		return 0
+	}
+	switch v := raw.(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return int(n)
+		}
+		if f, err := v.Float64(); err == nil {
+			return int(f)
+		}
+	}
+	return 0
 }
 
 // stringField extracts a string value from a map by key.
@@ -146,6 +214,9 @@ func buildRequestMDWithBody(extCtx externalContext, body string) string {
 	case extCtx.JiraIssueType != "" || extCtx.JiraSummary != "" || extCtx.JiraDescription != "":
 		sourceType = "jira_issue"
 		resolvedBody = strings.TrimSpace(extCtx.JiraSummary + "\n\n" + extCtx.JiraDescription)
+	case extCtx.LinearTitle != "" || extCtx.LinearDescription != "":
+		sourceType = "linear_issue"
+		resolvedBody = strings.TrimSpace(extCtx.LinearTitle + "\n\n" + extCtx.LinearDescription)
 	default:
 		// text source: use the body parameter directly.
 		resolvedBody = body

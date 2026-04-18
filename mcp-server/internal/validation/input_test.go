@@ -156,6 +156,32 @@ func TestValidateInput(t *testing.T) {
 			wantValid:      false,
 			wantErrContain: "Jira",
 		},
+		// AC-3: Linear URL valid
+		{
+			name:           "valid Linear URL",
+			input:          "https://linear.app/dealon/issue/DEA-13",
+			wantValid:      true,
+			wantSourceType: "linear_issue",
+		},
+		{
+			name:           "valid Linear URL with trailing slash",
+			input:          "https://linear.app/dealon/issue/DEA-13/",
+			wantValid:      true,
+			wantSourceType: "linear_issue",
+		},
+		{
+			name:           "valid Linear URL with slug",
+			input:          "https://linear.app/dealon/issue/DEA-13/some-title-slug",
+			wantValid:      true,
+			wantSourceType: "linear_issue",
+		},
+		// AC-3: Linear URL malformed
+		{
+			name:           "Linear URL missing issue path",
+			input:          "https://linear.app/dealon",
+			wantValid:      false,
+			wantErrContain: "Linear",
+		},
 		// AC-3: unknown https URL
 		{
 			name:           "arbitrary https URL",
