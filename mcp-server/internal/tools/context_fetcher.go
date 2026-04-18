@@ -60,17 +60,7 @@ func detectSourceTypeFromFields(args map[string]any) string {
 	if !ok {
 		return ""
 	}
-	for key := range ec {
-		switch {
-		case len(key) > 7 && key[:7] == "github_":
-			return "github_issue"
-		case len(key) > 5 && key[:5] == "jira_":
-			return "jira_issue"
-		case len(key) > 7 && key[:7] == "linear_":
-			return "linear_issue"
-		}
-	}
-	return ""
+	return sourcetype.ClassifyByFieldPrefix(ec)
 }
 
 // buildRequestMDWithBody constructs the request.md content.

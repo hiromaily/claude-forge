@@ -19,6 +19,7 @@ type GitHubHandler struct{}
 
 func (h *GitHubHandler) Type() string               { return "github_issue" }
 func (h *GitHubHandler) Label() string              { return "GitHub issue" }
+func (h *GitHubHandler) FieldPrefix() string        { return "github_" }
 func (h *GitHubHandler) URLPattern() *regexp.Regexp  { return reGitHubURL }
 func (h *GitHubHandler) BasePattern() *regexp.Regexp { return reGitHubBase }
 func (h *GitHubHandler) SupportsClosingRef() bool    { return true }

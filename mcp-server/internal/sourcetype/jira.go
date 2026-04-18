@@ -19,6 +19,7 @@ type JiraHandler struct{}
 
 func (h *JiraHandler) Type() string               { return "jira_issue" }
 func (h *JiraHandler) Label() string              { return "Jira issue" }
+func (h *JiraHandler) FieldPrefix() string        { return "jira_" }
 func (h *JiraHandler) URLPattern() *regexp.Regexp  { return reJiraURL }
 func (h *JiraHandler) BasePattern() *regexp.Regexp { return reJiraBase }
 func (h *JiraHandler) SupportsClosingRef() bool    { return false }

@@ -18,7 +18,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -345,13 +344,9 @@ func parseFlags(args map[string]any) (pipelineFlags, error) {
 		return flags, nil
 	}
 
-	data, err := json.Marshal(raw)
+	m, err := maputil.ToMap(raw)
 	if err != nil {
-		return flags, fmt.Errorf("marshal flags: %w", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return flags, fmt.Errorf("unmarshal flags: %w", err)
+		return flags, fmt.Errorf("parse flags: %w", err)
 	}
 
 	flags.Auto = maputil.BoolField(m, "auto")
@@ -368,13 +363,9 @@ func parseFlags(args map[string]any) (pipelineFlags, error) {
 func parseUserConfirmation(raw any) (userConfirmation, error) {
 	var uc userConfirmation
 
-	data, err := json.Marshal(raw)
+	m, err := maputil.ToMap(raw)
 	if err != nil {
-		return uc, fmt.Errorf("marshal user_confirmation: %w", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return uc, fmt.Errorf("unmarshal user_confirmation: %w", err)
+		return uc, fmt.Errorf("parse user_confirmation: %w", err)
 	}
 
 	uc.Effort = maputil.StringField(m, "effort")

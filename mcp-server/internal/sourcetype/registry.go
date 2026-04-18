@@ -28,6 +28,22 @@ func IsURLSource(sourceType string) bool {
 	return Get(sourceType) != nil
 }
 
+// ClassifyByFieldPrefix infers the source type from field name prefixes in a map.
+// Returns the source type of the first handler whose FieldPrefix matches a key,
+// or "" if no match. Used as a backward-compatibility fallback when source_url
+// is not provided but prefixed fields (github_*, jira_*, linear_*) are.
+func ClassifyByFieldPrefix(m map[string]any) string {
+	for key := range m {
+		for _, h := range handlers {
+			prefix := h.FieldPrefix()
+			if len(key) > len(prefix) && key[:len(prefix)] == prefix {
+				return h.Type()
+			}
+		}
+	}
+	return ""
+}
+
 func ClassifyURL(rawURL string) (string, error) {
 	for _, h := range handlers {
 		if h.BasePattern().MatchString(rawURL) {

@@ -14,4 +14,8 @@ type Handler interface {
 	PostConfig(sourceURL, sourceID, artifactPath string) *PostConfig
 	ParseExternalContext(m map[string]any) ExternalFields
 	SupportsClosingRef() bool
+
+	// FieldPrefix returns the key prefix used in external_context maps
+	// (e.g., "github_", "jira_", "linear_"). Used by ClassifyByFieldPrefix.
+	FieldPrefix() string
 }

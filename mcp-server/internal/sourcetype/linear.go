@@ -19,6 +19,7 @@ type LinearHandler struct{}
 
 func (h *LinearHandler) Type() string               { return "linear_issue" }
 func (h *LinearHandler) Label() string              { return "Linear issue" }
+func (h *LinearHandler) FieldPrefix() string        { return "linear_" }
 func (h *LinearHandler) URLPattern() *regexp.Regexp  { return reLinearURL }
 func (h *LinearHandler) BasePattern() *regexp.Regexp { return reLinearBase }
 func (h *LinearHandler) SupportsClosingRef() bool    { return false }
