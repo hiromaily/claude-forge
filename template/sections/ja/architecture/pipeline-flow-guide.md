@@ -64,16 +64,16 @@ flowchart TD
 | 13 | `final-verification` | フルビルド + テストスイート検証 | verifier | final-verification.md |
 | 14 | `pr-creation` | `gh pr create` による PR 作成（summary.md は未生成） | オーケストレーター | PR URL |
 | 15 | `final-summary` | PR 番号・実行統計・改善レポートを含む summary.md 生成 | オーケストレーター | summary.md |
-| 16 | `final-commit` | PR body を summary.md で更新 + 最終コミット amend + force-push | オーケストレーター | — |
-| 17 | `post-to-source` | GitHub/Jira Issue にサマリーを投稿 | オーケストレーター | Issue コメント |
+| 16 | `post-to-source` | GitHub/Jira Issue にサマリーを投稿 | オーケストレーター | Issue コメント |
+| 17 | `final-commit` | PR body を summary.md で更新 + 最終コミット amend + force-push | オーケストレーター | — |
 | 18 | `completed` | パイプライン完了 | — | — |
 
 ## Effort レベルとスキップされるフェーズ
 
 | Effort | フローテンプレート | スキップされるフェーズ |
 |--------|---------------|----------------|
-| S | light | phase-4b（タスクレビュー）、checkpoint-b（タスクチェックポイント）、phase-7（包括的レビュー） |
-| M | standard | phase-4b（タスクレビュー）、checkpoint-b（タスクチェックポイント） |
+| S | light | phase-2（調査）、phase-4（タスク分解）、phase-4b（タスク AI レビュー）、checkpoint-b（タスクチェックポイント）、phase-6（コードレビュー） |
+| M | standard | phase-4b（タスク AI レビュー）、checkpoint-b（タスクチェックポイント） |
 | L | full | _（なし）_ |
 
 ## シーケンス図 — オーケストレーター / MCP サーバー間のやり取り

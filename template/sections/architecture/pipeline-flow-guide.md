@@ -66,16 +66,16 @@ flowchart TD
 | 13 | `final-verification` | Full build + test suite verification | verifier | final-verification.md |
 | 14 | `pr-creation` | Create PR via `gh pr create` (summary.md not yet available) | Orchestrator | PR URL |
 | 15 | `final-summary` | Generate summary.md with PR number, execution stats, improvement report | Orchestrator | summary.md |
-| 16 | `final-commit` | Update PR body with summary.md, amend last commit, force-push | Orchestrator | — |
-| 17 | `post-to-source` | Post summary to GitHub/Jira issue | Orchestrator | issue comment |
+| 16 | `post-to-source` | Post summary to GitHub/Jira issue | Orchestrator | issue comment |
+| 17 | `final-commit` | Update PR body with summary.md, amend last commit, force-push | Orchestrator | — |
 | 18 | `completed` | Pipeline done | — | — |
 
 ## Effort Levels and Skipped Phases
 
 | Effort | Flow Template | Skipped Phases |
 |--------|---------------|----------------|
-| S | light | phase-4b (Tasks Review), checkpoint-b (Tasks Checkpoint), phase-7 (Comprehensive Review) |
-| M | standard | phase-4b (Tasks Review), checkpoint-b (Tasks Checkpoint) |
+| S | light | phase-2 (Investigation), phase-4 (Task Decomposition), phase-4b (Tasks AI Review), checkpoint-b (Tasks Checkpoint), phase-6 (Code Review) |
+| M | standard | phase-4b (Tasks AI Review), checkpoint-b (Tasks Checkpoint) |
 | L | full | _(none)_ |
 
 ## Sequence Diagram — Orchestrator / MCP Server Interaction
