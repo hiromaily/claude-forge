@@ -202,6 +202,15 @@ func runE2EPipeline(
 				resp.Action.Phase, textContent(reportRes))
 		}
 
+		// Invoke optional per-action state verification callback.
+		if cfg.onAction != nil {
+			s, sErr := state.ReadState(workspace)
+			if sErr != nil {
+				t.Fatalf("runE2EPipeline: ReadState after %s: %v", resp.Action.Phase, sErr)
+			}
+			cfg.onAction(t, resp.Action, s)
+		}
+
 		// Detect revision_required for phase-3b and set approveOverride for next phase-3b call.
 		if resp.Action.Phase == state.PhaseThreeB && !*approveOverride {
 			rro := parsePRRResponse(t, textContent(reportRes))
@@ -648,5 +657,42 @@ func TestE2E_CheckpointPhaseLog(t *testing.T) {
 	}
 	if !logged[state.PhaseCheckpointB] {
 		t.Errorf("checkpoint-b not found in PhaseLog")
+	}
+}
+
+func TestE2E_StateTransitions(t *testing.T) {
+	t.Parallel()
+
+	var prevPhase string
+	var phaseOrder []string
+
+	cfg := e2eConfig{
+		effort:      state.EffortM,
+		template:    state.TemplateStandard,
+		autoApprove: true,
+		skipPR:      true,
+		onAction: func(t *testing.T, action orchestrator.Action, s *state.State) {
+			t.Helper()
+			phase := s.CurrentPhase
+
+			// Track phase progression — each new phase should differ from the previous
+			// (except during revision cycles where phase-3/3b may repeat).
+			if phase != prevPhase && phase != "" {
+				phaseOrder = append(phaseOrder, phase)
+				prevPhase = phase
+			}
+
+			// Verify phase status is never empty during active execution.
+			if s.CurrentPhaseStatus == "" && phase != state.PhaseCompleted {
+				t.Errorf("currentPhaseStatus is empty during phase %q", phase)
+			}
+		},
+	}
+	workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
+	_, _ = runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
+
+	// Verify at least 5 distinct phases were observed (even light template has more).
+	if len(phaseOrder) < 5 {
+		t.Errorf("only %d distinct phases observed, want >= 5; phases: %v", len(phaseOrder), phaseOrder)
 	}
 }
