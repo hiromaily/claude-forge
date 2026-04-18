@@ -1,6 +1,7 @@
 package events_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -313,6 +314,178 @@ func TestLoadMalformedJSONLSkipsBadLines(t *testing.T) {
 	}
 	if !reflect.DeepEqual(hist[0], good) {
 		t.Errorf("History()[0] = %+v, want %+v", hist[0], good)
+	}
+}
+
+// TestWatchEventLog_PicksUpCrossProcessEvents verifies that events appended to the shared
+// log file by another process (simulated by a direct file write) are picked up by
+// WatchEventLog and broadcast to live SSE subscribers within a few seconds.
+func TestWatchEventLog_PicksUpCrossProcessEvents(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "events.jsonl")
+
+	bus := events.NewEventBus()
+	if err := bus.SetEventLog(logPath); err != nil {
+		t.Fatalf("SetEventLog: %v", err)
+	}
+	t.Cleanup(func() { bus.CloseLog() })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	bus.WatchEventLog(ctx)
+
+	// Subscribe before the external write so we receive the live broadcast.
+	_, ch := bus.Subscribe()
+
+	// Simulate another MCP server instance appending an event to the shared log.
+	external := events.Event{
+		Event:     "phase-start",
+		Phase:     "phase-1",
+		SpecName:  "other-project",
+		Workspace: "/other/project/.specs/ws",
+		Timestamp: "2026-04-18T10:00:00Z",
+		Outcome:   "in_progress",
+	}
+	line, _ := json.Marshal(external)
+	f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		t.Fatalf("open log for external write: %v", err)
+	}
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		t.Fatalf("external write: %v", err)
+	}
+	_ = f.Close()
+
+	// WatchEventLog polls every second; allow up to 3 seconds for pickup.
+	select {
+	case got := <-ch:
+		if got != external {
+			t.Errorf("received event = %+v, want %+v", got, external)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out: cross-process event not broadcast within 3 seconds")
+	}
+
+	// The event must also appear in History so dashboard reloads show it.
+	hist := bus.History()
+	if !reflect.DeepEqual(hist[len(hist)-1], external) {
+		t.Errorf("History does not contain cross-process event; last = %+v", hist[len(hist)-1])
+	}
+}
+
+// TestWatchEventLog_NoopWhenLogPathEmpty verifies that WatchEventLog does not panic
+// or start a goroutine when no log path is configured.
+func TestWatchEventLog_NoopWhenLogPathEmpty(t *testing.T) {
+	t.Parallel()
+	bus := events.NewEventBus()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()               // cancelled immediately
+	bus.WatchEventLog(ctx) // must not panic
+}
+
+// TestWatchEventLog_SkipsOwnEvents verifies that events published by this instance
+// (already in history) are NOT re-broadcast when the tail picks them up from the file.
+func TestWatchEventLog_SkipsOwnEvents(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "events.jsonl")
+
+	bus := events.NewEventBus()
+	if err := bus.SetEventLog(logPath); err != nil {
+		t.Fatalf("SetEventLog: %v", err)
+	}
+	t.Cleanup(func() { bus.CloseLog() })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	bus.WatchEventLog(ctx)
+
+	own := events.Event{
+		Event:     "phase-complete",
+		Phase:     "phase-3",
+		SpecName:  "this-project",
+		Workspace: "/this/.specs/ws",
+		Timestamp: "2026-04-18T11:00:00Z",
+		Outcome:   "completed",
+	}
+	bus.Publish(own) // written to file + history by this instance
+
+	// Subscribe after Publish so the channel starts empty.
+	_, ch := bus.Subscribe()
+
+	// Wait long enough for at least one tail poll (1 second + buffer).
+	time.Sleep(1500 * time.Millisecond)
+
+	// Channel must be empty: our own event must not be re-broadcast.
+	select {
+	case got := <-ch:
+		t.Errorf("unexpected re-broadcast of own event: %+v", got)
+	default:
+		// correct — nothing re-broadcast
+	}
+}
+
+// TestWatchEventLog_TruncationResetsOffset verifies that if the shared log file is
+// truncated (e.g. rotated), WatchEventLog resets its offset to zero and resumes
+// reading from the beginning of the new file content.
+func TestWatchEventLog_TruncationResetsOffset(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "events.jsonl")
+
+	bus := events.NewEventBus()
+	if err := bus.SetEventLog(logPath); err != nil {
+		t.Fatalf("SetEventLog: %v", err)
+	}
+	t.Cleanup(func() { bus.CloseLog() })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	bus.WatchEventLog(ctx)
+
+	// Subscribe before any writes so the channel captures all broadcasts.
+	_, ch := bus.Subscribe()
+
+	// Write a large first event (Detail field makes it noticeably longer than second).
+	// This ensures the second file, written after truncation, is strictly smaller,
+	// triggering the fi.Size() < offset truncation-reset path in readTail.
+	first := events.Event{
+		Event: "phase-start", Phase: "phase-1", SpecName: "proj",
+		Workspace: "/proj/.specs/ws", Timestamp: "2026-04-18T12:00:00Z",
+		Outcome: "in_progress", Detail: "this-detail-makes-the-line-longer-than-the-second-event",
+	}
+	line, _ := json.Marshal(first)
+	if err := os.WriteFile(logPath, append(line, '\n'), 0o600); err != nil {
+		t.Fatalf("write first event: %v", err)
+	}
+
+	// Wait for the first tick to process the initial event so tailOffset advances.
+	select {
+	case <-ch:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for first event")
+	}
+
+	// Simulate file truncation: overwrite with a shorter event.
+	// fi.Size() of the new file is less than the current tailOffset,
+	// which triggers the reset-to-zero path in readTail.
+	second := events.Event{
+		Event: "phase-start", Phase: "phase-2", SpecName: "proj",
+		Workspace: "/proj/.specs/ws", Timestamp: "2026-04-18T12:01:00Z", Outcome: "in_progress",
+	}
+	line2, _ := json.Marshal(second)
+	if err := os.WriteFile(logPath, append(line2, '\n'), 0o600); err != nil {
+		t.Fatalf("write truncated event: %v", err)
+	}
+
+	select {
+	case got := <-ch:
+		if got != second {
+			t.Errorf("received event = %+v, want %+v", got, second)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out: event after truncation was not broadcast")
 	}
 }
 
