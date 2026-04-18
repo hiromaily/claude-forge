@@ -193,6 +193,8 @@ func PipelineNextActionHandler(
 					if completeErr := sm2.PhaseComplete(workspace, st.CurrentPhase); completeErr != nil {
 						return errorf("checkpoint proceed %s: %v", st.CurrentPhase, completeErr)
 					}
+					// Record checkpoint resolution in PhaseLog for observability.
+					_ = sm2.PhaseLog(workspace, st.CurrentPhase, 0, 0, "checkpoint")
 				case "revise":
 					var targetPhase, reviewPhase, reviewArtifact string
 					switch st.CurrentPhase {
@@ -230,10 +232,14 @@ func PipelineNextActionHandler(
 							return errorf("rewind %s to %s: %v", st.CurrentPhase, targetPhase, updateErr)
 						}
 					}
+					// Record checkpoint rewind in PhaseLog for observability.
+					_ = sm2.PhaseLog(workspace, st.CurrentPhase, 0, 0, "checkpoint")
 				case "abandon":
 					if abandonErr := sm2.Abandon(workspace); abandonErr != nil {
 						return errorf("checkpoint abandon: %v", abandonErr)
 					}
+					// Record checkpoint abandonment in PhaseLog.
+					_ = sm2.PhaseLog(workspace, st.CurrentPhase, 0, 0, "checkpoint")
 					return okJSON(nextActionResponse{
 						Action: orchestrator.NewDoneAction("pipeline abandoned at "+st.CurrentPhase, ""),
 					})
@@ -370,6 +376,8 @@ func PipelineNextActionHandler(
 					if finalErr := executeFinalCommit(workspace, sm2, kb); finalErr != nil {
 						return errorf("final_commit: %v", finalErr)
 					}
+					// Record final-commit execution in PhaseLog for observability.
+					_ = sm2.PhaseLog(workspace, state.PhaseFinalCommit, 0, 0, "exec")
 					return okJSON(nextActionResponse{Action: orchestrator.NewDoneAction("pipeline completed", "")})
 				}
 				// Non-final_commit exec: fall through to return the action to the orchestrator.

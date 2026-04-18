@@ -21,9 +21,12 @@ import (
 
 // e2eConfig holds per-test pipeline configuration for E2E tests.
 type e2eConfig struct {
-	effort              string // state.EffortM, state.EffortS, state.EffortL
-	template            string // state.TemplateStandard, TemplateLight, TemplateFull
-	reviewDesignVerdict string // verdict written to review-design.md on first phase-3b spawn; defaults to "APPROVE" if empty
+	effort              string
+	template            string
+	reviewDesignVerdict string
+	autoApprove         bool
+	skipPR              bool
+	onAction            func(t *testing.T, action orchestrator.Action, s *state.State)
 }
 
 // setupE2EWorkspace initialises a workspace with the given config and returns
@@ -43,8 +46,8 @@ func setupE2EWorkspace(
 	if err := sm.Configure(dir, state.PipelineConfig{
 		Effort:        cfg.effort,
 		FlowTemplate:  cfg.template,
-		AutoApprove:   true,
-		SkipPR:        true,
+		AutoApprove:   cfg.autoApprove,
+		SkipPR:        cfg.skipPR,
 		SkippedPhases: orchestrator.SkipsForTemplate(cfg.template),
 	}); err != nil {
 		t.Fatalf("sm.Configure: %v", err)
@@ -250,7 +253,7 @@ func TestE2E_Templates(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			cfg := e2eConfig{effort: tc.effort, template: tc.template}
+			cfg := e2eConfig{effort: tc.effort, template: tc.template, autoApprove: true, skipPR: true}
 			workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
 			_, _ = runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
 
@@ -281,6 +284,8 @@ func TestE2E_DesignRevisionCycle(t *testing.T) {
 		effort:              state.EffortM,
 		template:            state.TemplateStandard,
 		reviewDesignVerdict: "REVISE",
+		autoApprove:         true,
+		skipPR:              true,
 	}
 	workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
 	_, revisionDetected := runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
@@ -493,7 +498,7 @@ func TestE2E_ActionSequenceComplete(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			cfg := e2eConfig{effort: tc.effort, template: tc.template}
+			cfg := e2eConfig{effort: tc.effort, template: tc.template, autoApprove: true, skipPR: true}
 			workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
 			actions, _ := runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
 
@@ -546,7 +551,7 @@ func TestE2E_ActionSequenceComplete(t *testing.T) {
 func TestE2E_SkippedPhasesInPhaseLog(t *testing.T) {
 	t.Parallel()
 
-	cfg := e2eConfig{effort: state.EffortS, template: state.TemplateLight}
+	cfg := e2eConfig{effort: state.EffortS, template: state.TemplateLight, autoApprove: true, skipPR: true}
 	workspace, nextActionH, reportResultH := setupE2EWorkspace(t, cfg)
 	_, _ = runE2EPipeline(t, cfg, workspace, nextActionH, reportResultH)
 
