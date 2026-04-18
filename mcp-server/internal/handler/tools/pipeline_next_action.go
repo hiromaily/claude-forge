@@ -331,7 +331,11 @@ func PipelineNextActionHandler(
 					return errorf("task_init: %v", taskErr)
 				}
 				// Validate that task_init populated state.Tasks.
-				if st2, stErr := sm2.GetState(); stErr == nil && len(st2.Tasks) == 0 {
+				st2, stErr := sm2.GetState()
+				if stErr != nil {
+					return errorf("task_init: failed to read state: %v", stErr)
+				}
+				if len(st2.Tasks) == 0 {
 					return errorf("task_init: tasks not populated after execution — tasks.md may be malformed or missing")
 				}
 				action, err = eng.NextAction(sm2, "")

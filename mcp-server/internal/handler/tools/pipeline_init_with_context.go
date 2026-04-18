@@ -103,7 +103,7 @@ type userConfirmation struct {
 //	creates directory, initialises state, applies all setters, skips phases, writes request.md.
 //
 // DISCRIMINATOR ORDER: discussion_answers checked BEFORE user_confirmation to prevent shadowing.
-func PipelineInitWithContextHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc {
+func PipelineInitWithContextHandler(sm *state.StateManager, bus *events.EventBus) server.ToolHandlerFunc { //nolint:gocyclo // complexity is inherent in the dispatch table
 	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, err := req.RequireString("workspace")
 		if err != nil {
