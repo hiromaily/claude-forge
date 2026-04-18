@@ -808,32 +808,70 @@ func (*Engine) handleFinalCommit(st *state.State) (Action, error) {
 
 // handlePostToSource handles the post-to-source phase — Decision 26.
 func (e *Engine) handlePostToSource(st *state.State) (Action, error) {
-	// Decision 26 — Post-to-source dispatch
 	sourceType := e.sourceTypeReader(st.Workspace)
+	sourceURL := e.sourceURLReader(st.Workspace)
+	sourceID := e.sourceIDReader(st.Workspace)
 
-	// Use the phase ID as checkpoint name so mcp__forge-state__checkpoint()
-	// validation succeeds (it compares checkpoint name against CurrentPhase).
-	// The source type (github/jira) is embedded in the message, not the name.
-	var label string
-	switch sourceType {
-	case state.SourceTypeGitHub:
-		label = "GitHub issue"
-	case state.SourceTypeJira:
-		label = "Jira issue"
-	default: // "text" and anything else — skip this phase
+	label := sourceTypeLabel(sourceType)
+	if label == "" {
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
 	}
 
-	sourceURL := e.sourceURLReader(st.Workspace)
 	if sourceURL == "" {
 		return NewDoneAction(SkipSummaryPrefix+PhasePostToSource, ""), nil
 	}
+
+	pm := buildPostMethod(sourceType, sourceURL, sourceID, st.Workspace)
 
 	msg := fmt.Sprintf(
 		"Pipeline complete. Post the final summary as a comment to the %s?\n\nURL: %s\nSummary file: %s/%s",
 		label, sourceURL, st.Workspace, state.ArtifactSummary,
 	)
-	return NewCheckpointAction(PhasePostToSource, msg, []string{"post", "skip"}), nil
+
+	action := NewCheckpointAction(PhasePostToSource, msg, []string{"post", "skip"})
+	action.PostMethod = pm
+	return action, nil
+}
+
+// sourceTypeLabel returns a human-readable label for a source type.
+func sourceTypeLabel(sourceType string) string {
+	switch sourceType {
+	case state.SourceTypeGitHub:
+		return "GitHub issue"
+	case state.SourceTypeJira:
+		return "Jira issue"
+	case state.SourceTypeLinear:
+		return "Linear issue"
+	default:
+		return ""
+	}
+}
+
+// buildPostMethod constructs a PostMethod for the given source type.
+// Returns nil for text sources and unknown source types.
+func buildPostMethod(sourceType, sourceURL, sourceID, workspace string) *PostMethod {
+	bodySource := filepath.Join(workspace, state.ArtifactSummary)
+
+	switch sourceType {
+	case state.SourceTypeGitHub:
+		return &PostMethod{
+			Command:    "gh issue comment " + sourceURL + " --body-file " + bodySource,
+			BodySource: bodySource,
+		}
+	case state.SourceTypeJira:
+		return &PostMethod{
+			BodySource:  bodySource,
+			Instruction: "Post the contents of " + bodySource + " as a comment to " + sourceURL + ". Use Atlassian MCP tools if available, or convert the markdown to ADF and POST via Jira REST API with $JIRA_USER:$JIRA_TOKEN.",
+		}
+	case state.SourceTypeLinear:
+		return &PostMethod{
+			MCPTool:    "mcp__linear__save_comment",
+			MCPParams:  map[string]string{"issueId": sourceID},
+			BodySource: bodySource,
+		}
+	default:
+		return nil
+	}
 }
 
 // readFrontMatterField reads a named field from {workspace}/request.md YAML front matter.
