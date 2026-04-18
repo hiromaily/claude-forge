@@ -214,6 +214,49 @@ func TestPipelineNextAction(t *testing.T) {
 		}
 	})
 
+	t.Run("skip_phase_logged", func(t *testing.T) {
+		// P1: verify that skipped phases get PhaseLog entries with Model == "skipped".
+		// Before this fix, skipped phases appeared in CompletedPhases but not in PhaseLog,
+		// making skip-related bugs invisible.
+		t.Parallel()
+		workspace, sm := initWorkspaceForNextAction(t, "phase-3b", func(s *state.State) error {
+			s.SkippedPhases = []string{"phase-3b"}
+			return nil
+		})
+		eng := orchestrator.NewEngine("", "")
+		handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
+
+		result, err := callNextAction(t, handler, workspace)
+		if err != nil {
+			t.Fatalf("handler returned error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("handler returned MCP error: %s", result.Content)
+		}
+
+		// Verify PhaseLog contains an entry for the skipped phase.
+		s, loadErr := loadState(workspace)
+		if loadErr != nil {
+			t.Fatalf("loadState: %v", loadErr)
+		}
+		found := false
+		for _, entry := range s.PhaseLog {
+			if entry.Phase == "phase-3b" && entry.Model == "skipped" {
+				found = true
+				if entry.Tokens != 0 {
+					t.Errorf("skip PhaseLog entry tokens = %d, want 0", entry.Tokens)
+				}
+				if entry.DurationMs != 0 {
+					t.Errorf("skip PhaseLog entry durationMs = %d, want 0", entry.DurationMs)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("PhaseLog does not contain entry for skipped phase-3b with model=skipped; got %+v", s.PhaseLog)
+		}
+	})
+
 	t.Run("prompt_enrichment", func(t *testing.T) {
 		t.Parallel()
 		workspace, sm := initWorkspaceForNextAction(t, "phase-1", nil)

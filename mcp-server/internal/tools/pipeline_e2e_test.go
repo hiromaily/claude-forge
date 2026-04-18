@@ -211,11 +211,15 @@ func runE2EPipeline(
 }
 
 // phaseLogSet returns a set of phase IDs that appear in s.PhaseLog.
-// Only phases that were actually dispatched (agent spawned, exec run, or checkpoint
-// reported) have PhaseLog entries; pre-configured skipped phases are absent.
+// phaseLogSet returns phases that were actually executed (agent spawned, exec run,
+// or checkpoint reported). Skip-only entries (model == "skipped") are excluded so
+// the set reflects phases that ran, not phases that were merely logged as skipped.
 func phaseLogSet(s *state.State) map[string]bool {
 	set := make(map[string]bool, len(s.PhaseLog))
 	for _, entry := range s.PhaseLog {
+		if entry.Model == "skipped" {
+			continue
+		}
 		set[entry.Phase] = true
 	}
 	return set

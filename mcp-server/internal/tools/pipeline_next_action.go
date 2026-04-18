@@ -270,6 +270,7 @@ func PipelineNextActionHandler(
 		// Each ActionDone with a SkipSummaryPrefix triggers PhaseCompleteSkipped and
 		// re-invokes eng.NextAction. The loop is bounded to 20 iterations (pipeline has
 		// 18 phases; 20 provides a safe margin against infinite cycles).
+		var skipWarnings []string
 		for iter := range maxDispatchIter {
 			if action.Type != orchestrator.ActionDone ||
 				!strings.HasPrefix(action.Summary, orchestrator.SkipSummaryPrefix) {
@@ -278,6 +279,10 @@ func PipelineNextActionHandler(
 			skipPhase := strings.TrimPrefix(action.Summary, orchestrator.SkipSummaryPrefix)
 			if skipErr := sm2.PhaseCompleteSkipped(workspace, skipPhase); skipErr != nil {
 				return errorf("skip phase_complete %s: %v", skipPhase, skipErr)
+			}
+			// Record the skip in PhaseLog for observability.
+			if logErr := sm2.PhaseLog(workspace, skipPhase, 0, 0, "skipped"); logErr != nil {
+				skipWarnings = append(skipWarnings, fmt.Sprintf("skip phase-log %s: %v", skipPhase, logErr))
 			}
 			action, err = eng.NextAction(sm2, "")
 			if err != nil {
@@ -302,6 +307,11 @@ func PipelineNextActionHandler(
 				resp.Warning += "; "
 			}
 			resp.Warning += msg
+		}
+
+		// Merge skip warnings collected before appendWarning was available.
+		for _, w := range skipWarnings {
+			appendWarning(w)
 		}
 
 		// P2/P3/P4 dispatch loop: absorb ActionTaskInit, ActionBatchCommit, and the
