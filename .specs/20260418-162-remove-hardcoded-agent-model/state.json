@@ -1,0 +1,246 @@
+{
+  "version": 2,
+  "forge-state-mcp-version": "v2.13.0",
+  "specName": "162-remove-hardcoded-agent-model",
+  "workspace": ".specs/20260418-162-remove-hardcoded-agent-model",
+  "branch": "fix/162-remove-hardcoded-agent-model",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "branchClassified": true,
+  "debug": true,
+  "skippedPhases": [
+    "phase-4b",
+    "checkpoint-b"
+  ],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "setup",
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-3b",
+    "checkpoint-a",
+    "phase-4",
+    "phase-4b",
+    "checkpoint-b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "final-verification",
+    "pr-creation",
+    "final-summary",
+    "post-to-source",
+    "final-commit"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "needsBatchCommit": false,
+  "tasks": {
+    "1": {
+      "title": "Remove `model: sonnet` from agent frontmatter files [parallel]",
+      "executionMode": "parallel",
+      "depends_on": null,
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/situation-analyst.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/situation-analyst-investigator.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/investigator.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/architect.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/design-reviewer.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/task-reviewer.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/task-decomposer.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/implementer.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/impl-reviewer.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/comprehensive-reviewer.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/agents/verifier.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Update English SSOT documentation templates [parallel]",
+      "executionMode": "parallel",
+      "depends_on": null,
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/template/sections/architecture/technical-decisions.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/template/sections/architecture/design-principles.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/template/sections/architecture/design-decisions.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/template/sections/agents/overview.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Update Japanese SSOT documentation templates [parallel]",
+      "executionMode": "parallel",
+      "depends_on": null,
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/template/sections/ja/architecture/technical-decisions.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/template/sections/ja/architecture/design-principles.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/template/sections/ja/agents/overview.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Regenerate documentation with `make docs` [sequential]",
+      "executionMode": "sequential",
+      "depends_on": [
+        2,
+        3
+      ],
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/README.md",
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/CLAUDE.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-1",
+      "tokens": 59594,
+      "duration_ms": 207369,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:21:46.685391Z"
+    },
+    {
+      "phase": "phase-2",
+      "tokens": 84991,
+      "duration_ms": 211168,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:25:34.465259Z"
+    },
+    {
+      "phase": "phase-3",
+      "tokens": 49466,
+      "duration_ms": 93042,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:27:25.637085Z"
+    },
+    {
+      "phase": "phase-3b",
+      "tokens": 40749,
+      "duration_ms": 92269,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:29:11.923335Z"
+    },
+    {
+      "phase": "phase-4",
+      "tokens": 36419,
+      "duration_ms": 49076,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:34:11.820585Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 122402,
+      "duration_ms": 105754,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:36:15.816592Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 36195,
+      "duration_ms": 95694,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:38:04.383467Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 33467,
+      "duration_ms": 32172,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:38:55.517577Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 32207,
+      "duration_ms": 40140,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:39:48.226357Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 32535,
+      "duration_ms": 38116,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:40:40.407463Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 29830,
+      "duration_ms": 30487,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:41:24.479817Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 47537,
+      "duration_ms": 90168,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:43:07.019762Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 38465,
+      "duration_ms": 81402,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:44:42.110152Z"
+    },
+    {
+      "phase": "pr-creation",
+      "tokens": 0,
+      "duration_ms": 5000,
+      "model": "",
+      "timestamp": "2026-04-18T05:45:06.186075Z"
+    },
+    {
+      "phase": "final-summary",
+      "tokens": 37984,
+      "duration_ms": 60388,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:46:22.007828Z"
+    },
+    {
+      "phase": "final-summary",
+      "tokens": 37984,
+      "duration_ms": 60388,
+      "model": "sonnet",
+      "timestamp": "2026-04-18T05:46:34.418432Z"
+    },
+    {
+      "phase": "final-commit",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-18T05:46:34.421541Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-04-18T04:37:41.754057Z",
+    "lastUpdated": "2026-04-18T05:46:34.422171Z",
+    "phaseStarted": null
+  },
+  "error": null
+}

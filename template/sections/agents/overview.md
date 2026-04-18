@@ -33,4 +33,4 @@ Which phases (and their agents) execute depends on the **effort level**, not tas
 
 ## Model Configuration
 
-All agents default to `model: sonnet` for cost optimization. Upgrade individual agents to `opus` in their `.md` frontmatter when stronger reasoning is needed.
+Agents inherit the user's configured model by default — no `model:` key is set in agent frontmatter. This means agents run on whatever model the user has selected in their Claude Code configuration. To pin a specific agent to a particular model, add `model: <name>` to that agent's `.md` frontmatter.

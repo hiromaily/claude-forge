@@ -62,6 +62,6 @@ Critical invariants are enforced both by agent instructions (probabilistic) and 
 
 All hooks are fail-open: if jq is missing or state.json can't be read, the action is **allowed**. This prevents hooks from breaking non-pipeline work.
 
-## 6. Cost-Optimized Agent Selection
+## 6. User-Controlled Agent Model Selection
 
-All agents use `model: sonnet` by default — cost optimization for 10+ agent invocations per run. Individual agents can be upgraded to `opus` when stronger reasoning is needed.
+Agents inherit the user's configured model by default — no `model:` key is set in agent frontmatter. This lets users control model selection through their Claude Code configuration rather than having the pipeline override it. Individual agents can be pinned to a specific model by adding `model: <name>` to their frontmatter when needed.

@@ -108,6 +108,10 @@ const (
 // ---------- Default model ----------
 
 const (
+	// DefaultModel is the analytics label recorded in Action.Model for agent dispatch.
+	// It is NOT the execution model — the actual model each agent uses is determined
+	// by the agent's YAML frontmatter (e.g. "claude-opus-4-6"). This value appears
+	// only in phase_log entries for cost tracking and analytics purposes.
 	DefaultModel = "sonnet"
 )
 

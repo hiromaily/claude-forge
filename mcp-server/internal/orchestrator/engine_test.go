@@ -943,12 +943,26 @@ func TestNextAction(t *testing.T) {
 			wantAgent: agentVerifier,
 		},
 
-		// ── Decision 24: pr-creation exec (SkipPr == false) ─────────────────
+		// ── Decision 24: pr-creation emits push_branch first (BranchPushed == false) ──
+		{
+			name: "pr_creation_push_branch",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "pr-creation", nil) // BranchPushed defaults to false
+			},
+			wantType:  ActionPushBranch,
+			wantPhase: PhasePRCreation,
+		},
+
+		// ── Decision 24: pr-creation exec after branch pushed (BranchPushed == true) ──
 		{
 			name: "pr_creation_exec",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
-				return newTestStateManager(t, "pr-creation", nil)
+				return newTestStateManager(t, "pr-creation", func(s *state.State) error {
+					s.BranchPushed = true
+					return nil
+				})
 			},
 			wantType:  ActionExec,
 			wantPhase: PhasePRCreation,
@@ -973,7 +987,10 @@ func TestNextAction(t *testing.T) {
 			name: "pr_creation_github_issue_closes",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
-				return newTestStateManager(t, "pr-creation", nil)
+				return newTestStateManager(t, "pr-creation", func(s *state.State) error {
+					s.BranchPushed = true
+					return nil
+				})
 			},
 			engFn: func() *Engine {
 				return &Engine{
@@ -994,7 +1011,10 @@ func TestNextAction(t *testing.T) {
 			name: "pr_creation_text_source_no_closes",
 			setupSM: func(t *testing.T) *state.StateManager {
 				t.Helper()
-				return newTestStateManager(t, "pr-creation", nil)
+				return newTestStateManager(t, "pr-creation", func(s *state.State) error {
+					s.BranchPushed = true
+					return nil
+				})
 			},
 			engFn: func() *Engine {
 				return &Engine{

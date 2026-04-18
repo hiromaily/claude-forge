@@ -399,6 +399,29 @@ func PipelineNextActionHandler(
 				}
 				continue
 
+			case orchestrator.ActionPushBranch:
+				// P7: push feature branch to remote before pr-creation, update state, re-enter.
+				// Absorbed internally so the orchestrator never sees push_branch as an action.
+				// git push -u origin HEAD works on any checked-out branch name and is idempotent.
+				if pushErr := runGit(workspace, "push", "-u", "origin", "HEAD"); pushErr != nil {
+					return errorf("push_branch git: %v", pushErr)
+				}
+				if updateErr := sm2.Update(func(s *state.State) error {
+					s.BranchPushed = true
+					return nil
+				}); updateErr != nil {
+					return errorf("push_branch state update: %v", updateErr)
+				}
+				action, err = eng.NextAction(sm2, "")
+				if err != nil {
+					return errorf("next_action (after push_branch): %v", err)
+				}
+				if iter == maxDispatchIter-1 {
+					return errorf("dispatch loop exceeded %d iterations — possible engine cycle; last action: %s",
+						maxDispatchIter, action.Type)
+				}
+				continue
+
 			default:
 				// ActionSpawnAgent, ActionCheckpoint, ActionWriteFile, ActionDone — return as-is.
 			}
@@ -488,7 +511,7 @@ func PipelineNextActionHandler(
 // and the empty HistoryContext is used (fail-open pattern).
 //
 // Returns an error if the agent .md file is missing (caller should treat as warning).
-func enrichPrompt(
+func enrichPrompt( //nolint:gocyclo // complexity is inherent in the multi-layer prompt assembly
 	resp *nextActionResponse,
 	agentDir, workspace string,
 	sm *state.StateManager,
@@ -504,7 +527,33 @@ func enrichPrompt(
 		return fmt.Errorf("read agent file %q: %w", agentFile, err)
 	}
 
+	// Fetch state once; used for both template substitution and history search below.
+	st, stErr := sm.GetState()
+	if stErr != nil {
+		return fmt.Errorf("get state for prompt enrichment: %w", stErr)
+	}
+
 	agentInstructions := string(agentData)
+
+	// Substitute agent instruction template variables with runtime values.
+	// Agent .md files use {workspace}, {branch}, {spec-name}, and {N} as placeholders
+	// that must be resolved before the prompt is sent, so agents receive concrete paths
+	// and identifiers rather than literal brace-tokens.
+	// strings.NewReplacer performs all substitutions in a single pass, avoiding
+	// incorrect results if a replacement value contained another placeholder.
+	branch := ""
+	if st.Branch != nil {
+		branch = *st.Branch
+	}
+	replacements := []string{
+		"{workspace}", workspace,
+		"{branch}", branch,
+		"{spec-name}", st.SpecName,
+	}
+	if taskN := extractTaskNumber(action.OutputFile); taskN != "" {
+		replacements = append(replacements, "{N}", taskN)
+	}
+	agentInstructions = strings.NewReplacer(replacements...).Replace(agentInstructions)
 
 	// Build Layer 2 artifacts section — file paths only (no content inlining).
 	// Agents read artifacts themselves via the Read tool. This keeps the MCP
@@ -552,11 +601,7 @@ func enrichPrompt(
 	var histCtx prompt.HistoryContext
 
 	if histIdx != nil {
-		oneLiner := ""
-		if st, stErr := sm.GetState(); stErr == nil {
-			oneLiner = st.SpecName
-		}
-
+		oneLiner := st.SpecName
 		if oneLiner == "" {
 			oneLiner = filepath.Base(workspace)
 		}
@@ -658,4 +703,18 @@ func filterCurrentReviewFindings(workspace string, ctx prompt.HistoryContext) pr
 	ctx.CriticalPatterns = filteredCritical
 
 	return ctx
+}
+
+// extractTaskNumber parses the task number from an output artifact filename.
+// "impl-1.md" → "1", "review-2.md" → "2". Returns "" when the filename does
+// not match either pattern (e.g. "analysis.md", "design.md").
+func extractTaskNumber(outputFile string) string {
+	for _, prefix := range []string{"impl-", "review-"} {
+		if rest, ok := strings.CutPrefix(outputFile, prefix); ok {
+			if n, ok2 := strings.CutSuffix(rest, ".md"); ok2 {
+				return n
+			}
+		}
+	}
+	return ""
 }

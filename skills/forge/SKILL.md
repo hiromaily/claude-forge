@@ -97,6 +97,13 @@ Repeat until done:
      Record the tokens, duration, and model for the next `pipeline_next_action` call.
      - If `action.parallel_task_ids` is non-empty: spawn one Agent call per task ID in
        parallel; wait for all to complete before calling `pipeline_next_action` again.
+     - **Artifact write fallback**: After the agent returns, if `action.output_file` is
+       non-empty, check whether `{workspace}/{action.output_file}` exists on disk. If
+       the file does **NOT** exist, the agent returned its output as text instead of
+       writing the file (subagents may lack write permission in some permission modes).
+       In that case, use the Write tool to write the agent's final response text to
+       `{workspace}/{action.output_file}` before calling `pipeline_next_action`.
+       This ensures `pipeline_report_result` artifact validation always succeeds.
    - `checkpoint`: **Before presenting anything to the user**, call
      `mcp__forge-state__checkpoint(workspace, phase=action.name)`.
      This is mandatory — it registers the pause so the pipeline can exit safely if

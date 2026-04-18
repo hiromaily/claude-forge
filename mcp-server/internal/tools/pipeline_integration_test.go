@@ -138,8 +138,12 @@ func TestPipelineRoundTrip_SkipSignal(t *testing.T) {
 func TestPipelineRoundTrip_ExecPhase(t *testing.T) {
 	t.Parallel()
 
-	// Set up workspace at pr-creation phase.
-	workspace, sm := initWorkspaceForNextAction(t, "pr-creation", nil)
+	// Set up workspace at pr-creation phase with BranchPushed=true so the engine
+	// skips the internal push_branch action and returns the exec action directly.
+	workspace, sm := initWorkspaceForNextAction(t, "pr-creation", func(s *state.State) error {
+		s.BranchPushed = true
+		return nil
+	})
 	eng := orchestrator.NewEngine("", "")
 	nextActionH := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
 	reportResultH := PipelineReportResultHandler(state.NewStateManager("dev"), events.NewEventBus(), history.NewKnowledgeBase(""))
