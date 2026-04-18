@@ -356,7 +356,8 @@ func TestE2E_CheckpointRevisionFlow(t *testing.T) {
 
 		// If a checkpoint is pending from the previous iteration, respond to it
 		// via user_response instead of doing a normal callNextAction.
-		if pendingCheckpoint == state.PhaseCheckpointA {
+		switch {
+		case pendingCheckpoint == state.PhaseCheckpointA:
 			checkpointACount++
 			if checkpointACount == 1 {
 				// First time at checkpoint-a: respond "revise" to trigger rewind.
@@ -366,11 +367,11 @@ func TestE2E_CheckpointRevisionFlow(t *testing.T) {
 				result, err = callNextActionWithUserResponse(t, nextActionH, workspace, "proceed")
 			}
 			pendingCheckpoint = ""
-		} else if pendingCheckpoint != "" {
+		case pendingCheckpoint != "":
 			// For other checkpoints (checkpoint-b), just proceed.
 			result, err = callNextActionWithUserResponse(t, nextActionH, workspace, "proceed")
 			pendingCheckpoint = ""
-		} else {
+		default:
 			result, err = callNextAction(t, nextActionH, workspace)
 		}
 

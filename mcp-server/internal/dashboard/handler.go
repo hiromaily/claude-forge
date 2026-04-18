@@ -37,7 +37,10 @@ func phaseLabelsHandler(labels map[string]string) http.HandlerFunc {
 	if labels == nil {
 		labels = make(map[string]string)
 	}
-	data, _ := json.Marshal(labels)
+	data, err := json.Marshal(labels)
+	if err != nil {
+		data = []byte("{}")
+	}
 
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
