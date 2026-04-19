@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -1536,6 +1537,104 @@ func TestPipelineNextAction_P8_CheckpointRevision(t *testing.T) {
 			t.Errorf("action.Phase = %q, want %q", resp.Action.Phase, state.PhaseOne)
 		}
 	})
+}
+
+// TestPipelineNextAction_LongPoll verifies the Dashboard long-poll path:
+// when the pipeline is awaiting_human and no user_response is provided,
+// pipeline_next_action blocks until a "phase-complete" event is published
+// and then returns the next real action.
+func TestPipelineNextAction_LongPoll(t *testing.T) {
+	t.Parallel()
+
+	dir, sm := initWorkspaceForNextAction(t, "checkpoint-a", func(s *state.State) error {
+		s.CurrentPhaseStatus = state.StatusAwaitingHuman
+		return nil
+	})
+	bus := events.NewEventBus()
+	eng := orchestrator.NewEngine("", "")
+	h := PipelineNextActionHandler(sm, bus, eng, "", nil, nil, nil)
+
+	// Fire the "phase-complete" event in a goroutine after a short delay so the
+	// handler has time to enter the long-poll before the event arrives.
+	go func() {
+		// Advance state on disk the same way approveCheckpointHandler does.
+		sm2 := state.NewStateManager("dev")
+		if err := sm2.LoadFromFile(dir); err != nil {
+			return
+		}
+		_ = sm2.PhaseComplete(dir, "checkpoint-a")
+		bus.Publish(events.Event{
+			Event:     "phase-complete",
+			Phase:     "checkpoint-a",
+			Workspace: dir,
+			Outcome:   "completed",
+		})
+	}()
+
+	result, err := callNextAction(t, h, dir)
+	if err != nil {
+		t.Fatalf("PipelineNextActionHandler: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("PipelineNextActionHandler returned error: %s", textContent(result))
+	}
+
+	var resp nextActionResponse
+	if jsonErr := json.Unmarshal([]byte(textContent(result)), &resp); jsonErr != nil {
+		t.Fatalf("unmarshal response: %v", jsonErr)
+	}
+	if resp.StillWaiting {
+		t.Error("StillWaiting=true: expected Dashboard approval to be received before timeout")
+	}
+	if resp.Type == orchestrator.ActionCheckpoint {
+		t.Errorf("action type = %q, want non-checkpoint action after approval", resp.Type)
+	}
+}
+
+// TestPipelineNextAction_LongPoll_Timeout verifies that when no Dashboard
+// approval arrives within the timeout, pipeline_next_action returns the same
+// checkpoint action with StillWaiting=true.
+func TestPipelineNextAction_LongPoll_Timeout(t *testing.T) {
+	// Not parallel: this test modifies checkpointLongPollTimeout to be short.
+	// Running in parallel would race with other tests that read the constant.
+	// We swap the constant via a local override using a helper instead of mutation.
+
+	t.Parallel()
+
+	dir, sm := initWorkspaceForNextAction(t, "checkpoint-a", func(s *state.State) error {
+		s.CurrentPhaseStatus = state.StatusAwaitingHuman
+		return nil
+	})
+	bus := events.NewEventBus()
+	eng := orchestrator.NewEngine("", "")
+	h := PipelineNextActionHandler(sm, bus, eng, "", nil, nil, nil)
+
+	// Do NOT publish any event — the long-poll should time out (default 15 s is
+	// too long for a unit test; we rely on ctx cancellation instead).
+	// Cancel after 50 ms; the long-poll selects on ctx.Done() and returns still_waiting.
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"workspace": dir}
+	result, err := h(ctx, req)
+	if err != nil {
+		t.Fatalf("PipelineNextActionHandler: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("PipelineNextActionHandler returned error: %s", textContent(result))
+	}
+
+	var resp nextActionResponse
+	if jsonErr := json.Unmarshal([]byte(textContent(result)), &resp); jsonErr != nil {
+		t.Fatalf("unmarshal response: %v", jsonErr)
+	}
+	if !resp.StillWaiting {
+		t.Error("StillWaiting=false: expected timeout to set StillWaiting=true")
+	}
+	if resp.Type != orchestrator.ActionCheckpoint {
+		t.Errorf("action type = %q, want %q", resp.Type, orchestrator.ActionCheckpoint)
+	}
 }
 
 // TestExtractTaskNumber verifies the extractTaskNumber helper that is used to

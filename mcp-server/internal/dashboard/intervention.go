@@ -27,8 +27,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
 // interventionRequest is the JSON body shape accepted by intervention endpoints.
@@ -47,9 +49,12 @@ type interventionRequest struct {
 // The handler refuses to advance any phase that is not currently awaiting
 // human input, so a misfired button cannot accidentally skip an active
 // agent run.
-func approveCheckpointHandler(sm *state.StateManager) http.HandlerFunc {
+//
+// When publicMode is true (FORGE_DASHBOARD_BIND_ALL=1) the loopback/origin
+// safety check is skipped so devices on the local network can reach the API.
+func approveCheckpointHandler(sm *state.StateManager, bus *events.EventBus, publicMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !isLocalRequest(r) {
+		if !publicMode && !isLocalRequest(r) {
 			httpError(w, http.StatusForbidden, "forbidden: intervention API requires loopback request and same-origin")
 			return
 		}
@@ -99,6 +104,14 @@ func approveCheckpointHandler(sm *state.StateManager) http.HandlerFunc {
 			httpError(w, http.StatusInternalServerError, fmt.Sprintf("phase_complete: %v", err))
 			return
 		}
+		// Publish phase-complete so any pipeline_next_action long-poll wakes up.
+		bus.Publish(events.Event{
+			Event:     "phase-complete",
+			Phase:     req.Phase,
+			Workspace: req.Workspace,
+			Outcome:   "completed",
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+		})
 		writeJSON(w, http.StatusOK, map[string]any{
 			"status":    "approved",
 			"workspace": req.Workspace,
@@ -109,9 +122,11 @@ func approveCheckpointHandler(sm *state.StateManager) http.HandlerFunc {
 
 // abandonHandler marks the workspace as abandoned, mirroring the abandon MCP
 // tool. It refuses to abandon a workspace that is already terminal.
-func abandonHandler(sm *state.StateManager) http.HandlerFunc {
+//
+// When publicMode is true the loopback/origin check is skipped (see approveCheckpointHandler).
+func abandonHandler(sm *state.StateManager, publicMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !isLocalRequest(r) {
+		if !publicMode && !isLocalRequest(r) {
 			httpError(w, http.StatusForbidden, "forbidden: intervention API requires loopback request and same-origin")
 			return
 		}

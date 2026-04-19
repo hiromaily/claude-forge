@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -21,6 +22,11 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/prompt"
 	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
+
+// checkpointLongPollTimeout is the maximum time pipeline_next_action blocks
+// waiting for a Dashboard-triggered phase-complete event at a checkpoint.
+// 15 seconds is safely within the MCP tool-call timeout on all observed clients.
+const checkpointLongPollTimeout = 15 * time.Second
 
 const similarPipelinesSearchLimit = 3
 
@@ -69,6 +75,8 @@ type reportResultEmbedded struct {
 // DisplayMessage is a pre-formatted progress line the orchestrator should output verbatim
 // before executing the action (e.g. "▶ Phase 1 — Situation Analysis  ·  spawning …").
 // ReportResult is present when previous_* params triggered a non-proceed transition.
+// StillWaiting is true when pipeline_next_action returned from a long-poll timeout at a
+// checkpoint; the orchestrator should call pipeline_next_action again immediately.
 type nextActionResponse struct {
 	orchestrator.Action
 	Warning            string                `json:"warning,omitempty"`
@@ -76,6 +84,7 @@ type nextActionResponse struct {
 	ReportResult       *reportResultEmbedded `json:"report_result,omitempty"`
 	CurrentPhase       string                `json:"current_phase,omitempty"`
 	CurrentPhaseStatus string                `json:"current_phase_status,omitempty"`
+	StillWaiting       bool                  `json:"still_waiting,omitempty"`
 }
 
 // parsePreviousResult extracts the optional previous_* parameters from the MCP request.
@@ -121,7 +130,7 @@ func PipelineNextActionHandler(
 	kb *history.KnowledgeBase,
 	profiler *profile.RepoProfiler,
 ) server.ToolHandlerFunc {
-	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, result, err := requireWorkspace(req)
 		if result != nil {
 			return result, err
@@ -264,6 +273,60 @@ func PipelineNextActionHandler(
 				return nil
 			}); updateErr != nil {
 				return errorf("resolve human gate task %s: %v", taskKey, updateErr)
+			}
+		}
+
+		// Long-poll: when the pipeline is awaiting human approval and the caller
+		// provided no user_response, subscribe to the EventBus and block until a
+		// Dashboard-triggered phase-complete event arrives or the timeout elapses.
+		//
+		// This eliminates the need for AskUserQuestion at checkpoints: the
+		// orchestrator calls pipeline_next_action immediately after presenting the
+		// checkpoint to the user, and the MCP call stays open until either the
+		// Dashboard approves or 15 s pass.
+		//
+		// On timeout the function falls through to eng.NextAction (which returns the
+		// same checkpoint action) and sets StillWaiting=true so the orchestrator
+		// re-calls immediately. On Dashboard approval the state is already advanced
+		// on disk; reloading before eng.NextAction yields the next real action.
+		// checkpointTimedOut is set true when the long-poll exits without Dashboard
+		// approval; it causes StillWaiting=true to be set on the response so the
+		// orchestrator re-calls pipeline_next_action immediately.
+		checkpointTimedOut := false
+		if userResponse == "" {
+			if st, stErr := sm2.GetState(); stErr == nil && st.CurrentPhaseStatus == state.StatusAwaitingHuman {
+				subID, eventCh := bus.Subscribe()
+				checkPhase := st.CurrentPhase
+				timer := time.NewTimer(checkpointLongPollTimeout)
+				approved := false
+			longPoll:
+				for {
+					select {
+					case e, ok := <-eventCh:
+						if !ok {
+							break longPoll
+						}
+						if e.Event == "phase-complete" && e.Phase == checkPhase {
+							approved = true
+							break longPoll
+						}
+					case <-timer.C:
+						break longPoll
+					case <-ctx.Done():
+						break longPoll
+					}
+				}
+				timer.Stop()
+				bus.Unsubscribe(subID)
+
+				if approved {
+					// Dashboard approved: reload from disk (state is now advanced).
+					if reloadErr := sm2.LoadFromFile(workspace); reloadErr != nil {
+						return errorf("long-poll reload: %v", reloadErr)
+					}
+				} else {
+					checkpointTimedOut = true
+				}
 			}
 		}
 
@@ -488,6 +551,9 @@ func PipelineNextActionHandler(
 
 		resp.Action = action
 		resp.DisplayMessage = buildSpawnMessage(action)
+		if checkpointTimedOut && action.Type == orchestrator.ActionCheckpoint {
+			resp.StillWaiting = true
+		}
 
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
 			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb, profiler); enrichErr != nil {

@@ -13,6 +13,14 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
 
+// publicModeEnabled returns true when FORGE_DASHBOARD_BIND_ALL is set to a non-empty value.
+// In public mode the dashboard binds to 0.0.0.0 (all interfaces) and the
+// loopback/origin safety checks in the intervention handlers are disabled.
+// This is intentionally insecure and intended for local network development only.
+func publicModeEnabled() bool {
+	return os.Getenv("FORGE_DASHBOARD_BIND_ALL") != ""
+}
+
 const (
 	// fallbackPortMin and fallbackPortMax define the inclusive range of ports
 	// tried when the configured eventsPort is already in use.
@@ -60,7 +68,8 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager, opts
 		return nil
 	}
 
-	ln := listenWithFallback(eventsPort)
+	public := publicModeEnabled()
+	ln := listenWithFallback(eventsPort, public)
 	if ln == nil {
 		return nil
 	}
@@ -69,6 +78,9 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager, opts
 		fmt.Fprintf(os.Stderr, "forge-state: dashboard ready at %s\n", dashboardURL(tcpAddr.Port))
 	} else {
 		fmt.Fprintf(os.Stderr, "forge-state: dashboard ready (listener addr type %T; URL unavailable)\n", ln.Addr())
+	}
+	if public {
+		fmt.Fprintf(os.Stderr, "forge-state: dashboard running in public mode (FORGE_DASHBOARD_BIND_ALL=1) — accessible from any network interface\n")
 	}
 
 	var labels map[string]string
@@ -82,8 +94,8 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager, opts
 	mux.Handle("GET /api/phase-labels", phaseLabelsHandler(labels))
 	mux.Handle("GET /api/phase-artifacts", phaseArtifactsHandler())
 	mux.Handle("GET /api/artifact", artifactHandler())
-	mux.Handle("POST /api/checkpoint/approve", approveCheckpointHandler(sm))
-	mux.Handle("POST /api/pipeline/abandon", abandonHandler(sm))
+	mux.Handle("POST /api/checkpoint/approve", approveCheckpointHandler(sm, bus, public))
+	mux.Handle("POST /api/pipeline/abandon", abandonHandler(sm, public))
 
 	srv := &http.Server{
 		Handler:           mux,
@@ -99,9 +111,14 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager, opts
 
 // listenWithFallback tries to bind on the configured port first. If that fails
 // (e.g. port conflict), it retries on random ports in [fallbackPortMin, fallbackPortMax].
+// When public is true it binds to 0.0.0.0 (all interfaces); otherwise 127.0.0.1 only.
 // Returns nil only when all attempts are exhausted.
-func listenWithFallback(preferredPort string) net.Listener {
-	addr := net.JoinHostPort("127.0.0.1", preferredPort)
+func listenWithFallback(preferredPort string, public bool) net.Listener {
+	host := "127.0.0.1"
+	if public {
+		host = "0.0.0.0"
+	}
+	addr := net.JoinHostPort(host, preferredPort)
 	ln, err := net.Listen("tcp", addr)
 	if err == nil {
 		return ln
@@ -111,7 +128,7 @@ func listenWithFallback(preferredPort string) net.Listener {
 
 	for range fallbackAttempts {
 		port := fallbackPortMin + rand.IntN(fallbackPortMax-fallbackPortMin+1) //nolint:gosec // port selection is non-security use of math/rand
-		addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+		addr = net.JoinHostPort(host, strconv.Itoa(port))
 		ln, err = net.Listen("tcp", addr)
 		if err == nil {
 			return ln
