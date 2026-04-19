@@ -489,7 +489,7 @@
         postIntervention("/api/checkpoint/approve", { workspace: workspace, phase: phase, message: message })
           .then(function (r) {
             if (r.ok) {
-              btn.textContent = "approved";
+              btn.textContent = "✓ Pipeline will continue automatically";
               if (messageInput) messageInput.disabled = true;
             } else {
               btn.disabled = false;
