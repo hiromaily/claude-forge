@@ -17,6 +17,15 @@
       --warn: #d29922;
       --bad: #f85149;
       --info: #a371f7;
+      /* Status colour tokens — single source of truth.
+         Badge text and left-border both derive from these, so they can never
+         diverge. To change a status colour, edit exactly one line here. */
+      --status-completed:      var(--ok);
+      --status-in_progress:    var(--accent);
+      --status-dispatched:     var(--info);
+      --status-awaiting_human: var(--warn);
+      --status-failed:         var(--bad);
+      --status-abandoned:      var(--muted);
     }
     @media (prefers-color-scheme: light) {
       :root {
@@ -134,11 +143,18 @@
     .event.kind-agent-dispatch { border-left-color: var(--info); opacity: 0.85; }
     .event.kind-action-complete { border-left-color: var(--ok); opacity: 0.85; }
     .event.kind-revision-required { border-left-color: var(--warn); }
-    /* Outcome-based border overrides: ensure failed/abandoned events always
-       show the correct left-border colour regardless of event kind. */
-    .event.outcome-failed { border-left-color: var(--bad); }
-    .event.outcome-abandoned { border-left-color: var(--bad); opacity: 0.7; }
-    .out-dispatched { background: rgba(163, 113, 247, 0.15); color: var(--info); }
+    /* Outcome-based border overrides: every outcome maps to its status token,
+       so left-border always matches the badge text — no divergence possible.
+       These run after the kind-* rules so they take precedence. */
+    .event.outcome-completed      { border-left-color: var(--status-completed); }
+    .event.outcome-in_progress    { border-left-color: var(--status-in_progress); }
+    .event.outcome-dispatched     { border-left-color: var(--status-dispatched); }
+    .event.outcome-awaiting_human { border-left-color: var(--status-awaiting_human); }
+    .event.outcome-failed         { border-left-color: var(--status-failed); }
+    .event.outcome-abandoned      { border-left-color: var(--status-abandoned); opacity: 0.7; }
+    /* Outcome badge styles — background derives from the same status token as
+       the text colour, so badge and border are always in sync. */
+    .out-dispatched { background: color-mix(in srgb, var(--status-dispatched) 15%, transparent); color: var(--status-dispatched); }
     .event-kind {
       font-weight: 600;
       font-size: 13px;
@@ -165,11 +181,11 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-    .out-completed { background: rgba(63, 185, 80, 0.15); color: var(--ok); }
-    .out-in_progress { background: rgba(163, 113, 247, 0.15); color: var(--info); }
-    .out-failed { background: rgba(248, 81, 73, 0.15); color: var(--bad); }
-    .out-awaiting_human { background: rgba(210, 153, 34, 0.15); color: var(--warn); }
-    .out-abandoned { background: rgba(139, 148, 158, 0.15); color: var(--muted); }
+    .out-completed      { background: color-mix(in srgb, var(--status-completed)      15%, transparent); color: var(--status-completed); }
+    .out-in_progress    { background: color-mix(in srgb, var(--status-in_progress)    15%, transparent); color: var(--status-in_progress); }
+    .out-failed         { background: color-mix(in srgb, var(--status-failed)         15%, transparent); color: var(--status-failed); }
+    .out-awaiting_human { background: color-mix(in srgb, var(--status-awaiting_human) 15%, transparent); color: var(--status-awaiting_human); }
+    .out-abandoned      { background: color-mix(in srgb, var(--status-abandoned)      15%, transparent); color: var(--status-abandoned); }
     .action-btn {
       background: var(--panel);
       color: var(--text);
