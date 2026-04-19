@@ -171,7 +171,7 @@ func PipelineNextActionHandler(
 
 				switch outcome.NextActionHint {
 				case "revision_required":
-					publishEvent(bus, nil, "revision-required", st.CurrentPhase, st.SpecName, workspace, "failed")
+					publishEvent(bus, nil, "revision-required", st.CurrentPhase, st.SpecName, workspace, "revised")
 					// Surface to orchestrator; do NOT call eng.NextAction.
 					return okJSON(nextActionResponse{
 						ReportResult: &reportResultEmbedded{

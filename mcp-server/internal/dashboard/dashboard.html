@@ -25,6 +25,7 @@
       --status-dispatched:     var(--info);
       --status-awaiting_human: var(--warn);
       --status-failed:         var(--bad);
+      --status-revised:        var(--warn);
       --status-abandoned:      var(--muted);
     }
     @media (prefers-color-scheme: light) {
@@ -151,10 +152,12 @@
     .event.outcome-dispatched     { border-left-color: var(--status-dispatched); }
     .event.outcome-awaiting_human { border-left-color: var(--status-awaiting_human); }
     .event.outcome-failed         { border-left-color: var(--status-failed); }
+    .event.outcome-revised        { border-left-color: var(--status-revised); }
     .event.outcome-abandoned      { border-left-color: var(--status-abandoned); opacity: 0.7; }
     /* Outcome badge styles — background derives from the same status token as
        the text colour, so badge and border are always in sync. */
     .out-dispatched { background: color-mix(in srgb, var(--status-dispatched) 15%, transparent); color: var(--status-dispatched); }
+    .out-revised    { background: color-mix(in srgb, var(--status-revised)    15%, transparent); color: var(--status-revised); }
     .event-kind {
       font-weight: 600;
       font-size: 13px;
@@ -465,7 +468,7 @@
       // class so the data path can never inject arbitrary CSS class names.
       var KNOWN_EVENTS = ["phase-start", "phase-complete", "phase-fail", "checkpoint", "abandon",
         "pipeline-init", "pipeline-complete", "agent-dispatch", "action-complete", "revision-required"];
-      var KNOWN_OUTCOMES = ["completed", "in_progress", "failed", "awaiting_human", "abandoned", "dispatched"];
+      var KNOWN_OUTCOMES = ["completed", "in_progress", "failed", "revised", "awaiting_human", "abandoned", "dispatched"];
 
       function safeClassFragment(value, allowlist, fallback) {
         return allowlist.indexOf(value) === -1 ? fallback : value;
