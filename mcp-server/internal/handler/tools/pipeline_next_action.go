@@ -287,18 +287,28 @@ func PipelineNextActionHandler(
 		//
 		// On timeout the function falls through to eng.NextAction (which returns the
 		// same checkpoint action) and sets StillWaiting=true so the orchestrator
-		// re-calls immediately. On Dashboard approval the state is already advanced
-		// on disk; reloading before eng.NextAction yields the next real action.
-		// checkpointTimedOut is set true when the long-poll exits without Dashboard
-		// approval; it causes StillWaiting=true to be set on the response so the
-		// orchestrator re-calls pipeline_next_action immediately.
+		// re-calls immediately. On Dashboard approval or abandon the state is already
+		// advanced on disk; reloading before eng.NextAction yields the correct action.
+		// checkpointTimedOut is set true only on a real timer expiry; it causes
+		// StillWaiting=true so the orchestrator re-calls pipeline_next_action.
 		checkpointTimedOut := false
 		if userResponse == "" {
-			if st, stErr := sm2.GetState(); stErr == nil && st.CurrentPhaseStatus == state.StatusAwaitingHuman {
-				subID, eventCh := bus.Subscribe()
+			// Subscribe before GetState to close the race window: if the dashboard
+			// acts between the state-check and Subscribe the event would be missed,
+			// causing a full 15-second timeout before the orchestrator sees the update.
+			subID, eventCh := bus.Subscribe()
+			st, stErr := sm2.GetState()
+			if stErr == nil && st.CurrentPhaseStatus == state.StatusAwaitingHuman {
 				checkPhase := st.CurrentPhase
+				// Resolve workspace symlinks once. On macOS /var is a symlink to
+				// /private/var; exact string comparison would silently fail for paths
+				// rooted there, causing the long-poll to never wake for that workspace.
+				resolvedWs := workspace
+				if rw, rwErr := filepath.EvalSymlinks(workspace); rwErr == nil {
+					resolvedWs = rw
+				}
 				timer := time.NewTimer(checkpointLongPollTimeout)
-				approved := false
+				needsReload := false
 			longPoll:
 				for {
 					select {
@@ -310,20 +320,27 @@ func PipelineNextActionHandler(
 						// concurrent pipelines in different workspaces may share it.
 						// Without the workspace guard, a phase-complete from pipeline A
 						// would spuriously wake up pipeline B's long-poll.
-						if e.Workspace == workspace {
+						ews := e.Workspace
+						if rw, rwErr := filepath.EvalSymlinks(ews); rwErr == nil {
+							ews = rw
+						}
+						if ews == resolvedWs {
 							if e.Event == "phase-complete" && e.Phase == checkPhase {
-								approved = true
+								needsReload = true
 								break longPoll
 							}
-							// An abandon event also ends the wait; the caller falls through
-							// to eng.NextAction which returns ActionDone for an abandoned state.
+							// An abandon event also ends the wait; reload from disk so
+							// eng.NextAction sees the abandoned state and returns ActionDone.
 							if e.Event == "abandon" {
+								needsReload = true
 								break longPoll
 							}
 						}
 					case <-timer.C:
+						checkpointTimedOut = true
 						break longPoll
 					case <-ctx.Done():
+						checkpointTimedOut = true
 						break longPoll
 					}
 				}
@@ -337,14 +354,14 @@ func PipelineNextActionHandler(
 				}
 				bus.Unsubscribe(subID)
 
-				if approved {
-					// Dashboard approved: reload from disk (state is now advanced).
+				if needsReload {
+					// Dashboard acted: reload from disk (state is now advanced or abandoned).
 					if reloadErr := sm2.LoadFromFile(workspace); reloadErr != nil {
 						return errorf("long-poll reload: %v", reloadErr)
 					}
-				} else {
-					checkpointTimedOut = true
 				}
+			} else {
+				bus.Unsubscribe(subID)
 			}
 		}
 
