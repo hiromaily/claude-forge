@@ -1,6 +1,6 @@
 # ダッシュボードのリモートコントロール
 
-Status: draft v2 (2026-04-19)
+Status: draft v3 (2026-04-19)
 
 ## 概要
 
@@ -191,40 +191,29 @@ FORGE_EVENTS_PORT=8099 FORGE_DASHBOARD_BIND_ALL=1 forge-state-mcp
 
 ---
 
-## フェーズ2: Web UI からのタスク投入（リサーチ）
+## フェーズ2: Web UI からのタスク投入
 
-Web UI からタスクを投入するにはプログラム的な Claude セッションが必要です。
-`claude --print`（`-p`）はステートレスであり、マルチターンのパイプライン会話には
-適していません。適切なツールは **Anthropic Agent SDK** です。これはプログラム的に
-完全なツール使用付きのマルチターン会話をサポートします。
+### 3.1 エグゼクティブサマリー
 
-### アーキテクチャ
+フェーズ2により、ダッシュボード Web UI から forge パイプラインタスクを投入できるようになります。
+MCP サーバープロセスに組み込まれたタスクランナーが、投入された各タスクに対して Anthropic
+Agent SDK セッションを起動します。Agent SDK セッションは、完全なマルチターン会話と
+ツール使用サポートを備えた forge パイプラインを実行します。セッションは同じ `.specs/`
+ワークスペースツリーに書き込み、同じプロセス内の `EventBus` に発行するため、ダッシュボードの
+SSE ストリームとチェックポイント承認フローは、インタラクティブ（Claude Code）と SDK 実行の
+両パイプラインで同一に動作します — コントロールプレーンは統一されます。
 
-```text
-Web UI  ──  POST /api/task/submit  ──▶  ダッシュボードサーバー
-                                              │
-                                        タスクをキューに追加
-                                              │
-                                        タスクランナー
-                                        （Agent SDK）
-                                              │
-                                        マルチターンエージェントセッション
-                                        forge パイプラインを実行
-                                              │
-                                        .specs/ ワークスペース
-                                        state.json  ←──────  同じ EventBus
-                                                             同じダッシュボード SSE
+`claude --print`（`-p`）はステートレスであり、マルチターンのパイプライン会話には適して
+いません。適切なツールは **Anthropic Agent SDK** です。これはプログラム的に完全な
+ツール使用付きのマルチターン会話をサポートします。
+
+### 3.2 HTTP API
+
 ```
-
-Agent SDK 実行パイプラインは同じ `state.json` に書き込み、同じ `EventBus` に発行する
-ため、ダッシュボードの SSE ストリームとチェックポイント承認メカニズムは、インタラクティブ
-（Claude Code）と SDK 実行の両パイプラインで同一に動作します。コントロールプレーンは
-統一されます。
-
-### タスク投入エンドポイント
-
-```json
 POST /api/task/submit
+Authorization: Bearer <token>   （FORGE_DASHBOARD_TOKEN が設定されている場合に必須）
+Content-Type: application/json
+
 {
   "input":  "https://github.com/org/repo/issues/42",
   "effort": "M",
@@ -232,30 +221,260 @@ POST /api/task/submit
 }
 ```
 
-タスク ID を返します。タスクはダッシュボードに新しいパイプラインとして表示され、
-同じ SSE + チェックポイントフローで監視・承認できます。
+レスポンス（202 Accepted）:
+```json
+{
+  "task_id": "20260419-42-fix-login-timeout",
+  "status":  "queued"
+}
+```
 
-### forge-queue との統合
+```
+GET /api/tasks
+Authorization: Bearer <token>   （FORGE_DASHBOARD_TOKEN が設定されている場合に必須）
+```
 
-`forge-queue` 設計（`queue-design.md` 参照）は `claude -p` サブプロセスを通じた
-逐次バッチ実行をカバーしています。フェーズ2はそのモデルを拡張し、ダッシュボード
-駆動のタスク投入と SDK ベースの実行をサポートします:
+レスポンス（200 OK）:
+```json
+{
+  "tasks": [
+    {
+      "task_id":    "20260419-42-fix-login-timeout",
+      "input":      "https://github.com/org/repo/issues/42",
+      "status":     "running",
+      "workspace":  ".specs/20260419-42-fix-login-timeout",
+      "queued_at":  "2026-04-19T10:30:00Z",
+      "started_at": "2026-04-19T10:30:05Z"
+    }
+  ]
+}
+```
 
-- `forge-queue` → `claude -p` による逐次バッチ、ダッシュボード投入なし
-- フェーズ2 → ダッシュボードからのオンデマンド投入、SDK ベース実行
+**バリデーション**: `input` フィールドは既存の `handler/validation.ValidateInput` 関数で
+検証されます（`pipeline_init` と同じパス）。`effort` は `S`、`M`、`L` のいずれか
+（省略可、省略時は forge が自動選択）。`flags` エントリは初期実装では `["--auto"]` のみ
+許可されます。
 
-これらは共存可能です。ダッシュボードのタスク投入エンドポイントは同じランナーのキューに
-追加するだけです。
+**デコーダー**: 専用の `json.NewDecoder` を持つ新しい `taskSubmitRequest` 構造体を使用します
+（`intervention.go` の `decodeRequest` は `DisallowUnknownFields` を使用し、ボディ形状が
+異なるため使用しません）。新しいデコーダーは同じ
+`http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)` パターンに従います。
 
-### フェーズ2に必要なもの
+### 3.3 Go パッケージレイアウト
 
-- Anthropic Agent SDK 統合（Python または TypeScript ランナー、または Go SDK）
-- 永続的タスクランナーサービス（別プロセスまたはゴルーチンプール）
-- タスクキューの永続化（シンプルなファイルベースまたはインメモリ）
-- ダッシュボード: タスク投入フォーム + タスク一覧ビュー
-- 認証強化（エンドポイントがタスク入力を受け付けるためトークンベース必須）
+```text
+mcp-server/internal/taskrunner/
+  runner.go          — Runner 構造体: ゴルーチンプール、タスクキュー、ライフサイクル
+  task.go            — Task 構造体: ID、input、effort、flags、status、タイムスタンプ
+  queue.go           — インメモリキュー + tasks.json 永続化
+mcp-server/internal/dashboard/
+  task_submit.go     — POST /api/task/submit ハンドラー
+  task_list.go       — GET /api/tasks ハンドラー
+```
 
-フェーズ2は独立した取り組みです。ここでは実装計画を提供しません。
+**依存関係の方向**（インポート DAG `tools → orchestrator → state` に準拠）:
+
+```text
+dashboard/task_submit.go → taskrunner（エンキューのみ）
+taskrunner/runner.go     → engine/state（結果確認のための ReadState、PhaseComplete は不使用）
+taskrunner/queue.go      → engine/state（再開スキャンのための ReadState のみ）
+```
+
+`taskrunner` は `handler/tools` または `engine/orchestrator` をインポートしてはなりません。
+`taskrunner` はタスクの結果を確認するためにのみ `state.json` を読み取ります
+（`queue-design.md` の `queue_report` と同じパターン）。
+
+### 3.4 `StartOptions` の拡張
+
+`StartOptions`（`mcp-server/internal/dashboard/server.go` で定義）に `TaskRunner`
+フィールドが追加されます:
+
+```go
+type StartOptions struct {
+    PhaseLabels map[string]string
+    TaskRunner  *taskrunner.Runner   // nil → タスク投入エンドポイントは 501 を返す
+}
+```
+
+`Start` 関数は `opts.TaskRunner != nil` の場合に `POST /api/task/submit` と
+`GET /api/tasks` を登録します。nil の場合、ルートは登録されますが `501 Not Implemented`
+を返します（ランナーの起動失敗時の nil 参照パニックを回避）。
+
+これは既存の `*StartOptions` パターンを拡張するもので、`Start` のシグネチャは変更しません。
+
+### 3.5 Agent SDK ランタイムオプション
+
+フェーズ2実装パイプラインは、SDK の利用可能状況に基づいてランタイムを選択する必要があります。
+優先順位順に3つのオプションを示します:
+
+1. **Go Anthropic SDK**（推奨）: MCP サーバーと同一プロセスで Agent セッションを保持し、
+   クロスランゲージの依存関係を回避。実装時に Go Anthropic SDK がマルチターン会話と
+   ツール使用をサポートしている場合に使用。
+2. **Node.js サブプロセス**: `@anthropic-ai/sdk` パッケージを使用する Node.js プロセスを
+   `taskrunner.Runner` が起動。サブプロセスは stdin JSON でタスクを受け取り、進捗イベントを
+   stdout に書き出す。Node.js ランタイム依存関係が追加される。
+3. **Python サブプロセス**: `anthropic` Python パッケージを使用したオプション2と同じパターン。
+   Go SDK も Node.js SDK も適切でない場合のフォールバック。サブプロセスを使用する場合は、
+   `os/exec` 呼び出しに `//nolint:gosec // G204` を注記してください（`.golangci.yml` は
+   すでに G204 を抑制しています）。
+
+HTTP API コントラクト（`POST /api/task/submit`、`GET /api/tasks`、`tasks.json` 永続化）は
+ランタイムに依存しません。内部の Agent セッション起動メカニズムのみが SDK の選択によって変わります。
+
+### 3.6 `artifactHandler` パブリックモード修正（フェーズ2の前提条件）
+
+`mcp-server/internal/dashboard/artifact.go` は現在 `publicMode` を無視し、直接
+`isLocalRequest(r)` を呼び出しており（29行目）、パブリックモードでも外部デバイスが
+アーティファクトを参照できません。
+
+必要な修正（このドキュメントパイプラインでは実装しません）:
+
+```go
+// 現在（パブリックモードで不正）:
+if !isLocalRequest(r) {
+
+// 修正後:
+if !publicMode && !isLocalRequest(r) {
+```
+
+`artifactHandler` は `publicMode bool` パラメータを受け取る必要があります（クロージャ経由で
+追加 — `approveCheckpointHandler` や `abandonHandler` と同じコンストラクタパターン）。
+`server.go` は `artifactHandler(public)` として登録します。
+
+これはフェーズ2の前提条件です: 外部デバイスがアーティファクト `.md` ファイル（design.md、
+tasks.md）を取得できることが、リモートダッシュボードを有用にするために必要です。
+**この Go の変更はこのドキュメントパイプラインでは実装されず**、フェーズ2の Go 実装
+パイプラインで実施する必要があります。
+
+### 3.7 タスクランナーのライフサイクル
+
+**起動**: `Runner.Start(ctx context.Context)` は固定サイズのゴルーチンプール
+（デフォルト: 1 ワーカー）を起動します。プールは `Enqueue` によって供給される
+インメモリチャネルから読み取ります。
+
+**クラッシュリカバリ**: `Runner.Start()` 時に、ランナーは `.specs/tasks.json` の
+`status: queued` または `status: in_progress` のタスクをスキャンして再エンキューします。
+ランナーは `source: "dashboard"` を持つタスクのみ再エンキューします — この識別子フィールドにより、
+インタラクティブな Claude Code セッションで開始されたパイプラインを誤って再エンキューしないようにします。
+
+**Agent セッション**: 各タスクは Agent SDK セッションを起動します。セッションは forge
+パイプラインをインタラクティブに実行します（マルチターン、パイプライン全ライフサイクルにわたる
+完全なツール使用）。セッションは `FORGE_EVENTS_PORT` にアクセスでき、同じマシンの `.specs/`
+に書き込むため、そのパイプラインは同じプロセス内 EventBus と同じダッシュボード SSE ストリームに
+イベントを発行します。正確な SDK 起動メカニズム（Go SDK、Node.js サブプロセス、Python
+サブプロセス）は、その時点での SDK の利用可能状況に基づいてフェーズ2の Go 実装パイプラインに
+委ねられます（§3.5 参照）。
+
+**ワークスペーススラッグ**: 入力 URL からスラッグ導出ロジックを使用して事前生成されます
+（URL からソース ID を抽出: GitHub はイシュー番号、Jira は小文字キー）。スラッグは
+Agent SDK セッションに渡されるため、`pipeline_init_with_context` の `user_confirmation`
+で `workspace_slug` を渡すことができます。これは `pipeline_init_with_context.go` の
+既存の `applyWorkspaceSlug` パスを使用し、forge への変更はありません。
+
+**結果判定**: セッション終了後、ランナーはワークスペースの `state.json` を直接読み取って
+結果を判定します（MCP ツール呼び出しなし）。`queue_report` と同じ決定論的ルール:
+`currentPhase == "completed"` → 成功、それ以外 → 失敗。
+
+**永続化**: `.specs/` の `tasks.json` がタスクキューのステートを保持します。各ステート遷移後に
+アトミックに書き込まれます（一時ファイルに書き込み + `os.Rename`）。`source: "dashboard"`
+フィールドは HTTP 投入ハンドラーが常に書き込むため、リカバリスキャンがダッシュボードタスクと
+インタラクティブパイプラインを区別できます。フォーマット:
+
+```json
+{
+  "tasks": [
+    {
+      "task_id":     "20260419-42-fix-login-timeout",
+      "input":       "https://github.com/org/repo/issues/42",
+      "effort":      "M",
+      "flags":       ["--auto"],
+      "source":      "dashboard",
+      "status":      "completed",
+      "workspace":   ".specs/20260419-42-fix-login-timeout",
+      "slug":        "42",
+      "queued_at":   "2026-04-19T10:30:00Z",
+      "started_at":  "2026-04-19T10:30:05Z",
+      "finished_at": "2026-04-19T10:45:12Z"
+    }
+  ]
+}
+```
+
+### 3.8 認証
+
+**環境変数**: `FORGE_DASHBOARD_TOKEN`。設定されている（非空の）場合、すべての変更エンドポイント
+（`POST /api/task/submit`、`POST /api/checkpoint/approve`、`POST /api/pipeline/abandon`）は
+`Authorization: Bearer <token>` を必要とします。タイミング攻撃を防ぐため、トークン比較は
+`crypto/subtle.ConstantTimeCompare` を使用します。
+
+`FORGE_DASHBOARD_TOKEN` が設定されていない場合、動作はフェーズ1から変わりません
+（`publicMode` がアクセスを制御）。`FORGE_DASHBOARD_TOKEN` が空のとき、トークン強制は
+明示的に無効化され、ローカル開発でのオプトインを使いやすくします。
+
+**フェーズ2実装パイプラインへの後方互換性注記**: `FORGE_DASHBOARD_TOKEN` 強制を既存の
+フェーズ1エンドポイント（`POST /api/checkpoint/approve`、`POST /api/pipeline/abandon`）に
+追加することは、`FORGE_DASHBOARD_BIND_ALL=1` を設定しているが `FORGE_DASHBOARD_TOKEN`
+を設定していない既存のデプロイメントにとって破壊的変更です。実装はトークン強制をオプトインに
+しなければなりません — `FORGE_DASHBOARD_TOKEN` が非空の場合のみ有効。トークンを無条件に
+強制してはなりません。
+
+### 3.9 ダッシュボード UI の変更
+
+`dashboard.html`（現在 777 行、ゼロ依存）に以下が追加されます:
+
+1. **タスク投入フォーム**（`publicMode` 有効時のみ表示）:
+   - クライアントサイドで `publicMode` を検出するメカニズム（例: `GET /api/server-info`
+     エンドポイント、またはサーブ時に HTML に埋め込まれた値）はフェーズ2の Go 実装
+     パイプラインに委ねます。意図は `publicMode=true` のときのみフォームを表示することで、
+     検出メカニズムには Go コードが必要であり、このドキュメントパイプラインのスコープ外です。
+   - `input`（URL またはフリーテキスト）のテキスト入力
+   - `effort`（S / M / L / Auto）のドロップダウン
+   - 送信ボタン → `POST /api/task/submit`
+   - 返された `task_id` とステータスを表示
+
+2. **タスク一覧パネル**:
+   - `GET /api/tasks` を10秒ごとにポーリング
+   - カラム: タスク ID、入力、ステータス、開始時刻
+   - 行をクリックするとフェーズタイムラインがそのワークスペースのイベントにフィルタリング
+
+3. **マルチワークスペース SSE フィルタリング**:
+   - 既存のタイムラインビューは SSE イベントデータの `workspace` でフィルタリング
+   - タスク一覧からタスクを選択すると、そのワークスペースに一致するイベントのみが
+     タイムラインに表示される
+
+### 3.10 比較表: forge-queue vs フェーズ2
+
+| 次元 | forge-queue | フェーズ2 ダッシュボード |
+|---|---|---|
+| 投入方法 | `queue.yaml` ファイル、`/forge-queue` スキル | `POST /api/task/submit` HTTP |
+| 並列性 | 逐次（1タスクずつ） | 逐次（1ワーカー、拡張可） |
+| 永続化 | `queue.yaml` | `.specs/tasks.json` |
+| 入力タイプ | イシュー URL のみ（`--auto` 強制） | イシュー URL + フリーテキスト + フラグ |
+| セッションランタイム | タスクごとに別 `claude -p`（ステートレス） | タスクごとに Agent SDK（マルチターン） |
+| `claude -p` / SDK の理由 | バッチタスクのコンテキスト分離 | マルチターンパイプラインにはライブコンテキストが必要 |
+| ワークスペーススラッグ | `queue_next` が事前生成 | `taskrunner` が事前生成 |
+| 結果記録 | `queue_report` MCP ツール | `runner.go` が `state.json` を直接読取 |
+| 監視 | CLI のみ | ダッシュボード SSE + タスク一覧 |
+
+### テスト戦略
+
+**`mcp-server/internal/taskrunner/` ユニットテスト**:
+- `queue_test.go`: エンキュー/デキューのラウンドトリップ、`tasks.json` アトミック書き込み、
+  重複 task_id の拒否、クラッシュリカバリスキャン（`source: "dashboard"` タスクのみ再エンキュー）
+- `runner_test.go`: ワーカーゴルーチンがタスクを取得、Agent SDK セッションのライフサイクル、
+  `state.json` からの結果判定（`completed` → 成功、それ以外 → 失敗）
+- スラッグ生成: GitHub URL → イシュー番号、Jira URL → 小文字キー
+
+**`mcp-server/internal/dashboard/` ハンドラーテスト**:
+- `task_submit_test.go`: `input` を検証、未知の effort 値を拒否、`task_id` を含む 202 を返す、
+  `FORGE_DASHBOARD_TOKEN` 設定時にトークンなしのリクエストを拒否、`TaskRunner` が未設定時に 501 を返す
+- `task_list_test.go`: ランナーの現在のタスク一覧を返す、空リストを処理
+- `artifact_test.go`（既存を拡張）: `publicMode=true` の `artifactHandler` がループバックチェック
+  なしでアーティファクトを返す
+
+**統合**（手動）:
+- `POST /api/task/submit` で GitHub イシュー URL を投入し、起動されたパイプラインワークスペースの
+  SSE イベントが表示されることを確認し、完了後に `tasks.json` が更新されることを確認
 
 ---
 
@@ -288,5 +507,23 @@ POST /api/task/submit
 
 ### フェーズ2（将来）
 
-Agent SDK ベースのタスクランナーとダッシュボード投入フォームを独立した取り組みとして
-設計・実装します。
+§3.1–§3.10 で仕様化された Agent SDK ベースのタスクランナーとダッシュボード投入フォームを
+実装します。主要な成果物:
+
+1. **`mcp-server/internal/taskrunner/`**: `Runner`、`Task`、キュー永続化（`tasks.json`）を
+   含む新パッケージ。実装時の Go SDK の利用可能状況に基づいて Agent SDK ランタイムを選択
+   （Go SDK 推奨; Node.js または Python サブプロセスがフォールバック — §3.5 参照）。
+
+2. **`dashboard/task_submit.go` + `dashboard/task_list.go`**: `opts.TaskRunner != nil`
+   の場合に `POST /api/task/submit` と `GET /api/tasks` を登録（§3.2 と §3.4 参照）。
+
+3. **`dashboard/artifact.go`**: 外部デバイスがアーティファクト `.md` ファイルを取得できる
+   ように `publicMode bool` 修正を適用（前提条件 — §3.6 参照）。
+
+4. **`dashboard/server.go`**: `TaskRunner` を `StartOptions` に組み込む; 変更エンドポイントの
+   `FORGE_DASHBOARD_TOKEN` ベアラートークンミドルウェアを追加（§3.8 参照）。
+
+5. **`dashboard.html`**: タスク投入フォームとタスク一覧パネルを追加（§3.9 参照）。
+
+HTTP API コントラクト（`POST /api/task/submit`、`GET /api/tasks`、`tasks.json` 永続化フォーマット）
+はこのドキュメントで固定されており、このリサーチドキュメントを先に更新しなければ変更してはなりません。

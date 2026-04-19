@@ -1,0 +1,284 @@
+{
+  "version": 2,
+  "forge-state-mcp-version": "v2.15.0",
+  "specName": "remote-dashboard-control-phase2",
+  "workspace": ".specs/20260419-remote-dashboard-control-phase2",
+  "branch": "fix/remote-dashboard-control-phase2",
+  "effort": "M",
+  "flowTemplate": "standard",
+  "autoApprove": false,
+  "skipPr": false,
+  "useCurrentBranch": false,
+  "branchClassified": true,
+  "branchPushed": true,
+  "debug": false,
+  "skippedPhases": [
+    "phase-4b",
+    "checkpoint-b"
+  ],
+  "currentPhase": "completed",
+  "currentPhaseStatus": "completed",
+  "completedPhases": [
+    "setup",
+    "checkpoint-a",
+    "phase-4",
+    "phase-4b",
+    "checkpoint-b",
+    "phase-5",
+    "phase-6",
+    "phase-7",
+    "final-verification",
+    "pr-creation",
+    "final-summary",
+    "post-to-source",
+    "final-commit"
+  ],
+  "revisions": {
+    "designRevisions": 0,
+    "taskRevisions": 0,
+    "designInlineRevisions": 0,
+    "taskInlineRevisions": 0
+  },
+  "checkpointRevisionPending": {
+    "checkpoint-a": false,
+    "checkpoint-b": false
+  },
+  "needsBatchCommit": false,
+  "tasks": {
+    "1": {
+      "title": "Expand Phase 2 English documentation [sequential]",
+      "executionMode": "sequential",
+      "depends_on": null,
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/docs/research/remote-dashboard-control.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "2": {
+      "title": "Update Japanese translation of remote-dashboard-control.md [sequential]",
+      "executionMode": "sequential",
+      "depends_on": [
+        1
+      ],
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/docs/ja/research/remote-dashboard-control.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "3": {
+      "title": "Register queue-design.md in VitePress sidebar [sequential]",
+      "executionMode": "sequential",
+      "depends_on": null,
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/docs/.vitepress/config.ts"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 0,
+      "reviewRetries": 0
+    },
+    "4": {
+      "title": "Create Japanese translation of queue-design.md [sequential]",
+      "executionMode": "sequential",
+      "depends_on": [
+        3
+      ],
+      "files": [
+        "/Users/hiroki.yasui/work/hiromaily/claude-forge/docs/ja/research/queue-design.md"
+      ],
+      "implStatus": "completed",
+      "reviewStatus": "completed_pass",
+      "implRetries": 4,
+      "reviewRetries": 0
+    }
+  },
+  "phaseLog": [
+    {
+      "phase": "phase-4",
+      "tokens": 42393,
+      "duration_ms": 55340,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:17:41.483947Z"
+    },
+    {
+      "phase": "phase-4b",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "skipped",
+      "timestamp": "2026-04-19T04:17:41.485959Z"
+    },
+    {
+      "phase": "checkpoint-b",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "skipped",
+      "timestamp": "2026-04-19T04:17:41.486715Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 50767,
+      "duration_ms": 179086,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:21:09.019599Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 71609,
+      "duration_ms": 245681,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:25:45.680682Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 41774,
+      "duration_ms": 61104,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:27:17.274576Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 62355,
+      "duration_ms": 289563,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:32:34.803885Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 42053,
+      "duration_ms": 52630,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:34:06.782047Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 45329,
+      "duration_ms": 45386,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:35:24.358933Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 30126,
+      "duration_ms": 35520,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:36:33.284041Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 60464,
+      "duration_ms": 81281,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:38:37.931851Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 25044,
+      "duration_ms": 28262,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:39:28.501275Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 61034,
+      "duration_ms": 132228,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:42:19.293949Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 51791,
+      "duration_ms": 98145,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:44:19.456364Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 59177,
+      "duration_ms": 150294,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:48:05.145013Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 28182,
+      "duration_ms": 47070,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:49:07.704036Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 44335,
+      "duration_ms": 86983,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:52:03.602743Z"
+    },
+    {
+      "phase": "phase-5",
+      "tokens": 22377,
+      "duration_ms": 17941,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:52:48.922219Z"
+    },
+    {
+      "phase": "phase-6",
+      "tokens": 41387,
+      "duration_ms": 58005,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:54:02.580307Z"
+    },
+    {
+      "phase": "phase-7",
+      "tokens": 51814,
+      "duration_ms": 98476,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:56:05.93544Z"
+    },
+    {
+      "phase": "final-verification",
+      "tokens": 49196,
+      "duration_ms": 153939,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T04:59:09.371935Z"
+    },
+    {
+      "phase": "pr-creation",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-19T04:59:55.930596Z"
+    },
+    {
+      "phase": "final-summary",
+      "tokens": 53810,
+      "duration_ms": 170959,
+      "model": "sonnet",
+      "timestamp": "2026-04-19T05:04:42.757983Z"
+    },
+    {
+      "phase": "post-to-source",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "skipped",
+      "timestamp": "2026-04-19T05:04:42.761753Z"
+    },
+    {
+      "phase": "final-commit",
+      "tokens": 0,
+      "duration_ms": 0,
+      "model": "",
+      "timestamp": "2026-04-19T05:04:42.762515Z"
+    }
+  ],
+  "timestamps": {
+    "created": "2026-04-19T03:23:48.028675Z",
+    "lastUpdated": "2026-04-19T05:04:42.763186Z",
+    "phaseStarted": null
+  },
+  "error": null
+}

@@ -174,6 +174,10 @@ export default withMermaid(
                     text: "Remote Dashboard Control",
                     link: "/research/remote-dashboard-control",
                   },
+                  {
+                    text: "Forge Queue Design",
+                    link: "/research/queue-design",
+                  },
                 ],
               },
             ],
@@ -352,6 +356,10 @@ export default withMermaid(
                   {
                     text: "ダッシュボードのリモートコントロール",
                     link: "/ja/research/remote-dashboard-control",
+                  },
+                  {
+                    text: "Forge Queue 設計",
+                    link: "/ja/research/queue-design",
                   },
                 ],
               },
