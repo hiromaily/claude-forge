@@ -377,16 +377,16 @@ queue_next                    queue.yaml          subprocess (forge)
 
 queue_report                  queue.yaml
   │                               │
-  │ workspace_slug を読込         │
+  │ read workspace_slug           │
   │◀──────────────────────────────│
   │                               │
-  │ .specs/ をスキャン            │
+  │ scan .specs/ for              │
   │ {date}-{source_id}*           │
-  │ → 20260417-dea-123-... を発見 │
+  │ → finds 20260417-dea-123-...  │
   │                               │
-  │ state.json を読込             │
-  │ ステータスを決定              │
-  │──workspace, branch を書込────▶│
+  │ read state.json               │
+  │ determine status              │
+  │──write workspace, branch─────▶│
 ```
 
 ### 再開の動作
