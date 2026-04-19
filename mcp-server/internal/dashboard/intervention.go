@@ -124,7 +124,9 @@ func approveCheckpointHandler(sm *state.StateManager, bus *events.EventBus, publ
 // tool. It refuses to abandon a workspace that is already terminal.
 //
 // When publicMode is true the loopback/origin check is skipped (see approveCheckpointHandler).
-func abandonHandler(sm *state.StateManager, publicMode bool) http.HandlerFunc {
+// An "abandon" event is published to the bus so any pipeline_next_action long-poll
+// at a checkpoint wakes up immediately rather than waiting the full 15-second timeout.
+func abandonHandler(sm *state.StateManager, bus *events.EventBus, publicMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !publicMode && !isLocalRequest(r) {
 			httpError(w, http.StatusForbidden, "forbidden: intervention API requires loopback request and same-origin")
@@ -157,6 +159,13 @@ func abandonHandler(sm *state.StateManager, publicMode bool) http.HandlerFunc {
 			httpError(w, http.StatusInternalServerError, fmt.Sprintf("abandon: %v", err))
 			return
 		}
+		// Publish so any pipeline_next_action long-poll wakes up immediately.
+		bus.Publish(events.Event{
+			Event:     "abandon",
+			Workspace: req.Workspace,
+			Outcome:   "abandoned",
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+		})
 		writeJSON(w, http.StatusOK, map[string]any{
 			"status":    "abandoned",
 			"workspace": req.Workspace,

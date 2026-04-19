@@ -306,9 +306,20 @@ func PipelineNextActionHandler(
 						if !ok {
 							break longPoll
 						}
-						if e.Event == "phase-complete" && e.Phase == checkPhase {
-							approved = true
-							break longPoll
+						// Match workspace too: the EventBus is process-global and
+						// concurrent pipelines in different workspaces may share it.
+						// Without the workspace guard, a phase-complete from pipeline A
+						// would spuriously wake up pipeline B's long-poll.
+						if e.Workspace == workspace {
+							if e.Event == "phase-complete" && e.Phase == checkPhase {
+								approved = true
+								break longPoll
+							}
+							// An abandon event also ends the wait; the caller falls through
+							// to eng.NextAction which returns ActionDone for an abandoned state.
+							if e.Event == "abandon" {
+								break longPoll
+							}
 						}
 					case <-timer.C:
 						break longPoll
@@ -316,7 +327,14 @@ func PipelineNextActionHandler(
 						break longPoll
 					}
 				}
-				timer.Stop()
+				// Drain the timer channel if Stop() races with the timer firing,
+				// per the documented Go pattern for one-shot timers.
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				bus.Unsubscribe(subID)
 
 				if approved {

@@ -95,7 +95,7 @@ func Start(eventsPort string, bus *events.EventBus, sm *state.StateManager, opts
 	mux.Handle("GET /api/phase-artifacts", phaseArtifactsHandler())
 	mux.Handle("GET /api/artifact", artifactHandler())
 	mux.Handle("POST /api/checkpoint/approve", approveCheckpointHandler(sm, bus, public))
-	mux.Handle("POST /api/pipeline/abandon", abandonHandler(sm, public))
+	mux.Handle("POST /api/pipeline/abandon", abandonHandler(sm, bus, public))
 
 	srv := &http.Server{
 		Handler:           mux,

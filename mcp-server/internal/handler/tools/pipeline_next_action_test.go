@@ -1555,8 +1555,11 @@ func TestPipelineNextAction_LongPoll(t *testing.T) {
 	h := PipelineNextActionHandler(sm, bus, eng, "", nil, nil, nil)
 
 	// Fire the "phase-complete" event in a goroutine after a short delay so the
-	// handler has time to enter the long-poll before the event arrives.
+	// handler has time to enter the long-poll (bus.Subscribe) before the event
+	// arrives. Without the sleep the goroutine races against Subscribe: if Publish
+	// fires before Subscribe the event is dropped and the test waits 15 s.
 	go func() {
+		time.Sleep(20 * time.Millisecond)
 		// Advance state on disk the same way approveCheckpointHandler does.
 		sm2 := state.NewStateManager("dev")
 		if err := sm2.LoadFromFile(dir); err != nil {
@@ -1595,10 +1598,6 @@ func TestPipelineNextAction_LongPoll(t *testing.T) {
 // approval arrives within the timeout, pipeline_next_action returns the same
 // checkpoint action with StillWaiting=true.
 func TestPipelineNextAction_LongPoll_Timeout(t *testing.T) {
-	// Not parallel: this test modifies checkpointLongPollTimeout to be short.
-	// Running in parallel would race with other tests that read the constant.
-	// We swap the constant via a local override using a helper instead of mutation.
-
 	t.Parallel()
 
 	dir, sm := initWorkspaceForNextAction(t, "checkpoint-a", func(s *state.State) error {

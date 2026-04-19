@@ -398,7 +398,7 @@ func TestAbandon_Success(t *testing.T) {
 	t.Parallel()
 
 	sm, workspace := newTestStateManager(t)
-	handler := abandonHandler(sm, false)
+	handler := abandonHandler(sm, events.NewEventBus(), false)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/pipeline/abandon",
 		jsonBody(t, interventionRequest{Workspace: workspace}))
@@ -437,7 +437,7 @@ func TestAbandon_Forbidden(t *testing.T) {
 	t.Parallel()
 
 	sm, workspace := newTestStateManager(t)
-	handler := abandonHandler(sm, false)
+	handler := abandonHandler(sm, events.NewEventBus(), false)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/pipeline/abandon",
 		jsonBody(t, interventionRequest{Workspace: workspace}))
