@@ -12,19 +12,19 @@
 ```text
 SKILL.md (forge-queue)
   │
-  │  queue_init(queue_path)          ← YAML の解析とバリデーション
+  │  queue_init(queue_path)          ← parse + validate YAML
   │        │
   │        ▼
-  │  queue_next(queue_path)          ← 次のタスクと事前生成されたワークスペーススラグを返す
+  │  queue_next(queue_path)          ← return next task + pre-generated workspace slug
   │        │
   │        ▼
-  │  claude -p "/forge {url} --auto" ← 隔離されたサブプロセス、forge は変更なし
-  │        │                            SKILL.md は user_confirmation で workspace_slug を渡す
+  │  claude -p "/forge {url} --auto" ← isolated subprocess, forge unchanged
+  │        │                            SKILL.md passes workspace_slug in user_confirmation
   │        ▼
-  │  queue_report(queue_path, index) ← スラグでワークスペースを検索し state.json を読む
+  │  queue_report(queue_path, index) ← find workspace by slug, read state.json
   │        │
   │        ▼
-  │  queue_next(queue_path)          ← 次のタスク、または「すべて完了」
+  │  queue_next(queue_path)          ← next task, or "all done"
   │        │
   │        ...
 ```
@@ -302,30 +302,30 @@ SKILL.md (forge-queue)
 `forge-queue` は forge の内部を何も知らない独立したスキル（`/forge-queue`）です。各タスクは**隔離された `claude -p` サブプロセス**で実行され、タスクごとにクリーンなコンテキストウィンドウを確保してタスク間の汚染ゼロを実現します。
 
 ```markdown
-## ステップ 1: 初期化
+## Step 1: Initialize
 
-1. `queue_init(queue_path=".specs/queue.yaml")` を呼び出す。
-2. エラーがある場合: 報告して停止する。
-3. キューの状態を報告する（例: "4 tasks: 1 completed, 1 failed, 2 pending"）。
+1. Call `queue_init(queue_path=".specs/queue.yaml")`.
+2. If errors: report and stop.
+3. Report queue status (e.g. "4 tasks: 1 completed, 1 failed, 2 pending").
 
-## ステップ 2: 処理ループ
+## Step 2: Process Loop
 
-1. `queue_next(queue_path=".specs/queue.yaml")` を呼び出す。
-2. `has_next` が false の場合: サマリーを出力して停止する。
-3. 再開でない場合（`resuming` が false）:
-   `git checkout main && git pull --rebase` を実行する。
-4. Bash で forge をサブプロセスとして実行する:
+1. Call `queue_next(queue_path=".specs/queue.yaml")`.
+2. If `has_next` is false: output summary and stop.
+3. If NOT resuming (`resuming` is false):
+   Run `git checkout main && git pull --rebase`.
+4. Run forge as a subprocess via Bash:
    `claude -p "/forge {forge_arguments}" --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Agent,Skill,mcp__plugin_claude-forge_forge-state__*"`
-   - 新規タスクの場合、プロンプトに追記する:
+   - For new tasks, append to the prompt:
      "Use workspace_slug '{workspace_slug}' in user_confirmation."
-   - 各サブプロセスは空のコンテキストウィンドウで新しいセッションを開始する。
-   - forge は自律的に実行（--auto）し、完了または失敗時に終了する。
-5. `queue_report(queue_path=".specs/queue.yaml", index=<index>)` を呼び出す。
-6. `status == "completed"` かつ `branch` が存在する場合:
-   a. `gh pr list --head {branch} --json number --jq '.[0].number'` を実行する
-   b. PR 番号が見つかった場合:
-      `queue_update_pr(queue_path, index, pr=<number>)` を呼び出す。
-7. ステップ 1 に戻る。
+   - Each subprocess starts a fresh session with an empty context window.
+   - forge runs autonomously (--auto) and exits on completion or failure.
+5. Call `queue_report(queue_path=".specs/queue.yaml", index=<index>)`.
+6. If `status == "completed"` and `branch` is present:
+   a. Run `gh pr list --head {branch} --json number --jq '.[0].number'`
+   b. If PR number is found:
+      Call `queue_update_pr(queue_path, index, pr=<number>)`.
+7. Return to step 1.
 ```
 
 ### サブプロセス隔離の理由
@@ -433,17 +433,17 @@ queue_report                  queue.yaml
 
 ```yaml
 tasks:
-  - url: https://jira.example.com/browse/DEA-123    # 必須
-    effort: M                                        # 任意: S | M | L (省略時は自動選択)
-    # — 以下のフィールドは forge-queue が管理 —
+  - url: https://jira.example.com/browse/DEA-123    # required
+    effort: M                                        # optional: S | M | L (auto-selected if omitted)
+    # — fields below are managed by forge-queue —
     status: completed                                # completed | failed | in_progress
-    workspace_slug: dea-123                          # 事前生成スラグ (queue_next が設定)
-    workspace: 20260417-dea-123-fix-login             # 実際の .specs/ ディレクトリ名 (queue_report が設定)
-    branch: feature/20260417-dea-123-fix-login        # git ブランチ名 (queue_report が設定)
-    pr: 2891                                         # PR 番号 (スキルが queue_update_pr で設定)
-    reason: "phase-3: design rejected"               # 失敗理由 (queue_report が設定)
-    started_at: "2026-04-17T10:30:00Z"               # ISO8601 (queue_next が設定)
-    finished_at: "2026-04-17T10:45:00Z"              # ISO8601 (queue_report が設定)
+    workspace_slug: dea-123                          # pre-generated slug (set by queue_next)
+    workspace: 20260417-dea-123-fix-login             # actual .specs/ directory name (set by queue_report)
+    branch: feature/20260417-dea-123-fix-login        # git branch name (set by queue_report)
+    pr: 2891                                         # PR number (set by skill via queue_update_pr)
+    reason: "phase-3: design rejected"               # failure reason (set by queue_report)
+    started_at: "2026-04-17T10:30:00Z"               # ISO8601 (set by queue_next)
+    finished_at: "2026-04-17T10:45:00Z"              # ISO8601 (set by queue_report)
 ```
 
 ## 設計上の制約
