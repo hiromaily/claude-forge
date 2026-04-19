@@ -463,16 +463,16 @@ tasks:
 ## Go パッケージの配置
 
 ```text
-mcp-server/internal/queue/         ← YAML の解析/バリデーション/読み書き + ワークスペーススキャン
+mcp-server/internal/queue/         ← YAML parse/validate/read/write + workspace scan
 mcp-server/internal/handler/tools/
-  queue_create.go                  ← MCP ハンドラー (queue.yaml 生成)
-  queue_init.go                    ← MCP ハンドラー (既存の queue.yaml バリデーション)
-  queue_next.go                    ← MCP ハンドラー (次のタスク + スラグの選択)
-  queue_report.go                  ← MCP ハンドラー (結果の記録)
-  queue_update_pr.go               ← MCP ハンドラー (PR 番号の書き込み)
+  queue_create.go                  ← MCP handler (generate queue.yaml)
+  queue_init.go                    ← MCP handler (validate existing queue.yaml)
+  queue_next.go                    ← MCP handler (pick next task + slug)
+  queue_report.go                  ← MCP handler (record result)
+  queue_update_pr.go               ← MCP handler (write PR number)
 skills/
-  forge-queue/SKILL.md             ← キュー実行スキル
-  forge-queue-create/SKILL.md      ← キュー生成スキル
+  forge-queue/SKILL.md             ← queue executor skill
+  forge-queue-create/SKILL.md      ← queue generator skill
 ```
 
 ### 依存関係の方向
@@ -480,7 +480,7 @@ skills/
 `queue` パッケージは `state.ReadState`（読み取り専用）をインポートして `queue_report` でパイプラインの結果を決定します。これは一方向の依存関係です:
 
 ```text
-tools → queue → state (ReadState のみ)
+tools → queue → state (ReadState only)
 ```
 
 これは既存のレイヤリングルール（`tools → ... → state`）に従います。逆方向の依存関係は導入されません。`queue` パッケージは `engine/orchestrator` または `handler/tools` をインポートしません。
@@ -490,9 +490,9 @@ tools → queue → state (ReadState のみ)
 `queue_create` と `queue_init` の両方がソースタイプ検出を使用して URL をバリデートします。`handler/validation` パッケージ（`pipeline_init` が使用）はソースタイプ検出を含む `ValidateInput` を公開しています。`queue` は `engine/state` のみをインポートするため（`handler/tools` や `handler/validation` はインポートしない）、URL バリデーションロジックは `handler/validation` パッケージ内の共有関数として抽出されます（`queue` は DAG に違反することなくこれをインポートできます）:
 
 ```text
-tools → queue → validation (URL バリデーション)
+tools → queue → validation (URL validation)
                       ↑
-              tools → validation (既存)
+              tools → validation (existing)
 ```
 
 ## テスト戦略
