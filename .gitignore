@@ -26,7 +26,7 @@ logs
 
 # others
 memo.md
-mcp-server/internal/tools/patterns.json
+mcp-server/internal/handler/tools/patterns.json
 COMPETITIVE-ANALYSIS.md
 /.specs/**
 !/.specs/index.json

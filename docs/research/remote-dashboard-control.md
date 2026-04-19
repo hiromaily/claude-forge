@@ -1,6 +1,6 @@
 # Remote Dashboard Control
 
-Status: draft v1 (2026-04-18)
+Status: draft v2 (2026-04-19)
 
 ## Overview
 
@@ -8,6 +8,9 @@ This document explores the architecture required to allow the forge Dashboard to
 be accessed from external devices (smartphone, tablet, remote machine) and to
 have checkpoint approvals automatically resume the Claude pipeline — without
 requiring any terminal input.
+
+Security hardening is deferred to a later phase. The design here is for the
+initial development / dogfooding phase only.
 
 ## Problem Statement
 
@@ -28,23 +31,42 @@ Claude (terminal)          Dashboard (browser)         state.json
        │  still blocked           │                         │
 ```
 
-When the user clicks "approve" in the Dashboard, `sm.PhaseComplete()` advances
-`state.json` to the next phase. However, Claude is blocked on `AskUserQuestion`
-waiting for terminal input. The approval is written to state, but Claude never
-wakes up.
+When the user clicks "approve" in the Dashboard, `approveCheckpointHandler` calls
+`sm.PhaseComplete()`, advancing `state.json` to the next phase. However:
+
+1. **No event is published to EventBus** — `approveCheckpointHandler` does not
+   have access to `bus`, so the EventBus never learns about the approval.
+2. **Claude is blocked on `AskUserQuestion`** waiting for terminal input. Even
+   if an event were published, nothing is listening.
 
 Additionally, the Dashboard server binds to `127.0.0.1` only, so access from
-external devices is not possible without changes.
+external devices is not possible.
+
+### What is already implemented
+
+- **`checkpoint-message.txt` injection**: when the user approves a checkpoint
+  via the Dashboard with an optional message, the message is written to
+  `checkpoint-message.txt` in the workspace. `enrichPrompt` in
+  `pipeline_next_action.go` reads and removes the file, injecting the message
+  into the next agent's prompt automatically.
+- **`currentPhaseStatus = "awaiting_human"`** is set directly by
+  `pipeline_next_action` when it returns an `ActionCheckpoint`, eliminating the
+  window between the checkpoint action and the `checkpoint()` MCP call.
+- **EventBus + SSE**: the event bus is running and the dashboard SSE stream
+  works; the missing link is that `approveCheckpointHandler` does not publish
+  to it.
 
 ### Goals
 
-1. Dashboard approval automatically resumes the pipeline — no terminal action required.
-2. Dashboard accessible from external devices (smartphone, remote machine) via ngrok.
+1. Dashboard approval automatically resumes the pipeline — no terminal action
+   required.
+2. Dashboard accessible from external devices on the same network (smartphone,
+   tablet) via a `0.0.0.0` bind mode.
 3. Foundation for multi-pipeline monitoring and task submission (Phase 2).
 
 ---
 
-## Phase 1: EventBus Long-Poll + Remote Access
+## Phase 1: EventBus Long-Poll + Local Network Access
 
 ### Core mechanism: EventBus long-poll in `pipeline_next_action`
 
@@ -53,21 +75,22 @@ itself waits for a state change. When `pipeline_next_action` is called while
 `currentPhaseStatus == "awaiting_human"` and no `user_response` is provided:
 
 1. The handler subscribes to the in-process `EventBus`.
-2. Waits up to **N seconds** (e.g. 15 s — safely within MCP tool-call timeout)
-   for a `phase-complete` event on the current checkpoint phase.
+2. Waits up to **15 seconds** (safely within MCP tool-call timeout) for a
+   `phase-complete` event on the current checkpoint phase.
 3. **Event arrives** (Dashboard called `PhaseComplete` → EventBus published):
-   reload state → `eng.NextAction` → `sm.PhaseStart` → return the next real
-   action (e.g. `spawn_agent` for phase-4). Claude proceeds with no terminal
-   interaction.
-4. **Timeout elapses** with no event: return `{type: "checkpoint",
-   still_waiting: true}` with the same checkpoint presentation text.
+   reload state → fall through to `eng.NextAction` → `sm.PhaseStart` → return
+   the next real action (e.g. `spawn_agent` for phase-4). Claude proceeds with
+   no terminal interaction.
+4. **Timeout elapses** with no event: let `eng.NextAction` run (returns
+   the same checkpoint action), and set `StillWaiting: true` in the response.
+   SKILL.md calls `pipeline_next_action()` again immediately.
 
 ```text
 Claude (no AskUserQuestion)        MCP server                  Dashboard
        │                                │                           │
        │── pipeline_next_action() ─────▶│                           │
        │                                │ subscribe EventBus        │
-       │   [MCP call blocked]           │ wait up to 15s            │
+       │   [MCP call blocked ~15s]      │ wait up to 15s            │
        │                                │                           │
        │                                │◀── PhaseComplete() ───────│ user clicks approve
        │                                │ event: phase-complete      │
@@ -78,83 +101,98 @@ Claude (no AskUserQuestion)        MCP server                  Dashboard
        │  continue pipeline             │                           │
 ```
 
-If no Dashboard approval arrives within 15 s, the tool returns `still_waiting:
-true`. SKILL.md calls `pipeline_next_action` again immediately (no sleep, no
-terminal prompt). The 15 s server-side delay provides natural pacing.
+On timeout, `pipeline_next_action` returns `{type: "checkpoint", still_waiting: true}`.
+SKILL.md calls `pipeline_next_action` again immediately (no sleep). The 15s
+server-side delay provides natural pacing.
 
 ### Terminal user path
 
-The terminal path is unaffected in correctness, with a max 15 s delay:
+The terminal path is unaffected in correctness, with a max 15s delay:
 
-1. Claude is blocked on the `pipeline_next_action` long-poll.
+1. Claude is blocked in the `pipeline_next_action` long-poll.
 2. User types "proceed" in terminal → Claude Code queues the message.
-3. After 15 s (or earlier if Dashboard fires), the tool returns `still_waiting:
-   true`.
-4. Claude processes the queued "proceed" → calls
+3. After 15s (or earlier if Dashboard fires), the tool returns — either with the
+   next action (Dashboard approved) or `still_waiting: true` (timeout).
+4. If `still_waiting`, Claude processes the queued "proceed" → calls
    `pipeline_next_action(user_response="proceed")`.
 5. P8 block calls `sm.PhaseComplete` + the engine returns the next action.
+
+### Missing link: bus not wired into `approveCheckpointHandler`
+
+`approveCheckpointHandler` currently receives only `*state.StateManager`. After
+calling `sm.PhaseComplete()` it must also publish a `phase-complete` event so
+the long-poll wakes up:
+
+```go
+// after sm.PhaseComplete succeeds:
+bus.Publish(events.Event{
+    Event:     "phase-complete",
+    Phase:     req.Phase,
+    Workspace: req.Workspace,
+    Outcome:   "completed",
+    Timestamp: time.Now().UTC().Format(time.RFC3339),
+})
+```
+
+`server.go` must pass `bus` to `approveCheckpointHandler`.
 
 ### SKILL.md change (minimal)
 
 The only SKILL.md change is the checkpoint action handler:
 
 ```text
-- `checkpoint`: Call checkpoint(). Output action.present_to_user + Dashboard URL.
-  Then immediately call pipeline_next_action() (no user_response, no AskUserQuestion).
-  - If still_waiting: true  → call pipeline_next_action() again immediately.
-  - If non-checkpoint action returned → Dashboard approved; proceed normally.
-  - User may type in terminal at any time; their message is processed after the
-    current pipeline_next_action() call returns (max 15 s delay).
+- `checkpoint`:
+  1. Call checkpoint(workspace, phase=action.name) to register the pause.
+  2. Present action.present_to_user to the user and mention that the Dashboard
+     can be used to approve without terminal input.
+  3. Immediately call pipeline_next_action(workspace) (no user_response, no
+     previous_*). If still_waiting: true, call again. Repeat until a
+     non-checkpoint action is returned.
+  4. If the user types in the terminal (proceed/revise/abandon): their message
+     is queued during the 15s long-poll. On the next pipeline_next_action call,
+     pass user_response=<message> instead of looping.
 ```
 
 ### Changes summary
 
 | Component | Change | Scope |
 | --- | --- | --- |
-| `pipeline_next_action.go` | Add long-poll path when `awaiting_human` + no `user_response` | Medium |
-| `SKILL.md` | Replace `AskUserQuestion` with immediate re-call on `still_waiting` | Small |
-| `dashboard.html` | After approve: show "Pipeline will continue automatically" | Trivial |
-| `intervention.go` | Optional: bearer token auth (`FORGE_DASHBOARD_TOKEN`) | Small |
+| `dashboard/server.go` | Pass `bus` to `approveCheckpointHandler` | Trivial |
+| `dashboard/intervention.go` | Add `bus` param; publish `phase-complete` after `PhaseComplete` | Small |
+| `handler/tools/pipeline_next_action.go` | Add long-poll path when `awaiting_human` + no `user_response` | Medium |
+| `skills/forge/SKILL.md` | Replace `AskUserQuestion` with immediate re-call loop on `still_waiting` | Small |
+| `nextActionResponse` | Add `StillWaiting bool` field | Trivial |
 
-### Remote access via ngrok
+### Remote access via local network (`FORGE_DASHBOARD_BIND_ALL`)
 
-No server binding changes are required. The Dashboard stays on `127.0.0.1`.
-ngrok forwards external traffic to the local port:
+No auth or ngrok is required for the initial development phase. Adding
+`FORGE_DASHBOARD_BIND_ALL=1` makes the dashboard bind to `0.0.0.0` instead of
+`127.0.0.1` and disables the `isLocalRequest` origin check:
 
 ```text
-smartphone browser
+smartphone browser (same WiFi)
        │
-       ▼ HTTPS
-  ngrok tunnel (e.g. https://abc123.ngrok.io)
-       │
-       ▼ HTTP (loopback)
-  127.0.0.1:8099  ←  forge Dashboard server
+       ▼ HTTP
+  192.168.x.x:8099  ←  forge Dashboard server (0.0.0.0:8099)
 ```
 
-The `isLocalRequest` guard in `intervention.go` sees only the ngrok agent's
-loopback connection and passes it through unchanged.
+The implementation:
+- `server.go`: read `FORGE_DASHBOARD_BIND_ALL` at startup; use `0.0.0.0` when
+  set, else keep `127.0.0.1`.
+- `intervention.go`: skip `isLocalRequest` check when `FORGE_DASHBOARD_BIND_ALL`
+  is set. Pass a `publicMode bool` flag from `server.go` to the handlers.
 
-The `Origin` header from the browser will be the ngrok URL, which currently
-fails the same-origin check. Fix: when `FORGE_DASHBOARD_TOKEN` is set and the
-request carries a valid `Authorization: Bearer <token>` header, bypass the
-origin check entirely — token auth supersedes CSRF protection.
-
-**Security model:**
-
-| Mode | Binding | Auth |
-| --- | --- | --- |
-| Default (current) | `127.0.0.1` | loopback + same-origin (unchanged) |
-| Remote (ngrok) | `127.0.0.1` | `FORGE_DASHBOARD_TOKEN` bearer token |
-
-Setting up ngrok:
+Starting the dashboard in public mode:
 
 ```bash
-# start the MCP server with dashboard
-FORGE_EVENTS_PORT=8099 FORGE_DASHBOARD_TOKEN=<secret> forge-state-mcp
-
-# in another terminal, expose via ngrok
-ngrok http 8099 --request-header-add "Authorization: Bearer <secret>"
+FORGE_EVENTS_PORT=8099 FORGE_DASHBOARD_BIND_ALL=1 forge-state-mcp
 ```
+
+Then open `http://<host-ip>:8099` from any device on the same network.
+
+**Security note:** This is intentionally insecure and meant for local development
+only. Anyone on the same network can approve checkpoints and abandon pipelines.
+Bearer-token auth and ngrok support are deferred to a future phase.
 
 ---
 
@@ -231,25 +269,28 @@ Phase 2 is a separate initiative. No implementation plan is provided here.
 
 ### Phase 1 (implement now)
 
-1. **`pipeline_next_action.go`**: Add EventBus long-poll when
-   `currentPhaseStatus == "awaiting_human"` and no `user_response` provided.
-   - Subscribe to `bus` (already threaded into the handler).
-   - Select on: EventBus channel (`phase-complete` for current phase), 15 s
-     ticker, `ctx.Done()`.
-   - On match: reload state, run engine, call `PhaseStart`, return action.
-   - On timeout: return checkpoint action with `still_waiting: true`.
+1. **`dashboard/server.go`**: read `FORGE_DASHBOARD_BIND_ALL` env var; when set,
+   bind to `0.0.0.0` and pass `publicMode=true` to handlers.
 
-2. **`SKILL.md`**: Checkpoint action handler — remove `AskUserQuestion`, add
-   immediate re-call loop on `still_waiting: true`.
+2. **`dashboard/intervention.go`**: add `bus *events.EventBus` and
+   `publicMode bool` to handler constructors.
+   - When `publicMode`: skip `isLocalRequest` check.
+   - After `sm.PhaseComplete()` succeeds: publish `phase-complete` event to `bus`.
 
-3. **`intervention.go`**: Add optional bearer token middleware.
-   - Read `FORGE_DASHBOARD_TOKEN` from env at server start.
-   - If set: accept any origin when `Authorization: Bearer <token>` matches;
-     reject otherwise (regardless of loopback).
-   - If unset: existing `isLocalRequest` behavior unchanged.
+3. **`handler/tools/pipeline_next_action.go`**: add long-poll block between P0
+   and `eng.NextAction`. When `currentPhaseStatus == "awaiting_human"` and no
+   `user_response`:
+   - Subscribe to `bus`, select on: EventBus channel (`phase-complete` for
+     current phase), 15s timer, `ctx.Done()`.
+   - On `phase-complete`: reload state (`sm2.LoadFromFile`), fall through to
+     `eng.NextAction`.
+   - On timeout/ctx: fall through to `eng.NextAction` (returns same checkpoint
+     action); set `StillWaiting: true` on `nextActionResponse`.
 
-4. **`dashboard.html`**: Post-approve UX — replace "approved" button label
-   with "✓ Pipeline will continue automatically".
+4. **`nextActionResponse`**: add `StillWaiting bool \`json:"still_waiting,omitempty"\``.
+
+5. **`skills/forge/SKILL.md`**: checkpoint action handler — remove
+   `AskUserQuestion`, add immediate re-call loop on `still_waiting: true`.
 
 ### Phase 2 (future)
 

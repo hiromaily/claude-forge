@@ -123,7 +123,7 @@ func TestApproveCheckpoint_Success(t *testing.T) {
 		t.Fatalf("Checkpoint: %v", err)
 	}
 
-	handler := approveCheckpointHandler(sm)
+	handler := approveCheckpointHandler(sm, events.NewEventBus(), false)
 	req := httptest.NewRequest(http.MethodPost, "/api/checkpoint/approve",
 		jsonBody(t, interventionRequest{Workspace: workspace, Phase: "checkpoint-a"}))
 	req.RemoteAddr = "127.0.0.1:54321"
@@ -149,6 +149,56 @@ func TestApproveCheckpoint_Success(t *testing.T) {
 	}
 }
 
+// TestApproveCheckpoint_PublishesEvent verifies that a successful approve
+// publishes a "phase-complete" event to the EventBus so any long-polling
+// pipeline_next_action can wake up.
+func TestApproveCheckpoint_PublishesEvent(t *testing.T) {
+	t.Parallel()
+
+	sm, workspace := newTestStateManager(t)
+
+	for _, phase := range []string{"phase-1", "phase-2", "phase-3", "phase-3b"} {
+		if err := sm.PhaseComplete(workspace, phase); err != nil {
+			t.Fatalf("PhaseComplete %s: %v", phase, err)
+		}
+	}
+	if err := sm.Checkpoint(workspace, "checkpoint-a"); err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+
+	bus := events.NewEventBus()
+	_, ch := bus.Subscribe()
+
+	handler := approveCheckpointHandler(sm, bus, false)
+	req := httptest.NewRequest(http.MethodPost, "/api/checkpoint/approve",
+		jsonBody(t, interventionRequest{Workspace: workspace, Phase: "checkpoint-a"}))
+	req.RemoteAddr = "127.0.0.1:54321"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	resp := rec.Result()
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want 200; body=%q", resp.StatusCode, readErrorBody(t, resp))
+	}
+
+	select {
+	case e := <-ch:
+		if e.Event != "phase-complete" {
+			t.Errorf("event type = %q, want %q", e.Event, "phase-complete")
+		}
+		if e.Phase != "checkpoint-a" {
+			t.Errorf("event phase = %q, want %q", e.Phase, "checkpoint-a")
+		}
+		if e.Outcome != "completed" {
+			t.Errorf("event outcome = %q, want %q", e.Outcome, "completed")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no phase-complete event published within 1s")
+	}
+}
+
 // TestApproveCheckpoint_MessageWritten verifies that when the checkpoint
 // approve request includes a non-empty message, the handler writes the
 // message to checkpoint-message.txt inside the workspace directory.
@@ -167,7 +217,7 @@ func TestApproveCheckpoint_MessageWritten(t *testing.T) {
 		t.Fatalf("Checkpoint: %v", err)
 	}
 
-	handler := approveCheckpointHandler(sm)
+	handler := approveCheckpointHandler(sm, events.NewEventBus(), false)
 	body := jsonBody(t, interventionRequest{
 		Workspace: workspace,
 		Phase:     "checkpoint-a",
@@ -212,7 +262,7 @@ func TestApproveCheckpoint_NoMessageNoFile(t *testing.T) {
 		t.Fatalf("Checkpoint: %v", err)
 	}
 
-	handler := approveCheckpointHandler(sm)
+	handler := approveCheckpointHandler(sm, events.NewEventBus(), false)
 	body := jsonBody(t, interventionRequest{
 		Workspace: workspace,
 		Phase:     "checkpoint-a",
@@ -239,7 +289,7 @@ func TestApproveCheckpoint_Forbidden(t *testing.T) {
 	t.Parallel()
 
 	sm, workspace := newTestStateManager(t)
-	handler := approveCheckpointHandler(sm)
+	handler := approveCheckpointHandler(sm, events.NewEventBus(), false)
 
 	cases := []struct {
 		name       string
@@ -273,7 +323,7 @@ func TestApproveCheckpoint_BadRequest(t *testing.T) {
 	t.Parallel()
 
 	sm, _ := newTestStateManager(t)
-	handler := approveCheckpointHandler(sm)
+	handler := approveCheckpointHandler(sm, events.NewEventBus(), false)
 
 	cases := []struct {
 		name string
@@ -309,7 +359,7 @@ func TestApproveCheckpoint_Conflict(t *testing.T) {
 		t.Parallel()
 		sm, workspace := newTestStateManager(t)
 		// Workspace is at phase-1 / pending. Caller asks for checkpoint-a.
-		handler := approveCheckpointHandler(sm)
+		handler := approveCheckpointHandler(sm, events.NewEventBus(), false)
 		req := httptest.NewRequest(http.MethodPost, "/api/checkpoint/approve",
 			jsonBody(t, interventionRequest{Workspace: workspace, Phase: "checkpoint-a"}))
 		req.RemoteAddr = "127.0.0.1:54321"
@@ -328,7 +378,7 @@ func TestApproveCheckpoint_Conflict(t *testing.T) {
 		sm, workspace := newTestStateManager(t)
 		// At phase-1 / pending. Caller asks to approve phase-1, which is the
 		// current phase but is not at awaiting_human status.
-		handler := approveCheckpointHandler(sm)
+		handler := approveCheckpointHandler(sm, events.NewEventBus(), false)
 		req := httptest.NewRequest(http.MethodPost, "/api/checkpoint/approve",
 			jsonBody(t, interventionRequest{Workspace: workspace, Phase: "phase-1"}))
 		req.RemoteAddr = "127.0.0.1:54321"
@@ -348,7 +398,7 @@ func TestAbandon_Success(t *testing.T) {
 	t.Parallel()
 
 	sm, workspace := newTestStateManager(t)
-	handler := abandonHandler(sm)
+	handler := abandonHandler(sm, events.NewEventBus(), false)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/pipeline/abandon",
 		jsonBody(t, interventionRequest{Workspace: workspace}))
@@ -387,7 +437,7 @@ func TestAbandon_Forbidden(t *testing.T) {
 	t.Parallel()
 
 	sm, workspace := newTestStateManager(t)
-	handler := abandonHandler(sm)
+	handler := abandonHandler(sm, events.NewEventBus(), false)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/pipeline/abandon",
 		jsonBody(t, interventionRequest{Workspace: workspace}))

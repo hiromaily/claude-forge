@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -21,6 +22,11 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/prompt"
 	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 )
+
+// checkpointLongPollTimeout is the maximum time pipeline_next_action blocks
+// waiting for a Dashboard-triggered phase-complete event at a checkpoint.
+// 15 seconds is safely within the MCP tool-call timeout on all observed clients.
+const checkpointLongPollTimeout = 15 * time.Second
 
 const similarPipelinesSearchLimit = 3
 
@@ -69,6 +75,8 @@ type reportResultEmbedded struct {
 // DisplayMessage is a pre-formatted progress line the orchestrator should output verbatim
 // before executing the action (e.g. "▶ Phase 1 — Situation Analysis  ·  spawning …").
 // ReportResult is present when previous_* params triggered a non-proceed transition.
+// StillWaiting is true when pipeline_next_action returned from a long-poll timeout at a
+// checkpoint; the orchestrator should call pipeline_next_action again immediately.
 type nextActionResponse struct {
 	orchestrator.Action
 	Warning            string                `json:"warning,omitempty"`
@@ -76,6 +84,7 @@ type nextActionResponse struct {
 	ReportResult       *reportResultEmbedded `json:"report_result,omitempty"`
 	CurrentPhase       string                `json:"current_phase,omitempty"`
 	CurrentPhaseStatus string                `json:"current_phase_status,omitempty"`
+	StillWaiting       bool                  `json:"still_waiting,omitempty"`
 }
 
 // parsePreviousResult extracts the optional previous_* parameters from the MCP request.
@@ -121,7 +130,7 @@ func PipelineNextActionHandler(
 	kb *history.KnowledgeBase,
 	profiler *profile.RepoProfiler,
 ) server.ToolHandlerFunc {
-	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		workspace, result, err := requireWorkspace(req)
 		if result != nil {
 			return result, err
@@ -264,6 +273,95 @@ func PipelineNextActionHandler(
 				return nil
 			}); updateErr != nil {
 				return errorf("resolve human gate task %s: %v", taskKey, updateErr)
+			}
+		}
+
+		// Long-poll: when the pipeline is awaiting human approval and the caller
+		// provided no user_response, subscribe to the EventBus and block until a
+		// Dashboard-triggered phase-complete event arrives or the timeout elapses.
+		//
+		// This eliminates the need for AskUserQuestion at checkpoints: the
+		// orchestrator calls pipeline_next_action immediately after presenting the
+		// checkpoint to the user, and the MCP call stays open until either the
+		// Dashboard approves or 15 s pass.
+		//
+		// On timeout the function falls through to eng.NextAction (which returns the
+		// same checkpoint action) and sets StillWaiting=true so the orchestrator
+		// re-calls immediately. On Dashboard approval or abandon the state is already
+		// advanced on disk; reloading before eng.NextAction yields the correct action.
+		// checkpointTimedOut is set true only on a real timer expiry; it causes
+		// StillWaiting=true so the orchestrator re-calls pipeline_next_action.
+		checkpointTimedOut := false
+		if userResponse == "" {
+			// Subscribe before GetState to close the race window: if the dashboard
+			// acts between the state-check and Subscribe the event would be missed,
+			// causing a full 15-second timeout before the orchestrator sees the update.
+			subID, eventCh := bus.Subscribe()
+			st, stErr := sm2.GetState()
+			if stErr == nil && st.CurrentPhaseStatus == state.StatusAwaitingHuman {
+				checkPhase := st.CurrentPhase
+				// Resolve workspace symlinks once. On macOS /var is a symlink to
+				// /private/var; exact string comparison would silently fail for paths
+				// rooted there, causing the long-poll to never wake for that workspace.
+				resolvedWs := workspace
+				if rw, rwErr := filepath.EvalSymlinks(workspace); rwErr == nil {
+					resolvedWs = rw
+				}
+				timer := time.NewTimer(checkpointLongPollTimeout)
+				needsReload := false
+			longPoll:
+				for {
+					select {
+					case e, ok := <-eventCh:
+						if !ok {
+							break longPoll
+						}
+						// Match workspace too: the EventBus is process-global and
+						// concurrent pipelines in different workspaces may share it.
+						// Without the workspace guard, a phase-complete from pipeline A
+						// would spuriously wake up pipeline B's long-poll.
+						ews := e.Workspace
+						if rw, rwErr := filepath.EvalSymlinks(ews); rwErr == nil {
+							ews = rw
+						}
+						if ews == resolvedWs {
+							if e.Event == "phase-complete" && e.Phase == checkPhase {
+								needsReload = true
+								break longPoll
+							}
+							// An abandon event also ends the wait; reload from disk so
+							// eng.NextAction sees the abandoned state and returns ActionDone.
+							if e.Event == "abandon" {
+								needsReload = true
+								break longPoll
+							}
+						}
+					case <-timer.C:
+						checkpointTimedOut = true
+						break longPoll
+					case <-ctx.Done():
+						checkpointTimedOut = true
+						break longPoll
+					}
+				}
+				// Drain the timer channel if Stop() races with the timer firing,
+				// per the documented Go pattern for one-shot timers.
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				bus.Unsubscribe(subID)
+
+				if needsReload {
+					// Dashboard acted: reload from disk (state is now advanced or abandoned).
+					if reloadErr := sm2.LoadFromFile(workspace); reloadErr != nil {
+						return errorf("long-poll reload: %v", reloadErr)
+					}
+				}
+			} else {
+				bus.Unsubscribe(subID)
 			}
 		}
 
@@ -488,6 +586,9 @@ func PipelineNextActionHandler(
 
 		resp.Action = action
 		resp.DisplayMessage = buildSpawnMessage(action)
+		if checkpointTimedOut && action.Type == orchestrator.ActionCheckpoint {
+			resp.StillWaiting = true
+		}
 
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
 			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb, profiler); enrichErr != nil {

@@ -124,7 +124,7 @@ func TestListenWithFallback_PreferredPortSucceeds(t *testing.T) {
 	t.Parallel()
 
 	port := freePort(t)
-	ln := listenWithFallback(port)
+	ln := listenWithFallback(port, false)
 	if ln == nil {
 		t.Fatal("listenWithFallback returned nil for free port")
 	}
@@ -148,7 +148,7 @@ func TestListenWithFallback_FallbackPortRange(t *testing.T) {
 	defer func() { _ = ln.Close() }()
 	occupiedPort := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
 
-	fallback := listenWithFallback(occupiedPort)
+	fallback := listenWithFallback(occupiedPort, false)
 	if fallback == nil {
 		t.Fatal("listenWithFallback returned nil; expected fallback to succeed")
 	}
