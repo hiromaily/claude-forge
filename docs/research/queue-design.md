@@ -275,18 +275,23 @@ this tool reads `state.json` directly and makes the determination itself
 
 - `queue_path` (string, required): Path to the queue YAML file.
 - `index` (number, required): The task index returned by `queue_next`.
+- `workspace` (string, optional): Workspace directory path passed by the skill
+  from forge's `pipeline_init_with_context` response. When provided, skips
+  `.specs/` scanning entirely.
 
 **Behavior**:
 
 1. Read `queue.yaml`, find the entry at `index`.
 2. Read `workspace_slug` from the entry (written by `queue_next`).
 3. Locate the workspace directory in `.specs/`:
-   - Extract the date prefix from `started_at` (e.g., `20260417`).
-   - Extract the source ID from the URL (e.g., `dea-123` for Jira,
-     `42` for GitHub).
-   - Scan `.specs/` for directories matching the pattern
-     `{date_prefix}-{source_id}*`. Since execution is sequential and
-     source IDs are unique per queue entry, at most one directory matches.
+   - If the optional `workspace` parameter is provided (set by the skill
+     after capturing the path from forge's `pipeline_init_with_context`
+     response): use it directly. No scanning is needed.
+   - Fallback (crash recovery — skill was interrupted before passing workspace):
+     extract the date prefix from `started_at` (e.g., `20260417`) and
+     `workspace_slug` from the queue.yaml entry, then scan `.specs/` for
+     `{date_prefix}-{workspace_slug}*`. This is deterministic because the
+     slug is pre-generated and written to queue.yaml before the pipeline starts.
    - If no match found: mark the task as `failed` with reason
      `"workspace not found"`.
 4. Read `{workspace}/state.json`.
@@ -542,7 +547,9 @@ tasks:
 13. **Workspace slug known before subprocess** — `queue_next` pre-generates
     the slug and writes it to queue.yaml. The subprocess passes it to
     forge via the existing `user_confirmation.workspace_slug` mechanism.
-    `queue_report` locates the workspace by date + source_id prefix scan.
+    The skill captures the workspace path from `pipeline_init_with_context`
+    response and passes it to `queue_report` as an optional `workspace`
+    parameter; fallback crash-recovery scan uses `{date_prefix}-{workspace_slug}*`.
 
 ## Go Package Location
 
@@ -575,17 +582,18 @@ No reverse dependency is introduced. The `queue` package does not import
 ### URL validation reuse
 
 Both `queue_create` and `queue_init` validate URLs using source type
-detection. The `handler/validation` package (used by `pipeline_init`) exposes
-`ValidateInput` which includes source type detection. Since `queue`
-imports `engine/state` only (not `handler/tools` or `handler/validation`), the URL validation
-logic is extracted into a shared function in the `handler/validation` package
-(which `queue` can import without violating the DAG):
+detection. To avoid a layering violation (`queue` must not import
+`handler/validation` since handler packages sit above logic packages),
+the URL validation logic is extracted into `pkg/validation` — a lower-level
+shared package that both `queue` and `handler/tools` can import:
 
 ```text
-tools → queue → validation (URL validation)
-                      ↑
-              tools → validation (existing)
+tools → queue    → pkg/validation (URL validation)
+tools → handlers → pkg/validation (existing validate_input)
 ```
+
+`pkg/validation` must not import any `internal/` package
+(same constraint as `pkg/maputil`).
 
 ## Test Strategy
 

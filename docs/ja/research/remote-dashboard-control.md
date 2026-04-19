@@ -316,7 +316,7 @@ type StartOptions struct {
 3. **Python サブプロセス**: `anthropic` Python パッケージを使用したオプション2と同じパターン。
    Go SDK も Node.js SDK も適切でない場合のフォールバック。サブプロセスを使用する場合は、
    `os/exec` 呼び出しに `//nolint:gosec // G204` を注記してください（`.golangci.yml` は
-   すでに G204 を抑制していますが、インライン注記も必要です）。
+   すでに G204 を抑制しています）。
 
 HTTP API コントラクト（`POST /api/task/submit`、`GET /api/tasks`、`tasks.json` 永続化）は
 ランタイムに依存しません。内部の Agent セッション起動メカニズムのみが SDK の選択によって変わります。
@@ -355,8 +355,7 @@ tasks.md）を取得できることが、リモートダッシュボードを有
 **クラッシュリカバリ**: `Runner.Start()` 時に、ランナーは `.specs/tasks.json` の
 `status: queued` または `status: in_progress` のタスクをスキャンして再エンキューします。
 ランナーは `source: "dashboard"` を持つタスクのみ再エンキューします — この識別子フィールドにより、
-インタラクティブな Claude Code セッションで開始されたパイプライン（`tasks.json` に書き込まない）
-を誤って再エンキューしないようにします。
+インタラクティブな Claude Code セッションで開始されたパイプラインを誤って再エンキューしないようにします。
 
 **Agent セッション**: 各タスクは Agent SDK セッションを起動します。セッションは forge
 パイプラインをインタラクティブに実行します（マルチターン、パイプライン全ライフサイクルにわたる

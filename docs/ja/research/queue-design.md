@@ -235,15 +235,23 @@ SKILL.md (forge-queue)
 
 - `queue_path` (string, 必須): キュー YAML ファイルへのパス。
 - `index` (number, 必須): `queue_next` が返したタスクインデックス。
+- `workspace`（文字列、オプション）: スキルが forge の `pipeline_init_with_context`
+  レスポンスから渡すワークスペースディレクトリパス。指定された場合、`.specs/` スキャンを
+  完全にスキップします。
 
 **動作**:
 
 1. `queue.yaml` を読み込み、`index` のエントリを見つける。
 2. エントリから `workspace_slug` を読み込む（`queue_next` が書き込んだもの）。
 3. `.specs/` でワークスペースディレクトリを特定する:
-   - `started_at` から日付プレフィックスを抽出する（例: `20260417`）。
-   - URL から source ID を抽出する（例: Jira は `dea-123`、GitHub は `42`）。
-   - `.specs/` でパターン `{date_prefix}-{source_id}*` に一致するディレクトリをスキャンする。実行が逐次でありソース ID がキューエントリごとにユニークなため、最大 1 つのディレクトリが一致します。
+   - オプションの `workspace` パラメータが指定されている場合（スキルが forge の
+     `pipeline_init_with_context` レスポンスからパスをキャプチャして渡す）:
+     そのパスを直接使用する。スキャンは不要。
+   - フォールバック（クラッシュリカバリ — スキルが workspace を渡す前に中断された場合）:
+     `started_at` から日付プレフィックス（例: `20260417`）と queue.yaml エントリから
+     `workspace_slug` を抽出し、`.specs/` で `{date_prefix}-{workspace_slug}*` を
+     スキャンする。スラッグはパイプライン開始前に事前生成され queue.yaml に書き込まれるため、
+     このスキャンは決定論的です。
    - 一致が見つからない場合: タスクを `failed`（理由: `"workspace not found"`）としてマークする。
 4. `{workspace}/state.json` を読み込む。
 5. 結果を決定論的に決定する:
@@ -458,7 +466,7 @@ tasks:
 10. **再開可能** — `queue_next` は `in_progress` エントリを候補として扱い、割り込まれたセッションからの回復を可能にする。
 11. **セッション隔離** — 各タスクは別の `claude -p` サブプロセスで実行される。コンテキストウィンドウはタスクごとにクリーン。タスク間の汚染なし。
 12. **MCP ツールはピュアな Go** — MCP ツール内で外部コマンド（`gh`、`curl` など）の `os/exec` 呼び出しなし。シェルコマンドはスキルレイヤーのみで実行される。
-13. **ワークスペーススラグはサブプロセスより先に判明** — `queue_next` がスラグを事前生成して queue.yaml に書き込む。サブプロセスは既存の `user_confirmation.workspace_slug` メカニズムを通じてそれを forge に渡す。`queue_report` は日付 + source_id プレフィックスのスキャンでワークスペースを特定する。
+13. **ワークスペーススラグはサブプロセスより先に判明** — `queue_next` がスラグを事前生成して queue.yaml に書き込む。サブプロセスは既存の `user_confirmation.workspace_slug` メカニズムを通じてそれを forge に渡す。スキルは `pipeline_init_with_context` レスポンスからワークスペースパスをキャプチャし、オプションの `workspace` パラメータとして `queue_report` に渡す。フォールバックのクラッシュリカバリスキャンは `{date_prefix}-{workspace_slug}*` を使用する。
 
 ## Go パッケージの配置
 
@@ -487,13 +495,14 @@ tools → queue → state (ReadState only)
 
 ### URL バリデーションの再利用
 
-`queue_create` と `queue_init` の両方がソースタイプ検出を使用して URL をバリデートします。`handler/validation` パッケージ（`pipeline_init` が使用）はソースタイプ検出を含む `ValidateInput` を公開しています。`queue` は `engine/state` のみをインポートするため（`handler/tools` や `handler/validation` はインポートしない）、URL バリデーションロジックは `handler/validation` パッケージ内の共有関数として抽出されます（`queue` は DAG に違反することなくこれをインポートできます）:
+`queue_create` と `queue_init` の両方がソースタイプ検出を使用して URL をバリデートします。レイヤリング違反を避けるため（`queue` は `handler/validation` をインポートできません — ハンドラーパッケージはロジックパッケージより上位に位置します）、URL バリデーションロジックは `pkg/validation` に抽出されます — `queue` と `handler/tools` の両方がインポートできる低レベルの共有パッケージです:
 
 ```text
-tools → queue → validation (URL validation)
-                      ↑
-              tools → validation (existing)
+tools → queue    → pkg/validation（URL バリデーション）
+tools → handlers → pkg/validation（既存の validate_input）
 ```
+
+`pkg/validation` は `internal/` パッケージをインポートしてはなりません（`pkg/maputil` と同じ制約）。
 
 ## テスト戦略
 

@@ -321,7 +321,7 @@ availability at that time. Three options are documented here in preference order
 3. **Python subprocess**: same pattern as option 2 using the `anthropic` Python package.
    Fallback if neither Go nor Node.js SDKs are suitable. If a subprocess is used,
    annotate the `os/exec` call with `//nolint:gosec // G204` (`.golangci.yml` already
-   suppresses G204 but the inline annotation is still required).
+   suppresses G204).
 
 The HTTP API contract (`POST /api/task/submit`, `GET /api/tasks`, `tasks.json`
 persistence) is runtime-independent. Only the internal Agent session launch mechanism
@@ -361,7 +361,7 @@ pool (default: 1 worker). The pool reads from an in-memory channel fed by `Enque
 tasks with `status: queued` or `status: in_progress` and re-enqueues them. The
 runner only re-enqueues tasks that have `source: "dashboard"` — this discriminator
 field prevents the runner from accidentally re-enqueuing pipelines that were started
-by an interactive Claude Code session (which never write to `tasks.json`).
+by an interactive Claude Code session.
 
 **Agent session**: each task starts an Agent SDK session. The session runs the forge
 pipeline interactively (multi-turn, full tool-use across the complete pipeline
