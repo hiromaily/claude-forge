@@ -347,32 +347,30 @@ SKILL.md (forge-queue)
 ```text
 queue_next                    queue.yaml          subprocess (forge)
   │                               │                     │
-  │ スラグを事前生成              │                     │
-  │ URL から (例: "dea-123")     │                     │
-  │──workspace_slug を書込──────▶│                     │
+  │ pre-generate slug             │                     │
+  │ from URL (e.g. "dea-123")    │                     │
+  │──write workspace_slug───────▶│                     │
   │                               │                     │
-  │ workspace_slug を返す         │                     │
+  │ return workspace_slug         │                     │
   │◀──────────────────────────────│                     │
   │                               │                     │
-  │ スラグを claude -p            │                     │
-  │ プロンプト指示に埋め込む      │                     │
+  │ embed slug in claude -p       │                     │
+  │ prompt instruction            │                     │
   │──────────────────────────────────────────────────▶ │
   │                               │    forge SKILL.md   │
-  │                               │    スラグを          │
+  │                               │    passes slug in   │
   │                               │    user_confirmation│
   │                               │    .workspace_slug  │
-  │                               │    で渡す           │
   │                               │         │           │
   │                               │         ▼           │
   │                               │    pipeline_init_   │
   │                               │    with_context     │
-  │                               │    スラグを適用     │
-  │                               │    (既存コード      │
+  │                               │    applies slug     │
+  │                               │    (existing code   │
   │                               │     L277-283)       │
   │                               │         │           │
   │                               │         ▼           │
-  │                               │    ワークスペース   │
-  │                               │    作成             │
+  │                               │    workspace created│
   │                               │    .specs/20260417- │
   │                               │    dea-123-fix-login│
   │                               │                     │
