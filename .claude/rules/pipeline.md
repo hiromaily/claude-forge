@@ -43,7 +43,7 @@ Events are emitted **after** the corresponding `StateManager` method succeeds. N
 |---|---|
 | Phase start (`pending -> in_progress`) | `pipeline_next_action` |
 | Phase complete (`in_progress -> completed`) | `pipeline_report_result` via `determineTransition()` |
-| Checkpoint (`in_progress -> awaiting_human`) | `pipeline_next_action` (absorbed; calls `sm.Checkpoint()` internally) |
+| Checkpoint (`in_progress -> awaiting_human`) | `pipeline_next_action` (checkpoint action) |
 | Checkpoint resolution | `pipeline_next_action` (with `user_response`) |
 
 ### 5. Event pairs

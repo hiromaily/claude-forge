@@ -94,7 +94,7 @@ claude-forge は4つの強制レイヤーを使用しており、最も信頼性
 |---|---|---|
 | Agent 呼び出しに `isolation: "worktree"` を渡さない | SKILL.md | Claude Code の Agent ツールパラメータ；Agent ツール引数のフックインターセプトポイントがない |
 | `spawn_agent`、`exec`、`write_file` の後に常に `pipeline_report_result` を呼び出す | SKILL.md | 省略は no-op（メトリクス欠落）であり、状態の破損ではない；タイムアウトガードを追加するとリスクに対して不釣り合いな複雑さが加わる |
-| チェックポイントで `phase_complete` を呼び出す前に人間の応答を待つ | SKILL.md | **待機**自体はプロンプトのみだが、**ゲート**は決定的：ガード 3e は `checkpoint()` が最初に呼び出されない限り `phase_complete` をブロックするため、LLM はチェックポイントをスキップできない |
+| チェックポイントで Dashboard または terminal の応答を待つ | SKILL.md | `pipeline_next_action` がチェックポイントの状態遷移を吸収し、Dashboard 承認をロングポーリング（50 秒）する。LLM は `still_waiting` 時に `pipeline_next_action` を再呼び出しする必要がある；ロングポーリングにより反復回数を削減し非決定性を最小化 |
 | `done` アクションの `skip:` プレフィックスを解析して `phase_complete` を呼び出す | SKILL.md | エンジンがスキップシグナルを返す；オーケストレーターが解析に失敗した場合、`pipeline_next_action` は同じスキップシグナルを再び返す（自己修正ループ） |
 
 ## デュアルレイヤー強制マップ

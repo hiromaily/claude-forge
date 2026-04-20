@@ -100,6 +100,7 @@
 | sections/architecture/go-package-layering.md | Not referenced by any template |
 | sections/architecture/guard-catalogue.md | Not referenced by any template |
 | sections/architecture/hooks.md | Not referenced by any template |
+| sections/architecture/mcp-protocol-constraints.md | Not referenced by any template |
 | sections/architecture/overview-content.md | Not referenced by any template |
 | sections/architecture/pipeline-flow-guide.md | Not referenced by any template |
 | sections/architecture/pipeline-lifecycle-contract.md | Not referenced by any template |

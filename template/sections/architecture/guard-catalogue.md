@@ -96,7 +96,7 @@ These behaviors are enforced **only** by LLM instructions. They cannot be guaran
 |---|---|---|
 | Never pass `isolation: "worktree"` to Agent calls | SKILL.md | Claude Code Agent tool parameter; no hook intercept point for Agent tool arguments |
 | Always call `pipeline_report_result` after `spawn_agent`, `exec`, `write_file` | SKILL.md | Omission is a no-op (missing metric), not a state corruption; adding a timeout guard would add complexity disproportionate to risk |
-| Wait for human response before calling `phase_complete` on checkpoints | SKILL.md | The **wait** itself is prompt-only, but the **gate** is deterministic: Guard 3e blocks `phase_complete` unless `checkpoint()` was called first, so the LLM cannot skip the checkpoint even if it doesn't wait |
+| Wait for Dashboard or terminal response at checkpoints | SKILL.md | `pipeline_next_action` absorbs the checkpoint state transition and long-polls for Dashboard approval (50 s). The LLM must re-call `pipeline_next_action` on `still_waiting`; the long-poll reduces iterations to minimize non-determinism |
 | Parse `skip:` prefix from `done` action and call `phase_complete` | SKILL.md | Engine returns the skip signal; if the orchestrator fails to parse it, `pipeline_next_action` returns the same skip signal again (self-correcting loop) |
 
 ## Dual-layer Enforcement Map
