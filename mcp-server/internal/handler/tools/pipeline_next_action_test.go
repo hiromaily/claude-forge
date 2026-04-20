@@ -1763,6 +1763,126 @@ func TestCheckpointLongPollTimeout_Is50s(t *testing.T) {
 	}
 }
 
+// TestPipelineNextAction_CheckpointAbsorption_MidPhase verifies that checkpoint
+// absorption works for mid-phase checkpoints where action.Name differs from
+// CurrentPhase. This is a regression test for the fix that changed
+// sm2.Checkpoint(workspace, action.Name) to sm2.Checkpoint(workspace, st.CurrentPhase).
+// Without the fix, sm2.Checkpoint("design-approved") would fail the validation
+// guard because "design-approved" != CurrentPhase "phase-3b".
+func TestPipelineNextAction_CheckpointAbsorption_MidPhase(t *testing.T) {
+	t.Parallel()
+
+	workspace, sm := initWorkspaceForNextAction(t, state.PhaseThreeB, func(s *state.State) error {
+		s.CurrentPhaseStatus = state.StatusInProgress
+		s.CompletedPhases = []string{
+			state.PhaseOne, state.PhaseTwo, state.PhaseThree,
+		}
+		return nil
+	})
+
+	// Write a review-design.md with APPROVE verdict so the engine returns
+	// a "design-approved" checkpoint (not a spawn_agent for revision).
+	reviewContent := "# Design Review\n\n## Verdict: APPROVE\n\nLooks good.\n"
+	if err := os.WriteFile(filepath.Join(workspace, state.ArtifactReviewDesign), []byte(reviewContent), 0o644); err != nil {
+		t.Fatalf("write review-design.md: %v", err)
+	}
+
+	bus := events.NewEventBus()
+	eng := orchestrator.NewEngine("", "")
+	h := PipelineNextActionHandler(sm, bus, eng, "", nil, nil, nil)
+
+	result, err := callNextAction(t, h, workspace)
+	if err != nil {
+		t.Fatalf("PipelineNextActionHandler: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("PipelineNextActionHandler returned error: %s", textContent(result))
+	}
+
+	var resp nextActionResponse
+	if jsonErr := json.Unmarshal([]byte(textContent(result)), &resp); jsonErr != nil {
+		t.Fatalf("unmarshal response: %v", jsonErr)
+	}
+	if resp.Type != orchestrator.ActionCheckpoint {
+		t.Fatalf("action type = %q, want %q", resp.Type, orchestrator.ActionCheckpoint)
+	}
+
+	// Verify checkpoint absorption: state on disk should have awaiting_human.
+	sm2 := state.NewStateManager("dev")
+	if err := sm2.LoadFromFile(workspace); err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+	st, err := sm2.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if st.CurrentPhaseStatus != state.StatusAwaitingHuman {
+		t.Errorf("CurrentPhaseStatus = %q, want %q", st.CurrentPhaseStatus, state.StatusAwaitingHuman)
+	}
+	// CurrentPhase should remain "phase-3b", NOT "design-approved".
+	if st.CurrentPhase != state.PhaseThreeB {
+		t.Errorf("CurrentPhase = %q, want %q (must not change to checkpoint name)", st.CurrentPhase, state.PhaseThreeB)
+	}
+}
+
+// TestPipelineNextAction_AutoApprove_BypassesAbsorption verifies that when
+// AutoApprove is true and the AI verdict is APPROVE, the engine returns
+// ActionSpawnAgent (not ActionCheckpoint), so the checkpoint absorption code
+// is never reached. This documents the --auto flag's checkpoint bypass behavior.
+func TestPipelineNextAction_AutoApprove_BypassesAbsorption(t *testing.T) {
+	t.Parallel()
+
+	workspace, sm := initWorkspaceForNextAction(t, state.PhaseThreeB, func(s *state.State) error {
+		s.CurrentPhaseStatus = state.StatusInProgress
+		s.AutoApprove = true
+		s.CompletedPhases = []string{
+			state.PhaseOne, state.PhaseTwo, state.PhaseThree,
+		}
+		return nil
+	})
+
+	// Write a review-design.md with APPROVE verdict.
+	reviewContent := "# Design Review\n\n## Verdict: APPROVE\n\nLooks good.\n"
+	if err := os.WriteFile(filepath.Join(workspace, state.ArtifactReviewDesign), []byte(reviewContent), 0o644); err != nil {
+		t.Fatalf("write review-design.md: %v", err)
+	}
+
+	bus := events.NewEventBus()
+	eng := orchestrator.NewEngine("", "")
+	h := PipelineNextActionHandler(sm, bus, eng, "", nil, nil, nil)
+
+	result, err := callNextAction(t, h, workspace)
+	if err != nil {
+		t.Fatalf("PipelineNextActionHandler: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("PipelineNextActionHandler returned error: %s", textContent(result))
+	}
+
+	var resp nextActionResponse
+	if jsonErr := json.Unmarshal([]byte(textContent(result)), &resp); jsonErr != nil {
+		t.Fatalf("unmarshal response: %v", jsonErr)
+	}
+	// Auto-approve should bypass checkpoint entirely — the engine returns
+	// a spawn_agent or task_init action, not a checkpoint.
+	if resp.Type == orchestrator.ActionCheckpoint {
+		t.Errorf("action type = %q with AutoApprove=true; expected non-checkpoint action", resp.Type)
+	}
+
+	// State should NOT be awaiting_human.
+	sm2 := state.NewStateManager("dev")
+	if err := sm2.LoadFromFile(workspace); err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+	st, err := sm2.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if st.CurrentPhaseStatus == state.StatusAwaitingHuman {
+		t.Errorf("CurrentPhaseStatus = %q with AutoApprove=true; should not be awaiting_human", st.CurrentPhaseStatus)
+	}
+}
+
 // TestExtractTaskNumber verifies the extractTaskNumber helper that is used to
 // resolve the {N} template variable in agent .md files.
 func TestExtractTaskNumber(t *testing.T) {
