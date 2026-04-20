@@ -1,6 +1,6 @@
 # ダッシュボードのリモートコントロール
 
-Status: draft v3 (2026-04-19)
+Status: **Phase 1 実装済み** (2026-04-20)。チェックポイント吸収、EventBus ロングポーリング（50 秒）、ローカルネットワークアクセスが稼働中。実装仕様は `docs/superpowers/specs/2026-04-20-checkpoint-absorption-design.md` を参照。
 
 ## 概要
 

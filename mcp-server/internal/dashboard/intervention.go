@@ -125,7 +125,7 @@ func approveCheckpointHandler(sm *state.StateManager, bus *events.EventBus, publ
 //
 // When publicMode is true the loopback/origin check is skipped (see approveCheckpointHandler).
 // An "abandon" event is published to the bus so any pipeline_next_action long-poll
-// at a checkpoint wakes up immediately rather than waiting the full 15-second timeout.
+// at a checkpoint wakes up immediately rather than waiting the full 50-second timeout.
 func abandonHandler(sm *state.StateManager, bus *events.EventBus, publicMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !publicMode && !isLocalRequest(r) {

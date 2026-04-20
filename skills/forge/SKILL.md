@@ -109,15 +109,11 @@ Repeat until done:
        In that case, use the Write tool to write the agent's final response text to
        `{workspace}/{action.output_file}` before calling `pipeline_next_action`.
        This ensures `pipeline_report_result` artifact validation always succeeds.
-   - `checkpoint`: **Before presenting anything to the user**, call
-     `mcp__forge-state__checkpoint(workspace, phase=action.name)`.
-     This is mandatory — it registers the pause so the pipeline can exit safely if
-     the user closes the conversation before responding. Never skip or defer this call.
-     Then present `action.present_to_user` to the user. Mention that the Dashboard
-     can be used to approve without terminal input.
-     **Immediately** call `mcp__forge-state__pipeline_next_action(workspace)` (no
-     `user_response`, no `previous_*`). The server blocks up to 15 s waiting for a
-     Dashboard approval event.
+   - `checkpoint`: Present `action.present_to_user` to the user.
+     Mention that the Dashboard can be used to approve without terminal input.
+     Then **immediately** call `mcp__forge-state__pipeline_next_action(workspace)`
+     (no `user_response`, no `previous_*`). The server long-polls up to 50 s
+     waiting for a Dashboard approval event.
      - If the response has `still_waiting: true`: call `pipeline_next_action(workspace)`
        again immediately (no `user_response`). Repeat until a non-checkpoint action is
        returned or the user provides a terminal response.
@@ -139,9 +135,8 @@ Repeat until done:
           c. Report success or failure to the user.
        3. If the user chooses **"skip"**: do nothing.
        Pass the user's response to `pipeline_next_action(workspace, user_response=<response>)`.
-     The engine handles all checkpoint state transitions deterministically
-     (proceed → advance, revise → rewind, abandon → mark abandoned).
-     Do NOT call `phase_complete` for checkpoints — the engine owns the lifecycle.
+     Do NOT call `checkpoint()` — `pipeline_next_action` handles the checkpoint
+     state transition internally.
      On every `pipeline_next_action` call for a checkpoint (still_waiting loops and
      terminal-response call alike), omit `previous_action_complete` (or pass false),
      and pass `previous_tokens=0, previous_duration_ms=0` with no `previous_model`
@@ -183,6 +178,6 @@ Flags can also be set as persistent defaults via `/forge-setup`. Explicit flags 
 
 - Never make orchestration decisions independently — follow action.type exactly.
 - Always pass `previous_action_complete=true`, `previous_tokens`, `previous_duration_ms`, `previous_model`, and `previous_setup_only` on every `pipeline_next_action` call after the first (after any `spawn_agent`, `exec`, or `write_file` action completes). Do NOT pass `previous_action_complete=true` after a checkpoint — it must remain false (or omitted) to skip the P5 report block.
-- When `still_waiting: true` is returned: call `pipeline_next_action(workspace)` again immediately with no `previous_*` or `user_response`. This is the Dashboard long-poll loop — keep calling until a non-still_waiting response arrives or the user types a terminal response.
+- When `still_waiting: true` is returned: call `pipeline_next_action(workspace)` again immediately with no `previous_*` or `user_response`. This is the Dashboard long-poll loop (50 s per iteration) — keep calling until a non-still_waiting response arrives or the user types a terminal response.
 - Never pass `isolation: "worktree"` to any Agent call.
 - On MCP error: surface the error to the user and stop.

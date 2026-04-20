@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -695,4 +696,183 @@ func TestE2E_StateTransitions(t *testing.T) {
 	if len(phaseOrder) < 5 {
 		t.Errorf("only %d distinct phases observed, want >= 5; phases: %v", len(phaseOrder), phaseOrder)
 	}
+}
+
+// TestE2E_DashboardCheckpointApproval drives a full pipeline to completion
+// where checkpoints are approved via Dashboard (EventBus events) instead of
+// terminal user_response. This is the E2E verification that the checkpoint
+// absorption + long-poll mechanism works end-to-end.
+func TestE2E_DashboardCheckpointApproval(t *testing.T) {
+	t.Parallel()
+
+	// Custom setup: we need the shared EventBus to simulate Dashboard approval.
+	dir := t.TempDir()
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(dir, "e2e-dashboard"); err != nil {
+		t.Fatalf("sm.Init: %v", err)
+	}
+	cfg := e2eConfig{
+		effort:      state.EffortM,
+		template:    state.TemplateStandard,
+		autoApprove: false,
+		skipPR:      true,
+	}
+	if err := sm.Configure(dir, state.PipelineConfig{
+		Effort:        cfg.effort,
+		FlowTemplate:  cfg.template,
+		AutoApprove:   cfg.autoApprove,
+		SkipPR:        cfg.skipPR,
+		SkippedPhases: orchestrator.SkipsForTemplate(cfg.template),
+	}); err != nil {
+		t.Fatalf("sm.Configure: %v", err)
+	}
+	if err := sm.Update(func(s *state.State) error {
+		s.BranchClassified = true
+		return nil
+	}); err != nil {
+		t.Fatalf("sm.Update: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(dir, state.ArtifactRequest),
+		[]byte("# Request\n\ntest task\n"),
+		0o600,
+	); err != nil {
+		t.Fatalf("write request.md: %v", err)
+	}
+
+	// Shared bus: both the handler and the Dashboard simulation goroutine use this.
+	bus := events.NewEventBus()
+	eng := orchestrator.NewEngine("", "")
+	kb := history.NewKnowledgeBase("")
+	nextActionH := PipelineNextActionHandler(sm, bus, eng, "", nil, kb, nil)
+	reportResultH := PipelineReportResultHandler(sm, bus, kb)
+
+	dashboardApprovedCheckpoints := 0
+
+	for iter := range 60 {
+		result, err := callNextAction(t, nextActionH, dir)
+		if err != nil {
+			t.Fatalf("iter %d: callNextAction Go error: %v", iter, err)
+		}
+		if result.IsError {
+			t.Fatalf("iter %d: callNextAction MCP error: %s", iter, textContent(result))
+		}
+
+		var resp nextActionResponse
+		if err := json.Unmarshal([]byte(textContent(result)), &resp); err != nil {
+			t.Fatalf("iter %d: unmarshal: %v", iter, err)
+		}
+		if resp.Action.Type == orchestrator.ActionDone {
+			break
+		}
+
+		reportPhase := resp.Action.Phase
+		if resp.Action.Type == orchestrator.ActionCheckpoint && reportPhase == "" {
+			reportPhase = resp.Action.Name
+		}
+
+		// When we hit a checkpoint, simulate Dashboard approval via EventBus
+		// instead of using callNextActionWithUserResponse.
+		if resp.Action.Type == orchestrator.ActionCheckpoint {
+			// Goroutine simulates a Dashboard user clicking "Approve" after 20ms.
+			// Reads CurrentPhase from disk (not action.Name) to match what
+			// approveCheckpointHandler does: it uses the phase stored in state.json,
+			// not the checkpoint label from the SSE event.
+			go func() {
+				time.Sleep(20 * time.Millisecond)
+				dashSM := state.NewStateManager("dev")
+				if loadErr := dashSM.LoadFromFile(dir); loadErr != nil {
+					return
+				}
+				dashSt, stErr := dashSM.GetState()
+				if stErr != nil {
+					return
+				}
+				_ = dashSM.PhaseComplete(dir, dashSt.CurrentPhase)
+				bus.Publish(events.Event{
+					Event:     "phase-complete",
+					Phase:     dashSt.CurrentPhase,
+					Workspace: dir,
+					Outcome:   "completed",
+				})
+			}()
+
+			// Call pipeline_next_action which enters the long-poll.
+			// The goroutine above wakes it by publishing the event.
+			result2, err2 := callNextAction(t, nextActionH, dir)
+			if err2 != nil {
+				t.Fatalf("iter %d (dashboard poll): Go error: %v", iter, err2)
+			}
+			if result2.IsError {
+				t.Fatalf("iter %d (dashboard poll): MCP error: %s", iter, textContent(result2))
+			}
+
+			var resp2 nextActionResponse
+			if err := json.Unmarshal([]byte(textContent(result2)), &resp2); err != nil {
+				t.Fatalf("iter %d (dashboard poll): unmarshal: %v", iter, err)
+			}
+			if resp2.StillWaiting {
+				t.Fatalf("iter %d: StillWaiting=true after Dashboard approval — event not received", iter)
+			}
+			if resp2.Action.Type == orchestrator.ActionDone {
+				dashboardApprovedCheckpoints++
+				break
+			}
+
+			dashboardApprovedCheckpoints++
+
+			// Continue with the post-approval action.
+			resp = resp2
+			reportPhase = resp.Action.Phase
+			if resp.Action.Type == orchestrator.ActionCheckpoint && reportPhase == "" {
+				reportPhase = resp.Action.Name
+			}
+		}
+
+		// Execute the action.
+		switch resp.Action.Type {
+		case orchestrator.ActionWriteFile:
+			if err := os.WriteFile(resp.Action.Path, []byte(resp.Action.Content), 0o600); err != nil {
+				t.Fatalf("write_file %s: %v", resp.Action.Path, err)
+			}
+		case orchestrator.ActionSpawnAgent:
+			approve := new(bool)
+			*approve = true
+			mockAgentExecute(t, dir, resp.Action, cfg, approve)
+		case orchestrator.ActionExec:
+			// no-op
+		case orchestrator.ActionCheckpoint:
+			// This shouldn't happen (handled above), but be safe.
+			t.Fatalf("unexpected checkpoint after dashboard approval: %s", resp.Action.Name)
+		default:
+			t.Fatalf("unhandled action type %q", resp.Action.Type)
+		}
+
+		// Report result to advance state.
+		reportRes := callTool(t, reportResultH, map[string]any{
+			"workspace":   dir,
+			"phase":       reportPhase,
+			"tokens_used": 500,
+			"duration_ms": 1000,
+			"model":       "sonnet",
+		})
+		if reportRes.IsError {
+			t.Fatalf("reportResult for %q: %s", reportPhase, textContent(reportRes))
+		}
+	}
+
+	// Verify: pipeline completed.
+	finalState, err := state.ReadState(dir)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if finalState.CurrentPhase != state.PhaseCompleted {
+		t.Errorf("currentPhase = %q, want %q", finalState.CurrentPhase, state.PhaseCompleted)
+	}
+
+	// Verify: at least one checkpoint was approved via Dashboard.
+	if dashboardApprovedCheckpoints == 0 {
+		t.Error("no checkpoints were approved via Dashboard — test did not exercise the target code path")
+	}
+	t.Logf("Dashboard-approved checkpoints: %d", dashboardApprovedCheckpoints)
 }

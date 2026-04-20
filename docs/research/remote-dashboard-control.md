@@ -1,6 +1,6 @@
 # Remote Dashboard Control
 
-Status: draft v3 (2026-04-19)
+Status: **Phase 1 implemented** (2026-04-20). Checkpoint absorption, EventBus long-poll (50 s), and local network access are live. See `docs/superpowers/specs/2026-04-20-checkpoint-absorption-design.md` for the implementation spec.
 
 ## Overview
 

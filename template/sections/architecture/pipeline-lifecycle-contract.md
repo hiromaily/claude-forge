@@ -104,22 +104,26 @@ PhaseCompleteHandler
 
 ### Path 3: Checkpoint Flow
 
-Human-review gates. `pipeline_next_action` detects checkpoint phases and sets `awaiting_human` via `sm.Update()` (not `sm.Checkpoint()` — the standalone checkpoint handler is a separate MCP tool). The orchestrator presents the checkpoint to the user and passes the response back.
+Human-review gates. `pipeline_next_action` detects checkpoint phases and absorbs the checkpoint state transition by calling `sm.Checkpoint(workspace, st.CurrentPhase)`, which sets both `CurrentPhase` and `CurrentPhaseStatus = "awaiting_human"`. The orchestrator presents the checkpoint to the user. On the next `pipeline_next_action` call, the handler long-polls (up to 50 s) for a Dashboard approval event; if the user responds via terminal, the response is passed as `user_response`.
 
 ```
 pipeline_next_action (checkpoint action detected)
-  ├── sm.Update(): CurrentPhaseStatus = "awaiting_human"
+  ├── sm.Checkpoint(): CurrentPhaseStatus = "awaiting_human"
+  ├── publish "checkpoint" event
   └── return Action{type: "checkpoint"} to orchestrator
 
-[user reviews and responds]
+pipeline_next_action (2nd call, no user_response)
+  ├── long-poll up to 50 s for Dashboard "phase-complete" event
+  ├── Dashboard approves → reload state → return next action
+  └── timeout → return Action{type: "checkpoint", still_waiting: true}
 
-pipeline_next_action (with user_response)
+pipeline_next_action (with user_response from terminal)
   ├── "proceed" → sm.PhaseComplete(workspace, phase)
   ├── "revise"  → sm.Update() to rewind state
   └── "abandon" → sm.Abandon()
 ```
 
-**Note**: The standalone `CheckpointHandler` (`handlers.go`) calls `sm.Checkpoint()` and emits a `checkpoint` event. The pipeline engine path uses `sm.Update()` directly. Both result in `CurrentPhaseStatus = "awaiting_human"` but through different code paths.
+**Note**: The standalone `CheckpointHandler` (`handlers.go`) is retained for manual debugging and backward compatibility but is no longer called by the orchestrator for standard checkpoints (checkpoint-a, checkpoint-b). The pipeline engine path now uses `sm.Checkpoint()` directly.
 
 ## Event Taxonomy
 

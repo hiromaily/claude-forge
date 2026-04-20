@@ -25,8 +25,9 @@ import (
 
 // checkpointLongPollTimeout is the maximum time pipeline_next_action blocks
 // waiting for a Dashboard-triggered phase-complete event at a checkpoint.
-// 15 seconds is safely within the MCP tool-call timeout on all observed clients.
-const checkpointLongPollTimeout = 15 * time.Second
+// 50 seconds provides a 10-second margin against the default 60-second MCP
+// tool-call timeout. See docs/architecture/mcp-protocol-constraints.md.
+const checkpointLongPollTimeout = 50 * time.Second
 
 const similarPipelinesSearchLimit = 3
 
@@ -283,7 +284,7 @@ func PipelineNextActionHandler(
 		// This eliminates the need for AskUserQuestion at checkpoints: the
 		// orchestrator calls pipeline_next_action immediately after presenting the
 		// checkpoint to the user, and the MCP call stays open until either the
-		// Dashboard approves or 15 s pass.
+		// Dashboard approves or 50 s pass.
 		//
 		// On timeout the function falls through to eng.NextAction (which returns the
 		// same checkpoint action) and sets StillWaiting=true so the orchestrator
@@ -295,7 +296,7 @@ func PipelineNextActionHandler(
 		if userResponse == "" {
 			// Subscribe before GetState to close the race window: if the dashboard
 			// acts between the state-check and Subscribe the event would be missed,
-			// causing a full 15-second timeout before the orchestrator sees the update.
+			// causing a full 50-second timeout before the orchestrator sees the update.
 			subID, eventCh := bus.Subscribe()
 			st, stErr := sm2.GetState()
 			if stErr == nil && st.CurrentPhaseStatus == state.StatusAwaitingHuman {
@@ -554,33 +555,32 @@ func PipelineNextActionHandler(
 			break
 		}
 
-		// When reaching a checkpoint without a rename, mark BranchClassified so the engine
-		// does not re-evaluate branch type on subsequent calls.
+		// When reaching a checkpoint: mark BranchClassified so the engine does not
+		// re-evaluate branch type on subsequent calls, then absorb the checkpoint
+		// state transition (previously done by the standalone checkpoint() MCP tool).
+		// sm2.Checkpoint() sets CurrentPhaseStatus=awaiting_human. We pass
+		// st.CurrentPhase (not action.Name) because mid-phase checkpoints (e.g.
+		// "design-approved" at phase-3b) have action.Name values that differ from
+		// CurrentPhase and would fail the Checkpoint() validation guard. The event
+		// uses action.Name for the checkpoint identifier.
 		if action.Type == orchestrator.ActionCheckpoint {
-			if st2, stErr := sm2.GetState(); stErr == nil && !st2.BranchClassified {
-				if updateErr := sm2.Update(func(s *state.State) error {
-					s.BranchClassified = true
-					return nil
-				}); updateErr != nil {
-					appendWarning(fmt.Sprintf("set BranchClassified: %v", updateErr))
-				}
-			}
-		}
-
-		// Eliminate the window between pipeline_next_action returning a checkpoint action
-		// and the orchestrator calling mcp__forge-state__checkpoint().
-		// Set currentPhaseStatus to "awaiting_human" immediately so the stop hook permits
-		// session exit even if the conversation ends before the orchestrator calls checkpoint().
-		if action.Type == orchestrator.ActionCheckpoint {
-			if updateErr := sm2.Update(func(s *state.State) error {
-				s.CurrentPhaseStatus = "awaiting_human"
-				return nil
-			}); updateErr != nil {
-				// Fail-open: warn but still return the action.
-				appendWarning(fmt.Sprintf("set awaiting_human: %v", updateErr))
-			}
 			if st, stErr := sm2.GetState(); stErr == nil {
-				publishEvent(bus, nil, "checkpoint", action.Phase, st.SpecName, workspace, "awaiting_human")
+				if !st.BranchClassified {
+					if updateErr := sm2.Update(func(s *state.State) error {
+						s.BranchClassified = true
+						return nil
+					}); updateErr != nil {
+						appendWarning(fmt.Sprintf("set BranchClassified: %v", updateErr))
+					}
+				}
+				if chkErr := sm2.Checkpoint(workspace, st.CurrentPhase); chkErr != nil {
+					// Fail-open: warn but still return the action.
+					appendWarning(fmt.Sprintf("Checkpoint: %v", chkErr))
+				} else {
+					publishEvent(bus, nil, "checkpoint", action.Name, st.SpecName, workspace, "awaiting_human")
+				}
+			} else {
+				appendWarning(fmt.Sprintf("Checkpoint GetState: %v", stErr))
 			}
 		}
 

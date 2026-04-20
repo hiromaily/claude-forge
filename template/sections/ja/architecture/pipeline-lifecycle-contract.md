@@ -104,22 +104,26 @@ PhaseCompleteHandler
 
 ### パス 3: チェックポイントフロー
 
-ヒューマンレビューゲート。`pipeline_next_action` はチェックポイントフェーズを検出し、`sm.Update()` を介して `awaiting_human` を設定する（`sm.Checkpoint()` ではない — スタンドアロンチェックポイントハンドラは別の MCP ツール）。オーケストレーターがユーザーにチェックポイントを提示し、レスポンスを返す。
+ヒューマンレビューゲート。`pipeline_next_action` はチェックポイントフェーズを検出し、`sm.Checkpoint(workspace, st.CurrentPhase)` を呼び出してチェックポイントの状態遷移を吸収する。これにより `CurrentPhase` と `CurrentPhaseStatus = "awaiting_human"` の両方が設定される。オーケストレーターがユーザーにチェックポイントを提示する。次の `pipeline_next_action` 呼び出しでは、ハンドラが最大 50 秒間 Dashboard 承認イベントをロングポーリングする。ユーザーが terminal で応答した場合は `user_response` として渡される。
 
 ```
 pipeline_next_action (チェックポイントアクション検出)
-  |-- sm.Update(): CurrentPhaseStatus = "awaiting_human"
+  |-- sm.Checkpoint(): CurrentPhaseStatus = "awaiting_human"
+  |-- "checkpoint" イベント発行
   └-- return Action{type: "checkpoint"} to orchestrator
 
-[ユーザーがレビューして応答]
+pipeline_next_action (2回目の呼び出し、user_response なし)
+  |-- Dashboard の "phase-complete" イベントを最大 50 秒ロングポーリング
+  |-- Dashboard 承認 -> 状態リロード -> 次アクション返却
+  └-- タイムアウト -> return Action{type: "checkpoint", still_waiting: true}
 
-pipeline_next_action (user_response 付き)
+pipeline_next_action (terminal からの user_response 付き)
   |-- "proceed" -> sm.PhaseComplete(workspace, phase)
   |-- "revise"  -> sm.Update() で状態を巻き戻し
   └-- "abandon" -> sm.Abandon()
 ```
 
-**注記**: スタンドアロンの `CheckpointHandler` (`handlers.go`) は `sm.Checkpoint()` を呼び `checkpoint` イベントを発行する。パイプラインエンジンパスは `sm.Update()` を直接使用する。両方とも `CurrentPhaseStatus = "awaiting_human"` となるが、異なるコードパスを通る。
+**注記**: スタンドアロンの `CheckpointHandler` (`handlers.go`) はデバッグおよび後方互換性のために保持されるが、標準チェックポイント（checkpoint-a、checkpoint-b）ではオーケストレーターから呼び出されなくなった。パイプラインエンジンパスは `sm.Checkpoint()` を直接使用する。
 
 ## イベント分類
 
