@@ -1557,7 +1557,7 @@ func TestPipelineNextAction_LongPoll(t *testing.T) {
 	// Fire the "phase-complete" event in a goroutine after a short delay so the
 	// handler has time to enter the long-poll (bus.Subscribe) before the event
 	// arrives. Without the sleep the goroutine races against Subscribe: if Publish
-	// fires before Subscribe the event is dropped and the test waits 15 s.
+	// fires before Subscribe the event is dropped and the test waits 50 s.
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		// Advance state on disk the same way approveCheckpointHandler does.
@@ -1608,7 +1608,7 @@ func TestPipelineNextAction_LongPoll_Timeout(t *testing.T) {
 	eng := orchestrator.NewEngine("", "")
 	h := PipelineNextActionHandler(sm, bus, eng, "", nil, nil, nil)
 
-	// Do NOT publish any event — the long-poll should time out (default 15 s is
+	// Do NOT publish any event — the long-poll should time out (default 50 s is
 	// too long for a unit test; we rely on ctx cancellation instead).
 	// Cancel after 50 ms; the long-poll selects on ctx.Done() and returns still_waiting.
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)

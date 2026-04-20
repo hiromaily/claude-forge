@@ -284,7 +284,7 @@ func PipelineNextActionHandler(
 		// This eliminates the need for AskUserQuestion at checkpoints: the
 		// orchestrator calls pipeline_next_action immediately after presenting the
 		// checkpoint to the user, and the MCP call stays open until either the
-		// Dashboard approves or 15 s pass.
+		// Dashboard approves or 50 s pass.
 		//
 		// On timeout the function falls through to eng.NextAction (which returns the
 		// same checkpoint action) and sets StillWaiting=true so the orchestrator
@@ -296,7 +296,7 @@ func PipelineNextActionHandler(
 		if userResponse == "" {
 			// Subscribe before GetState to close the race window: if the dashboard
 			// acts between the state-check and Subscribe the event would be missed,
-			// causing a full 15-second timeout before the orchestrator sees the update.
+			// causing a full 50-second timeout before the orchestrator sees the update.
 			subID, eventCh := bus.Subscribe()
 			st, stErr := sm2.GetState()
 			if stErr == nil && st.CurrentPhaseStatus == state.StatusAwaitingHuman {
