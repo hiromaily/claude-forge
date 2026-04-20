@@ -1636,6 +1636,133 @@ func TestPipelineNextAction_LongPoll_Timeout(t *testing.T) {
 	}
 }
 
+// TestPipelineNextAction_CheckpointAbsorption verifies that when
+// pipeline_next_action encounters a checkpoint phase in StatusInProgress, it
+// internally calls sm.Checkpoint() (setting CurrentPhaseStatus=awaiting_human
+// and CurrentPhase to the checkpoint phase) without requiring a separate
+// checkpoint() MCP tool call.
+func TestPipelineNextAction_CheckpointAbsorption(t *testing.T) {
+	t.Parallel()
+
+	workspace, sm := initWorkspaceForNextAction(t, state.PhaseCheckpointA, func(s *state.State) error {
+		s.CurrentPhaseStatus = state.StatusInProgress
+		s.CompletedPhases = []string{
+			state.PhaseOne, state.PhaseTwo, state.PhaseThree, state.PhaseThreeB,
+		}
+		return nil
+	})
+	bus := events.NewEventBus()
+	eng := orchestrator.NewEngine("", "")
+	h := PipelineNextActionHandler(sm, bus, eng, "", nil, nil, nil)
+
+	result, err := callNextAction(t, h, workspace)
+	if err != nil {
+		t.Fatalf("PipelineNextActionHandler: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("PipelineNextActionHandler returned error: %s", textContent(result))
+	}
+
+	var resp nextActionResponse
+	if jsonErr := json.Unmarshal([]byte(textContent(result)), &resp); jsonErr != nil {
+		t.Fatalf("unmarshal response: %v", jsonErr)
+	}
+	if resp.Type != orchestrator.ActionCheckpoint {
+		t.Fatalf("action type = %q, want %q", resp.Type, orchestrator.ActionCheckpoint)
+	}
+
+	sm2 := state.NewStateManager("dev")
+	if err := sm2.LoadFromFile(workspace); err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+	st, err := sm2.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if st.CurrentPhaseStatus != state.StatusAwaitingHuman {
+		t.Errorf("CurrentPhaseStatus = %q, want %q", st.CurrentPhaseStatus, state.StatusAwaitingHuman)
+	}
+	if st.CurrentPhase != state.PhaseCheckpointA {
+		t.Errorf("CurrentPhase = %q, want %q", st.CurrentPhase, state.PhaseCheckpointA)
+	}
+}
+
+// TestPipelineNextAction_CheckpointAbsorption_ThenLongPoll verifies the
+// two-phase flow: the first call absorbs the checkpoint (sets awaiting_human),
+// and the second call enters long-poll and wakes when a Dashboard approval
+// event is published.
+func TestPipelineNextAction_CheckpointAbsorption_ThenLongPoll(t *testing.T) {
+	t.Parallel()
+
+	workspace, sm := initWorkspaceForNextAction(t, state.PhaseCheckpointA, func(s *state.State) error {
+		s.CurrentPhaseStatus = state.StatusInProgress
+		s.CompletedPhases = []string{
+			state.PhaseOne, state.PhaseTwo, state.PhaseThree, state.PhaseThreeB,
+		}
+		return nil
+	})
+	bus := events.NewEventBus()
+	eng := orchestrator.NewEngine("", "")
+	h := PipelineNextActionHandler(sm, bus, eng, "", nil, nil, nil)
+
+	// Phase 1: first call absorbs the checkpoint.
+	result1, err := callNextAction(t, h, workspace)
+	if err != nil {
+		t.Fatalf("1st call: %v", err)
+	}
+	var resp1 nextActionResponse
+	if jsonErr := json.Unmarshal([]byte(textContent(result1)), &resp1); jsonErr != nil {
+		t.Fatalf("unmarshal 1st: %v", jsonErr)
+	}
+	if resp1.Type != orchestrator.ActionCheckpoint {
+		t.Fatalf("1st call type = %q, want checkpoint", resp1.Type)
+	}
+
+	// Phase 2: second call should enter long-poll (state is now awaiting_human).
+	// Simulate Dashboard approval after a short delay.
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		sm2 := state.NewStateManager("dev")
+		if loadErr := sm2.LoadFromFile(workspace); loadErr != nil {
+			return
+		}
+		_ = sm2.PhaseComplete(workspace, state.PhaseCheckpointA)
+		bus.Publish(events.Event{
+			Event:     "phase-complete",
+			Phase:     "checkpoint-a",
+			Workspace: workspace,
+			Outcome:   "completed",
+		})
+	}()
+
+	// Create a fresh handler with a fresh StateManager for the 2nd call
+	h2 := PipelineNextActionHandler(sm, bus, eng, "", nil, nil, nil)
+	result2, err := callNextAction(t, h2, workspace)
+	if err != nil {
+		t.Fatalf("2nd call: %v", err)
+	}
+
+	var resp2 nextActionResponse
+	if jsonErr := json.Unmarshal([]byte(textContent(result2)), &resp2); jsonErr != nil {
+		t.Fatalf("unmarshal 2nd: %v", jsonErr)
+	}
+	if resp2.StillWaiting {
+		t.Error("2nd call: StillWaiting=true, expected Dashboard approval to wake long-poll")
+	}
+	if resp2.Type == orchestrator.ActionCheckpoint {
+		t.Errorf("2nd call type = %q, want non-checkpoint action after approval", resp2.Type)
+	}
+}
+
+// TestCheckpointLongPollTimeout_Is50s documents and pins the timeout constant
+// so accidental changes are caught immediately.
+func TestCheckpointLongPollTimeout_Is50s(t *testing.T) {
+	t.Parallel()
+	if checkpointLongPollTimeout != 50*time.Second {
+		t.Errorf("checkpointLongPollTimeout = %v, want 50s", checkpointLongPollTimeout)
+	}
+}
+
 // TestExtractTaskNumber verifies the extractTaskNumber helper that is used to
 // resolve the {N} template variable in agent .md files.
 func TestExtractTaskNumber(t *testing.T) {
