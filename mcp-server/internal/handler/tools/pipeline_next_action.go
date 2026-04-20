@@ -568,20 +568,18 @@ func PipelineNextActionHandler(
 			}
 		}
 
-		// Eliminate the window between pipeline_next_action returning a checkpoint action
-		// and the orchestrator calling mcp__forge-state__checkpoint().
-		// Set currentPhaseStatus to "awaiting_human" immediately so the stop hook permits
-		// session exit even if the conversation ends before the orchestrator calls checkpoint().
+		// Absorb the checkpoint state transition that was previously done by the
+		// standalone checkpoint() MCP tool. sm2.Checkpoint() sets both CurrentPhase
+		// and CurrentPhaseStatus=awaiting_human, which is a superset of the previous
+		// Update() that only set CurrentPhaseStatus. This eliminates the need for
+		// the orchestrator to call checkpoint() as a separate MCP tool call.
 		if action.Type == orchestrator.ActionCheckpoint {
-			if updateErr := sm2.Update(func(s *state.State) error {
-				s.CurrentPhaseStatus = "awaiting_human"
-				return nil
-			}); updateErr != nil {
+			if chkErr := sm2.Checkpoint(workspace, action.Name); chkErr != nil {
 				// Fail-open: warn but still return the action.
-				appendWarning(fmt.Sprintf("set awaiting_human: %v", updateErr))
+				appendWarning(fmt.Sprintf("Checkpoint: %v", chkErr))
 			}
 			if st, stErr := sm2.GetState(); stErr == nil {
-				publishEvent(bus, nil, "checkpoint", action.Phase, st.SpecName, workspace, "awaiting_human")
+				publishEvent(bus, nil, "checkpoint", action.Name, st.SpecName, workspace, "awaiting_human")
 			}
 		}
 
