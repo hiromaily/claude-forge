@@ -25,8 +25,9 @@ import (
 
 // checkpointLongPollTimeout is the maximum time pipeline_next_action blocks
 // waiting for a Dashboard-triggered phase-complete event at a checkpoint.
-// 15 seconds is safely within the MCP tool-call timeout on all observed clients.
-const checkpointLongPollTimeout = 15 * time.Second
+// 50 seconds provides a 10-second margin against the default 60-second MCP
+// tool-call timeout. See docs/architecture/mcp-protocol-constraints.md.
+const checkpointLongPollTimeout = 50 * time.Second
 
 const similarPipelinesSearchLimit = 3
 
