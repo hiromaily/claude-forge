@@ -570,16 +570,20 @@ func PipelineNextActionHandler(
 
 		// Absorb the checkpoint state transition that was previously done by the
 		// standalone checkpoint() MCP tool. sm2.Checkpoint() sets both CurrentPhase
-		// and CurrentPhaseStatus=awaiting_human, which is a superset of the previous
-		// Update() that only set CurrentPhaseStatus. This eliminates the need for
-		// the orchestrator to call checkpoint() as a separate MCP tool call.
+		// and CurrentPhaseStatus=awaiting_human. We pass st.CurrentPhase (not
+		// action.Name) because mid-phase checkpoints (e.g. "design-approved" at
+		// phase-3b) have action.Name values that differ from CurrentPhase and would
+		// fail the Checkpoint() validation guard. The event uses action.Name for the
+		// checkpoint identifier.
 		if action.Type == orchestrator.ActionCheckpoint {
-			if chkErr := sm2.Checkpoint(workspace, action.Name); chkErr != nil {
-				// Fail-open: warn but still return the action.
-				appendWarning(fmt.Sprintf("Checkpoint: %v", chkErr))
-			}
 			if st, stErr := sm2.GetState(); stErr == nil {
+				if chkErr := sm2.Checkpoint(workspace, st.CurrentPhase); chkErr != nil {
+					// Fail-open: warn but still return the action.
+					appendWarning(fmt.Sprintf("Checkpoint: %v", chkErr))
+				}
 				publishEvent(bus, nil, "checkpoint", action.Name, st.SpecName, workspace, "awaiting_human")
+			} else {
+				appendWarning(fmt.Sprintf("Checkpoint GetState: %v", stErr))
 			}
 		}
 
