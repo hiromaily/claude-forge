@@ -555,33 +555,30 @@ func PipelineNextActionHandler(
 			break
 		}
 
-		// When reaching a checkpoint without a rename, mark BranchClassified so the engine
-		// does not re-evaluate branch type on subsequent calls.
-		if action.Type == orchestrator.ActionCheckpoint {
-			if st2, stErr := sm2.GetState(); stErr == nil && !st2.BranchClassified {
-				if updateErr := sm2.Update(func(s *state.State) error {
-					s.BranchClassified = true
-					return nil
-				}); updateErr != nil {
-					appendWarning(fmt.Sprintf("set BranchClassified: %v", updateErr))
-				}
-			}
-		}
-
-		// Absorb the checkpoint state transition that was previously done by the
-		// standalone checkpoint() MCP tool. sm2.Checkpoint() sets both CurrentPhase
-		// and CurrentPhaseStatus=awaiting_human. We pass st.CurrentPhase (not
-		// action.Name) because mid-phase checkpoints (e.g. "design-approved" at
-		// phase-3b) have action.Name values that differ from CurrentPhase and would
-		// fail the Checkpoint() validation guard. The event uses action.Name for the
-		// checkpoint identifier.
+		// When reaching a checkpoint: mark BranchClassified so the engine does not
+		// re-evaluate branch type on subsequent calls, then absorb the checkpoint
+		// state transition (previously done by the standalone checkpoint() MCP tool).
+		// sm2.Checkpoint() sets CurrentPhaseStatus=awaiting_human. We pass
+		// st.CurrentPhase (not action.Name) because mid-phase checkpoints (e.g.
+		// "design-approved" at phase-3b) have action.Name values that differ from
+		// CurrentPhase and would fail the Checkpoint() validation guard. The event
+		// uses action.Name for the checkpoint identifier.
 		if action.Type == orchestrator.ActionCheckpoint {
 			if st, stErr := sm2.GetState(); stErr == nil {
+				if !st.BranchClassified {
+					if updateErr := sm2.Update(func(s *state.State) error {
+						s.BranchClassified = true
+						return nil
+					}); updateErr != nil {
+						appendWarning(fmt.Sprintf("set BranchClassified: %v", updateErr))
+					}
+				}
 				if chkErr := sm2.Checkpoint(workspace, st.CurrentPhase); chkErr != nil {
 					// Fail-open: warn but still return the action.
 					appendWarning(fmt.Sprintf("Checkpoint: %v", chkErr))
+				} else {
+					publishEvent(bus, nil, "checkpoint", action.Name, st.SpecName, workspace, "awaiting_human")
 				}
-				publishEvent(bus, nil, "checkpoint", action.Name, st.SpecName, workspace, "awaiting_human")
 			} else {
 				appendWarning(fmt.Sprintf("Checkpoint GetState: %v", stErr))
 			}
