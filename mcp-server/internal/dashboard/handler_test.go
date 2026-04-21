@@ -71,10 +71,11 @@ func TestDashboardHandler_ServesEmbeddedHTMLAtRoot(t *testing.T) {
 		// Intervention API wiring — fail if the buttons or their endpoints
 		// are accidentally removed from the dashboard.
 		"/api/checkpoint/approve",
-		"/api/pipeline/abandon",
 		"approveCheckpoint",
-		"abandonPipeline",
-		`id="abandon-btn"`,
+		// Workspace status and cleanup controls.
+		`id="ws-status"`,
+		`id="remove-finished-btn"`,
+		"removeFinishedWorkspaces",
 		// Artifact viewer — fail if the overlay or its JS is removed.
 		`id="artifact-overlay"`,
 		"openArtifact",
