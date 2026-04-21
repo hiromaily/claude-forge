@@ -178,6 +178,10 @@ export default withMermaid(
                     text: "Forge Queue Design",
                     link: "/research/queue-design",
                   },
+                  {
+                    text: "Anthropic Go SDK Integration",
+                    link: "/research/anthropic-go-sdk",
+                  },
                 ],
               },
             ],
@@ -360,6 +364,10 @@ export default withMermaid(
                   {
                     text: "Forge Queue 設計",
                     link: "/ja/research/queue-design",
+                  },
+                  {
+                    text: "Anthropic Go SDK 統合",
+                    link: "/ja/research/anthropic-go-sdk",
                   },
                 ],
               },

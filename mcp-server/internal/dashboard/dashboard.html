@@ -209,9 +209,9 @@
       cursor: not-allowed;
       opacity: 0.45;
     }
-    .action-btn.danger:hover:not(:disabled) {
-      background: var(--bad);
-      border-color: var(--bad);
+    .action-btn.warn:hover:not(:disabled) {
+      background: var(--warn);
+      border-color: var(--warn);
     }
     footer {
       padding: 12px 24px;
@@ -394,7 +394,9 @@
       <select id="ws-filter">
         <option value="">all workspaces</option>
       </select>
-      <button id="clear-btn" class="action-btn" type="button">clear</button>
+      <span id="ws-status" class="badge" style="display:none;"></span>
+      <button id="remove-finished-btn" class="action-btn" type="button" disabled
+              title="Hide completed/abandoned workspaces from the list">hide finished</button>
       <button id="abandon-btn" class="action-btn danger" type="button" disabled
               title="Select a workspace to enable abandon">abandon</button>
     </div>
@@ -430,12 +432,14 @@
       var emptyEl = document.getElementById("empty");
       var timelineEl = document.getElementById("timeline");
       var wsFilter = document.getElementById("ws-filter");
-      var clearBtn = document.getElementById("clear-btn");
+      var wsStatusEl = document.getElementById("ws-status");
+      var removeFinishedBtn = document.getElementById("remove-finished-btn");
       var abandonBtn = document.getElementById("abandon-btn");
 
       var es = null;
       var count = 0;
       var workspaces = new Set();
+      var hiddenWorkspaces = new Set();  // workspaces hidden by "hide finished"
 
       // Phase ID → human-readable label map, fetched from /api/phase-labels.
       // Resolved client-side to keep the event publishing path decoupled from
@@ -548,10 +552,53 @@
         }
       });
 
-      function abandonPipeline(workspace) {
-        if (!confirm("Abandon pipeline for " + (shortWorkspace(workspace) || workspace) + "?\nThis cannot be undone.")) return;
+      // Track the latest status per workspace from SSE events.
+      var TERMINAL_STATUSES = ["completed", "abandoned", "failed"];
+      var wsStatuses = {};  // workspace → latest outcome string
+
+      function updateWorkspaceStatus(ws, outcome) {
+        if (ws && outcome) wsStatuses[ws] = outcome;
+      }
+
+      function syncWorkspaceStatusBadge() {
+        var ws = wsFilter.value;
+        if (!ws || !wsStatuses[ws]) {
+          wsStatusEl.style.display = "none";
+          return;
+        }
+        var status = wsStatuses[ws];
+        wsStatusEl.textContent = status;
+        wsStatusEl.className = "badge";
+        wsStatusEl.style.display = "";
+        // Apply colour matching the outcome badge styles
+        var colorVar = "--status-" + status.replace(/ /g, "_");
+        wsStatusEl.style.color = "var(" + colorVar + ")";
+        wsStatusEl.style.borderColor = "var(" + colorVar + ")";
+      }
+
+      function syncRemoveFinishedButton() {
+        var hasFinished = false;
+        workspaces.forEach(function (ws) {
+          if (TERMINAL_STATUSES.indexOf(wsStatuses[ws]) !== -1) hasFinished = true;
+        });
+        removeFinishedBtn.disabled = !hasFinished;
+      }
+
+      function syncAbandonButton() {
+        var ws = wsFilter.value;
+        var active = ws && TERMINAL_STATUSES.indexOf(wsStatuses[ws]) === -1;
+        abandonBtn.disabled = !active;
+        abandonBtn.title = active
+          ? "Abandon pipeline for " + (shortWorkspace(ws) || ws)
+          : "Select an active workspace to enable abandon";
+      }
+
+      function abandonPipeline() {
+        var ws = wsFilter.value;
+        if (!ws) return;
+        if (!confirm("Abandon pipeline for " + (shortWorkspace(ws) || ws) + "?\nThis cannot be undone.")) return;
         abandonBtn.disabled = true;
-        postIntervention("/api/pipeline/abandon", { workspace: workspace })
+        postIntervention("/api/pipeline/abandon", { workspace: ws })
           .then(function (r) {
             if (r.ok) {
               alert("Pipeline abandoned.");
@@ -565,12 +612,25 @@
           .then(syncAbandonButton);
       }
 
-      function syncAbandonButton() {
-        var ws = wsFilter.value;
-        abandonBtn.disabled = !ws;
-        abandonBtn.title = ws
-          ? "Abandon pipeline for " + (shortWorkspace(ws) || ws)
-          : "Select a workspace to enable abandon";
+      function removeFinishedWorkspaces() {
+        workspaces.forEach(function (ws) {
+          if (TERMINAL_STATUSES.indexOf(wsStatuses[ws]) !== -1) {
+            hiddenWorkspaces.add(ws);
+            workspaces.delete(ws);
+          }
+        });
+        var current = wsFilter.value;
+        refreshWorkspaceOptions();
+        // Always reset the timeline: hidden workspace events must be purged,
+        // including when "all workspaces" is selected.
+        resetTimeline();
+        // If the selected workspace was hidden, reset filter to "all".
+        if (current && hiddenWorkspaces.has(current)) wsFilter.value = "";
+        // Reconnect so the replayed event stream is filtered by renderEvent.
+        connect();
+        syncWorkspaceStatusBadge();
+        syncRemoveFinishedButton();
+        syncAbandonButton();
       }
 
       function setStatus(connected) {
@@ -611,9 +671,17 @@
 
       function renderEvent(ev) {
         if (ev.workspace) {
+          // Skip events for workspaces the user has chosen to hide.
+          if (hiddenWorkspaces.has(ev.workspace)) return;
           if (!workspaces.has(ev.workspace)) {
             workspaces.add(ev.workspace);
             refreshWorkspaceOptions();
+          }
+          if (ev.outcome) {
+            updateWorkspaceStatus(ev.workspace, ev.outcome);
+            syncWorkspaceStatusBadge();
+            syncRemoveFinishedButton();
+            syncAbandonButton();
           }
         }
 
@@ -780,14 +848,13 @@
         // newly-filtered stream.
         resetTimeline();
         connect();
+        syncWorkspaceStatusBadge();
         syncAbandonButton();
       });
-      clearBtn.addEventListener("click", resetTimeline);
-      abandonBtn.addEventListener("click", function () {
-        var ws = wsFilter.value;
-        if (ws) abandonPipeline(ws);
-      });
+      removeFinishedBtn.addEventListener("click", removeFinishedWorkspaces);
+      abandonBtn.addEventListener("click", abandonPipeline);
 
+      syncWorkspaceStatusBadge();
       syncAbandonButton();
       connect();
     })();
