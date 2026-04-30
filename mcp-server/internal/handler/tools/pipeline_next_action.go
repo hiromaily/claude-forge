@@ -404,6 +404,17 @@ func PipelineNextActionHandler(
 			}
 		}
 
+		// P0.5: persist engine flags to state.json. The engine is read-only,
+		// so it communicates state-mutation requests via Action.Flags.
+		if action.Flags[orchestrator.FlagDesignReviseCapReached] {
+			if updateErr := sm2.Update(func(s *state.State) error {
+				s.DesignReviseCapReached = true
+				return nil
+			}); updateErr != nil {
+				return errorf("set DesignReviseCapReached: %v", updateErr)
+			}
+		}
+
 		resp := nextActionResponse{Action: action}
 
 		// appendWarning accumulates warnings into resp.Warning, semicolon-separated.
@@ -591,6 +602,19 @@ func PipelineNextActionHandler(
 		}
 
 		if action.Type == orchestrator.ActionSpawnAgent && agentDir != "" {
+			// Branch validation: verify that st.Branch matches the actual
+			// git branch before dispatching agents. A mismatch causes agents
+			// to checkout the wrong branch and waste time.
+			if st2, stErr2 := sm2.GetState(); stErr2 == nil && st2.Branch != nil {
+				if actual := currentGitBranch(workspace); actual != "" && actual != *st2.Branch {
+					appendWarning(fmt.Sprintf(
+						"branch mismatch: state.Branch=%q but git reports %q — switching to %q",
+						*st2.Branch, actual, *st2.Branch))
+					if swErr := runGit(workspace, "checkout", *st2.Branch); swErr != nil {
+						appendWarning(fmt.Sprintf("auto-checkout failed: %v — agents may use wrong branch", swErr))
+					}
+				}
+			}
 			if enrichErr := enrichPrompt(&resp, agentDir, workspace, sm2, histIdx, kb, profiler); enrichErr != nil {
 				// Fail-open: return the action with a warning, not an error.
 				appendWarning(fmt.Sprintf("enrichPrompt: %v", enrichErr))

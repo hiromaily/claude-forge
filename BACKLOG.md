@@ -20,7 +20,7 @@ Ordered by priority. Higher rows should be tackled first.
 | 7 | **F6** | [#19](https://github.com/hiromaily/claude-forge/issues/19) | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. Could now be informed by the accumulated `analytics_*` metrics. |
 | 8 | **F2** | [#20](https://github.com/hiromaily/claude-forge/issues/20) | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
 | 9 | **F20** | — | Shared events log rotation / pruning | Maintenance | S | `~/.claude/forge-events.jsonl` is append-only and grows indefinitely. `SetEventLog` loads the entire file into memory on startup. After weeks of use across many projects the file and in-memory `history` slice will become large. Add max-age trimming (e.g. keep last 30 days) or a file-size cap with rollover to `forge-events.jsonl.old`. |
-| 10 | **P1** | — | Pipeline execution speed: REVISE loop cap + parallel dispatch fix + branch name mismatch | Performance/Bug | M | **3-4× slower than superpowers.** Real-world DEA-221 run took ~210min vs estimated ~60min with superpowers. Three root causes: (1) design-review REVISE looped 3×, (2) parallel tasks dispatched sequentially, (3) branch name mismatch confused implementers. See detailed analysis below. |
+| 10 | **P1** | — | ~~Pipeline execution speed: REVISE loop cap + parallel dispatch fix + branch name mismatch~~ | Performance/Bug | M | ✅ **All 6 actions completed.** REVISE cap (MaxDesignReviseRounds=2), dependency-aware parallel dispatch, branch auto-checkout validation. |
 
 **Effort key:** XS = < 30min, S = 1-2h, M = half day, L = 1+ day
 
@@ -366,9 +366,9 @@ This caps the worst case at 2 revision rounds (~15min) instead of unbounded.
 | 1 | Architect comprehensive grep requirement | ✅ Done | — | Prevents REVISE loops |
 | 2 | Task decomposer file path verification | ✅ Done | — | Prevents batch commit failure |
 | 3 | `executeBatchCommit` path filtering | ✅ Done | — | Graceful degradation on bad paths |
-| 4 | REVISE cap (MaxDesignRevisions=2) | ⬜ Todo | S | Caps worst-case REVISE time at ~15min |
-| 5 | Parallel task dispatch investigation | ⬜ Todo | M | Could save ~90min on large parallel workloads |
-| 6 | Branch name mismatch investigation | ⬜ Todo | S | Eliminates agent confusion on branch checkout |
+| 4 | REVISE cap (MaxDesignReviseRounds=2) | ✅ Done | S | Caps worst-case REVISE time at ~15min. Auto-promotes to APPROVE_WITH_NOTES after 2 REVISE rounds, passing remaining findings to implementers via `DesignReviseCapReached` state flag and `review-design.md` as input artifact. |
+| 5 | Parallel task dispatch — dependency-aware filtering | ✅ Done | M | `handlePhaseFive` now filters `pendingKeys` by `DependsOn` satisfaction, preventing tasks with unmet dependencies from being dispatched. Debug logging added (gated by `st.Debug`). |
+| 6 | Branch name mismatch — auto-checkout validation | ✅ Done | S | `pipeline_next_action` validates `st.Branch` against `git rev-parse --abbrev-ref HEAD` before dispatching agents. Auto-checkouts the correct branch on mismatch with a warning. |
 
 ---
 

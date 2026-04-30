@@ -764,6 +764,49 @@ func TestNextAction(t *testing.T) {
 			wantParallelIDs: []string{"1", "2", "3"},
 		},
 
+		// ── Decision 22b: parallel tasks blocked by incomplete dependency ──
+		// Task 8 is sequential, tasks 9-16 are parallel with depends_on: [8].
+		// Before task 8 completes, only task 8 is dispatched.
+		{
+			name: "phase5_parallel_blocked_by_dependency",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.UseCurrentBranch = true
+					s.Tasks = map[string]state.Task{
+						"8":  {Title: "Task 8", ExecutionMode: "sequential"},
+						"9":  {Title: "Task 9", ExecutionMode: "parallel", DependsOn: []int{8}},
+						"10": {Title: "Task 10", ExecutionMode: "parallel", DependsOn: []int{8}},
+						"11": {Title: "Task 11", ExecutionMode: "parallel", DependsOn: []int{8}},
+					}
+					return nil
+				})
+			},
+			wantType:  ActionSpawnAgent,
+			wantAgent: agentImplementer,
+		},
+
+		// ── Decision 22c: parallel tasks unblocked after dependency completes ──
+		// Task 8 completed, tasks 9-11 are parallel with depends_on: [8] → all dispatched.
+		{
+			name: "phase5_parallel_unblocked_after_dependency",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.UseCurrentBranch = true
+					s.Tasks = map[string]state.Task{
+						"8":  {Title: "Task 8", ExecutionMode: "sequential", ImplStatus: state.TaskStatusCompleted},
+						"9":  {Title: "Task 9", ExecutionMode: "parallel", DependsOn: []int{8}},
+						"10": {Title: "Task 10", ExecutionMode: "parallel", DependsOn: []int{8}},
+						"11": {Title: "Task 11", ExecutionMode: "parallel", DependsOn: []int{8}},
+					}
+					return nil
+				})
+			},
+			wantType:        ActionSpawnAgent,
+			wantParallelIDs: []string{"9", "10", "11"},
+		},
+
 		// ── Decision 29: phase-5 batch commit — NeedsBatchCommit=true emits ActionBatchCommit ──
 		{
 			name: "phase5_batch_commit",
@@ -1804,6 +1847,132 @@ func TestHandlePhaseThreeB_AutoApprove_PhaseFourSkipped(t *testing.T) {
 				t.Errorf("action.Summary = %q, want %q", action.Summary, tc.wantSummary)
 			}
 		})
+	}
+}
+
+// TestHandlePhaseThreeB_ReviseCapAutoPromote verifies that when DesignRevisions >= MaxDesignReviseRounds
+// and the verdict is REVISE, the engine auto-promotes to APPROVE_WITH_NOTES instead of
+// re-spawning the architect.
+func TestHandlePhaseThreeB_ReviseCapAutoPromote(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		autoApprove   bool
+		skippedPhases []string
+		wantType      string
+		wantAgent     string
+		wantSummary   string
+		wantName      string // checkpoint name
+		wantFlag      bool
+	}{
+		{
+			name:        "auto_approve_spawns_decomposer",
+			autoApprove: true,
+			wantType:    ActionSpawnAgent,
+			wantAgent:   agentTaskDecomposer,
+			wantFlag:    true,
+		},
+		{
+			name:          "auto_approve_phase4_skipped_returns_done",
+			autoApprove:   true,
+			skippedPhases: []string{PhaseFour},
+			wantType:      ActionDone,
+			wantSummary:   SkipSummaryPrefix + PhaseThreeB,
+			wantFlag:      true,
+		},
+		{
+			name:     "manual_approve_returns_checkpoint",
+			wantType: ActionCheckpoint,
+			wantName: "design-approved",
+			wantFlag: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sm := newTestStateManager(t, PhaseThreeB, func(s *state.State) error {
+				s.AutoApprove = tc.autoApprove
+				s.SkippedPhases = tc.skippedPhases
+				s.Revisions.DesignRevisions = state.MaxDesignReviseRounds // at the cap
+				return nil
+			})
+			st, err := sm.GetState()
+			if err != nil {
+				t.Fatalf("GetState: %v", err)
+			}
+			if err := writeFileForTest(st.Workspace+"/review-design.md", "## Verdict: REVISE\n### Findings\n**1. [CRITICAL] Missing error handling.**\n"); err != nil {
+				t.Fatalf("writeFileForTest: %v", err)
+			}
+
+			eng := &Engine{
+				agentDir:         "/test/agents",
+				specsDir:         "/test/specs",
+				verdictReader:    stubVerdictReader(VerdictRevise),
+				sourceTypeReader: stubSourceTypeReader("text"),
+			}
+
+			action, err := eng.NextAction(sm, "")
+			if err != nil {
+				t.Fatalf("NextAction: %v", err)
+			}
+			if action.Type != tc.wantType {
+				t.Errorf("action.Type = %q, want %q", action.Type, tc.wantType)
+			}
+			if tc.wantAgent != "" && action.Agent != tc.wantAgent {
+				t.Errorf("action.Agent = %q, want %q", action.Agent, tc.wantAgent)
+			}
+			if tc.wantSummary != "" && action.Summary != tc.wantSummary {
+				t.Errorf("action.Summary = %q, want %q", action.Summary, tc.wantSummary)
+			}
+			if tc.wantName != "" && action.Name != tc.wantName {
+				t.Errorf("action.Name = %q, want %q", action.Name, tc.wantName)
+			}
+			if tc.wantFlag && !action.Flags[FlagDesignReviseCapReached] {
+				t.Error("action.Flags[FlagDesignReviseCapReached] = false, want true")
+			}
+		})
+	}
+}
+
+// TestHandlePhaseThreeB_ReviseUnderCap verifies that when DesignRevisions < MaxDesignReviseRounds
+// and the verdict is REVISE, the engine re-spawns the architect normally.
+func TestHandlePhaseThreeB_ReviseUnderCap(t *testing.T) {
+	t.Parallel()
+
+	sm := newTestStateManager(t, PhaseThreeB, func(s *state.State) error {
+		s.Revisions.DesignRevisions = state.MaxDesignReviseRounds - 1 // under the cap
+		return nil
+	})
+	st, err := sm.GetState()
+	if err != nil {
+		t.Fatalf("GetState: %v", err)
+	}
+	if err := writeFileForTest(st.Workspace+"/review-design.md", "## Verdict: REVISE\n"); err != nil {
+		t.Fatalf("writeFileForTest: %v", err)
+	}
+
+	eng := &Engine{
+		agentDir:         "/test/agents",
+		specsDir:         "/test/specs",
+		verdictReader:    stubVerdictReader(VerdictRevise),
+		sourceTypeReader: stubSourceTypeReader("text"),
+	}
+
+	action, err := eng.NextAction(sm, "")
+	if err != nil {
+		t.Fatalf("NextAction: %v", err)
+	}
+	if action.Type != ActionSpawnAgent {
+		t.Errorf("action.Type = %q, want %q", action.Type, ActionSpawnAgent)
+	}
+	if action.Agent != agentArchitect {
+		t.Errorf("action.Agent = %q, want %q", action.Agent, agentArchitect)
+	}
+	if action.Flags != nil {
+		t.Errorf("action.Flags = %v, want nil (no cap flag)", action.Flags)
 	}
 }
 

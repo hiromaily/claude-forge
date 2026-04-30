@@ -33,6 +33,19 @@ func repoRoot(workspace string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+// currentGitBranch returns the current branch name (e.g. "feature/foo")
+// for the given working directory. Returns empty string on error (detached HEAD,
+// not a git repo, etc.).
+func currentGitBranch(dir string) string {
+	var stdout bytes.Buffer
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(stdout.String())
+}
+
 // runGit executes a git command and returns a wrapped error with stdout/stderr
 // included when the command fails. The first argument is the working-directory
 // flag value (used with `git -C <dir>`); remaining args are the git sub-command

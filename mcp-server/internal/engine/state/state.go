@@ -41,6 +41,7 @@ type State struct {
 	CurrentPhaseStatus        string          `json:"currentPhaseStatus"`
 	CompletedPhases           []string        `json:"completedPhases"`
 	Revisions                 Revisions       `json:"revisions"`
+	DesignReviseCapReached    bool            `json:"designReviseCapReached,omitempty"`
 	CheckpointRevisionPending map[string]bool `json:"checkpointRevisionPending"`
 	NeedsBatchCommit          bool            `json:"needsBatchCommit"`
 	PendingHumanGate          *string         `json:"pendingHumanGate,omitempty"`
