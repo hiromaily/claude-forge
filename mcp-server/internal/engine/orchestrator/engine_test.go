@@ -807,6 +807,44 @@ func TestNextAction(t *testing.T) {
 			wantParallelIDs: []string{"9", "10", "11"},
 		},
 
+		// ── Decision 22d: non-existent dependency treated as satisfied ──
+		// Task 2 has depends_on: [99] but task 99 does not exist → not blocked.
+		{
+			name: "phase5_nonexistent_dependency_treated_as_satisfied",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.UseCurrentBranch = true
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "sequential", ImplStatus: state.TaskStatusCompleted},
+						"2": {Title: "Task 2", ExecutionMode: "sequential", DependsOn: []int{99}},
+					}
+					return nil
+				})
+			},
+			wantType:  ActionSpawnAgent,
+			wantAgent: agentImplementer,
+		},
+
+		// ── Decision 31b: DesignReviseCapReached adds review-design.md to input ──
+		{
+			name: "phase5_revise_cap_includes_review_design",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-5", func(s *state.State) error {
+					s.UseCurrentBranch = true
+					s.DesignReviseCapReached = true
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "sequential"},
+					}
+					return nil
+				})
+			},
+			wantType:          ActionSpawnAgent,
+			wantAgent:         agentImplementer,
+			wantInputContains: state.ArtifactReviewDesign,
+		},
+
 		// ── Decision 29: phase-5 batch commit — NeedsBatchCommit=true emits ActionBatchCommit ──
 		{
 			name: "phase5_batch_commit",

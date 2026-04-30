@@ -547,10 +547,13 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 	}
 
 	// Find pending tasks: not yet completed AND all dependencies satisfied.
+	// Build two lookup maps: all known task IDs, and completed task IDs.
+	knownTasks := make(map[int]bool, len(taskKeys))
 	completedSet := make(map[int]bool, len(taskKeys))
 	for _, k := range taskKeys {
-		if st.Tasks[k].ImplStatus == state.TaskStatusCompleted {
-			if n, err := strconv.Atoi(k); err == nil {
+		if n, err := strconv.Atoi(k); err == nil {
+			knownTasks[n] = true
+			if st.Tasks[k].ImplStatus == state.TaskStatusCompleted {
 				completedSet[n] = true
 			}
 		}
@@ -561,9 +564,15 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		if task.ImplStatus == state.TaskStatusCompleted {
 			continue
 		}
-		// Check all dependencies are satisfied.
+		// Check all dependencies are satisfied. Non-existent dependency IDs
+		// are treated as satisfied (with a warning) to prevent silent deadlock
+		// when the task decomposer writes an invalid depends_on value.
 		blocked := false
 		for _, dep := range task.DependsOn {
+			if !knownTasks[dep] {
+				fmt.Fprintf(os.Stderr, "handlePhaseFive: task %s depends_on %d which does not exist — treating as satisfied\n", k, dep)
+				continue
+			}
 			if !completedSet[dep] {
 				blocked = true
 				break
@@ -578,6 +587,14 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 	if len(pendingKeys) == 0 {
 		// All tasks completed; move on
 		return NewDoneAction(SkipSummaryPrefix+PhaseFive, ""), nil
+	}
+
+	// Build base input files for implementers. When the design REVISE cap
+	// was reached, include review-design.md so implementers can address
+	// remaining findings that were auto-promoted past the review phase.
+	implInputFiles := []string{state.ArtifactTasks, state.ArtifactDesign}
+	if st.DesignReviseCapReached {
+		implInputFiles = append(implInputFiles, state.ArtifactReviewDesign)
 	}
 
 	// Detect execution mode of the first pending task.
@@ -617,7 +634,7 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 			"Implement tasks in parallel.",
 			state.DefaultModel,
 			PhaseFive,
-			[]string{state.ArtifactTasks, state.ArtifactDesign},
+			implInputFiles,
 			parallelKeys,
 		), nil
 	}
@@ -628,7 +645,7 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		"Implement task "+firstKey+".",
 		state.DefaultModel,
 		PhaseFive,
-		[]string{state.ArtifactTasks, state.ArtifactDesign},
+		implInputFiles,
 		"impl-"+firstKey+".md",
 	), nil
 }
