@@ -122,6 +122,13 @@ const (
 	// the engine escalates to a human checkpoint. Increase this value to allow
 	// more automated retries before human intervention is required.
 	MaxRevisionRetries = 5
+
+	// MaxDesignReviseRounds is the soft cap on design REVISE cycles.
+	// After this many REVISE verdicts, the engine auto-promotes to
+	// APPROVE_WITH_NOTES and injects remaining findings into state
+	// so implementers can address them. This prevents unbounded
+	// architect ↔ reviewer loops that waste 10+ minutes per extra round.
+	MaxDesignReviseRounds = 2
 )
 
 // ---------- Verdict values ----------

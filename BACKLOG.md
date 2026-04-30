@@ -20,6 +20,7 @@ Ordered by priority. Higher rows should be tackled first.
 | 7 | **F6** | [#19](https://github.com/hiromaily/claude-forge/issues/19) | Adaptive model routing | Feature | L | Needs phase-stats data before deciding. Could now be informed by the accumulated `analytics_*` metrics. |
 | 8 | **F2** | [#20](https://github.com/hiromaily/claude-forge/issues/20) | Execution log (JSONL) | Feature | M | Basic coverage via phase-log. Full JSONL log deferred until the need is confirmed. |
 | 9 | **F20** | — | Shared events log rotation / pruning | Maintenance | S | `~/.claude/forge-events.jsonl` is append-only and grows indefinitely. `SetEventLog` loads the entire file into memory on startup. After weeks of use across many projects the file and in-memory `history` slice will become large. Add max-age trimming (e.g. keep last 30 days) or a file-size cap with rollover to `forge-events.jsonl.old`. |
+| 10 | **P1** | — | ~~Pipeline execution speed: REVISE loop cap + parallel dispatch fix + branch name mismatch~~ | Performance/Bug | M | ✅ **All 6 actions completed.** REVISE cap (MaxDesignReviseRounds=2), dependency-aware parallel dispatch, branch auto-checkout validation. |
 
 **Effort key:** XS = < 30min, S = 1-2h, M = half day, L = 1+ day
 
@@ -257,6 +258,117 @@ For honesty: claude-forge already matches Devin in several places that look like
 - **Effort-aware flow templates** — the `light` / `standard` / `full` template selection is more transparent than Devin's opaque scoping.
 
 The deficit is therefore not in *what the agent can decide* but in *where and when it can run, and how a human watches it*. Layer A and Layer B together close that perception gap; Layer C closes the substantive quality gap once both are in place.
+
+---
+
+## P1: Pipeline Execution Speed — 3-4× Slower Than Superpowers
+
+### Problem
+
+Real-world pipeline run on `dealon-app` DEA-221 (33 PostgreSQL ENUM → TEXT + CHECK migration, Effort M) took **~210 minutes** end-to-end. The same task with superpowers (brainstorm → plan → execute) would take an estimated **50-60 minutes**. The 3-4× slowdown has five root causes, three of which are fixable without architectural changes.
+
+### Time breakdown (DEA-221, 2026-04-30)
+
+| Phase | Duration | Notes |
+|-------|----------|-------|
+| Phase 1: Situation Analysis | ~5min | Reasonable |
+| Phase 2: Investigation | ~8min | Reasonable |
+| Phase 3 + 3b: Design + Review (initial) | ~9min | |
+| Phase 3 + 3b: REVISE round 1 | ~10min | Missing `default_job_generation_guideline_templates` table |
+| Phase 3 + 3b: REVISE round 2 | ~7min | Missing `chat_repository.py` + cross-file DROP TYPE ambiguity |
+| Phase 3 + 3b: REVISE round 3 | ~6min | Missing `task_proposals.py` + `test_save_task_title.py` |
+| Phase 3 + 3b: Final APPROVE_WITH_NOTES | ~2min | |
+| Checkpoint A (user wait) | ~4min | |
+| Phase 4: Task Decomposition | ~2min | |
+| Phase 5: Tasks 1-7 (parallel OK) | ~8min | Parallel dispatch worked for initial batch |
+| Phase 5: Task 8 (sqlc-gen, sequential) | ~5min | |
+| Phase 5: Tasks 9-16 (sequential, should be parallel) | ~120min | **Biggest bottleneck.** Includes one 2-hour agent timeout |
+| Phase 5: Task 17 (verification) | ~26min | |
+| **Total** | **~210min** | |
+
+### Root cause 1: Design Review REVISE loop — ~25min wasted
+
+**Symptom:** Design reviewer found 2 CRITICAL findings → REVISE → architect fixed those 2 → reviewer found 2 *new* CRITICALs → REVISE → architect fixed → reviewer found 2 *more* → REVISE again. Three full REVISE cycles before APPROVE.
+
+**Root cause:** Architect listed affected files from investigation.md without grepping the codebase. Each reviewer pass found Python files (`chat_repository.py`, `task_proposals.py`, `test_save_task_title.py`) that import generated ENUM classes — these were never mentioned in investigation.md because the investigator also didn't grep comprehensively.
+
+**Partial fix applied (2026-04-30):** Added "Comprehensive Impact Scan for Deletions and Type Changes" section to `agents/architect.md` requiring a full codebase grep before listing affected files.
+
+**Remaining fix — REVISE cap with auto-escalation:**
+
+Currently `handlePhaseThreeB` (in `engine.go`) allows unlimited REVISE cycles. After 2 REVISE rounds, the probability that a 3rd review will find a *new* CRITICAL is low — the architect should have done a comprehensive scan by then. Proposal:
+
+1. Add a configurable `MaxDesignRevisions` (default: 2) to state or preferences.
+2. After `MaxDesignRevisions` REVISE verdicts, auto-promote to `APPROVE_WITH_NOTES` with a warning: "REVISE cap reached after N rounds — proceeding with remaining MINOR findings."
+3. Inject remaining CRITICAL findings into the implementer's prompt as "known issues to address during implementation" so they are not silently dropped.
+
+This caps the worst case at 2 revision rounds (~15min) instead of unbounded.
+
+**Files to change:**
+- `mcp-server/internal/engine/orchestrator/engine.go` — `handlePhaseThreeB`: add revision counter check
+- `mcp-server/internal/engine/state/state.go` — add `MaxDesignRevisions` preference field
+- `agents/architect.md` — already done (grep requirement)
+
+### Root cause 2: Parallel task dispatch failure — ~90min wasted
+
+**Symptom:** Tasks 9-16 were all marked `mode: parallel` in tasks.md with `depends_on: [8]` (correct). After Task 8 completed, `pipeline_next_action` returned Task 9 as a *single* `spawn_agent` without `parallel_task_ids`. Tasks 10-16 were dispatched one by one.
+
+**Root cause (hypothesis — needs investigation):** The parallel detection in `handlePhaseFive` (engine.go L537-556) works correctly when tested in isolation. The likely cause is one of:
+1. **`task_init` parse failure:** `ParseTasksMd` may have failed to parse `mode: parallel` for some tasks due to formatting variations (e.g., `mode:parallel` without space, or `mode: parallel` with trailing whitespace). The task decomposer wrote `mode: parallel` but the parser may require exact formatting.
+2. **Dependency resolution:** Tasks 9-16 all depend on Task 8. If `depends_on` is not cleared after Task 8 completes, the tasks remain "blocked" and are not included in `pendingKeys`.
+3. **State inconsistency after manual state.json edit:** The orchestrator manually edited state.json to fix the batch commit failure (Root cause 3). This may have corrupted task state, breaking the parallel detection.
+
+**Investigation needed:**
+- Add debug logging to `handlePhaseFive` showing `pendingKeys`, `firstTask.ExecutionMode`, and the parallel group detection result.
+- Add a test case to `engine_test.go` that reproduces: 8 tasks where 1 is sequential (depends on nothing) and 7 are parallel (depend on 1). After task 1 completes, the engine should return a `NewParallelSpawnAction` with 7 task IDs.
+- Review `ParseTasksMd` for whitespace sensitivity in `mode:` field parsing.
+
+**Files to investigate:**
+- `mcp-server/internal/engine/orchestrator/engine.go` — `handlePhaseFive` parallel detection
+- `mcp-server/internal/engine/state/tasks_parser.go` — `ParseTasksMd` mode parsing
+- `mcp-server/internal/handler/tools/pipeline_next_action.go` — task_init and reporting
+
+### Root cause 3: Batch commit pathspec failure + stuck state — ~15min wasted (manual recovery)
+
+**Symptom:** `executeBatchCommit` failed with `fatal: pathspec 'backend/pkg/db/query/mail_receiving/mail_receiving.sql' did not match any files`. The `needsBatchCommit` flag remained `true`, and every subsequent `pipeline_next_action` call retried the same failing commit. Required manual state.json editing to recover.
+
+**Root cause:** Task decomposer listed `mail_receiving/mail_receiving.sql` in the `files:` field, but the actual files were `mail_receiving/emails.sql`, `mail_receiving/tenants.sql`, etc. `executeBatchCommit` collected file paths from `task.Files` and passed them all to `git add --`, which failed on the non-existent path.
+
+**Fix applied (2026-04-30):** Three changes:
+1. `agents/task-decomposer.md` — added file path verification requirement
+2. `mcp-server/internal/handler/tools/git_ops.go` — `executeBatchCommit` now filters non-existent paths via `os.Stat` before `git add`, falls back to `git diff --name-only HEAD` when all paths are invalid
+3. Tests added: `TestExecuteBatchCommit_MixedValidInvalidPaths`, `TestExecuteBatchCommit_AllInvalidPaths`, `TestExecuteBatchCommit_AllValidPaths`
+
+### Root cause 4: Branch name mismatch in implementer prompt
+
+**Symptom:** `pipeline_init_with_context` returned `branch: "feature/dea-221-db-enum-to-text-check-migration"`, and the orchestrator created this branch. But `pipeline_next_action` injected `fix/dea-221-db-enum-to-text-check-migration` into the implementer prompt. Implementer agents tried `git checkout fix/...` and failed, wasting a few minutes each.
+
+**Root cause (hypothesis):** The branch name in the implementer prompt template uses a `{branch}` placeholder replaced by `pipeline_next_action.go`. The replacement value may come from `branchClassified` (the initial classification of source_type → branch prefix) rather than `st.Branch` (the actual branch created). If the user overrides the branch prefix during `pipeline_init_with_context` (e.g., by choosing `feature/` over `fix/`), `branchClassified` and `st.Branch` diverge.
+
+**Investigation needed:**
+- Trace the `{branch}` replacement in `pipeline_next_action.go` — confirm it reads from `st.Branch` (correct) or from `branchClassified` (bug).
+- If the replacement uses `st.Branch`, the issue may be in `DeriveBranchName` applying a different prefix classification than what was actually created.
+
+**Files to investigate:**
+- `mcp-server/internal/handler/tools/pipeline_next_action.go` — `enrichPrompt` or template replacement logic
+- `mcp-server/internal/handler/tools/pipeline_init_with_context.go` — `DeriveBranchName`
+
+### Root cause 5: Per-phase overhead accumulation
+
+**Not a bug, but a structural cost.** Each phase involves: MCP call to `pipeline_next_action` → state.json read → agent prompt enrichment → agent spawn → artifact write → MCP call to `pipeline_report_result` → state.json update. For Effort M (13 active phases), this adds ~1-2 min of overhead per phase = ~15-25 min total. Superpowers has zero phase management overhead.
+
+**No immediate fix needed**, but this context explains why forge will always be slower than superpowers for small/well-specified tasks where the design and task decomposition phases add no value. The right mitigation is using Effort S aggressively for tasks with detailed external specs (Linear/Jira issues that already contain the design).
+
+### Summary of actions
+
+| # | Action | Status | Effort | Impact |
+|---|--------|--------|--------|--------|
+| 1 | Architect comprehensive grep requirement | ✅ Done | — | Prevents REVISE loops |
+| 2 | Task decomposer file path verification | ✅ Done | — | Prevents batch commit failure |
+| 3 | `executeBatchCommit` path filtering | ✅ Done | — | Graceful degradation on bad paths |
+| 4 | REVISE cap (MaxDesignReviseRounds=2) | ✅ Done | S | Caps worst-case REVISE time at ~15min. Auto-promotes to APPROVE_WITH_NOTES after 2 REVISE rounds, passing remaining findings to implementers via `DesignReviseCapReached` state flag and `review-design.md` as input artifact. |
+| 5 | Parallel task dispatch — dependency-aware filtering | ✅ Done | M | `handlePhaseFive` now filters `pendingKeys` by `DependsOn` satisfaction, preventing tasks with unmet dependencies from being dispatched. Debug logging added (gated by `st.Debug`). |
+| 6 | Branch name mismatch — auto-checkout validation | ✅ Done | S | `pipeline_next_action` validates `st.Branch` against `git rev-parse --abbrev-ref HEAD` before dispatching agents. Auto-checkouts the correct branch on mismatch with a warning. |
 
 ---
 

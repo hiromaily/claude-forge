@@ -41,6 +41,10 @@ type State struct {
 	CurrentPhaseStatus        string          `json:"currentPhaseStatus"`
 	CompletedPhases           []string        `json:"completedPhases"`
 	Revisions                 Revisions       `json:"revisions"`
+	// DesignReviseCapReached is set when the design REVISE cap fires.
+	// Consumed by: implementer prompt enrichment (review-design.md is added as
+	// input artifact) and analytics_pipeline_summary (to flag auto-promoted runs).
+	DesignReviseCapReached bool `json:"designReviseCapReached,omitempty"`
 	CheckpointRevisionPending map[string]bool `json:"checkpointRevisionPending"`
 	NeedsBatchCommit          bool            `json:"needsBatchCommit"`
 	PendingHumanGate          *string         `json:"pendingHumanGate,omitempty"`

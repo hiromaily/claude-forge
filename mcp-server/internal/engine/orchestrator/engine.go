@@ -281,6 +281,44 @@ func (e *Engine) handlePhaseThreeB(st *state.State) (Action, error) {
 			[]string{"proceed", "revise"},
 		), nil
 	case VerdictRevise:
+		// Decision 31 — REVISE cap: after MaxDesignReviseRounds, auto-promote to
+		// APPROVE_WITH_NOTES to prevent unbounded architect ↔ reviewer loops.
+		// Remaining findings are flagged via FlagDesignReviseCapReached so
+		// pipeline_next_action can persist the signal to state.json.
+		if st.Revisions.DesignRevisions >= state.MaxDesignReviseRounds {
+			fmt.Fprintf(os.Stderr, "design REVISE cap reached (%d rounds); auto-promoting to APPROVE_WITH_NOTES\n",
+				st.Revisions.DesignRevisions)
+			capFlag := map[string]bool{FlagDesignReviseCapReached: true}
+			if st.AutoApprove {
+				if slices.Contains(st.SkippedPhases, PhaseFour) {
+					a := NewDoneAction(SkipSummaryPrefix+PhaseThreeB, "")
+					a.Flags = capFlag
+					return a, nil
+				}
+				a := NewSpawnAgentAction(
+					agentTaskDecomposer,
+					"Decompose the approved design into tasks. Note: design REVISE cap was reached — check review-design.md for remaining findings to address during implementation.",
+					state.DefaultModel,
+					PhaseFour,
+					[]string{state.ArtifactDesign, state.ArtifactReviewDesign},
+					state.ArtifactTasks,
+				)
+				a.Flags = capFlag
+				return a, nil
+			}
+			nextStep := "task decomposition"
+			if slices.Contains(st.SkippedPhases, PhaseFour) {
+				nextStep = "implementation"
+			}
+			a := NewCheckpointAction(
+				"design-approved",
+				fmt.Sprintf("Design REVISE cap reached (%d rounds). Auto-promoted to APPROVE_WITH_NOTES. Remaining findings in review-design.md will be addressed during implementation. Proceed to %s?",
+					st.Revisions.DesignRevisions, nextStep),
+				[]string{"proceed", "revise"},
+			)
+			a.Flags = capFlag
+			return a, nil
+		}
 		// Re-spawn architect for revision
 		return NewSpawnAgentAction(
 			agentArchitect,
@@ -508,18 +546,55 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		return NewDoneAction(SkipSummaryPrefix+PhaseFive, ""), nil
 	}
 
-	// Find pending tasks (not yet completed)
+	// Find pending tasks: not yet completed AND all dependencies satisfied.
+	// Build two lookup maps: all known task IDs, and completed task IDs.
+	knownTasks := make(map[int]bool, len(taskKeys))
+	completedSet := make(map[int]bool, len(taskKeys))
+	for _, k := range taskKeys {
+		if n, err := strconv.Atoi(k); err == nil {
+			knownTasks[n] = true
+			if st.Tasks[k].ImplStatus == state.TaskStatusCompleted {
+				completedSet[n] = true
+			}
+		}
+	}
 	var pendingKeys []string
 	for _, k := range taskKeys {
 		task := st.Tasks[k]
-		if task.ImplStatus != state.TaskStatusCompleted {
-			pendingKeys = append(pendingKeys, k)
+		if task.ImplStatus == state.TaskStatusCompleted {
+			continue
 		}
+		// Check all dependencies are satisfied. Non-existent dependency IDs
+		// are treated as satisfied (with a warning) to prevent silent deadlock
+		// when the task decomposer writes an invalid depends_on value.
+		blocked := false
+		for _, dep := range task.DependsOn {
+			if !knownTasks[dep] {
+				fmt.Fprintf(os.Stderr, "handlePhaseFive: task %s depends_on %d which does not exist — treating as satisfied\n", k, dep)
+				continue
+			}
+			if !completedSet[dep] {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
+		pendingKeys = append(pendingKeys, k)
 	}
 
 	if len(pendingKeys) == 0 {
 		// All tasks completed; move on
 		return NewDoneAction(SkipSummaryPrefix+PhaseFive, ""), nil
+	}
+
+	// Build base input files for implementers. When the design REVISE cap
+	// was reached, include review-design.md so implementers can address
+	// remaining findings that were auto-promoted past the review phase.
+	implInputFiles := []string{state.ArtifactTasks, state.ArtifactDesign}
+	if st.DesignReviseCapReached {
+		implInputFiles = append(implInputFiles, state.ArtifactReviewDesign)
 	}
 
 	// Detect execution mode of the first pending task.
@@ -532,6 +607,15 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 	// completion deterministically via PendingHumanGate in state.
 	if firstTask.ExecutionMode == state.ExecModeHumanGate {
 		return NewHumanGateAction(PhaseFive, firstKey, firstTask.Title), nil
+	}
+
+	// Debug: log pending task modes for parallel dispatch diagnostics.
+	if st.Debug {
+		var modes []string
+		for _, k := range pendingKeys {
+			modes = append(modes, fmt.Sprintf("%s=%s", k, st.Tasks[k].ExecutionMode))
+		}
+		fmt.Fprintf(os.Stderr, "handlePhaseFive: pendingKeys=%v modes=%v\n", pendingKeys, modes)
 	}
 
 	// Detect parallel groups: consecutive tasks with executionMode == "parallel"
@@ -550,7 +634,7 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 			"Implement tasks in parallel.",
 			state.DefaultModel,
 			PhaseFive,
-			[]string{state.ArtifactTasks, state.ArtifactDesign},
+			implInputFiles,
 			parallelKeys,
 		), nil
 	}
@@ -561,7 +645,7 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		"Implement task "+firstKey+".",
 		state.DefaultModel,
 		PhaseFive,
-		[]string{state.ArtifactTasks, state.ArtifactDesign},
+		implInputFiles,
 		"impl-"+firstKey+".md",
 	), nil
 }

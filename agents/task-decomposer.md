@@ -70,6 +70,14 @@ The MCP server's `ParseTasksMd` function extracts task state from plaintext fiel
 - `files:` — a header followed by a `- ` bullet list of file paths (one per line). The parser reads paths from the bullets only and does NOT strip backticks; do NOT wrap paths in backticks. A single-line `**Files:** path` is ignored by the parser.
 - `depends_on:` — comma-separated task numbers, with or without brackets (e.g. `[1, 2]` or `1, 2`); omit when there are no dependencies.
 
+## File Path Verification
+
+The `files:` field in each task is used by the MCP server for batch commits (`git add`). **Invalid paths cause batch commit failures that block the entire pipeline.** Before listing a file path:
+
+- **Verify the path exists** using `Glob` or `Bash ls` — do NOT guess paths from memory or design.md
+- Pay special attention to **directory structures with multiple files** (e.g., `query/module/` may contain `emails.sql`, `threads.sql`, etc. — not `module.sql`)
+- If unsure about the exact filename, use `Glob` with a pattern like `backend/pkg/db/query/module/*.sql` to discover the real files
+
 ## What NOT to Do
 
 - Do NOT make tasks too large — if a task touches more than 3-4 files, consider splitting it
@@ -78,3 +86,4 @@ The MCP server's `ParseTasksMd` function extracts task state from plaintext fiel
 - Do NOT write AC items without `AC-N:` labels — numbered labels are required for implementer and reviewer traceability
 - Do NOT forget deletion tasks — every file/export marked for removal in the design needs a task
 - Do NOT forget test tasks — every code change needs corresponding test updates
+- Do NOT list file paths you haven't verified exist — invalid paths break batch commits

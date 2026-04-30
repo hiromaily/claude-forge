@@ -494,3 +494,217 @@ func TestExecuteBatchCommit_EmptyFiles_MultiTask(t *testing.T) {
 		t.Errorf("executeBatchCommit with no changed files: expected non-empty warning, got empty string")
 	}
 }
+
+// TestExecuteBatchCommit_MixedValidInvalidPaths verifies that executeBatchCommit
+// skips non-existent paths and stages only valid files. The warning must mention
+// the skipped paths.
+func TestExecuteBatchCommit_MixedValidInvalidPaths(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+
+	// Create a real file that will be modified and staged.
+	realFile := filepath.Join(dir, "real.txt")
+	if err := os.WriteFile(realFile, []byte("original\n"), 0o600); err != nil {
+		t.Fatalf("write real.txt: %v", err)
+	}
+	runGitIn := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGitIn("add", "real.txt")
+	runGitIn("commit", "-m", "add real.txt")
+
+	// Modify real.txt so it appears in git diff.
+	if err := os.WriteFile(realFile, []byte("modified\n"), 0o600); err != nil {
+		t.Fatalf("write real.txt: %v", err)
+	}
+
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(dir, "test-spec"); err != nil {
+		t.Fatalf("sm.Init: %v", err)
+	}
+
+	if err := sm.Update(func(s *state.State) error {
+		s.Tasks = map[string]state.Task{
+			"1": {
+				Title:         "Task 1",
+				ExecutionMode: state.ExecModeParallel,
+				ImplStatus:    state.TaskStatusCompleted,
+				Files:         []string{"real.txt", "nonexistent/fake.txt", "also/missing.go"},
+			},
+		}
+		s.NeedsBatchCommit = true
+		return nil
+	}); err != nil {
+		t.Fatalf("sm.Update: %v", err)
+	}
+
+	warning, err := executeBatchCommit(dir, sm)
+	if err != nil {
+		t.Fatalf("executeBatchCommit returned unexpected error: %v", err)
+	}
+
+	// Warning must mention the skipped paths.
+	if !strings.Contains(warning, "skipped 2 non-existent paths") {
+		t.Errorf("expected warning about skipped paths, got: %q", warning)
+	}
+	if !strings.Contains(warning, "nonexistent/fake.txt") {
+		t.Errorf("expected warning to mention nonexistent/fake.txt, got: %q", warning)
+	}
+
+	// Verify real.txt was committed.
+	cmd := exec.Command("git", "log", "--oneline", "-1", "--format=%s")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git log: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "batch commit") {
+		t.Errorf("expected batch commit message, got: %s", out)
+	}
+}
+
+// TestExecuteBatchCommit_AllInvalidPaths verifies that when ALL task paths are
+// non-existent, executeBatchCommit falls back to `git diff --name-only HEAD`
+// instead of failing with a pathspec error.
+func TestExecuteBatchCommit_AllInvalidPaths(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+
+	// Create and modify a tracked file so git diff returns something.
+	trackedFile := filepath.Join(dir, "tracked.txt")
+	if err := os.WriteFile(trackedFile, []byte("v1\n"), 0o600); err != nil {
+		t.Fatalf("write tracked.txt: %v", err)
+	}
+	runGitIn := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGitIn("add", "tracked.txt")
+	runGitIn("commit", "-m", "add tracked.txt")
+
+	// Modify so it shows up in diff.
+	if err := os.WriteFile(trackedFile, []byte("v2\n"), 0o600); err != nil {
+		t.Fatalf("write tracked.txt: %v", err)
+	}
+
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(dir, "test-spec"); err != nil {
+		t.Fatalf("sm.Init: %v", err)
+	}
+
+	if err := sm.Update(func(s *state.State) error {
+		s.Tasks = map[string]state.Task{
+			"1": {
+				Title:         "Task 1",
+				ExecutionMode: state.ExecModeParallel,
+				ImplStatus:    state.TaskStatusCompleted,
+				Files:         []string{"ghost/does_not_exist.sql", "phantom/missing.go"},
+			},
+		}
+		s.NeedsBatchCommit = true
+		return nil
+	}); err != nil {
+		t.Fatalf("sm.Update: %v", err)
+	}
+
+	warning, err := executeBatchCommit(dir, sm)
+	if err != nil {
+		t.Fatalf("executeBatchCommit returned unexpected error: %v (should have fallen back to git diff)", err)
+	}
+
+	// Warning must mention ALL paths were skipped.
+	if !strings.Contains(warning, "skipped 2 non-existent paths") {
+		t.Errorf("expected warning about 2 skipped paths, got: %q", warning)
+	}
+
+	// Verify fallback committed tracked.txt via git diff.
+	cmd := exec.Command("git", "log", "--oneline", "-1", "--format=%s")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git log: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "batch commit") {
+		t.Errorf("expected batch commit via fallback, got: %s", out)
+	}
+}
+
+// TestExecuteBatchCommit_AllValidPaths verifies normal operation is unchanged
+// when all task paths exist (regression test for the path-filtering logic).
+func TestExecuteBatchCommit_AllValidPaths(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+
+	// Create two files, commit, then modify.
+	for _, name := range []string{"a.txt", "b.txt"} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("v1\n"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	runGitIn := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGitIn("add", "a.txt", "b.txt")
+	runGitIn("commit", "-m", "add files")
+
+	for _, name := range []string{"a.txt", "b.txt"} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("v2\n"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	sm := state.NewStateManager("dev")
+	if err := sm.Init(dir, "test-spec"); err != nil {
+		t.Fatalf("sm.Init: %v", err)
+	}
+
+	if err := sm.Update(func(s *state.State) error {
+		s.Tasks = map[string]state.Task{
+			"1": {
+				Title:         "Task 1",
+				ExecutionMode: state.ExecModeParallel,
+				ImplStatus:    state.TaskStatusCompleted,
+				Files:         []string{"a.txt", "b.txt"},
+			},
+		}
+		s.NeedsBatchCommit = true
+		return nil
+	}); err != nil {
+		t.Fatalf("sm.Update: %v", err)
+	}
+
+	warning, err := executeBatchCommit(dir, sm)
+	if err != nil {
+		t.Fatalf("executeBatchCommit returned unexpected error: %v", err)
+	}
+
+	// No paths should be skipped — warning should not mention "skipped".
+	if strings.Contains(warning, "skipped") {
+		t.Errorf("expected no skipped paths warning, got: %q", warning)
+	}
+}

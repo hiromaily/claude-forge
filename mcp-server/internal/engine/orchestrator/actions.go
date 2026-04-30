@@ -71,7 +71,19 @@ type Action struct {
 
 	// post-to-source metadata — populated only for post-to-source checkpoints
 	PostMethod *sourcetype.PostConfig `json:"post_method,omitempty"`
+
+	// Flags carries boolean signals from the engine to the handler without
+	// breaking the read-only contract. The handler inspects these flags and
+	// applies corresponding state mutations.
+	Flags map[string]bool `json:"flags,omitempty"`
 }
+
+// Action flag keys.
+const (
+	// FlagDesignReviseCapReached signals that the design REVISE cap was hit
+	// and the verdict was auto-promoted to APPROVE_WITH_NOTES.
+	FlagDesignReviseCapReached = "designReviseCapReached"
+)
 
 // NewSpawnAgentAction constructs an Action of type ActionSpawnAgent.
 func NewSpawnAgentAction(agent, prompt, model, phase string, inputFiles []string, outputFile string) Action {
