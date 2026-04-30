@@ -605,13 +605,19 @@ func PipelineNextActionHandler(
 			// Branch validation: verify that st.Branch matches the actual
 			// git branch before dispatching agents. A mismatch causes agents
 			// to checkout the wrong branch and waste time.
+			// Uses repoRoot (not workspace) for git operations — workspace is a
+			// subdirectory (.specs/...) that may not exist on the target branch.
+			// "HEAD" is excluded because git rev-parse --abbrev-ref returns it
+			// in detached HEAD state, which is not a real branch mismatch.
 			if st2, stErr2 := sm2.GetState(); stErr2 == nil && st2.Branch != nil {
-				if actual := currentGitBranch(workspace); actual != "" && actual != *st2.Branch {
-					appendWarning(fmt.Sprintf(
-						"branch mismatch: state.Branch=%q but git reports %q — switching to %q",
-						*st2.Branch, actual, *st2.Branch))
-					if swErr := runGit(workspace, "checkout", *st2.Branch); swErr != nil {
-						appendWarning(fmt.Sprintf("auto-checkout failed: %v — agents may use wrong branch", swErr))
+				if root, rootErr := repoRoot(workspace); rootErr == nil {
+					if actual := currentGitBranch(root); actual != "" && actual != "HEAD" && actual != *st2.Branch {
+						appendWarning(fmt.Sprintf(
+							"branch mismatch: state.Branch=%q but git reports %q — switching to %q",
+							*st2.Branch, actual, *st2.Branch))
+						if swErr := runGit(root, "checkout", *st2.Branch); swErr != nil {
+							appendWarning(fmt.Sprintf("auto-checkout failed: %v — agents may use wrong branch", swErr))
+						}
 					}
 				}
 			}
