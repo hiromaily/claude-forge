@@ -50,6 +50,17 @@ When your design references specific APIs, type signatures, function behaviours,
 
 If you cannot verify an assumption (e.g., the file is in an external repository), explicitly state "**Unverified assumption:**" and the fallback plan if the assumption is wrong.
 
+## Comprehensive Impact Scan for Deletions and Type Changes
+
+When the design deletes a type, class, constant, or export — or changes its signature in a way that breaks callers — you MUST perform a **comprehensive grep across the entire codebase** (source AND tests, ALL languages) BEFORE listing the affected files in the design. Do NOT list affected files from memory or investigation.md alone — grep is the source of truth.
+
+For each deleted/changed symbol:
+1. Run `Grep` for the symbol name across all source and test directories — search for **all naming variants**: the type name (`TaskPriority`), the SQL/DB name (`task_priority`), and any language-specific import aliases (e.g., `models.TaskPriority` in Python, `query.TaskPriority` in Go)
+2. Include EVERY file that references it in the change list — not just the obvious ones
+3. Pay special attention to **test files**, **cross-language references** (e.g., Python importing generated types from Go sqlc output), and **files in different server/module directories** that share generated code
+
+This scan is mandatory because partial file lists are the #1 cause of repeated REVISE cycles — each review pass finds new missing files, costing 2-3 extra revision rounds.
+
 ## What NOT to Do
 
 - Do NOT implement any code — only describe what should be built

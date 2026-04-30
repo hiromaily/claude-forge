@@ -141,13 +141,49 @@ func executeBatchCommit(workspace string, sm *state.StateManager) (warning strin
 		}
 	}
 
-	// Step 4: Stage files.
+	// Step 4: Filter out non-existent paths to prevent "pathspec did not match" errors.
+	// Task decomposers may list paths that don't exist on disk (e.g., guessed filenames).
+	var validFiles []string
+	var skippedFiles []string
+	for _, f := range files {
+		absPath := filepath.Join(repo, f)
+		if _, statErr := os.Stat(absPath); statErr == nil {
+			validFiles = append(validFiles, f)
+		} else {
+			skippedFiles = append(skippedFiles, f)
+		}
+	}
+	if len(skippedFiles) > 0 {
+		warnings = append(warnings, fmt.Sprintf("skipped %d non-existent paths: %s",
+			len(skippedFiles), strings.Join(skippedFiles, ", ")))
+	}
+	if len(validFiles) == 0 {
+		// All paths were invalid — fall back to git diff.
+		var stdout bytes.Buffer
+		cmd := exec.Command("git", "-C", repo, "diff", "--name-only", "HEAD")
+		cmd.Stdout = &stdout
+		if runErr := cmd.Run(); runErr == nil {
+			raw := strings.TrimSpace(stdout.String())
+			for line := range strings.SplitSeq(raw, "\n") {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					validFiles = append(validFiles, line)
+				}
+			}
+		}
+		if len(validFiles) == 0 {
+			return strings.Join(warnings, "; "), nil
+		}
+	}
+	files = validFiles
+
+	// Step 5: Stage files.
 	addArgs := append([]string{"add", "--"}, files...)
 	if err := runGit(repo, addArgs...); err != nil {
 		return strings.Join(warnings, "; "), fmt.Errorf("batch commit stage: %w", err)
 	}
 
-	// Step 5: Commit.
+	// Step 6: Commit.
 	if err := runGit(repo, "commit", "-m", "chore: batch commit parallel tasks"); err != nil {
 		return strings.Join(warnings, "; "), fmt.Errorf("batch commit: %w", err)
 	}
