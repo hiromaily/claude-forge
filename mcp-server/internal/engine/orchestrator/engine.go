@@ -1121,7 +1121,10 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeFix,
 		Keywords: []string{
-			"bug", "fix", "defect", "hotfix", // EN
+			// EN (whole-word matched; include common plural/inflected forms because
+			// word-boundary matching no longer catches them as substrings)
+			"bug", "bugs", "fix", "fixes", "defect", "defects",
+			"hotfix", "hotfixes", "bugfix", "bugfixes",
 			"バグ", "修正", "不具合", "障害", // JA
 			"fehler", "bugfix", // DE
 			"correctif", "bogue", // FR
@@ -1130,7 +1133,10 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeRefactor,
 		Keywords: []string{
-			"refactor", "restructure", "reorganize", // EN
+			// EN
+			"refactor", "refactors", "refactoring",
+			"restructure", "restructures", "restructuring",
+			"reorganize", "reorganizes", "reorganizing",
 			"リファクタ", "再構成", "構造改善", // JA
 			"refaktorierung", "umstrukturierung", // DE
 			"refactorisation", "restructuration", // FR
@@ -1139,7 +1145,7 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeDocs,
 		Keywords: []string{
-			"documentation", "readme", // EN
+			"documentation", "readme", "readmes", "docs", // EN
 			"ドキュメント", "文書", "資料", // JA
 			"dokumentation", // DE
 			// FR: "documentation" is shared with EN
@@ -1148,7 +1154,10 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeChore,
 		Keywords: []string{
-			"dependency", "upgrade", "migration", "config", // EN
+			// EN — include plurals (e.g. "dependencies", which is not a substring of
+			// "dependency") so word-boundary matching still classifies them.
+			"dependency", "dependencies", "upgrade", "upgrades",
+			"migration", "migrations", "config", "configs", "configuration",
 			"依存", "アップグレード", "移行", "設定", // JA
 			"abhängigkeit", "configuration", // DE
 			"dépendance", "configuration", // FR
@@ -1162,12 +1171,61 @@ func ClassifyBranchType(content string) string {
 	lower := strings.ToLower(content)
 	for _, rule := range branchTypeRules {
 		for _, kw := range rule.Keywords {
-			if strings.Contains(lower, kw) {
+			if containsKeyword(lower, kw) {
 				return rule.Type
 			}
 		}
 	}
 	return BranchTypeFeature
+}
+
+// containsKeyword reports whether keyword occurs in text. ASCII-letter keywords must match
+// at a word boundary so "fix" does not classify "prefix"/"suffix"/"fixtures"; keywords that
+// contain non-ASCII letters (e.g. Japanese) fall back to substring matching, since CJK text
+// has no whitespace word boundaries. Both arguments are expected to be lowercased already.
+func containsKeyword(text, keyword string) bool {
+	if !isASCIIWord(keyword) {
+		return strings.Contains(text, keyword)
+	}
+	for from := 0; from+len(keyword) <= len(text); {
+		idx := strings.Index(text[from:], keyword)
+		if idx < 0 {
+			return false
+		}
+		start := from + idx
+		end := start + len(keyword)
+		beforeOK := start == 0 || !isWordByte(text[start-1])
+		afterOK := end == len(text) || !isWordByte(text[end])
+		if beforeOK && afterOK {
+			return true
+		}
+		from = start + 1
+	}
+	return false
+}
+
+// isASCIIWord reports whether s consists solely of ASCII letters, so that whole-word
+// boundary matching is meaningful. Empty or non-ASCII keywords return false.
+func isASCIIWord(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
+			return false
+		}
+	}
+	return true
+}
+
+// isWordByte reports whether b is an ASCII word character (letter, digit, or underscore).
+// Bytes >= 0x80 (UTF-8 continuation / lead bytes, e.g. a CJK char adjacent to an English
+// keyword) are not word bytes, so they count as a boundary.
+func isWordByte(b byte) bool {
+	return b == '_' ||
+		(b >= '0' && b <= '9') ||
+		(b >= 'a' && b <= 'z') ||
+		(b >= 'A' && b <= 'Z')
 }
 
 // branchPrefix extracts the prefix before the first "/" in a branch name.

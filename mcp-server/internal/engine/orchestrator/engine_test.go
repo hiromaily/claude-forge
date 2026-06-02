@@ -2440,6 +2440,17 @@ func TestClassifyBranchType(t *testing.T) {
 		{name: "case_insensitive_REFACTOR", content: "REFACTOR the service layer", want: BranchTypeRefactor},
 		{name: "case_insensitive_DOCUMENTATION", content: "DOCUMENTATION update needed", want: BranchTypeDocs},
 
+		// Word-boundary: "fix" must not be matched inside larger words (false positives)
+		{name: "boundary_prefix", content: "Add a prefix to generated identifiers", want: BranchTypeFeature},
+		{name: "boundary_suffix", content: "Support a configurable filename suffix", want: BranchTypeFeature},
+		{name: "boundary_fixtures", content: "Add test fixtures for the parser", want: BranchTypeFeature},
+		// Plurals/inflections must still classify (no false negatives from boundary matching)
+		{name: "en_bugs_plural", content: "Resolve several bugs in the importer", want: BranchTypeFix},
+		{name: "en_fixes_plural", content: "Ship fixes for the flaky tests", want: BranchTypeFix},
+		{name: "en_refactoring", content: "Refactoring the handler layer", want: BranchTypeRefactor},
+		{name: "en_dependencies_plural", content: "Bump dependencies to latest", want: BranchTypeChore},
+		{name: "en_migrations_plural", content: "Run database migrations", want: BranchTypeChore},
+
 		// Default
 		{name: "empty_input", content: "", want: BranchTypeFeature},
 		{name: "no_keywords", content: "Add new user profile page with avatar upload", want: BranchTypeFeature},
