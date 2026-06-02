@@ -666,7 +666,12 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 		// All tasks removed after init (edge case); advance — mirrors handlePhaseFive behaviour
 		return NewDoneAction(SkipSummaryPrefix+PhaseSix, ""), nil
 	}
-	// Decision 23 — Phase 6 PASS/FAIL retry
+	// Decision 23 — Phase 6 PASS/FAIL retry.
+	// needsReview accumulates tasks that have no review file yet so independent
+	// reviews can be fanned out in a single parallel batch (improvement #1) instead
+	// of being dispatched one at a time. A failing review takes priority and short-
+	// circuits to an implementer retry, matching the original sequential semantics.
+	var needsReview []string
 	for _, k := range taskKeys {
 		task := st.Tasks[k]
 
@@ -690,19 +695,14 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 			return dispatchImplementerRetry(k, task)
 		}
 
-		// If review file doesn't exist, spawn reviewer.
+		// If review file doesn't exist, the task needs a fresh review. Collect it
+		// and continue scanning so all pending reviews can be dispatched together.
 		if _, err := os.Stat(reviewFile); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
 				return Action{}, fmt.Errorf("handlePhaseSix: stat %s: %w", reviewFile, err)
 			}
-			return NewSpawnAgentAction(
-				agentImplReviewer,
-				"Review implementation for task "+k+".",
-				state.DefaultModel,
-				PhaseSix,
-				[]string{"impl-" + k + ".md", state.ArtifactTasks},
-				"review-"+k+".md",
-			), nil
+			needsReview = append(needsReview, k)
+			continue
 		}
 
 		// Review file exists but ReviewStatus not yet set — transitional state
@@ -724,10 +724,36 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 		// pipeline_report_result so the engine never re-processes this task.
 	}
 
-	// All tasks reviewed; phase-6 is done. Return a done signal so
-	// pipeline_report_result advances to phase-7, where handlePhaseSeven
-	// dispatches the comprehensive-reviewer with the correct artifact name.
-	return NewDoneAction(SkipSummaryPrefix+PhaseSix, ""), nil
+	// Dispatch the reviews collected above. Multiple independent reviews are fanned
+	// out as a single parallel batch; pipeline_report_result already reconciles all
+	// review-*.md verdicts in one pass, so no per-task report round-trip is required.
+	switch len(needsReview) {
+	case 0:
+		// All tasks reviewed; phase-6 is done. Return a done signal so
+		// pipeline_report_result advances to phase-7, where handlePhaseSeven
+		// dispatches the comprehensive-reviewer with the correct artifact name.
+		return NewDoneAction(SkipSummaryPrefix+PhaseSix, ""), nil
+	case 1:
+		k := needsReview[0]
+		return NewSpawnAgentAction(
+			agentImplReviewer,
+			"Review implementation for task "+k+".",
+			state.DefaultModel,
+			PhaseSix,
+			[]string{"impl-" + k + ".md", state.ArtifactTasks},
+			"review-"+k+".md",
+		), nil
+	default:
+		return NewParallelSpawnAction(
+			agentImplReviewer,
+			"Review implementations in parallel — spawn one reviewer per task ID, each "+
+				"reading its impl-<id>.md and writing its verdict to review-<id>.md.",
+			state.DefaultModel,
+			PhaseSix,
+			[]string{state.ArtifactTasks},
+			needsReview,
+		), nil
+	}
 }
 
 // dispatchImplementerRetry returns an action to retry the implementer for task k,
@@ -997,6 +1023,16 @@ func ClosingRef(workspace string) string {
 // Exported so pipeline_init_with_context can derive the branch name during
 // initialisation (before Phase 5).
 func DeriveBranchName(st *state.State) string {
+	return DeriveBranchNameFromContent(st, "")
+}
+
+// DeriveBranchNameFromContent is like DeriveBranchName but picks the branch type
+// prefix (feature/fix/refactor/docs/chore) by classifying the supplied content —
+// typically the request body — so the initial branch already matches the work type
+// instead of always starting at "feature/" and being renamed after Phase 3b
+// (improvement #3). When content is empty (or classifies as a feature) the prefix
+// is "feature/". A later maybeRenameBranch can still refine the prefix from design.md.
+func DeriveBranchNameFromContent(st *state.State, content string) string {
 	name := stripDatePrefix(st.SpecName)
 	name = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 
@@ -1009,7 +1045,12 @@ func DeriveBranchName(st *state.State) string {
 		}
 	}
 
-	return "feature/" + name
+	prefix := BranchTypeFeature
+	if strings.TrimSpace(content) != "" {
+		prefix = ClassifyBranchType(content)
+	}
+
+	return prefix + "/" + name
 }
 
 // stripDatePrefix removes a leading "YYYYMMDD-" date prefix from a spec name.

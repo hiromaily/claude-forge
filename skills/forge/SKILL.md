@@ -57,6 +57,9 @@ Example: `/forge 20260401-effort-only-flow`
       (S, M, L — each with `skipped_phases` using the `label` field).
       Each option has a `recommended` boolean — mark the one where
       `recommended` is `true` as "(Recommended)".
+      If `needs_user_confirmation.estimate` is present, show its P50/P90 token and USD
+      figures (and `sample_size`) so the user knows roughly how heavy the run will be —
+      effort L in particular can be multi-hour and multi-dollar.
    2. **Branch decision**: based on `current_branch` and `is_main_branch` from the response:
       - If `is_main_branch` is true: inform the user a new branch will be created (no question needed).
       - If `is_main_branch` is false: ask whether to use the current branch or create a new one.
@@ -83,10 +86,13 @@ Repeat until done:
 1. Call `mcp__forge-state__pipeline_next_action(workspace=<workspace>,
    previous_action_complete=true,
    previous_tokens=<tokens from last action>,
-   previous_duration_ms=<ms from last action>,
-   previous_model=<model from last action>,
-   previous_setup_only=<setup_only from last action>)`.
+   previous_duration_ms=<ms from last action>)`.
    On the very first call, omit the `previous_*` parameters.
+   `previous_model` and `previous_setup_only` are **optional** and auto-carried: the
+   engine records the model and setup-only flag of the action it dispatched and reuses
+   them, so you only need to report `previous_action_complete` plus the observed
+   `previous_tokens` / `previous_duration_ms`. You may still pass `previous_model`
+   explicitly to override (it wins when non-empty).
 
 2. If `result.report_result` is non-null:
    - If `result.report_result.next_action_hint == "revision_required"`:
@@ -102,6 +108,14 @@ Repeat until done:
      Record the tokens, duration, and model for the next `pipeline_next_action` call.
      - If `action.parallel_task_ids` is non-empty: spawn one Agent call per task ID in
        parallel; wait for all to complete before calling `pipeline_next_action` again.
+       Each parallel agent works on a single task `<id>` from the list: it reads that
+       task's `impl-<id>.md` and writes its own per-task output file
+       (`impl-<id>.md` for the implementer phase, `review-<id>.md` for the Phase 6
+       reviewer). `action.output_file` is empty for a parallel batch, so apply the
+       artifact write fallback below **per task ID**: after each agent returns, if its
+       `{workspace}/<prefix>-<id>.md` is missing, Write that agent's response text there
+       before calling `pipeline_next_action`. `pipeline_report_result` reconciles all of
+       the per-task review verdicts in a single pass.
      - **Artifact write fallback**: After the agent returns, if `action.output_file` is
        non-empty, check whether `{workspace}/{action.output_file}` exists on disk. If
        the file does **NOT** exist, the agent returned its output as text instead of
@@ -110,6 +124,9 @@ Repeat until done:
        `{workspace}/{action.output_file}` before calling `pipeline_next_action`.
        This ensures `pipeline_report_result` artifact validation always succeeds.
    - `checkpoint`: Present `action.present_to_user` to the user.
+     If the response includes `display_message` or `analytics`, show the running-cost
+     line (tokens / estimated USD / phases / retries so far) to the user alongside the
+     checkpoint prompt so they can weigh "continue vs stop" against the spend so far.
      Mention that the Dashboard can be used to approve without terminal input.
      Then **immediately** call `mcp__forge-state__pipeline_next_action(workspace)`
      (no `user_response`, no `previous_*`). The server long-polls up to 50 s
@@ -157,6 +174,14 @@ Repeat until done:
        The handler automatically marks the task as completed.
      - If the user chooses **"abandon"**: call `mcp__forge-state__abandon(workspace)`.
      Do NOT call `checkpoint` or `phase_complete` for human_gate actions.
+     - **Cross-repo gates**: when `action.present_to_user` contains cross-repository
+       guidance (the task depends on an external repo — e.g. proto/akupara-proto,
+       a dependency bump, or a preview pin), surface that flow to the user and help drive
+       it: open the external repo's PR, watch its CI, fetch the preview artifact (preview
+       branch / pre-release version / SHA), then pin it in this repository and verify the
+       build. If the target repository ships an `update-proto` (or equivalent
+       dependency-update) skill, invoke it for the merge-before-preview pattern. Keep the
+       gate open (`done`) only once the external change is pinned and building here.
    - `done`: Pipeline complete. Stop.
 
 ## Supported Flags

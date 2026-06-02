@@ -404,6 +404,77 @@ func TestDiscussModeEndToEnd(t *testing.T) {
 // After the second call (with previous_tokens set), P5 reports phase-1, advances to
 // phase-2, then the P1 skip loop absorbs all remaining skipped phases and returns
 // ActionDone (pipeline completed).
+// TestIntegration_P9_AutoCarryModel verifies improvement #9: after the engine dispatches
+// an agent (recording its model in LastDispatch), the next pipeline_next_action call can
+// omit previous_model and the engine auto-carries the dispatched model into the phase-log,
+// so the orchestrator no longer has to thread it by hand.
+func TestIntegration_P9_AutoCarryModel(t *testing.T) {
+	t.Parallel()
+
+	workspace, sm := initWorkspaceForNextAction(t, "phase-1", func(s *state.State) error {
+		// Skip phase-2 so phase-1 dispatches the combined analyst-investigator and
+		// produces analysis.md (the artifact P5 validates).
+		s.SkippedPhases = []string{state.PhaseTwo}
+		return nil
+	})
+
+	kb := history.NewKnowledgeBase("")
+	eng := orchestrator.NewEngine("", "")
+	handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, kb, nil)
+
+	// Step 1: dispatch phase-1. This records LastDispatch{model: DefaultModel}.
+	res1, err := callNextAction(t, handler, workspace)
+	if err != nil || res1.IsError {
+		t.Fatalf("step 1: %v / %s", err, textContent(res1))
+	}
+	var action1 orchestrator.Action
+	if err := json.Unmarshal([]byte(textContent(res1)), &action1); err != nil {
+		t.Fatalf("step 1 unmarshal: %v", err)
+	}
+	if action1.Type != orchestrator.ActionSpawnAgent || action1.Model == "" {
+		t.Fatalf("step 1: expected spawn_agent with a model, got type=%q model=%q", action1.Type, action1.Model)
+	}
+
+	// Confirm LastDispatch was persisted.
+	s1, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState: %v", err)
+	}
+	if s1.LastDispatch == nil || s1.LastDispatch.Model != action1.Model {
+		t.Fatalf("LastDispatch not persisted with dispatched model; got %+v", s1.LastDispatch)
+	}
+
+	// Simulate the agent writing its artifact.
+	if err := os.WriteFile(filepath.Join(workspace, "analysis.md"), []byte("# Analysis\n"), 0o600); err != nil {
+		t.Fatalf("write analysis.md: %v", err)
+	}
+
+	// Step 2: report completion WITHOUT previous_model (empty). The engine must
+	// auto-carry the dispatched model into the phase-log entry for phase-1.
+	res2, err := callNextActionWithPrev(t, handler, workspace, 1500, 3000, "", false, true)
+	if err != nil || res2.IsError {
+		t.Fatalf("step 2: %v / %s", err, textContent(res2))
+	}
+
+	s2, err := state.ReadState(workspace)
+	if err != nil {
+		t.Fatalf("ReadState after step 2: %v", err)
+	}
+	var phaseOne *state.PhaseLogEntry
+	for i := range s2.PhaseLog {
+		if s2.PhaseLog[i].Phase == state.PhaseOne {
+			phaseOne = &s2.PhaseLog[i]
+			break
+		}
+	}
+	if phaseOne == nil {
+		t.Fatalf("phase-1 not found in phaseLog: %+v", s2.PhaseLog)
+	}
+	if phaseOne.Model != action1.Model {
+		t.Errorf("phase-1 model = %q, want auto-carried %q (orchestrator omitted previous_model)", phaseOne.Model, action1.Model)
+	}
+}
+
 func TestIntegration_P5_PreviousResultMerge(t *testing.T) {
 	t.Parallel()
 

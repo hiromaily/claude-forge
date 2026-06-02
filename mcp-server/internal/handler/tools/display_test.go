@@ -1,10 +1,46 @@
 package tools
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
 )
+
+func TestFormatCheckpointCostLine(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil_summary", func(t *testing.T) {
+		t.Parallel()
+		if got := formatCheckpointCostLine(nil); got != "" {
+			t.Errorf("nil summary: want empty, got %q", got)
+		}
+	})
+
+	t.Run("zero_tokens_suppressed", func(t *testing.T) {
+		t.Parallel()
+		got := formatCheckpointCostLine(&analytics.PipelineSummary{TotalTokens: 0})
+		if got != "" {
+			t.Errorf("fresh pipeline (0 tokens): want empty, got %q", got)
+		}
+	})
+
+	t.Run("formats_running_cost", func(t *testing.T) {
+		t.Parallel()
+		got := formatCheckpointCostLine(&analytics.PipelineSummary{
+			TotalTokens:      1234567,
+			EstimatedCostUSD: 7.41,
+			PhasesExecuted:   6,
+			Retries:          2,
+		})
+		for _, want := range []string{"1,234,567 tokens", "$7.41", "6 phases", "2 retries"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("cost line %q missing %q", got, want)
+			}
+		}
+	})
+}
 
 func TestBuildSpawnMessage(t *testing.T) {
 	t.Parallel()

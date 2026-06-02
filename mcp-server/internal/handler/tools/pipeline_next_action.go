@@ -17,6 +17,7 @@ import (
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/history"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/profile"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/prompt"
@@ -80,12 +81,13 @@ type reportResultEmbedded struct {
 // checkpoint; the orchestrator should call pipeline_next_action again immediately.
 type nextActionResponse struct {
 	orchestrator.Action
-	Warning            string                `json:"warning,omitempty"`
-	DisplayMessage     string                `json:"display_message,omitempty"`
-	ReportResult       *reportResultEmbedded `json:"report_result,omitempty"`
-	CurrentPhase       string                `json:"current_phase,omitempty"`
-	CurrentPhaseStatus string                `json:"current_phase_status,omitempty"`
-	StillWaiting       bool                  `json:"still_waiting,omitempty"`
+	Warning            string                     `json:"warning,omitempty"`
+	DisplayMessage     string                     `json:"display_message,omitempty"`
+	ReportResult       *reportResultEmbedded      `json:"report_result,omitempty"`
+	CurrentPhase       string                     `json:"current_phase,omitempty"`
+	CurrentPhaseStatus string                     `json:"current_phase_status,omitempty"`
+	StillWaiting       bool                       `json:"still_waiting,omitempty"`
+	Analytics          *analytics.PipelineSummary `json:"analytics,omitempty"`
 }
 
 // parsePreviousResult extracts the optional previous_* parameters from the MCP request.
@@ -153,6 +155,22 @@ func PipelineNextActionHandler(
 			if stErr != nil {
 				return errorf("get state for report: %v", stErr)
 			}
+			// Auto-carry engine-authoritative dispatch metadata (#9): the model and
+			// setup-only flag were chosen by the engine when it emitted the last action,
+			// so prefer the persisted LastDispatch over orchestrator-threaded values.
+			// This frees the orchestrator from passing previous_model / previous_setup_only
+			// by hand; tokens and duration still come from the caller (only it observes the
+			// subagent's usage). When LastDispatch is absent (e.g. direct-state tests), the
+			// orchestrator-provided values are used as-is for backward compatibility.
+			model := prev.model
+			setupOnly := prev.setupOnly
+			if st.LastDispatch != nil {
+				if model == "" {
+					model = st.LastDispatch.Model
+				}
+				setupOnly = st.LastDispatch.SetupOnly
+			}
+
 			// Guard: skip reportResultCore for non-reportable phases.
 			if st.CurrentPhase != "setup" && st.CurrentPhase != "completed" {
 				rIn := reportResultInput{
@@ -160,15 +178,15 @@ func PipelineNextActionHandler(
 					phase:      st.CurrentPhase,
 					tokensUsed: prev.tokensUsed,
 					durationMs: prev.durationMs,
-					model:      prev.model,
-					setupOnly:  prev.setupOnly,
+					model:      model,
+					setupOnly:  setupOnly,
 				}
 				outcome, rErr := reportResultCore(sm2, kb, rIn)
 				if rErr != nil {
 					return errorf("report_result: %v", rErr)
 				}
 				// Publish action-complete for the finished agent/exec step.
-				publishEventWithDetail(bus, nil, "action-complete", st.CurrentPhase, st.SpecName, workspace, "completed", prev.model)
+				publishEventWithDetail(bus, nil, "action-complete", st.CurrentPhase, st.SpecName, workspace, "completed", model)
 
 				switch outcome.NextActionHint {
 				case "revision_required":
@@ -254,6 +272,22 @@ func PipelineNextActionHandler(
 						Action: orchestrator.NewDoneAction("pipeline abandoned at "+st.CurrentPhase, ""),
 					})
 				}
+			}
+		}
+
+		// P8b: post-to-source is a terminal "dynamic" checkpoint (options post/skip) that
+		// isCheckpointPhase does not cover. Without explicit handling the engine re-returns
+		// the same checkpoint forever, so the orchestrator can never reach done (improvement
+		// #7). Both "post" and "skip" complete the phase so the pipeline advances to
+		// final-commit → completed. The actual comment posting (for "post") is performed by
+		// the orchestrator before it calls back with the terminal response.
+		if userResponse == "post" || userResponse == "skip" {
+			if st, stErr := sm2.GetState(); stErr == nil && st.CurrentPhase == state.PhasePostToSource {
+				if completeErr := sm2.PhaseComplete(workspace, st.CurrentPhase); completeErr != nil {
+					return errorf("post-to-source %s: %v", userResponse, completeErr)
+				}
+				// Record the terminal resolution in PhaseLog for observability.
+				_ = sm2.PhaseLog(workspace, st.CurrentPhase, 0, 0, "checkpoint")
 			}
 		}
 
@@ -635,6 +669,12 @@ func PipelineNextActionHandler(
 			if startErr := sm2.PhaseStart(workspace, action.Phase); startErr != nil {
 				appendWarning(fmt.Sprintf("PhaseStart: %v", startErr))
 			}
+			// Persist engine-authoritative dispatch metadata so the next
+			// pipeline_next_action call can auto-carry previous_model /
+			// previous_setup_only without manual threading (improvement #9).
+			if ldErr := sm2.SetLastDispatch(workspace, action.Phase, action.Model, action.SetupOnly); ldErr != nil {
+				appendWarning(fmt.Sprintf("SetLastDispatch: %v", ldErr))
+			}
 		}
 
 		// Include current phase state in response for debugging and publish
@@ -650,6 +690,22 @@ func PipelineNextActionHandler(
 				publishEvent(bus, nil, "phase-start", action.Phase, st.SpecName, workspace, "in_progress")
 			case orchestrator.ActionDone:
 				publishEvent(bus, nil, "pipeline-complete", st.CurrentPhase, st.SpecName, workspace, "completed")
+			}
+		}
+
+		// Surface the cost/token spend so far at every human checkpoint so the user can
+		// weigh "continue vs stop" against the running cost, instead of only learning the
+		// total at the final analytics call (improvement #8). Best-effort: a collector
+		// error never blocks the checkpoint.
+		if action.Type == orchestrator.ActionCheckpoint {
+			if summary, sErr := analytics.NewCollector("").Collect(workspace); sErr == nil {
+				resp.Analytics = summary
+				if line := formatCheckpointCostLine(summary); line != "" {
+					if resp.DisplayMessage != "" {
+						resp.DisplayMessage += "\n"
+					}
+					resp.DisplayMessage += line
+				}
 			}
 		}
 
@@ -790,6 +846,15 @@ func enrichPrompt( //nolint:gocyclo // complexity is inherent in the multi-layer
 		histCtx = filterCurrentReviewFindings(workspace, histCtx)
 	}
 
+	// Narrow the "Common Review Findings" for a per-task impl-reviewer to findings
+	// relevant to the task under review, so unrelated findings (e.g. a SQL finding for
+	// a frontend-only task) are not attached to every Phase 6 review (improvement #2).
+	if action.Agent == "impl-reviewer" {
+		if taskKey := extractTaskNumber(action.OutputFile); taskKey != "" {
+			histCtx = filterFindingsForTask(st, taskKey, histCtx)
+		}
+	}
+
 	action.Prompt = prompt.BuildPrompt(action.Agent, agentInstructions, artifactsSection, profileStr, histCtx)
 
 	// Layer 5: checkpoint feedback injection.
@@ -860,6 +925,83 @@ func filterCurrentReviewFindings(workspace string, ctx prompt.HistoryContext) pr
 	ctx.CriticalPatterns = filteredCritical
 
 	return ctx
+}
+
+// filterFindingsForTask narrows the "Common Review Findings" injected for a per-task
+// impl-reviewer to those relevant to the task under review (improvement #2). Relevance is
+// a token overlap between the finding (its normalised pattern text + category) and the
+// task scope (its title + file paths). This drops findings that have nothing to do with
+// the task — e.g. a SQL finding attached to a frontend-only task — which previously
+// bloated every Phase 6 review prompt with the full unfiltered findings list.
+//
+// Fails open: when the task is unknown or has no usable scope tokens, the context is
+// returned unchanged so a thin task never silently loses all findings context.
+func filterFindingsForTask(st *state.State, taskKey string, ctx prompt.HistoryContext) prompt.HistoryContext {
+	task, ok := st.Tasks[taskKey]
+	if !ok {
+		return ctx
+	}
+
+	scope := map[string]bool{}
+	addTokens(scope, task.Title)
+	for _, f := range task.Files {
+		addTokens(scope, f)
+	}
+	if len(scope) == 0 {
+		return ctx
+	}
+
+	relevant := func(p history.PatternEntry) bool {
+		toks := map[string]bool{}
+		addTokens(toks, p.Pattern)
+		addTokens(toks, p.Category)
+		for tok := range toks {
+			if scope[tok] {
+				return true
+			}
+		}
+		return false
+	}
+
+	ctx.AllPatterns = filterPatternEntries(ctx.AllPatterns, relevant)
+	ctx.CriticalPatterns = filterPatternEntries(ctx.CriticalPatterns, relevant)
+	return ctx
+}
+
+// filterPatternEntries returns the entries for which keep returns true.
+func filterPatternEntries(entries []history.PatternEntry, keep func(history.PatternEntry) bool) []history.PatternEntry {
+	out := make([]history.PatternEntry, 0, len(entries))
+	for _, e := range entries {
+		if keep(e) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// findingsTokenStopwords are generic words that carry no relevance signal and would
+// otherwise cause spurious finding/task matches.
+//
+//nolint:gochecknoglobals // immutable lookup table
+var findingsTokenStopwords = map[string]bool{
+	"the": true, "and": true, "for": true, "with": true, "that": true, "this": true,
+	"from": true, "into": true, "code": true, "file": true, "files": true, "task": true,
+	"review": true, "should": true, "must": true, "use": true, "used": true, "using": true,
+	"add": true, "added": true, "missing": true, "error": true, "errors": true,
+}
+
+// addTokens splits s into lowercased alphanumeric tokens (length >= 3, excluding generic
+// stopwords) and records them in set. Path separators and punctuation are token boundaries,
+// so "frontend/app/adapters/user.ts" yields "frontend", "app", "adapters", "user".
+func addTokens(set map[string]bool, s string) {
+	for _, tok := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	}) {
+		if len(tok) < 3 || findingsTokenStopwords[tok] {
+			continue
+		}
+		set[tok] = true
+	}
 }
 
 // extractTaskNumber parses the task number from an output artifact filename.

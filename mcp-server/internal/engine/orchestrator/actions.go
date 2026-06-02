@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/sourcetype"
 )
@@ -214,10 +215,49 @@ func NewPushBranchAction(phase string) Action {
 // for the orchestrator and stores the task key in PendingHumanGate.
 func NewHumanGateAction(phase, taskKey, title string) Action {
 	return Action{
-		Type:          ActionHumanGate,
-		Phase:         phase,
-		Name:          taskKey,
-		PresentToUser: fmt.Sprintf("Task %s requires human action: %s\n\nComplete the action and choose 'done' to continue, or 'skip' to mark it without action.", taskKey, title),
-		Options:       []string{"done", "skip", "abandon"},
+		Type:  ActionHumanGate,
+		Phase: phase,
+		Name:  taskKey,
+		PresentToUser: fmt.Sprintf(
+			"Task %s requires human action: %s\n\n%sComplete the action and choose 'done' to continue, or 'skip' to mark it without action.",
+			taskKey, title, crossRepoGateGuidance(title),
+		),
+		Options: []string{"done", "skip", "abandon"},
 	}
+}
+
+// crossRepoExternalRepoKeywords signal a human gate whose work lives in a *different*
+// repository (proto definitions, dependency bumps, preview pins).
+//
+//nolint:gochecknoglobals // immutable lookup table
+var crossRepoExternalRepoKeywords = []string{
+	"proto", "akupara", "external repo", "external repository", "external pr",
+	"dependency", "dependencies", "preview", "npm version", "package version", "upstream",
+}
+
+// crossRepoGateGuidance returns a guidance block for human gates that depend on an
+// external repository — walking through the PR → CI watch → preview-pin flow and
+// pointing to the repository's own proto/dependency-update skill (improvement #5).
+// Returns "" when the task title shows no external-repo signal so single-repo gates
+// stay concise. The trailing blank line lets callers concatenate it inline.
+func crossRepoGateGuidance(title string) string {
+	lower := strings.ToLower(title)
+	matched := false
+	for _, kw := range crossRepoExternalRepoKeywords {
+		if strings.Contains(lower, kw) {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return ""
+	}
+	return "This looks like a cross-repository dependency. Typical flow:\n" +
+		"1. Make the change in the external repository and open its PR.\n" +
+		"2. Watch that PR's CI; resolve repo-specific lint/naming rules " +
+		"(e.g. protolint field naming such as `created_at` → `created_time`).\n" +
+		"3. Obtain the preview artifact (preview branch / pre-release npm version / commit SHA).\n" +
+		"4. Pin that preview in this repository (update the dependency version) and verify the build.\n" +
+		"If this repository ships an `update-proto` (or equivalent dependency-update) skill, " +
+		"follow it for the merge-before-preview pattern.\n\n"
 }

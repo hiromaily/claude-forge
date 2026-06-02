@@ -78,6 +78,10 @@ func initWorkspace(
 		return "", fmt.Errorf("write request.md: %w", err)
 	}
 
+	// Keep the host project's markdownlint runs quiet about forge's internal spec
+	// artifacts under .specs/ (improvement #10). Best-effort; never fails init.
+	ensureMarkdownlintIgnore(workspace)
+
 	return requestMD, nil
 }
 

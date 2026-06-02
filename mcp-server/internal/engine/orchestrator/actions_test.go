@@ -2,8 +2,37 @@ package orchestrator
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
+
+// TestNewHumanGateActionCrossRepo verifies improvement #5: a human gate whose task
+// involves an external repository carries cross-repo guidance (PR → CI → preview pin
+// and a skill pointer), while a plain in-repo gate stays concise.
+func TestNewHumanGateActionCrossRepo(t *testing.T) {
+	t.Parallel()
+
+	t.Run("external_repo_task_gets_guidance", func(t *testing.T) {
+		t.Parallel()
+		a := NewHumanGateAction(PhaseFive, "1", "Merge akupara-proto PR and pin preview")
+		for _, want := range []string{"cross-repository", "preview", "update-proto", "CI"} {
+			if !strings.Contains(a.PresentToUser, want) {
+				t.Errorf("cross-repo gate message missing %q; got:\n%s", want, a.PresentToUser)
+			}
+		}
+	})
+
+	t.Run("in_repo_task_stays_concise", func(t *testing.T) {
+		t.Parallel()
+		a := NewHumanGateAction(PhaseFive, "2", "Rename the local handler function")
+		if strings.Contains(a.PresentToUser, "cross-repository") {
+			t.Errorf("in-repo gate should not include cross-repo guidance; got:\n%s", a.PresentToUser)
+		}
+		if !strings.Contains(a.PresentToUser, "requires human action") {
+			t.Errorf("in-repo gate missing base message; got:\n%s", a.PresentToUser)
+		}
+	})
+}
 
 func TestSkipSummaryPrefix(t *testing.T) {
 	t.Parallel()

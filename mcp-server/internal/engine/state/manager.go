@@ -1010,6 +1010,25 @@ func (m *StateManager) PhaseLog(workspace, phase string, tokens, durationMs int,
 	})
 }
 
+// SetLastDispatch records the model and setup-only flag of the action the engine just
+// dispatched, so the next pipeline_next_action call can auto-carry previous_model and
+// previous_setup_only without the orchestrator threading them by hand (improvement #9).
+func (m *StateManager) SetLastDispatch(workspace, phase, model string, setupOnly bool) error {
+	// Workspace entry-point guard.
+	if err := m.bindWorkspace(workspace); err != nil {
+		return err
+	}
+
+	return m.Update(func(s *State) error {
+		s.LastDispatch = &LastDispatch{
+			Phase:     phase,
+			Model:     model,
+			SetupOnly: setupOnly,
+		}
+		return nil
+	})
+}
+
 // PhaseStatsResult is the structured return value for PhaseStats.
 type PhaseStatsResult struct {
 	TotalTokens     int             `json:"totalTokens"`

@@ -28,6 +28,7 @@ import (
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/sourcetype"
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/state"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
 	"github.com/hiromaily/claude-forge/mcp-server/pkg/events"
 	"github.com/hiromaily/claude-forge/mcp-server/pkg/maputil"
 )
@@ -69,6 +70,11 @@ type UserConfirmationPrompt struct {
 	IsMainBranch        bool                    `json:"is_main_branch"`
 	Message             string                  `json:"message"`
 	EnrichedRequestBody string                  `json:"enriched_request_body,omitempty"`
+	// Estimate is a P50/P90 cost/token/duration forecast for the detected effort,
+	// derived from past completed pipelines of the same effort. Present only when
+	// historical data exists (sample_size > 0), so the user can gauge how heavy the
+	// run will be before approving (improvement #8). Nil when no history is available.
+	Estimate *analytics.EstimateResult `json:"estimate,omitempty"`
 }
 
 // pipelineFlags holds parsed flag fields from the flags parameter.
@@ -169,10 +175,15 @@ func PipelineInitWithContextHandler(sm *state.StateManager, bus *events.EventBus
 			return errorf("discussion_answers and user_confirmation must not both be present")
 		}
 
+		// Estimator forecasts run cost from past completed pipelines of the same effort.
+		// Built from the global specs dir; nil-safe and degrades to no estimate when no
+		// history exists (improvement #8).
+		est := analytics.NewEstimator(sm.SpecsDir())
+
 		switch {
 		case discussionAnswers != "":
 			// Discussion call: build enriched body, return needs_user_confirmation.
-			return handleDiscussionCall(workspace, extCtx, flags, discussionAnswers)
+			return handleDiscussionCall(workspace, extCtx, flags, discussionAnswers, est)
 		case hasConfirmation && ucRaw != nil:
 			// Confirmation call: validate effort, initialise workspace, write files.
 			uc, err := parseUserConfirmation(ucRaw)
@@ -182,14 +193,14 @@ func PipelineInitWithContextHandler(sm *state.StateManager, bus *events.EventBus
 			return handleSecondCall(sm, bus, workspace, extCtx, flags, uc)
 		default:
 			// First call: detect effort, return needs_user_confirmation (or needs_discussion).
-			return handleFirstCall(workspace, extCtx, flags)
+			return handleFirstCall(workspace, extCtx, flags, est)
 		}
 	}
 }
 
 // ---------- first call ----------
 
-func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFlags) (*mcp.CallToolResult, error) {
+func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFlags, est *analytics.Estimator) (*mcp.CallToolResult, error) {
 	if flags.Discuss && !flags.Auto && extCtx.IsTextSource() {
 		result := PipelineInitWithContextResult{
 			NeedsDiscussion: &DiscussionPrompt{
@@ -202,12 +213,13 @@ func handleFirstCall(workspace string, extCtx externalContext, flags pipelineFla
 	}
 
 	// Standard path: detect effort and return needs_user_confirmation.
-	return buildUserConfirmationPrompt(workspace, extCtx, flags, "")
+	return buildUserConfirmationPrompt(workspace, extCtx, flags, "", est)
 }
 
 // buildUserConfirmationPrompt constructs a needs_user_confirmation response.
 // enrichedBody is set when called from handleDiscussionCall; "" otherwise.
-func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags pipelineFlags, enrichedBody string) (*mcp.CallToolResult, error) {
+// est (nil-safe) provides an upfront cost/token estimate for the detected effort.
+func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags pipelineFlags, enrichedBody string, est *analytics.Estimator) (*mcp.CallToolResult, error) {
 	// Detect effort.
 	combinedText := strings.TrimSpace(extCtx.Fields.CombinedText() + " " + extCtx.TaskText)
 	effort := orchestrator.DetectEffort(flags.EffortOverride, extCtx.Fields.StoryPoints, combinedText)
@@ -230,6 +242,35 @@ func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags
 	if echoBody == "" {
 		echoBody = extCtx.TaskText
 	}
+	// For external issue sources (Linear/Jira/GitHub), the orchestrator may not re-send
+	// external_context on the confirmation call. Echo the issue body (title + description)
+	// here so the requirements survive the round-trip and land in request.md (improvement #4).
+	if echoBody == "" && !extCtx.Fields.IsEmpty() {
+		echoBody = strings.TrimSpace(extCtx.Fields.Title + "\n\n" + extCtx.Fields.Body)
+	}
+
+	message := fmt.Sprintf(
+		"Detected effort=%q. Current branch=%q (is_main=%v). "+
+			"Please confirm by calling pipeline_init_with_context again with "+
+			"user_confirmation={effort:..., use_current_branch:...}. "+
+			"Available effort options: S (light flow), M (standard flow), L (full flow).",
+		effort, currentBranch, isMain,
+	)
+
+	// Attach an upfront cost/token estimate for the detected effort so the user knows
+	// how heavy the run will be before approving (improvement #8). Only shown when
+	// historical data exists; failures are swallowed so estimation never blocks init.
+	var estimate *analytics.EstimateResult
+	if est != nil {
+		if er, eErr := est.Estimate(effort); eErr == nil && er.SampleSize > 0 {
+			estimate = er
+			message += fmt.Sprintf(
+				" Estimated cost for effort=%q (from %d past run(s)): ~%.0f tokens / ~$%.2f at P50, "+
+					"up to ~%.0f tokens / ~$%.2f at P90.",
+				effort, er.SampleSize, er.Tokens.P50, er.CostUSD.P50, er.Tokens.P90, er.CostUSD.P90,
+			)
+		}
+	}
 
 	nuc := &UserConfirmationPrompt{
 		DetectedEffort:      effort,
@@ -237,13 +278,8 @@ func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags
 		CurrentBranch:       currentBranch,
 		IsMainBranch:        isMain,
 		EnrichedRequestBody: echoBody,
-		Message: fmt.Sprintf(
-			"Detected effort=%q. Current branch=%q (is_main=%v). "+
-				"Please confirm by calling pipeline_init_with_context again with "+
-				"user_confirmation={effort:..., use_current_branch:...}. "+
-				"Available effort options: S (light flow), M (standard flow), L (full flow).",
-			effort, currentBranch, isMain,
-		),
+		Message:             message,
+		Estimate:            estimate,
 	}
 
 	result := PipelineInitWithContextResult{
@@ -263,9 +299,10 @@ func handleDiscussionCall(
 	extCtx externalContext,
 	flags pipelineFlags,
 	discussionAnswers string,
+	est *analytics.Estimator,
 ) (*mcp.CallToolResult, error) {
 	enrichedBody := buildEnrichedRequestBody(extCtx.TaskText, discussionAnswers)
-	return buildUserConfirmationPrompt(workspace, extCtx, flags, enrichedBody)
+	return buildUserConfirmationPrompt(workspace, extCtx, flags, enrichedBody, est)
 }
 
 // ---------- second call ----------
@@ -309,7 +346,18 @@ func handleSecondCall(
 		branchName = flags.CurrentBranch
 	} else {
 		st := &state.State{SpecName: specName}
-		branchName = orchestrator.DeriveBranchName(st)
+		// Classify the initial branch type from the request content (issue body / task
+		// text) so a new branch starts as feature/fix/refactor/etc. rather than always
+		// feature/ (improvement #3). maybeRenameBranch may still refine it from design.md.
+		// specName (the slug) is intentionally excluded: it is a terse, request-derived
+		// slug whose substrings ("prefix" → fix, "migration" → chore) would misclassify;
+		// the request body is the authoritative signal, and empty content falls back to feature.
+		classifyText := strings.TrimSpace(strings.Join([]string{
+			uc.EnrichedRequestBody,
+			extCtx.Fields.CombinedText(),
+			extCtx.TaskText,
+		}, " "))
+		branchName = orchestrator.DeriveBranchNameFromContent(st, classifyText)
 		createBranch = true
 	}
 

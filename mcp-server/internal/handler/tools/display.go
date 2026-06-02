@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
 )
 
 // buildSpawnMessage returns the progress line to display before spawning an agent.
@@ -29,6 +30,18 @@ func buildSpawnMessage(action orchestrator.Action) string {
 func buildCompleteMessage(tokensUsed, durationMs int) string {
 	return fmt.Sprintf("  ✓ Complete  ·  %s tokens · %s",
 		formatTokens(tokensUsed), formatDuration(durationMs))
+}
+
+// formatCheckpointCostLine returns a one-line running-cost summary for display at a
+// human checkpoint, e.g. "  💰 So far: 1,234,567 tokens · ~$7.41 · 6 phases · 2 retries".
+// Returns "" for a nil summary or a fresh pipeline that has logged no work yet, so the
+// line is only shown once there is something meaningful to report (improvement #8).
+func formatCheckpointCostLine(s *analytics.PipelineSummary) string {
+	if s == nil || s.TotalTokens == 0 {
+		return ""
+	}
+	return fmt.Sprintf("  💰 So far: %s tokens · ~$%.2f · %d phases · %d retries",
+		formatTokens(s.TotalTokens), s.EstimatedCostUSD, s.PhasesExecuted, s.Retries)
 }
 
 // phaseDisplayLabel builds a human-readable label for a phase ID.

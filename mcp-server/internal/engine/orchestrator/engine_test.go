@@ -991,6 +991,43 @@ func TestNextAction(t *testing.T) {
 			wantSummary: SkipSummaryPrefix + PhaseSix,
 		},
 
+		// ── Improvement #1: phase-6 batches independent reviews in parallel ──
+		{
+			// Two implemented, unreviewed tasks (no review-*.md yet) must be fanned
+			// out as a single parallel reviewer batch rather than one at a time.
+			name: "phase6_parallel_reviews",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-6", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "sequential", ImplStatus: "completed", ReviewStatus: ""},
+						"2": {Title: "Task 2", ExecutionMode: "sequential", ImplStatus: "completed", ReviewStatus: ""},
+					}
+					return nil
+				})
+			},
+			wantType:        ActionSpawnAgent,
+			wantAgent:       agentImplReviewer,
+			wantParallelIDs: []string{"1", "2"},
+		},
+
+		// ── Improvement #1: phase-6 single pending review uses a non-parallel spawn ──
+		{
+			name: "phase6_single_review",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-6", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "sequential", ImplStatus: "completed", ReviewStatus: ""},
+					}
+					return nil
+				})
+			},
+			wantType:        ActionSpawnAgent,
+			wantAgent:       agentImplReviewer,
+			wantParallelIDs: []string{}, // assert len == 0 (single spawn, not a fanout)
+		},
+
 		// ── Decision 23: phase-6 empty Tasks skips the phase (edge case, mirrors phase-5) ─
 		{
 			name: "phase6_empty_tasks_skips",
@@ -1371,6 +1408,34 @@ func TestDeriveBranchName(t *testing.T) {
 			got := DeriveBranchName(st)
 			if got != tt.want {
 				t.Errorf("DeriveBranchName(%q) = %q, want %q", tt.specName, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDeriveBranchNameFromContent(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		specName string
+		content  string
+		want     string
+	}{
+		{"empty_content_defaults_feature", "soa-1-add-thing", "", "feature/soa-1-add-thing"},
+		{"feature_content", "soa-1-add-thing", "implement a new dashboard capability", "feature/soa-1-add-thing"},
+		{"fix_content", "soa-2-login", "fix a bug where login fails", "fix/soa-2-login"},
+		{"japanese_fix_content", "soa-3-login", "ログインの不具合を修正する", "fix/soa-3-login"},
+		{"refactor_content", "soa-4-cleanup", "refactor the module structure", "refactor/soa-4-cleanup"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			st := &state.State{SpecName: tt.specName}
+			got := DeriveBranchNameFromContent(st, tt.content)
+			if got != tt.want {
+				t.Errorf("DeriveBranchNameFromContent(%q, %q) = %q, want %q", tt.specName, tt.content, got, tt.want)
 			}
 		})
 	}
