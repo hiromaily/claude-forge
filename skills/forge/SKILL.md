@@ -110,7 +110,8 @@ Repeat until done:
      - If `action.parallel_tasks` is non-empty: spawn one Agent call per entry in
        parallel; wait for all to complete before calling `pipeline_next_action` again.
        Each entry `t` is an explicit, server-computed contract — do **not** derive any
-       filename yourself:
+       filename yourself. Instruct that agent to work on task `t.id` (still using
+       `action.prompt` as the base prompt), with:
        - inputs = `action.input_files` (shared) + `t.input_files` (task-specific)
        - output artifact = `t.output_file`
        After each agent returns, apply the **artifact write fallback per entry**: if
@@ -175,9 +176,9 @@ Repeat until done:
      `action.options`. The server already embeds any cross-repository flow (external PR → CI
      watch → preview-pin → verify, plus a dependency-update skill pointer) into
      `present_to_user` for external-repo tasks — render that guidance as-is and help the user
-     drive it; do not re-derive the steps here. Choosing **"done"** is the deterministic
-     close: the engine clears the gate, so only pick it once the external change is pinned
-     and building.
+     drive it; do not re-derive the steps here. Choosing **"done"** clears the gate (the
+     deterministic close); for a cross-repo task, only choose it once the external change is
+     pinned and building here.
      - If the user chooses **"done"** or **"skip"**: call `pipeline_next_action` again
        with no `previous_*` parameters (no agent ran).
        The handler automatically marks the task as completed.
