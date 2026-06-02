@@ -74,7 +74,14 @@ type UserConfirmationPrompt struct {
 	// derived from past completed pipelines of the same effort. Present only when
 	// historical data exists (sample_size > 0), so the user can gauge how heavy the
 	// run will be before approving (improvement #8). Nil when no history is available.
+	// This raw struct is retained for the Dashboard / programmatic consumers; the
+	// orchestrator should display EstimateDisplay verbatim rather than re-formatting it.
 	Estimate *analytics.EstimateResult `json:"estimate,omitempty"`
+	// EstimateDisplay is the pre-formatted, user-facing one-line forecast the orchestrator
+	// outputs verbatim at effort selection. Empty when no history is available. Formatting
+	// lives in the server (formatEstimateLine) so the P50/P90 presentation is deterministic
+	// instead of reconstructed by the LLM from the raw Estimate struct (improvement #8).
+	EstimateDisplay string `json:"estimate_display,omitempty"`
 }
 
 // pipelineFlags holds parsed flag fields from the flags parameter.
@@ -260,15 +267,12 @@ func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags
 	// Attach an upfront cost/token estimate for the detected effort so the user knows
 	// how heavy the run will be before approving (improvement #8). Only shown when
 	// historical data exists; failures are swallowed so estimation never blocks init.
+	// The user-facing figures are pre-formatted into EstimateDisplay (verbatim) rather
+	// than appended to the procedural Message, so the LLM never reconstructs them.
 	var estimate *analytics.EstimateResult
 	if est != nil {
 		if er, eErr := est.Estimate(effort); eErr == nil && er.SampleSize > 0 {
 			estimate = er
-			message += fmt.Sprintf(
-				" Estimated cost for effort=%q (from %d past run(s)): ~%.0f tokens / ~$%.2f at P50, "+
-					"up to ~%.0f tokens / ~$%.2f at P90.",
-				effort, er.SampleSize, er.Tokens.P50, er.CostUSD.P50, er.Tokens.P90, er.CostUSD.P90,
-			)
 		}
 	}
 
@@ -280,6 +284,7 @@ func buildUserConfirmationPrompt(workspace string, extCtx externalContext, flags
 		EnrichedRequestBody: echoBody,
 		Message:             message,
 		Estimate:            estimate,
+		EstimateDisplay:     formatEstimateLine(effort, estimate),
 	}
 
 	result := PipelineInitWithContextResult{

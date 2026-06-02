@@ -44,6 +44,25 @@ func formatCheckpointCostLine(s *analytics.PipelineSummary) string {
 		formatTokens(s.TotalTokens), s.EstimatedCostUSD, s.PhasesExecuted, s.Retries)
 }
 
+// formatEstimateLine returns a one-line, pre-formatted upfront cost/token forecast for
+// the detected effort, e.g.
+// "  📊 Estimate (effort=L, 4 past run(s)): ~1,234,567 tokens / ~$7.41 (P50) · up to ~2,345,678 tokens / ~$14.08 (P90)".
+// Returns "" when no estimate is available (nil) or there is no history (sample_size 0).
+// The orchestrator displays this verbatim, so the P50/P90 figures are formatted here in
+// the server rather than reconstructed by the LLM from the raw estimate struct — keeping
+// the presentation deterministic (improvement #8).
+func formatEstimateLine(effort string, est *analytics.EstimateResult) string {
+	if est == nil || est.SampleSize == 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"  📊 Estimate (effort=%s, %d past run(s)): ~%s tokens / ~$%.2f (P50) · up to ~%s tokens / ~$%.2f (P90)",
+		effort, est.SampleSize,
+		formatTokens(int(est.Tokens.P50)), est.CostUSD.P50,
+		formatTokens(int(est.Tokens.P90)), est.CostUSD.P90,
+	)
+}
+
 // phaseDisplayLabel builds a human-readable label for a phase ID.
 // For phase-N IDs returns "Phase N — Label" when a label exists in the registry,
 // or just "Phase N" when the registry falls back to the ID itself.

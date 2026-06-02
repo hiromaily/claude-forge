@@ -204,10 +204,15 @@ Returns `needs_user_confirmation` for the orchestrator to present to the user:
     "current_branch": "main",
     "is_main_branch": true,
     "enriched_request_body": "implement login feature",
-    "message": "Detected effort=\"M\". ..."
+    "message": "Detected effort=\"M\". ...",
+    "estimate_display": "  📊 Estimate (effort=M, 4 past run(s)): ~120,000 tokens / ~$1.80 (P50) · up to ~210,000 tokens / ~$3.15 (P90)"
   }
 }
 ```
+
+`estimate_display` is a pre-formatted, verbatim line (omitted when no history exists); the
+orchestrator outputs it as-is rather than re-deriving P50/P90 figures from the raw `estimate`
+struct, keeping the cost presentation deterministic. `message` stays purely procedural.
 
 ### Response — First Call with `--discuss` (text source only)
 

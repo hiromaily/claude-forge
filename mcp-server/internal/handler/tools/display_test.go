@@ -42,6 +42,39 @@ func TestFormatCheckpointCostLine(t *testing.T) {
 	})
 }
 
+func TestFormatEstimateLine(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil_estimate", func(t *testing.T) {
+		t.Parallel()
+		if got := formatEstimateLine("L", nil); got != "" {
+			t.Errorf("nil estimate: want empty, got %q", got)
+		}
+	})
+
+	t.Run("zero_sample_suppressed", func(t *testing.T) {
+		t.Parallel()
+		got := formatEstimateLine("L", &analytics.EstimateResult{SampleSize: 0})
+		if got != "" {
+			t.Errorf("no history (sample_size 0): want empty, got %q", got)
+		}
+	})
+
+	t.Run("formats_p50_p90", func(t *testing.T) {
+		t.Parallel()
+		got := formatEstimateLine("L", &analytics.EstimateResult{
+			SampleSize: 4,
+			Tokens:     analytics.Percentiles{P50: 1234567, P90: 2345678},
+			CostUSD:    analytics.Percentiles{P50: 7.41, P90: 14.08},
+		})
+		for _, want := range []string{"effort=L", "4 past run", "1,234,567 tokens", "$7.41", "2,345,678 tokens", "$14.08", "P50", "P90"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("estimate line %q missing %q", got, want)
+			}
+		}
+	})
+}
+
 func TestBuildSpawnMessage(t *testing.T) {
 	t.Parallel()
 

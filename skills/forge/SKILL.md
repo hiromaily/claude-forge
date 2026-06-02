@@ -57,9 +57,10 @@ Example: `/forge 20260401-effort-only-flow`
       (S, M, L — each with `skipped_phases` using the `label` field).
       Each option has a `recommended` boolean — mark the one where
       `recommended` is `true` as "(Recommended)".
-      If `needs_user_confirmation.estimate` is present, show its P50/P90 token and USD
-      figures (and `sample_size`) so the user knows roughly how heavy the run will be —
-      effort L in particular can be multi-hour and multi-dollar.
+      If `needs_user_confirmation.estimate_display` is non-empty, output it **verbatim**
+      alongside the options so the user can gauge how heavy the run will be (effort L can
+      be multi-hour and multi-dollar). The server pre-formats the P50/P90 figures — do not
+      reconstruct them from the raw `estimate` struct.
    2. **Branch decision**: based on `current_branch` and `is_main_branch` from the response:
       - If `is_main_branch` is true: inform the user a new branch will be created (no question needed).
       - If `is_main_branch` is false: ask whether to use the current branch or create a new one.
@@ -124,9 +125,10 @@ Repeat until done:
        `{workspace}/{action.output_file}` before calling `pipeline_next_action`.
        This ensures `pipeline_report_result` artifact validation always succeeds.
    - `checkpoint`: Present `action.present_to_user` to the user.
-     If the response includes `display_message` or `analytics`, show the running-cost
-     line (tokens / estimated USD / phases / retries so far) to the user alongside the
-     checkpoint prompt so they can weigh "continue vs stop" against the spend so far.
+     If `display_message` is non-empty, output it **verbatim** — the server already appends
+     the running-cost line (tokens / estimated USD / phases / retries so far) so the user can
+     weigh "continue vs stop" against the spend. Do not assemble that line yourself from the
+     raw `analytics` field.
      Mention that the Dashboard can be used to approve without terminal input.
      Then **immediately** call `mcp__forge-state__pipeline_next_action(workspace)`
      (no `user_response`, no `previous_*`). The server long-polls up to 50 s
