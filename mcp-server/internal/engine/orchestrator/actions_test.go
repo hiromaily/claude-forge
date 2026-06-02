@@ -52,7 +52,7 @@ func TestNewParallelSpawnAction(t *testing.T) {
 		model      string
 		phase      string
 		inputFiles []string
-		taskIDs    []string
+		tasks      []ParallelTask
 		want       Action
 	}{
 		{
@@ -62,34 +62,48 @@ func TestNewParallelSpawnAction(t *testing.T) {
 			model:      "sonnet",
 			phase:      "phase-5",
 			inputFiles: []string{"design.md", "tasks.md"},
-			taskIDs:    []string{"1", "2"},
+			tasks: []ParallelTask{
+				{ID: "1", OutputFile: "impl-1.md"},
+				{ID: "2", OutputFile: "impl-2.md"},
+			},
 			want: Action{
-				Type:            ActionSpawnAgent,
-				Agent:           "implementer",
-				Prompt:          "implement tasks",
-				Model:           "sonnet",
-				Phase:           "phase-5",
-				InputFiles:      []string{"design.md", "tasks.md"},
+				Type:       ActionSpawnAgent,
+				Agent:      "implementer",
+				Prompt:     "implement tasks",
+				Model:      "sonnet",
+				Phase:      "phase-5",
+				InputFiles: []string{"design.md", "tasks.md"},
+				ParallelTasks: []ParallelTask{
+					{ID: "1", OutputFile: "impl-1.md"},
+					{ID: "2", OutputFile: "impl-2.md"},
+				},
 				ParallelTaskIDs: []string{"1", "2"},
 				OutputFile:      "",
 			},
 		},
 		{
-			name:       "parallel_three_tasks",
-			agent:      "implementer",
-			prompt:     "implement all",
+			name:       "parallel_reviewers_with_per_task_inputs",
+			agent:      "impl-reviewer",
+			prompt:     "review in parallel",
 			model:      "sonnet",
-			phase:      "phase-5",
-			inputFiles: []string{"design.md"},
-			taskIDs:    []string{"1", "2", "3"},
+			phase:      "phase-6",
+			inputFiles: []string{"tasks.md"},
+			tasks: []ParallelTask{
+				{ID: "1", InputFiles: []string{"impl-1.md"}, OutputFile: "review-1.md"},
+				{ID: "3", InputFiles: []string{"impl-3.md"}, OutputFile: "review-3.md"},
+			},
 			want: Action{
-				Type:            ActionSpawnAgent,
-				Agent:           "implementer",
-				Prompt:          "implement all",
-				Model:           "sonnet",
-				Phase:           "phase-5",
-				InputFiles:      []string{"design.md"},
-				ParallelTaskIDs: []string{"1", "2", "3"},
+				Type:       ActionSpawnAgent,
+				Agent:      "impl-reviewer",
+				Prompt:     "review in parallel",
+				Model:      "sonnet",
+				Phase:      "phase-6",
+				InputFiles: []string{"tasks.md"},
+				ParallelTasks: []ParallelTask{
+					{ID: "1", InputFiles: []string{"impl-1.md"}, OutputFile: "review-1.md"},
+					{ID: "3", InputFiles: []string{"impl-3.md"}, OutputFile: "review-3.md"},
+				},
+				ParallelTaskIDs: []string{"1", "3"},
 				OutputFile:      "",
 			},
 		},
@@ -99,7 +113,7 @@ func TestNewParallelSpawnAction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := NewParallelSpawnAction(tc.agent, tc.prompt, tc.model, tc.phase, tc.inputFiles, tc.taskIDs)
+			got := NewParallelSpawnAction(tc.agent, tc.prompt, tc.model, tc.phase, tc.inputFiles, tc.tasks)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("NewParallelSpawnAction() = %+v, want %+v", got, tc.want)
 			}

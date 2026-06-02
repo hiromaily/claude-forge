@@ -101,7 +101,11 @@ func TestBuildSpawnMessage(t *testing.T) {
 		{
 			name: "parallel_phase5",
 			action: orchestrator.NewParallelSpawnAction("implementer", "", "", "phase-5", nil,
-				[]string{"1", "2", "3"}),
+				[]orchestrator.ParallelTask{
+					{ID: "1", OutputFile: "impl-1.md"},
+					{ID: "2", OutputFile: "impl-2.md"},
+					{ID: "3", OutputFile: "impl-3.md"},
+				}),
 			want: "▶ Phase 5 — Implementation  ·  spawning implementer  (parallel · 3 tasks)…",
 		},
 		{

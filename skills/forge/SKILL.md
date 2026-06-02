@@ -107,16 +107,17 @@ Repeat until done:
    - `spawn_agent`: If `action.display_message` is non-empty, output it verbatim.
      Then call Agent tool with `action.prompt`. Use `action.agent` as description.
      Record the tokens, duration, and model for the next `pipeline_next_action` call.
-     - If `action.parallel_task_ids` is non-empty: spawn one Agent call per task ID in
+     - If `action.parallel_tasks` is non-empty: spawn one Agent call per entry in
        parallel; wait for all to complete before calling `pipeline_next_action` again.
-       Each parallel agent works on a single task `<id>` from the list: it reads that
-       task's `impl-<id>.md` and writes its own per-task output file
-       (`impl-<id>.md` for the implementer phase, `review-<id>.md` for the Phase 6
-       reviewer). `action.output_file` is empty for a parallel batch, so apply the
-       artifact write fallback below **per task ID**: after each agent returns, if its
-       `{workspace}/<prefix>-<id>.md` is missing, Write that agent's response text there
-       before calling `pipeline_next_action`. `pipeline_report_result` reconciles all of
-       the per-task review verdicts in a single pass.
+       Each entry `t` is an explicit, server-computed contract — do **not** derive any
+       filename yourself:
+       - inputs = `action.input_files` (shared) + `t.input_files` (task-specific)
+       - output artifact = `t.output_file`
+       After each agent returns, apply the **artifact write fallback per entry**: if
+       `{workspace}/{t.output_file}` does not exist on disk, Write that agent's response
+       text there before calling `pipeline_next_action`. `pipeline_report_result`
+       reconciles all of the per-task verdicts in a single pass.
+       (`action.parallel_task_ids` still lists the same IDs in order for reference.)
      - **Artifact write fallback**: After the agent returns, if `action.output_file` is
        non-empty, check whether `{workspace}/{action.output_file}` exists on disk. If
        the file does **NOT** exist, the agent returned its output as text instead of

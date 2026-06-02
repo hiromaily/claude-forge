@@ -47,6 +47,16 @@ type Action struct {
 	OutputFile      string   `json:"output_file,omitempty"`
 	ParallelTaskIDs []string `json:"parallel_task_ids,omitempty"` // non-nil iff this is a parallel fanout
 
+	// ParallelTasks is the per-task input/output contract for a parallel fanout. The
+	// engine — which already knows the phase — computes each task's output_file
+	// (impl-<id>.md for the implementer phase, review-<id>.md for the reviewer phase)
+	// and any task-specific input_files, so the orchestrator iterates this list
+	// mechanically instead of deriving the <prefix>-<id>.md filename from prose. The
+	// per-task output_file is also the target for the artifact-write fallback. Non-nil
+	// iff this is a parallel fanout; ParallelTaskIDs mirrors its IDs for callers that
+	// only need the count/order.
+	ParallelTasks []ParallelTask `json:"parallel_tasks,omitempty"`
+
 	// checkpoint fields
 	Name          string   `json:"name,omitempty"`
 	PresentToUser string   `json:"present_to_user,omitempty"`
@@ -99,10 +109,25 @@ func NewSpawnAgentAction(agent, prompt, model, phase string, inputFiles []string
 	}
 }
 
+// ParallelTask is the per-task input/output contract for one task in a parallel fanout.
+// OutputFile is the artifact the task's agent must write (and the write-fallback target);
+// InputFiles lists task-specific inputs beyond the shared Action.InputFiles.
+type ParallelTask struct {
+	ID         string   `json:"id"`
+	InputFiles []string `json:"input_files,omitempty"`
+	OutputFile string   `json:"output_file"`
+}
+
 // NewParallelSpawnAction constructs an ActionSpawnAgent that signals parallel fanout.
-// taskIDs must be sorted numerically ascending by the caller (engine uses sortedTaskKeys).
-// Prompt contains the shared prompt for all parallel tasks.
-func NewParallelSpawnAction(agent, prompt, model, phase string, inputFiles []string, taskIDs []string) Action {
+// tasks must be ordered by the caller (engine uses sortedTaskKeys); each task carries its
+// own output_file so the orchestrator never derives <prefix>-<id>.md from prose.
+// inputFiles is the shared input context applied to every task. Prompt is shared too.
+// ParallelTaskIDs is derived from tasks for callers that only need the IDs.
+func NewParallelSpawnAction(agent, prompt, model, phase string, inputFiles []string, tasks []ParallelTask) Action {
+	taskIDs := make([]string, len(tasks))
+	for i, t := range tasks {
+		taskIDs[i] = t.ID
+	}
 	return Action{
 		Type:            ActionSpawnAgent,
 		Agent:           agent,
@@ -110,6 +135,7 @@ func NewParallelSpawnAction(agent, prompt, model, phase string, inputFiles []str
 		Model:           model,
 		Phase:           phase,
 		InputFiles:      inputFiles,
+		ParallelTasks:   tasks,
 		ParallelTaskIDs: taskIDs,
 	}
 }

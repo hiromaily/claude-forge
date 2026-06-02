@@ -290,12 +290,13 @@ type nextActionTestCase struct {
 	wantType               string
 	wantAgent              string
 	wantSummary            string
-	wantPhase              string   // non-empty: assert action.Phase equals this value
-	wantParallelIDs        []string // nil means "do not check"; empty slice means "assert len==0"
-	wantInputContains      string   // non-empty: assert InputFiles contains this value
-	wantSetupOnly          *bool    // non-nil: assert action.SetupOnly equals *wantSetupOnly
-	wantCommandContains    string   // non-empty: assert any Commands element contains this value
-	wantCommandNotContains string   // non-empty: assert no Commands element contains this value
+	wantPhase              string            // non-empty: assert action.Phase equals this value
+	wantParallelIDs        []string          // nil means "do not check"; empty slice means "assert len==0"
+	wantParallelOutputs    map[string]string // nil means "do not check"; otherwise assert ParallelTasks[id].OutputFile
+	wantInputContains      string            // non-empty: assert InputFiles contains this value
+	wantSetupOnly          *bool             // non-nil: assert action.SetupOnly equals *wantSetupOnly
+	wantCommandContains    string            // non-empty: assert any Commands element contains this value
+	wantCommandNotContains string            // non-empty: assert no Commands element contains this value
 }
 
 // defaultEng returns an Engine with stubbed readers (approve + text).
@@ -723,8 +724,9 @@ func TestNextAction(t *testing.T) {
 					return nil
 				})
 			},
-			wantType:        ActionSpawnAgent,
-			wantParallelIDs: []string{"1", "2"},
+			wantType:            ActionSpawnAgent,
+			wantParallelIDs:     []string{"1", "2"},
+			wantParallelOutputs: map[string]string{"1": "impl-1.md", "2": "impl-2.md"},
 		},
 
 		// ── Decision 22: phase-5 single parallel task dispatches via ParallelSpawnAction ──
@@ -1321,6 +1323,16 @@ func TestNextAction(t *testing.T) {
 					if !reflect.DeepEqual(action.ParallelTaskIDs, tc.wantParallelIDs) {
 						t.Errorf("ParallelTaskIDs = %v, want %v", action.ParallelTaskIDs, tc.wantParallelIDs)
 					}
+				}
+			}
+
+			if tc.wantParallelOutputs != nil {
+				got := make(map[string]string, len(action.ParallelTasks))
+				for _, pt := range action.ParallelTasks {
+					got[pt.ID] = pt.OutputFile
+				}
+				if !reflect.DeepEqual(got, tc.wantParallelOutputs) {
+					t.Errorf("ParallelTasks output_file map = %v, want %v", got, tc.wantParallelOutputs)
 				}
 			}
 

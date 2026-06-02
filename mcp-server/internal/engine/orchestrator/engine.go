@@ -635,7 +635,7 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 			state.DefaultModel,
 			PhaseFive,
 			implInputFiles,
-			parallelKeys,
+			implParallelTasks(parallelKeys),
 		), nil
 	}
 
@@ -648,6 +648,33 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		implInputFiles,
 		"impl-"+firstKey+".md",
 	), nil
+}
+
+// implParallelTasks builds the per-task contract for a phase-5 parallel batch: each task
+// writes its own impl-<id>.md and shares the batch's input_files (the agent reads task <id>
+// from tasks.md, so no task-specific InputFiles are needed). keys must be caller-ordered.
+func implParallelTasks(keys []string) []ParallelTask {
+	tasks := make([]ParallelTask, len(keys))
+	for i, k := range keys {
+		tasks[i] = ParallelTask{ID: k, OutputFile: "impl-" + k + ".md"}
+	}
+	return tasks
+}
+
+// reviewParallelTasks builds the per-task contract for a phase-6 parallel review batch: each
+// reviewer reads its own impl-<id>.md (plus the shared tasks.md) and writes its verdict to
+// review-<id>.md. Supplying this mapping keeps the orchestrator from inferring filenames from
+// the prompt prose. keys must be caller-ordered.
+func reviewParallelTasks(keys []string) []ParallelTask {
+	tasks := make([]ParallelTask, len(keys))
+	for i, k := range keys {
+		tasks[i] = ParallelTask{
+			ID:         k,
+			InputFiles: []string{"impl-" + k + ".md"},
+			OutputFile: "review-" + k + ".md",
+		}
+	}
+	return tasks
 }
 
 // handlePhaseSix handles Phase 6 (impl reviewer) — Decision 23.
@@ -746,12 +773,12 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 	default:
 		return NewParallelSpawnAction(
 			agentImplReviewer,
-			"Review implementations in parallel — spawn one reviewer per task ID, each "+
-				"reading its impl-<id>.md and writing its verdict to review-<id>.md.",
+			"Review implementations in parallel — one reviewer per task in parallel_tasks, "+
+				"each reading its input_files and writing its verdict to its output_file.",
 			state.DefaultModel,
 			PhaseSix,
 			[]string{state.ArtifactTasks},
-			needsReview,
+			reviewParallelTasks(needsReview),
 		), nil
 	}
 }

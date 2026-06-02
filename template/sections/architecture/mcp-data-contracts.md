@@ -147,10 +147,15 @@ Returns `needs_user_confirmation` for the orchestrator to present to the user:
     "current_branch": "main",
     "is_main_branch": true,
     "enriched_request_body": "implement login feature",
-    "message": "Detected effort=\"M\". ..."
+    "message": "Detected effort=\"M\". ...",
+    "estimate_display": "  📊 Estimate (effort=M, 4 past run(s)): ~120,000 tokens / ~$1.80 (P50) · up to ~210,000 tokens / ~$3.15 (P90)"
   }
 }
 ```
+
+`estimate_display` is a pre-formatted, verbatim line (omitted when no history exists); the
+orchestrator outputs it as-is rather than re-deriving P50/P90 figures from the raw `estimate`
+struct, keeping the cost presentation deterministic. `message` stays purely procedural.
 
 ### Response — First Call with `--discuss` (text source only)
 
@@ -252,11 +257,32 @@ When `report_result` is non-null, the engine has recorded a phase result interna
   "phase": "phase-1",
   "input_files": ["request.md"],
   "output_file": "analysis.md",
-  "parallel_task_ids": null
+  "parallel_task_ids": null,
+  "parallel_tasks": null
 }
 ```
 
-The `prompt` field contains the **4-layer assembled prompt** (see below). When `parallel_task_ids` is non-empty, the orchestrator spawns one agent per task ID concurrently.
+The `prompt` field contains the **4-layer assembled prompt** (see below). For a parallel
+fanout, `parallel_tasks` carries the per-task contract the engine computed — each entry has
+`{ "id", "input_files", "output_file" }` — and the orchestrator spawns one agent per entry
+concurrently, using `output_file` for the artifact-write fallback. The orchestrator never
+derives the `<prefix>-<id>.md` filename itself. `parallel_task_ids` mirrors the same IDs in
+order for callers that only need the count. Both are `null` for a sequential spawn.
+
+```json
+{
+  "type": "spawn_agent",
+  "agent": "impl-reviewer",
+  "phase": "phase-6",
+  "input_files": ["tasks.md"],
+  "output_file": "",
+  "parallel_task_ids": ["1", "3"],
+  "parallel_tasks": [
+    { "id": "1", "input_files": ["impl-1.md"], "output_file": "review-1.md" },
+    { "id": "3", "input_files": ["impl-3.md"], "output_file": "review-3.md" }
+  ]
+}
+```
 
 #### `checkpoint` — Pause for human review
 

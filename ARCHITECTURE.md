@@ -314,11 +314,32 @@ When `report_result` is non-null, the engine has recorded a phase result interna
   "phase": "phase-1",
   "input_files": ["request.md"],
   "output_file": "analysis.md",
-  "parallel_task_ids": null
+  "parallel_task_ids": null,
+  "parallel_tasks": null
 }
 ```
 
-The `prompt` field contains the **4-layer assembled prompt** (see below). When `parallel_task_ids` is non-empty, the orchestrator spawns one agent per task ID concurrently.
+The `prompt` field contains the **4-layer assembled prompt** (see below). For a parallel
+fanout, `parallel_tasks` carries the per-task contract the engine computed — each entry has
+`{ "id", "input_files", "output_file" }` — and the orchestrator spawns one agent per entry
+concurrently, using `output_file` for the artifact-write fallback. The orchestrator never
+derives the `<prefix>-<id>.md` filename itself. `parallel_task_ids` mirrors the same IDs in
+order for callers that only need the count. Both are `null` for a sequential spawn.
+
+```json
+{
+  "type": "spawn_agent",
+  "agent": "impl-reviewer",
+  "phase": "phase-6",
+  "input_files": ["tasks.md"],
+  "output_file": "",
+  "parallel_task_ids": ["1", "3"],
+  "parallel_tasks": [
+    { "id": "1", "input_files": ["impl-1.md"], "output_file": "review-1.md" },
+    { "id": "3", "input_files": ["impl-3.md"], "output_file": "review-3.md" }
+  ]
+}
+```
 
 #### `checkpoint` — Pause for human review
 
