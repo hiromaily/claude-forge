@@ -25,12 +25,22 @@ func TestEnsureMarkdownlintIgnoreCreatesFile(t *testing.T) {
 
 	ensureMarkdownlintIgnore(workspace)
 
-	data, err := os.ReadFile(filepath.Join(repoRoot, ".markdownlintignore"))
+	ignorePath := filepath.Join(repoRoot, ".markdownlintignore")
+	data, err := os.ReadFile(ignorePath)
 	if err != nil {
 		t.Fatalf("expected .markdownlintignore to be created: %v", err)
 	}
 	if !markdownlintIgnoreCoversSpecs(string(data)) {
 		t.Errorf(".markdownlintignore does not cover .specs; content:\n%s", data)
+	}
+	// Shared repo-root config must be world-readable (0o644), not owner-only (0o600),
+	// so other local users / containers / CI runners can read it.
+	info, err := os.Stat(ignorePath)
+	if err != nil {
+		t.Fatalf("stat .markdownlintignore: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o644 {
+		t.Errorf(".markdownlintignore perm = %o, want 0o644", perm)
 	}
 }
 

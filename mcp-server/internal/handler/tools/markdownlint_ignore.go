@@ -42,10 +42,10 @@ func ensureMarkdownlintIgnore(workspace string) {
 			return
 		}
 		updated := strings.TrimRight(string(data), "\n") + "\n" + markdownlintIgnoreEntry + "\n"
-		_ = os.WriteFile(ignorePath, []byte(updated), 0o600) //nolint:gosec // fixed repo-root .markdownlintignore path, not user input
+		_ = os.WriteFile(ignorePath, []byte(updated), 0o644) //nolint:gosec // shared repo-root config must be world-readable; fixed path, not user input
 	case os.IsNotExist(err):
 		content := markdownlintIgnoreHeader + "\n" + markdownlintIgnoreEntry + "\n"
-		_ = os.WriteFile(ignorePath, []byte(content), 0o600)
+		_ = os.WriteFile(ignorePath, []byte(content), 0o644) //nolint:gosec // shared repo-root config must be world-readable; fixed path, not user input
 	default:
 		// Unreadable for some other reason — leave it untouched rather than clobber.
 	}
