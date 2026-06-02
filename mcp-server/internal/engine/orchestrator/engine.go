@@ -635,7 +635,7 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 			state.DefaultModel,
 			PhaseFive,
 			implInputFiles,
-			parallelKeys,
+			implParallelTasks(parallelKeys),
 		), nil
 	}
 
@@ -648,6 +648,33 @@ func (*Engine) handlePhaseFive(st *state.State) (Action, error) {
 		implInputFiles,
 		"impl-"+firstKey+".md",
 	), nil
+}
+
+// implParallelTasks builds the per-task contract for a phase-5 parallel batch: each task
+// writes its own impl-<id>.md and shares the batch's input_files (the agent reads task <id>
+// from tasks.md, so no task-specific InputFiles are needed). keys must be caller-ordered.
+func implParallelTasks(keys []string) []ParallelTask {
+	tasks := make([]ParallelTask, len(keys))
+	for i, k := range keys {
+		tasks[i] = ParallelTask{ID: k, OutputFile: "impl-" + k + ".md"}
+	}
+	return tasks
+}
+
+// reviewParallelTasks builds the per-task contract for a phase-6 parallel review batch: each
+// reviewer reads its own impl-<id>.md (plus the shared tasks.md) and writes its verdict to
+// review-<id>.md. Supplying this mapping keeps the orchestrator from inferring filenames from
+// the prompt prose. keys must be caller-ordered.
+func reviewParallelTasks(keys []string) []ParallelTask {
+	tasks := make([]ParallelTask, len(keys))
+	for i, k := range keys {
+		tasks[i] = ParallelTask{
+			ID:         k,
+			InputFiles: []string{"impl-" + k + ".md"},
+			OutputFile: "review-" + k + ".md",
+		}
+	}
+	return tasks
 }
 
 // handlePhaseSix handles Phase 6 (impl reviewer) — Decision 23.
@@ -666,7 +693,12 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 		// All tasks removed after init (edge case); advance — mirrors handlePhaseFive behaviour
 		return NewDoneAction(SkipSummaryPrefix+PhaseSix, ""), nil
 	}
-	// Decision 23 — Phase 6 PASS/FAIL retry
+	// Decision 23 — Phase 6 PASS/FAIL retry.
+	// needsReview accumulates tasks that have no review file yet so independent
+	// reviews can be fanned out in a single parallel batch (improvement #1) instead
+	// of being dispatched one at a time. A failing review takes priority and short-
+	// circuits to an implementer retry, matching the original sequential semantics.
+	var needsReview []string
 	for _, k := range taskKeys {
 		task := st.Tasks[k]
 
@@ -690,19 +722,14 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 			return dispatchImplementerRetry(k, task)
 		}
 
-		// If review file doesn't exist, spawn reviewer.
+		// If review file doesn't exist, the task needs a fresh review. Collect it
+		// and continue scanning so all pending reviews can be dispatched together.
 		if _, err := os.Stat(reviewFile); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
 				return Action{}, fmt.Errorf("handlePhaseSix: stat %s: %w", reviewFile, err)
 			}
-			return NewSpawnAgentAction(
-				agentImplReviewer,
-				"Review implementation for task "+k+".",
-				state.DefaultModel,
-				PhaseSix,
-				[]string{"impl-" + k + ".md", state.ArtifactTasks},
-				"review-"+k+".md",
-			), nil
+			needsReview = append(needsReview, k)
+			continue
 		}
 
 		// Review file exists but ReviewStatus not yet set — transitional state
@@ -724,10 +751,36 @@ func (e *Engine) handlePhaseSix(st *state.State) (Action, error) {
 		// pipeline_report_result so the engine never re-processes this task.
 	}
 
-	// All tasks reviewed; phase-6 is done. Return a done signal so
-	// pipeline_report_result advances to phase-7, where handlePhaseSeven
-	// dispatches the comprehensive-reviewer with the correct artifact name.
-	return NewDoneAction(SkipSummaryPrefix+PhaseSix, ""), nil
+	// Dispatch the reviews collected above. Multiple independent reviews are fanned
+	// out as a single parallel batch; pipeline_report_result already reconciles all
+	// review-*.md verdicts in one pass, so no per-task report round-trip is required.
+	switch len(needsReview) {
+	case 0:
+		// All tasks reviewed; phase-6 is done. Return a done signal so
+		// pipeline_report_result advances to phase-7, where handlePhaseSeven
+		// dispatches the comprehensive-reviewer with the correct artifact name.
+		return NewDoneAction(SkipSummaryPrefix+PhaseSix, ""), nil
+	case 1:
+		k := needsReview[0]
+		return NewSpawnAgentAction(
+			agentImplReviewer,
+			"Review implementation for task "+k+".",
+			state.DefaultModel,
+			PhaseSix,
+			[]string{"impl-" + k + ".md", state.ArtifactTasks},
+			"review-"+k+".md",
+		), nil
+	default:
+		return NewParallelSpawnAction(
+			agentImplReviewer,
+			"Review implementations in parallel — one reviewer per task in parallel_tasks, "+
+				"each reading its input_files and writing its verdict to its output_file.",
+			state.DefaultModel,
+			PhaseSix,
+			[]string{state.ArtifactTasks},
+			reviewParallelTasks(needsReview),
+		), nil
+	}
 }
 
 // dispatchImplementerRetry returns an action to retry the implementer for task k,
@@ -997,6 +1050,16 @@ func ClosingRef(workspace string) string {
 // Exported so pipeline_init_with_context can derive the branch name during
 // initialisation (before Phase 5).
 func DeriveBranchName(st *state.State) string {
+	return DeriveBranchNameFromContent(st, "")
+}
+
+// DeriveBranchNameFromContent is like DeriveBranchName but picks the branch type
+// prefix (feature/fix/refactor/docs/chore) by classifying the supplied content —
+// typically the request body — so the initial branch already matches the work type
+// instead of always starting at "feature/" and being renamed after Phase 3b
+// (improvement #3). When content is empty (or classifies as a feature) the prefix
+// is "feature/". A later maybeRenameBranch can still refine the prefix from design.md.
+func DeriveBranchNameFromContent(st *state.State, content string) string {
 	name := stripDatePrefix(st.SpecName)
 	name = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 
@@ -1009,7 +1072,12 @@ func DeriveBranchName(st *state.State) string {
 		}
 	}
 
-	return "feature/" + name
+	prefix := BranchTypeFeature
+	if strings.TrimSpace(content) != "" {
+		prefix = ClassifyBranchType(content)
+	}
+
+	return prefix + "/" + name
 }
 
 // stripDatePrefix removes a leading "YYYYMMDD-" date prefix from a spec name.
@@ -1053,7 +1121,10 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeFix,
 		Keywords: []string{
-			"bug", "fix", "defect", "hotfix", // EN
+			// EN (whole-word matched; include common plural/inflected forms because
+			// word-boundary matching no longer catches them as substrings)
+			"bug", "bugs", "fix", "fixes", "defect", "defects",
+			"hotfix", "hotfixes", "bugfix", "bugfixes",
 			"バグ", "修正", "不具合", "障害", // JA
 			"fehler", "bugfix", // DE
 			"correctif", "bogue", // FR
@@ -1062,7 +1133,10 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeRefactor,
 		Keywords: []string{
-			"refactor", "restructure", "reorganize", // EN
+			// EN
+			"refactor", "refactors", "refactoring",
+			"restructure", "restructures", "restructuring",
+			"reorganize", "reorganizes", "reorganizing",
 			"リファクタ", "再構成", "構造改善", // JA
 			"refaktorierung", "umstrukturierung", // DE
 			"refactorisation", "restructuration", // FR
@@ -1071,7 +1145,7 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeDocs,
 		Keywords: []string{
-			"documentation", "readme", // EN
+			"documentation", "readme", "readmes", "docs", // EN
 			"ドキュメント", "文書", "資料", // JA
 			"dokumentation", // DE
 			// FR: "documentation" is shared with EN
@@ -1080,7 +1154,10 @@ var branchTypeRules = []branchTypeRule{
 	{
 		Type: BranchTypeChore,
 		Keywords: []string{
-			"dependency", "upgrade", "migration", "config", // EN
+			// EN — include plurals (e.g. "dependencies", which is not a substring of
+			// "dependency") so word-boundary matching still classifies them.
+			"dependency", "dependencies", "upgrade", "upgrades",
+			"migration", "migrations", "config", "configs", "configuration",
 			"依存", "アップグレード", "移行", "設定", // JA
 			"abhängigkeit", "configuration", // DE
 			"dépendance", "configuration", // FR
@@ -1094,12 +1171,61 @@ func ClassifyBranchType(content string) string {
 	lower := strings.ToLower(content)
 	for _, rule := range branchTypeRules {
 		for _, kw := range rule.Keywords {
-			if strings.Contains(lower, kw) {
+			if containsKeyword(lower, kw) {
 				return rule.Type
 			}
 		}
 	}
 	return BranchTypeFeature
+}
+
+// containsKeyword reports whether keyword occurs in text. ASCII-letter keywords must match
+// at a word boundary so "fix" does not classify "prefix"/"suffix"/"fixtures"; keywords that
+// contain non-ASCII letters (e.g. Japanese) fall back to substring matching, since CJK text
+// has no whitespace word boundaries. Both arguments are expected to be lowercased already.
+func containsKeyword(text, keyword string) bool {
+	if !isASCIIWord(keyword) {
+		return strings.Contains(text, keyword)
+	}
+	for from := 0; from+len(keyword) <= len(text); {
+		idx := strings.Index(text[from:], keyword)
+		if idx < 0 {
+			return false
+		}
+		start := from + idx
+		end := start + len(keyword)
+		beforeOK := start == 0 || !isWordByte(text[start-1])
+		afterOK := end == len(text) || !isWordByte(text[end])
+		if beforeOK && afterOK {
+			return true
+		}
+		from = start + 1
+	}
+	return false
+}
+
+// isASCIIWord reports whether s consists solely of ASCII letters, so that whole-word
+// boundary matching is meaningful. Empty or non-ASCII keywords return false.
+func isASCIIWord(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
+			return false
+		}
+	}
+	return true
+}
+
+// isWordByte reports whether b is an ASCII word character (letter, digit, or underscore).
+// Bytes >= 0x80 (UTF-8 continuation / lead bytes, e.g. a CJK char adjacent to an English
+// keyword) are not word bytes, so they count as a boundary.
+func isWordByte(b byte) bool {
+	return b == '_' ||
+		(b >= '0' && b <= '9') ||
+		(b >= 'a' && b <= 'z') ||
+		(b >= 'A' && b <= 'Z')
 }
 
 // branchPrefix extracts the prefix before the first "/" in a branch name.

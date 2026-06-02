@@ -57,6 +57,10 @@ Example: `/forge 20260401-effort-only-flow`
       (S, M, L — each with `skipped_phases` using the `label` field).
       Each option has a `recommended` boolean — mark the one where
       `recommended` is `true` as "(Recommended)".
+      If `needs_user_confirmation.estimate_display` is non-empty, output it **verbatim**
+      alongside the options so the user can gauge how heavy the run will be (effort L can
+      be multi-hour and multi-dollar). The server pre-formats the P50/P90 figures — do not
+      reconstruct them from the raw `estimate` struct.
    2. **Branch decision**: based on `current_branch` and `is_main_branch` from the response:
       - If `is_main_branch` is true: inform the user a new branch will be created (no question needed).
       - If `is_main_branch` is false: ask whether to use the current branch or create a new one.
@@ -83,10 +87,13 @@ Repeat until done:
 1. Call `mcp__forge-state__pipeline_next_action(workspace=<workspace>,
    previous_action_complete=true,
    previous_tokens=<tokens from last action>,
-   previous_duration_ms=<ms from last action>,
-   previous_model=<model from last action>,
-   previous_setup_only=<setup_only from last action>)`.
+   previous_duration_ms=<ms from last action>)`.
    On the very first call, omit the `previous_*` parameters.
+   `previous_model` and `previous_setup_only` are **optional** and auto-carried: the
+   engine records the model and setup-only flag of the action it dispatched and reuses
+   them, so you only need to report `previous_action_complete` plus the observed
+   `previous_tokens` / `previous_duration_ms`. You may still pass `previous_model`
+   explicitly to override (it wins when non-empty).
 
 2. If `result.report_result` is non-null:
    - If `result.report_result.next_action_hint == "revision_required"`:
@@ -100,8 +107,18 @@ Repeat until done:
    - `spawn_agent`: If `action.display_message` is non-empty, output it verbatim.
      Then call Agent tool with `action.prompt`. Use `action.agent` as description.
      Record the tokens, duration, and model for the next `pipeline_next_action` call.
-     - If `action.parallel_task_ids` is non-empty: spawn one Agent call per task ID in
+     - If `action.parallel_tasks` is non-empty: spawn one Agent call per entry in
        parallel; wait for all to complete before calling `pipeline_next_action` again.
+       Each entry `t` is an explicit, server-computed contract — do **not** derive any
+       filename yourself. Instruct that agent to work on task `t.id` (still using
+       `action.prompt` as the base prompt), with:
+       - inputs = `action.input_files` (shared) + `t.input_files` (task-specific)
+       - output artifact = `t.output_file`
+       After each agent returns, apply the **artifact write fallback per entry**: if
+       `{workspace}/{t.output_file}` does not exist on disk, Write that agent's response
+       text there before calling `pipeline_next_action`. `pipeline_report_result`
+       reconciles all of the per-task verdicts in a single pass.
+       (`action.parallel_task_ids` still lists the same IDs in order for reference.)
      - **Artifact write fallback**: After the agent returns, if `action.output_file` is
        non-empty, check whether `{workspace}/{action.output_file}` exists on disk. If
        the file does **NOT** exist, the agent returned its output as text instead of
@@ -110,6 +127,10 @@ Repeat until done:
        `{workspace}/{action.output_file}` before calling `pipeline_next_action`.
        This ensures `pipeline_report_result` artifact validation always succeeds.
    - `checkpoint`: Present `action.present_to_user` to the user.
+     If `display_message` is non-empty, output it **verbatim** — the server already appends
+     the running-cost line (tokens / estimated USD / phases / retries so far) so the user can
+     weigh "continue vs stop" against the spend. Do not assemble that line yourself from the
+     raw `analytics` field.
      Mention that the Dashboard can be used to approve without terminal input.
      Then **immediately** call `mcp__forge-state__pipeline_next_action(workspace)`
      (no `user_response`, no `previous_*`). The server long-polls up to 50 s
@@ -151,7 +172,13 @@ Repeat until done:
      next `pipeline_next_action` call. Omit `previous_model` or pass it as an empty string.
      Also pass `previous_action_complete=true` (see Rules below).
    - `human_gate`: A task requires human action (e.g. merge an external PR, update dependencies).
-     Present `action.present_to_user` to the user using AskUserQuestion with `action.options`.
+     Present `action.present_to_user` to the user **verbatim** using AskUserQuestion with
+     `action.options`. The server already embeds any cross-repository flow (external PR → CI
+     watch → preview-pin → verify, plus a dependency-update skill pointer) into
+     `present_to_user` for external-repo tasks — render that guidance as-is and help the user
+     drive it; do not re-derive the steps here. Choosing **"done"** clears the gate (the
+     deterministic close); for a cross-repo task, only choose it once the external change is
+     pinned and building here.
      - If the user chooses **"done"** or **"skip"**: call `pipeline_next_action` again
        with no `previous_*` parameters (no agent ran).
        The handler automatically marks the task as completed.

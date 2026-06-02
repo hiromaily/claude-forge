@@ -1288,6 +1288,67 @@ func callNextActionWithUserResponse(
 	return handler(t.Context(), req)
 }
 
+// TestPipelineNextAction_P8b_PostToSourceTerminal verifies improvement #7: a terminal
+// user_response of "post" or "skip" at the post-to-source checkpoint completes the phase
+// and lets the pipeline advance to done, rather than re-presenting the same checkpoint
+// (the still_waiting loop the orchestrator could never escape).
+func TestPipelineNextAction_P8b_PostToSourceTerminal(t *testing.T) {
+	t.Parallel()
+
+	for _, userResponse := range []string{"post", "skip"} {
+		t.Run(userResponse, func(t *testing.T) {
+			t.Parallel()
+
+			workspace, sm := initWorkspaceForNextAction(t, state.PhasePostToSource, func(s *state.State) error {
+				s.CurrentPhaseStatus = state.StatusAwaitingHuman
+				// SkipPr makes final-commit collapse to done, so the pipeline reaches
+				// completed deterministically once post-to-source is resolved.
+				s.SkipPr = true
+				return nil
+			})
+			_ = os.WriteFile(filepath.Join(workspace, state.ArtifactRequest), []byte("---\nsource_type: text\n---\n\ntask\n"), 0o600)
+			_ = os.WriteFile(filepath.Join(workspace, state.ArtifactSummary), []byte("# Summary\n"), 0o600)
+
+			eng := orchestrator.NewEngine("", "")
+			handler := PipelineNextActionHandler(sm, events.NewEventBus(), eng, "", nil, nil, nil)
+
+			result, err := callNextActionWithUserResponse(t, handler, workspace, userResponse)
+			if err != nil {
+				t.Fatalf("handler returned error: %v", err)
+			}
+			if result.IsError {
+				t.Fatalf("handler returned MCP error: %s", textContent(result))
+			}
+
+			var resp nextActionResponse
+			if err := json.Unmarshal([]byte(textContent(result)), &resp); err != nil {
+				t.Fatalf("unmarshal: %v (raw: %s)", err, textContent(result))
+			}
+
+			// Must NOT re-return the post-to-source checkpoint (the bug).
+			if resp.Action.Type == orchestrator.ActionCheckpoint && resp.Action.Name == state.PhasePostToSource {
+				t.Fatalf("post-to-source re-returned the same checkpoint instead of advancing (still_waiting loop)")
+			}
+			if resp.StillWaiting {
+				t.Errorf("StillWaiting = true; terminal %q must not loop", userResponse)
+			}
+			// The pipeline should now be advancing to done.
+			if resp.Action.Type != orchestrator.ActionDone {
+				t.Errorf("action.Type = %q, want %q after terminal %q", resp.Action.Type, orchestrator.ActionDone, userResponse)
+			}
+
+			// State must have advanced beyond post-to-source.
+			s, loadErr := loadState(workspace)
+			if loadErr != nil {
+				t.Fatalf("loadState: %v", loadErr)
+			}
+			if s.CurrentPhase == state.PhasePostToSource {
+				t.Errorf("CurrentPhase still %q; expected the phase to complete and advance", state.PhasePostToSource)
+			}
+		})
+	}
+}
+
 func TestPipelineNextAction_P8_CheckpointRevision(t *testing.T) {
 	t.Parallel()
 

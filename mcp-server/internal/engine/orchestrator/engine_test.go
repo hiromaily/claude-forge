@@ -290,12 +290,13 @@ type nextActionTestCase struct {
 	wantType               string
 	wantAgent              string
 	wantSummary            string
-	wantPhase              string   // non-empty: assert action.Phase equals this value
-	wantParallelIDs        []string // nil means "do not check"; empty slice means "assert len==0"
-	wantInputContains      string   // non-empty: assert InputFiles contains this value
-	wantSetupOnly          *bool    // non-nil: assert action.SetupOnly equals *wantSetupOnly
-	wantCommandContains    string   // non-empty: assert any Commands element contains this value
-	wantCommandNotContains string   // non-empty: assert no Commands element contains this value
+	wantPhase              string            // non-empty: assert action.Phase equals this value
+	wantParallelIDs        []string          // nil means "do not check"; empty slice means "assert len==0"
+	wantParallelOutputs    map[string]string // nil means "do not check"; otherwise assert ParallelTasks[id].OutputFile
+	wantInputContains      string            // non-empty: assert InputFiles contains this value
+	wantSetupOnly          *bool             // non-nil: assert action.SetupOnly equals *wantSetupOnly
+	wantCommandContains    string            // non-empty: assert any Commands element contains this value
+	wantCommandNotContains string            // non-empty: assert no Commands element contains this value
 }
 
 // defaultEng returns an Engine with stubbed readers (approve + text).
@@ -723,8 +724,9 @@ func TestNextAction(t *testing.T) {
 					return nil
 				})
 			},
-			wantType:        ActionSpawnAgent,
-			wantParallelIDs: []string{"1", "2"},
+			wantType:            ActionSpawnAgent,
+			wantParallelIDs:     []string{"1", "2"},
+			wantParallelOutputs: map[string]string{"1": "impl-1.md", "2": "impl-2.md"},
 		},
 
 		// ── Decision 22: phase-5 single parallel task dispatches via ParallelSpawnAction ──
@@ -989,6 +991,43 @@ func TestNextAction(t *testing.T) {
 			},
 			wantType:    ActionDone,
 			wantSummary: SkipSummaryPrefix + PhaseSix,
+		},
+
+		// ── Improvement #1: phase-6 batches independent reviews in parallel ──
+		{
+			// Two implemented, unreviewed tasks (no review-*.md yet) must be fanned
+			// out as a single parallel reviewer batch rather than one at a time.
+			name: "phase6_parallel_reviews",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-6", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "sequential", ImplStatus: "completed", ReviewStatus: ""},
+						"2": {Title: "Task 2", ExecutionMode: "sequential", ImplStatus: "completed", ReviewStatus: ""},
+					}
+					return nil
+				})
+			},
+			wantType:        ActionSpawnAgent,
+			wantAgent:       agentImplReviewer,
+			wantParallelIDs: []string{"1", "2"},
+		},
+
+		// ── Improvement #1: phase-6 single pending review uses a non-parallel spawn ──
+		{
+			name: "phase6_single_review",
+			setupSM: func(t *testing.T) *state.StateManager {
+				t.Helper()
+				return newTestStateManager(t, "phase-6", func(s *state.State) error {
+					s.Tasks = map[string]state.Task{
+						"1": {Title: "Task 1", ExecutionMode: "sequential", ImplStatus: "completed", ReviewStatus: ""},
+					}
+					return nil
+				})
+			},
+			wantType:        ActionSpawnAgent,
+			wantAgent:       agentImplReviewer,
+			wantParallelIDs: []string{}, // assert len == 0 (single spawn, not a fanout)
 		},
 
 		// ── Decision 23: phase-6 empty Tasks skips the phase (edge case, mirrors phase-5) ─
@@ -1287,6 +1326,16 @@ func TestNextAction(t *testing.T) {
 				}
 			}
 
+			if tc.wantParallelOutputs != nil {
+				got := make(map[string]string, len(action.ParallelTasks))
+				for _, pt := range action.ParallelTasks {
+					got[pt.ID] = pt.OutputFile
+				}
+				if !reflect.DeepEqual(got, tc.wantParallelOutputs) {
+					t.Errorf("ParallelTasks output_file map = %v, want %v", got, tc.wantParallelOutputs)
+				}
+			}
+
 			if tc.wantInputContains != "" {
 				if !slices.Contains(action.InputFiles, tc.wantInputContains) {
 					t.Errorf("InputFiles = %v; expected to contain %q", action.InputFiles, tc.wantInputContains)
@@ -1371,6 +1420,34 @@ func TestDeriveBranchName(t *testing.T) {
 			got := DeriveBranchName(st)
 			if got != tt.want {
 				t.Errorf("DeriveBranchName(%q) = %q, want %q", tt.specName, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDeriveBranchNameFromContent(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		specName string
+		content  string
+		want     string
+	}{
+		{"empty_content_defaults_feature", "soa-1-add-thing", "", "feature/soa-1-add-thing"},
+		{"feature_content", "soa-1-add-thing", "implement a new dashboard capability", "feature/soa-1-add-thing"},
+		{"fix_content", "soa-2-login", "fix a bug where login fails", "fix/soa-2-login"},
+		{"japanese_fix_content", "soa-3-login", "ログインの不具合を修正する", "fix/soa-3-login"},
+		{"refactor_content", "soa-4-cleanup", "refactor the module structure", "refactor/soa-4-cleanup"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			st := &state.State{SpecName: tt.specName}
+			got := DeriveBranchNameFromContent(st, tt.content)
+			if got != tt.want {
+				t.Errorf("DeriveBranchNameFromContent(%q, %q) = %q, want %q", tt.specName, tt.content, got, tt.want)
 			}
 		})
 	}
@@ -2362,6 +2439,17 @@ func TestClassifyBranchType(t *testing.T) {
 		{name: "case_insensitive_FIX", content: "FIX the broken tests", want: BranchTypeFix},
 		{name: "case_insensitive_REFACTOR", content: "REFACTOR the service layer", want: BranchTypeRefactor},
 		{name: "case_insensitive_DOCUMENTATION", content: "DOCUMENTATION update needed", want: BranchTypeDocs},
+
+		// Word-boundary: "fix" must not be matched inside larger words (false positives)
+		{name: "boundary_prefix", content: "Add a prefix to generated identifiers", want: BranchTypeFeature},
+		{name: "boundary_suffix", content: "Support a configurable filename suffix", want: BranchTypeFeature},
+		{name: "boundary_fixtures", content: "Add test fixtures for the parser", want: BranchTypeFeature},
+		// Plurals/inflections must still classify (no false negatives from boundary matching)
+		{name: "en_bugs_plural", content: "Resolve several bugs in the importer", want: BranchTypeFix},
+		{name: "en_fixes_plural", content: "Ship fixes for the flaky tests", want: BranchTypeFix},
+		{name: "en_refactoring", content: "Refactoring the handler layer", want: BranchTypeRefactor},
+		{name: "en_dependencies_plural", content: "Bump dependencies to latest", want: BranchTypeChore},
+		{name: "en_migrations_plural", content: "Run database migrations", want: BranchTypeChore},
 
 		// Default
 		{name: "empty_input", content: "", want: BranchTypeFeature},

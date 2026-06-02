@@ -147,10 +147,15 @@
     "current_branch": "main",
     "is_main_branch": true,
     "enriched_request_body": "implement login feature",
-    "message": "Detected effort=\"M\". ..."
+    "message": "Detected effort=\"M\". ...",
+    "estimate_display": "  📊 Estimate (effort=M, 4 past run(s)): ~120,000 tokens / ~$1.80 (P50) · up to ~210,000 tokens / ~$3.15 (P90)"
   }
 }
 ```
+
+`estimate_display` は整形済みの verbatim 行（履歴がない場合は省略）。オーケストレーターは生の
+`estimate` 構造体から P50/P90 を再計算せず、この行をそのまま出力することでコスト表示を決定論的に保つ。
+`message` は手続き的な内容のみを保持する。
 
 ### レスポンス — `--discuss` 付き1回目コール（テキストソースのみ）
 
@@ -236,11 +241,31 @@
   "phase": "phase-1",
   "input_files": ["request.md"],
   "output_file": "analysis.md",
-  "parallel_task_ids": null
+  "parallel_task_ids": null,
+  "parallel_tasks": null
 }
 ```
 
-`prompt` フィールドは **4層組み立てプロンプト**（後述）を含む。`parallel_task_ids` が空でない場合、オーケストレーターはタスクIDごとに1つのエージェントを並行起動する。
+`prompt` フィールドは **4層組み立てプロンプト**（後述）を含む。並行ファンアウトの場合、
+`parallel_tasks` がエンジンの算出した per-task 契約（各エントリは `{ "id", "input_files", "output_file" }`）を保持し、
+オーケストレーターはエントリごとに1つのエージェントを並行起動して `output_file` を artifact-write フォールバックに用いる。
+オーケストレーターは `<prefix>-<id>.md` のファイル名を自前で導出しない。`parallel_task_ids` は同じ ID を順序どおりに
+ミラーする（件数のみ必要な呼び出し元向け）。逐次起動ではどちらも `null`。
+
+```json
+{
+  "type": "spawn_agent",
+  "agent": "impl-reviewer",
+  "phase": "phase-6",
+  "input_files": ["tasks.md"],
+  "output_file": "",
+  "parallel_task_ids": ["1", "3"],
+  "parallel_tasks": [
+    { "id": "1", "input_files": ["impl-1.md"], "output_file": "review-1.md" },
+    { "id": "3", "input_files": ["impl-3.md"], "output_file": "review-3.md" }
+  ]
+}
+```
 
 #### `checkpoint` — 人間レビューのための一時停止
 

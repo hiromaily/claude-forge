@@ -1,6 +1,8 @@
 package history_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -310,5 +312,68 @@ func TestPatternLoad_AbsentFile(t *testing.T) {
 
 	if len(acc.Entries()) != 0 {
 		t.Errorf("want 0 entries after Load on absent file, got %d", len(acc.Entries()))
+	}
+}
+
+// TestPatternAccumulate_CapsStoredPatterns verifies improvement #2: the stored
+// pattern set is bounded (maxStoredPatterns = 200). When the store exceeds the cap,
+// the lowest-value entries age out while all CRITICAL findings are retained.
+func TestPatternAccumulate_CapsStoredPatterns(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Seed patterns.json directly (Load does not merge or prune) with 250 distinct
+	// entries: 50 CRITICAL and 200 MINOR.
+	pf := history.PatternsFile{
+		UpdatedAt:            base,
+		TotalReviewsAnalyzed: 1,
+	}
+	for i := range 50 {
+		pf.Patterns = append(pf.Patterns, history.PatternEntry{
+			Pattern: fmt.Sprintf("critical pattern number %d", i), Severity: "CRITICAL",
+			Frequency: 1, Category: "other", FirstSeen: base, LastSeen: base.Add(time.Duration(i) * time.Hour),
+		})
+	}
+	for i := range 200 {
+		pf.Patterns = append(pf.Patterns, history.PatternEntry{
+			Pattern: fmt.Sprintf("minor pattern number %d", i), Severity: "MINOR",
+			Frequency: 1, Category: "other", FirstSeen: base, LastSeen: base.Add(time.Duration(i) * time.Minute),
+		})
+	}
+	data, err := json.MarshalIndent(pf, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal seed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "patterns.json"), data, 0o600); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+
+	acc := history.NewPatternAccumulator(dir)
+	if err := acc.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := len(acc.Entries()); got != 250 {
+		t.Fatalf("after Load want 250 entries, got %d", got)
+	}
+
+	// Any Accumulate call triggers the prune. Use empty findings so no new patterns are added.
+	if err := acc.Accumulate(nil, "impl-reviewer", base); err != nil {
+		t.Fatalf("Accumulate: %v", err)
+	}
+
+	entries := acc.Entries()
+	if len(entries) != 200 {
+		t.Errorf("after prune want 200 entries (cap), got %d", len(entries))
+	}
+	criticals := 0
+	for _, e := range entries {
+		if e.Severity == "CRITICAL" {
+			criticals++
+		}
+	}
+	if criticals != 50 {
+		t.Errorf("prune dropped CRITICAL findings: want all 50 retained, got %d", criticals)
 	}
 }

@@ -5,12 +5,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
 )
+
+// maxStoredPatterns bounds patterns.json growth. When Accumulate pushes the store
+// past this size, the lowest-value entries are pruned so the "Common Review Findings"
+// context injected into prompts stays bounded rather than accumulating without limit
+// across many pipeline runs (improvement #2).
+const maxStoredPatterns = 200
 
 // PatternEntry is one accumulated finding pattern.
 type PatternEntry struct {
@@ -239,7 +246,48 @@ func (a *PatternAccumulator) Accumulate(findings []orchestrator.Finding, agent s
 		}
 	}
 
+	a.pruneLocked()
+
 	return a.persist()
+}
+
+// pruneLocked drops the lowest-value pattern entries when the store exceeds
+// maxStoredPatterns, keeping the highest-value prefix and rebuilding the bucket
+// index. Must be called with a.mu held (write lock). Value ranking keeps CRITICAL
+// over MINOR, then higher frequency, then more recently seen — so stale, rare,
+// low-severity findings are the first to age out (improvement #2).
+func (a *PatternAccumulator) pruneLocked() {
+	if len(a.patterns) <= maxStoredPatterns {
+		return
+	}
+
+	sort.SliceStable(a.patterns, func(i, j int) bool {
+		return patternMoreValuable(a.patterns[i], a.patterns[j])
+	})
+	a.patterns = a.patterns[:maxStoredPatterns]
+	a.rebuildIndexLocked()
+}
+
+// patternMoreValuable reports whether x should be retained ahead of y when pruning.
+func patternMoreValuable(x, y PatternEntry) bool {
+	xc, yc := x.Severity == "CRITICAL", y.Severity == "CRITICAL"
+	if xc != yc {
+		return xc // CRITICAL ranks above MINOR
+	}
+	if x.Frequency != y.Frequency {
+		return x.Frequency > y.Frequency
+	}
+	return x.LastSeen.After(y.LastSeen)
+}
+
+// rebuildIndexLocked recreates the category|severity → indices bucket map from the
+// current patterns slice. Must be called with a.mu held (write lock).
+func (a *PatternAccumulator) rebuildIndexLocked() {
+	a.patternIdx = make(map[string][]int, len(a.patterns))
+	for i, p := range a.patterns {
+		key := p.Category + "|" + p.Severity
+		a.patternIdx[key] = append(a.patternIdx[key], i)
+	}
 }
 
 // Query returns pattern entries filtered by agentFilter and severityFilter, capped to limit.
@@ -301,11 +349,7 @@ func (a *PatternAccumulator) Load() error {
 	a.totalReviewsAnalyzed = pf.TotalReviewsAnalyzed
 
 	// Rebuild the bucket index from the loaded patterns.
-	a.patternIdx = make(map[string][]int, len(a.patterns))
-	for i, p := range a.patterns {
-		key := p.Category + "|" + p.Severity
-		a.patternIdx[key] = append(a.patternIdx[key], i)
-	}
+	a.rebuildIndexLocked()
 
 	return nil
 }

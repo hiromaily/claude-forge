@@ -32,6 +32,12 @@ A **DESIGN document** covering:
 4. **Test strategy** — what to test and at which layer (unit, integration, e2e)
 5. **Risk mitigation** — how the issues identified in investigation.md are addressed
 6. **Open question decisions** — resolution for each open question from investigation.md
+7. **Cross-repository dependencies** — when the change depends on another repository
+   (e.g. shared proto definitions / akupara-proto, a published package, or a dependency
+   bump): call it out explicitly. Note the external-repo conventions that will gate the
+   work (e.g. protolint field-naming rules such as `created_at` → `created_time`), and
+   plan the merge-before-preview flow (external PR → CI → preview pin) so it is not
+   discovered late during implementation. Mark the external step as a human gate.
 
 ## Output Format
 

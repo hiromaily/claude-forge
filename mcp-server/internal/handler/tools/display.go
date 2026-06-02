@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
 )
 
 // buildSpawnMessage returns the progress line to display before spawning an agent.
@@ -29,6 +30,37 @@ func buildSpawnMessage(action orchestrator.Action) string {
 func buildCompleteMessage(tokensUsed, durationMs int) string {
 	return fmt.Sprintf("  ✓ Complete  ·  %s tokens · %s",
 		formatTokens(tokensUsed), formatDuration(durationMs))
+}
+
+// formatCheckpointCostLine returns a one-line running-cost summary for display at a
+// human checkpoint, e.g. "  💰 So far: 1,234,567 tokens · ~$7.41 · 6 phases · 2 retries".
+// Returns "" for a nil summary or a fresh pipeline that has logged no work yet, so the
+// line is only shown once there is something meaningful to report (improvement #8).
+func formatCheckpointCostLine(s *analytics.PipelineSummary) string {
+	if s == nil || s.TotalTokens == 0 {
+		return ""
+	}
+	return fmt.Sprintf("  💰 So far: %s tokens · ~$%.2f · %d phases · %d retries",
+		formatTokens(s.TotalTokens), s.EstimatedCostUSD, s.PhasesExecuted, s.Retries)
+}
+
+// formatEstimateLine returns a one-line, pre-formatted upfront cost/token forecast for
+// the detected effort, e.g.
+// "  📊 Estimate (effort=L, 4 past run(s)): ~1,234,567 tokens / ~$7.41 (P50) · up to ~2,345,678 tokens / ~$14.08 (P90)".
+// Returns "" when no estimate is available (nil) or there is no history (sample_size 0).
+// The orchestrator displays this verbatim, so the P50/P90 figures are formatted here in
+// the server rather than reconstructed by the LLM from the raw estimate struct — keeping
+// the presentation deterministic (improvement #8).
+func formatEstimateLine(effort string, est *analytics.EstimateResult) string {
+	if est == nil || est.SampleSize == 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"  📊 Estimate (effort=%s, %d past run(s)): ~%s tokens / ~$%.2f (P50) · up to ~%s tokens / ~$%.2f (P90)",
+		effort, est.SampleSize,
+		formatTokens(int(est.Tokens.P50)), est.CostUSD.P50,
+		formatTokens(int(est.Tokens.P90)), est.CostUSD.P90,
+	)
 }
 
 // phaseDisplayLabel builds a human-readable label for a phase ID.

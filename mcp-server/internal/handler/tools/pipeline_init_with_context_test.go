@@ -835,6 +835,8 @@ func TestSourceIDPrependedToWorkspaceSlug(t *testing.T) {
 		wantBranch   string
 	}{
 		{
+			// Branch type is classified from the request content at init (improvement #3):
+			// "Fix auth timeout" / "fix-auth-timeout" → fix/ rather than the old always-feature/.
 			name:     "github_issue_with_slug",
 			sourceID: "42",
 			slug:     "fix-auth-timeout",
@@ -843,7 +845,7 @@ func TestSourceIDPrependedToWorkspaceSlug(t *testing.T) {
 				"github_body":  "requests timeout",
 			},
 			wantSpecName: "42-fix-auth-timeout",
-			wantBranch:   "feature/42-fix-auth-timeout",
+			wantBranch:   "fix/42-fix-auth-timeout",
 		},
 		{
 			name:     "jira_issue_with_slug",
@@ -1208,6 +1210,80 @@ func TestTextSourceRequestMDContainsTaskText(t *testing.T) {
 	contentStr := string(content)
 	if !strings.Contains(contentStr, taskText) {
 		t.Errorf("request.md body is missing task text %q; content:\n%s", taskText, contentStr)
+	}
+}
+
+// TestURLSourceRequestMDPersistsExternalBody reproduces improvement #4: when an
+// external issue (e.g. Linear) is the source and the orchestrator does NOT re-send
+// external_context on the confirmation call (only echoing enriched_request_body),
+// the issue body must still be persisted into request.md. The first call must echo
+// the external fields' body into enriched_request_body so it survives the round-trip.
+func TestURLSourceRequestMDPersistsExternalBody(t *testing.T) {
+	t.Parallel()
+
+	const (
+		issueTitle = "Deal risk dashboard production"
+		issueBody  = "FR-1: aggregate deal risk by stage. FR-2: surface alerts on the home dashboard."
+	)
+
+	dir := t.TempDir()
+	sm := newPIWCSM()
+	h := PipelineInitWithContextHandler(sm, events.NewEventBus())
+
+	// First call: Linear source, external_context present, no user_confirmation.
+	res1 := callTool(t, h, map[string]any{
+		"workspace":  dir,
+		"source_id":  "DEA-676",
+		"source_url": "https://linear.app/acme/issue/DEA-676/deal-risk-dashboard",
+		"external_context": map[string]any{
+			"linear_title":       issueTitle,
+			"linear_description": issueBody,
+		},
+		"flags": map[string]any{},
+	})
+	if res1.IsError {
+		t.Fatalf("first call returned MCP error: %v", textContent(res1))
+	}
+	result1 := parsePIWCResult(t, textContent(res1))
+	if result1.NeedsUserConfirmation == nil {
+		t.Fatalf("first call: expected needs_user_confirmation, got nil")
+	}
+	// enriched_request_body must carry the external issue body so the orchestrator
+	// can echo it back even when external_context is not re-sent.
+	nuc := result1.NeedsUserConfirmation
+	if !strings.Contains(nuc.EnrichedRequestBody, issueBody) {
+		t.Fatalf("first call: enriched_request_body = %q, want it to contain the issue body %q", nuc.EnrichedRequestBody, issueBody)
+	}
+
+	// Second call: orchestrator echoes enriched_request_body but does NOT re-send
+	// external_context — the exact failure scenario from improvement #4.
+	res2 := callTool(t, h, map[string]any{
+		"workspace":  dir,
+		"source_id":  "DEA-676",
+		"source_url": "https://linear.app/acme/issue/DEA-676/deal-risk-dashboard",
+		"flags":      map[string]any{},
+		"user_confirmation": map[string]any{
+			"effort":                "L",
+			"use_current_branch":    true,
+			"enriched_request_body": nuc.EnrichedRequestBody,
+		},
+	})
+	if res2.IsError {
+		t.Fatalf("second call returned MCP error: %v", textContent(res2))
+	}
+	result2 := parsePIWCResult(t, textContent(res2))
+	if !result2.Ready {
+		t.Fatalf("second call: ready = false, want true")
+	}
+
+	reqPath := filepath.Join(result2.Workspace, "request.md")
+	content, err := os.ReadFile(reqPath)
+	if err != nil {
+		t.Fatalf("ReadFile request.md: %v", err)
+	}
+	contentStr := string(content)
+	if !strings.Contains(contentStr, issueBody) {
+		t.Errorf("request.md body is missing external issue body %q; content:\n%s", issueBody, contentStr)
 	}
 }
 

@@ -1,10 +1,79 @@
 package tools
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hiromaily/claude-forge/mcp-server/internal/engine/orchestrator"
+	"github.com/hiromaily/claude-forge/mcp-server/internal/intelligence/analytics"
 )
+
+func TestFormatCheckpointCostLine(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil_summary", func(t *testing.T) {
+		t.Parallel()
+		if got := formatCheckpointCostLine(nil); got != "" {
+			t.Errorf("nil summary: want empty, got %q", got)
+		}
+	})
+
+	t.Run("zero_tokens_suppressed", func(t *testing.T) {
+		t.Parallel()
+		got := formatCheckpointCostLine(&analytics.PipelineSummary{TotalTokens: 0})
+		if got != "" {
+			t.Errorf("fresh pipeline (0 tokens): want empty, got %q", got)
+		}
+	})
+
+	t.Run("formats_running_cost", func(t *testing.T) {
+		t.Parallel()
+		got := formatCheckpointCostLine(&analytics.PipelineSummary{
+			TotalTokens:      1234567,
+			EstimatedCostUSD: 7.41,
+			PhasesExecuted:   6,
+			Retries:          2,
+		})
+		for _, want := range []string{"1,234,567 tokens", "$7.41", "6 phases", "2 retries"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("cost line %q missing %q", got, want)
+			}
+		}
+	})
+}
+
+func TestFormatEstimateLine(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil_estimate", func(t *testing.T) {
+		t.Parallel()
+		if got := formatEstimateLine("L", nil); got != "" {
+			t.Errorf("nil estimate: want empty, got %q", got)
+		}
+	})
+
+	t.Run("zero_sample_suppressed", func(t *testing.T) {
+		t.Parallel()
+		got := formatEstimateLine("L", &analytics.EstimateResult{SampleSize: 0})
+		if got != "" {
+			t.Errorf("no history (sample_size 0): want empty, got %q", got)
+		}
+	})
+
+	t.Run("formats_p50_p90", func(t *testing.T) {
+		t.Parallel()
+		got := formatEstimateLine("L", &analytics.EstimateResult{
+			SampleSize: 4,
+			Tokens:     analytics.Percentiles{P50: 1234567, P90: 2345678},
+			CostUSD:    analytics.Percentiles{P50: 7.41, P90: 14.08},
+		})
+		for _, want := range []string{"effort=L", "4 past run", "1,234,567 tokens", "$7.41", "2,345,678 tokens", "$14.08", "P50", "P90"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("estimate line %q missing %q", got, want)
+			}
+		}
+	})
+}
 
 func TestBuildSpawnMessage(t *testing.T) {
 	t.Parallel()
@@ -32,7 +101,11 @@ func TestBuildSpawnMessage(t *testing.T) {
 		{
 			name: "parallel_phase5",
 			action: orchestrator.NewParallelSpawnAction("implementer", "", "", "phase-5", nil,
-				[]string{"1", "2", "3"}),
+				[]orchestrator.ParallelTask{
+					{ID: "1", OutputFile: "impl-1.md"},
+					{ID: "2", OutputFile: "impl-2.md"},
+					{ID: "3", OutputFile: "impl-3.md"},
+				}),
 			want: "▶ Phase 5 — Implementation  ·  spawning implementer  (parallel · 3 tasks)…",
 		},
 		{

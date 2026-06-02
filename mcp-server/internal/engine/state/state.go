@@ -23,28 +23,28 @@ var ValidRevTypes = []string{RevTypeDesign, RevTypeTasks}
 
 // State mirrors the top-level state.json object written by the Go MCP server state package.
 type State struct {
-	Version                   int             `json:"version"`
-	MCPVersion                string          `json:"forge-state-mcp-version,omitempty"`
-	SpecName                  string          `json:"specName"`
-	Workspace                 string          `json:"workspace"`
-	Branch                    *string         `json:"branch"`
-	Effort                    *string         `json:"effort"`
-	FlowTemplate              *string         `json:"flowTemplate"`
-	AutoApprove               bool            `json:"autoApprove"`
-	SkipPr                    bool            `json:"skipPr"`
-	UseCurrentBranch          bool            `json:"useCurrentBranch"`
-	BranchClassified          bool            `json:"branchClassified"`
-	BranchPushed              bool            `json:"branchPushed"`
-	Debug                     bool            `json:"debug"`
-	SkippedPhases             []string        `json:"skippedPhases"`
-	CurrentPhase              string          `json:"currentPhase"`
-	CurrentPhaseStatus        string          `json:"currentPhaseStatus"`
-	CompletedPhases           []string        `json:"completedPhases"`
-	Revisions                 Revisions       `json:"revisions"`
+	Version            int       `json:"version"`
+	MCPVersion         string    `json:"forge-state-mcp-version,omitempty"`
+	SpecName           string    `json:"specName"`
+	Workspace          string    `json:"workspace"`
+	Branch             *string   `json:"branch"`
+	Effort             *string   `json:"effort"`
+	FlowTemplate       *string   `json:"flowTemplate"`
+	AutoApprove        bool      `json:"autoApprove"`
+	SkipPr             bool      `json:"skipPr"`
+	UseCurrentBranch   bool      `json:"useCurrentBranch"`
+	BranchClassified   bool      `json:"branchClassified"`
+	BranchPushed       bool      `json:"branchPushed"`
+	Debug              bool      `json:"debug"`
+	SkippedPhases      []string  `json:"skippedPhases"`
+	CurrentPhase       string    `json:"currentPhase"`
+	CurrentPhaseStatus string    `json:"currentPhaseStatus"`
+	CompletedPhases    []string  `json:"completedPhases"`
+	Revisions          Revisions `json:"revisions"`
 	// DesignReviseCapReached is set when the design REVISE cap fires.
 	// Consumed by: implementer prompt enrichment (review-design.md is added as
 	// input artifact) and analytics_pipeline_summary (to flag auto-promoted runs).
-	DesignReviseCapReached bool `json:"designReviseCapReached,omitempty"`
+	DesignReviseCapReached    bool            `json:"designReviseCapReached,omitempty"`
 	CheckpointRevisionPending map[string]bool `json:"checkpointRevisionPending"`
 	NeedsBatchCommit          bool            `json:"needsBatchCommit"`
 	PendingHumanGate          *string         `json:"pendingHumanGate,omitempty"`
@@ -52,6 +52,19 @@ type State struct {
 	PhaseLog                  []PhaseLogEntry `json:"phaseLog"`
 	Timestamps                Timestamps      `json:"timestamps"`
 	Error                     *PhaseError     `json:"error"`
+	// LastDispatch records the model and setup-only flag of the most recent agent/exec
+	// action the engine returned to the orchestrator. The next pipeline_next_action call
+	// auto-carries these into the phase-log report so the orchestrator no longer has to
+	// thread previous_model / previous_setup_only by hand (improvement #9). Tokens and
+	// duration still come from the orchestrator — only it observes the subagent's usage.
+	LastDispatch *LastDispatch `json:"lastDispatch,omitempty"`
+}
+
+// LastDispatch captures the engine-authoritative metadata of the last dispatched action.
+type LastDispatch struct {
+	Phase     string `json:"phase"`
+	Model     string `json:"model"`
+	SetupOnly bool   `json:"setupOnly"`
 }
 
 // Revisions holds counters for design/task review revision cycles.
