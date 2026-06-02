@@ -171,20 +171,18 @@ Repeat until done:
      next `pipeline_next_action` call. Omit `previous_model` or pass it as an empty string.
      Also pass `previous_action_complete=true` (see Rules below).
    - `human_gate`: A task requires human action (e.g. merge an external PR, update dependencies).
-     Present `action.present_to_user` to the user using AskUserQuestion with `action.options`.
+     Present `action.present_to_user` to the user **verbatim** using AskUserQuestion with
+     `action.options`. The server already embeds any cross-repository flow (external PR → CI
+     watch → preview-pin → verify, plus a dependency-update skill pointer) into
+     `present_to_user` for external-repo tasks — render that guidance as-is and help the user
+     drive it; do not re-derive the steps here. Choosing **"done"** is the deterministic
+     close: the engine clears the gate, so only pick it once the external change is pinned
+     and building.
      - If the user chooses **"done"** or **"skip"**: call `pipeline_next_action` again
        with no `previous_*` parameters (no agent ran).
        The handler automatically marks the task as completed.
      - If the user chooses **"abandon"**: call `mcp__forge-state__abandon(workspace)`.
      Do NOT call `checkpoint` or `phase_complete` for human_gate actions.
-     - **Cross-repo gates**: when `action.present_to_user` contains cross-repository
-       guidance (the task depends on an external repo — e.g. proto/akupara-proto,
-       a dependency bump, or a preview pin), surface that flow to the user and help drive
-       it: open the external repo's PR, watch its CI, fetch the preview artifact (preview
-       branch / pre-release version / SHA), then pin it in this repository and verify the
-       build. If the target repository ships an `update-proto` (or equivalent
-       dependency-update) skill, invoke it for the merge-before-preview pattern. Keep the
-       gate open (`done`) only once the external change is pinned and building here.
    - `done`: Pipeline complete. Stop.
 
 ## Supported Flags

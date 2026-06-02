@@ -15,7 +15,7 @@ func TestNewHumanGateActionCrossRepo(t *testing.T) {
 	t.Run("external_repo_task_gets_guidance", func(t *testing.T) {
 		t.Parallel()
 		a := NewHumanGateAction(PhaseFive, "1", "Merge akupara-proto PR and pin preview")
-		for _, want := range []string{"cross-repository", "preview", "update-proto", "CI"} {
+		for _, want := range []string{"cross-repository", "preview", "update-proto", "CI", "Choose 'done' only after"} {
 			if !strings.Contains(a.PresentToUser, want) {
 				t.Errorf("cross-repo gate message missing %q; got:\n%s", want, a.PresentToUser)
 			}

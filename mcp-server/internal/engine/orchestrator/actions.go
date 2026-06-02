@@ -285,5 +285,7 @@ func crossRepoGateGuidance(title string) string {
 		"3. Obtain the preview artifact (preview branch / pre-release npm version / commit SHA).\n" +
 		"4. Pin that preview in this repository (update the dependency version) and verify the build.\n" +
 		"If this repository ships an `update-proto` (or equivalent dependency-update) skill, " +
-		"follow it for the merge-before-preview pattern.\n\n"
+		"follow it for the merge-before-preview pattern.\n" +
+		"Choose 'done' only after the preview is pinned and the build passes here; " +
+		"until then keep this gate open.\n\n"
 }
